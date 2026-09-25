@@ -13,7 +13,7 @@ OUT="${1:-$ROOT/build/comparison-results}"
 shift || true
 EXTRA=("$@")
 
-LIBS="${LIBS-raw-tcp,kestrel-ws,nalix-tcp,nalix-ws,nalix-tcp-aead,signalr-ws-msgpack,grpc-unary,grpc-duplex,grpc-unary-tls,grpc-duplex-tls}"
+LIBS="${LIBS-raw-tcp,kestrel-ws,nalix-tcp,nalix-ws,nalix-tcp-aead,signalr-ws-msgpack,grpc-unary,grpc-duplex,grpc-unary-tls,grpc-duplex-tls,nalix-tcp-nocomp,nalix-tcp-inline}"
 MO_LIBS="${MO_LIBS-magiconion-unary,magiconion-hub}"
 ARGS=(--sizes 32,1024 --clients 1,16,64 --runs 3 --lat-warmup 20000 --lat-iters 100000 --warmup 2 --duration 8)
 

@@ -88,7 +88,7 @@ MessagePack protocol is built against v2. Both executables share the same harnes
 Reproduce with:
 
 ```bash
-benchmarks/run-comparison.sh                      # everything (~65 min on the machine above)
+benchmarks/run-comparison.sh                      # everything (~75 min on the machine above)
 LIBS="nalix-tcp,grpc-duplex" MO_LIBS="" benchmarks/run-comparison.sh /tmp/cmp --runs 5
 ```
 
