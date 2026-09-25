@@ -66,5 +66,13 @@ public static class RekeyExtensions
             session.ResetSequenceCounters();
             throw;
         }
+        finally
+        {
+            // Both generations of the session key were copied into this async method's state
+            // machine, which lives on the GC heap. The live key is in session.State.Secret; these
+            // copies are not needed once the rotation has settled either way.
+            Bytes32.Wipe(ref previousKey);
+            Bytes32.Wipe(ref newKey);
+        }
     }
 }
