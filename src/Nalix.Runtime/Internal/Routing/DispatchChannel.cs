@@ -102,6 +102,28 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
     public int ReadyConnections => Volatile.Read(ref _readyConnections);
 
     /// <summary>
+    /// Gets a value indicating whether at least one connection sits in a ready queue waiting to be
+    /// claimed. Unlike <see cref="ReadyConnections"/>, connections already claimed by a worker are
+    /// not counted, so an idle worker can use this to decide whether it may sleep.
+    /// </summary>
+    internal bool HasClaimableConnection
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get
+        {
+            for (int p = HighestPriorityIndex; p >= LowestPriorityIndex; p--)
+            {
+                if (Volatile.Read(ref _readyEntriesByPrio[p]) > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Gets the total number of packets evicted (dropped) because of capacity limits.
     /// </summary>
     public long TotalEvicted => Interlocked.Read(ref _totalEvicted);

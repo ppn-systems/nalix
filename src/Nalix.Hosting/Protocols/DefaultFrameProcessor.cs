@@ -65,6 +65,18 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
 
     #endregion Constructors
 
+    #region Properties
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <see langword="true"/> when the owning protocol is <see cref="DefaultProtocol"/> backed by the
+    /// queued <see cref="Runtime.Dispatching.PacketDispatchChannel"/>: frame processing then only
+    /// decrypts/decompresses and enqueues, and handlers run on dispatch workers.
+    /// </remarks>
+    public bool SupportsInlineProcessing => _protocol is DefaultProtocol { UsesQueuedDispatch: true };
+
+    #endregion Properties
+
     #region Methods
 
     /// <summary>

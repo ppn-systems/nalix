@@ -47,8 +47,13 @@ public sealed class PacketDispatchChannel
 
     private readonly DispatchChannel<IPacket> _dispatch;
 
-    private readonly SemaphoreSlim _wakeSignal;
     private readonly int _maxDrainPerWake;
+
+    // One reusable, allocation-free wake signal per worker, plus a per-worker "parked" flag
+    // (1 = registered idle and eligible to be woken). Sized in Activate().
+    private WorkerWakeSignal[] _wakeSignal = [];
+    private int[] _parked = [];
+    private int _wakeCursor;
 
     private int _running;
     private int _activeLoops;
@@ -75,7 +80,6 @@ public sealed class PacketDispatchChannel
     public PacketDispatchChannel(Action<PacketDispatchOptions<IPacket>> options) : base(options)
     {
         _dispatch = new DispatchChannel<IPacket>();
-        _wakeSignal = new SemaphoreSlim(0, int.MaxValue);
         _maxDrainPerWake = Math.Clamp(System.Environment.ProcessorCount * this.Options.Drain.MaxDrainPerWakeMultiplier, this.Options.Drain.MinDrainPerWake, this.Options.Drain.MaxDrainPerWake);
     }
 
@@ -131,6 +135,16 @@ public sealed class PacketDispatchChannel
                 ? this.Options.Drain.Count
                 : Math.Clamp(System.Environment.ProcessorCount, this.Options.Drain.MinDispatchLoops, this.Options.Drain.MaxDispatchLoops);
         }
+
+        WorkerWakeSignal[] signals = new WorkerWakeSignal[_dispatchLoops];
+        for (int i = 0; i < signals.Length; i++)
+        {
+            signals[i] = new WorkerWakeSignal();
+        }
+
+        _parked = new int[_dispatchLoops];
+        _wakeSignal = signals;
+        _wakeCursor = 0;
 
         _workerHandle = new IWorkerHandle[_dispatchLoops];
         CancellationToken linkedTokenRef = linkedToken;
@@ -198,8 +212,12 @@ public sealed class PacketDispatchChannel
                 localCts.Cancel();
             }
 
-            int wakeCount = Math.Max(_dispatchLoops, 1);
-            _ = _wakeSignal.Release(wakeCount);
+            // Wake every worker so it observes _running == 0 / cancellation and exits.
+            WorkerWakeSignal[] signals = _wakeSignal;
+            for (int i = 0; i < signals.Length; i++)
+            {
+                _ = signals[i].Set();
+            }
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
@@ -452,6 +470,15 @@ public sealed class PacketDispatchChannel
         // This guarantees strict per-connection ordering while distributing
         // load evenly across all workers.
 
+        // Snapshot this generation's signal/flag arrays: a later Activate() replaces the fields.
+        WorkerWakeSignal signal = _wakeSignal[index];
+        int[] parked = _parked;
+
+        // Cancellation must wake a parked worker (the old 50 ms timed wait used to poll it).
+        // One registration per worker lifetime, not per wait.
+        using CancellationTokenRegistration ctReg = ct.UnsafeRegister(
+            static s => _ = ((WorkerWakeSignal)s!).Set(), signal);
+
         try
         {
             // Loop while work is available, with occasional yields to InstanceManager.Instance.GetOrCreateInstance<TaskManager>().
@@ -461,6 +488,13 @@ public sealed class PacketDispatchChannel
 
                 if (_dispatch.TryClaim(out IDispatchSession? session))
                 {
+                    // More connections are waiting to be claimed: hand one to a parked worker
+                    // so a burst fans out instead of being drained serially by this worker.
+                    if (_dispatch.HasClaimableConnection)
+                    {
+                        this.RequestWake();
+                    }
+
                     try
                     {
 #pragma warning disable CA2000
@@ -517,35 +551,48 @@ public sealed class PacketDispatchChannel
                 try
                 {
                     /*
-                     * [Wait Strategy: Idle Worker + Coalesced Wake-up]
-                     * We register as idle before waiting so that the next
-                     * RequestWake() will correctly Release() this worker's
-                     * semaphore slot, eliminating the starvation bug.
+                     * [Wait Strategy: Parked Worker + Per-Worker Wake Signal]
+                     * Publish "parked" (full fence via Interlocked) BEFORE re-checking the ready
+                     * queues. A producer publishes the ready entry (Interlocked) BEFORE reading the
+                     * parked flags in RequestWake(). With both sides fenced, either this worker sees
+                     * the new work, or the producer sees this worker parked and sets its signal, so
+                     * a wake cannot be lost and no timer poll is needed.
                      */
+                    _ = Interlocked.Exchange(ref parked[index], 1);
+
                     int spins = 0;
-                    while (_dispatch.TotalPackets == 0 && spins < 16)
+                    while (!_dispatch.HasClaimableConnection && spins < 16)
                     {
                         Thread.SpinWait(8);
                         spins++;
                     }
 
-                    // Zero-allocation asynchronous wait.
-                    _ = await _wakeSignal.WaitAsync(millisecondsTimeout: 50)
-                                         .ConfigureAwait(false);
+                    if (_dispatch.HasClaimableConnection ||
+                        Volatile.Read(ref _running) == 0 || ct.IsCancellationRequested)
+                    {
+                        // Work (or shutdown) showed up: un-park without sleeping. If a producer
+                        // already claimed our flag it also set our signal; drop that stale wake.
+                        if (Interlocked.Exchange(ref parked[index], 0) == 0)
+                        {
+                            signal.Clear();
+                        }
+                    }
+                    else
+                    {
+                        // Allocation-free wait; completes synchronously if already signaled.
+                        await signal.WaitAsync().ConfigureAwait(false);
+                        _ = Interlocked.Increment(ref _wakeReadSignals);
+                        _ = Interlocked.Exchange(ref parked[index], 0);
+                    }
 
                     if (ct.IsCancellationRequested)
                     {
                         break;
                     }
                 }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
                 finally
                 {
-                    // Whether we were woken by signal or timeout, we are no longer idle.
-                    // If we got work, we stay active; if not, we loop back and re-idle.
+                    // Whether we were woken or found work, we are no longer idle.
                     DecrementNonNegative(ref _idleWorkers);
                 }
 
@@ -725,24 +772,40 @@ public sealed class PacketDispatchChannel
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void RequestWake()
     {
-        // Release exactly one wake signal for each currently idle worker.
-        // This eliminates the starvation bug: under sustained load, the
-        // semaphore is released every time a new packet arrives, waking
-        // workers one-by-one until none remain idle.
-        long idle = Volatile.Read(ref _idleWorkers);
-        if (idle <= 0)
+        // Fast exit when nobody is parked (the common case under sustained load).
+        // _idleWorkers is incremented (full fence) before a worker re-checks the ready queues.
+        if (Volatile.Read(ref _idleWorkers) <= 0)
         {
             return;
         }
 
-        int toWake = (int)Math.Min(idle, _dispatchLoops);
-        if (toWake <= 0)
+        int[] parked = _parked;
+        WorkerWakeSignal[] signals = _wakeSignal;
+        int n = Math.Min(parked.Length, signals.Length);
+        if (n == 0)
         {
             return;
         }
 
-        _ = _wakeSignal.Release(toWake);
-        _ = Interlocked.Increment(ref _wakeSignals);
+        // Wake exactly one parked worker per ready emission. Start the scan at a rotating
+        // cursor so wake-ups are spread across workers instead of always hitting worker 0.
+        int start = (int)((uint)Interlocked.Increment(ref _wakeCursor) % (uint)n);
+        for (int k = 0; k < n; k++)
+        {
+            int i = start + k;
+            if (i >= n)
+            {
+                i -= n;
+            }
+
+            if (Volatile.Read(ref parked[i]) == 1 &&
+                Interlocked.CompareExchange(ref parked[i], 0, 1) == 1)
+            {
+                _ = signals[i].Set();
+                _ = Interlocked.Increment(ref _wakeSignals);
+                return;
+            }
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -767,7 +830,6 @@ public sealed class PacketDispatchChannel
     {
         this.Deactivate();
         _dispatch.Dispose();
-        _wakeSignal.Dispose();
         _linkedCts?.Dispose();
         _cts?.Dispose();
     }

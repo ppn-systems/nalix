@@ -124,7 +124,7 @@ The `IProtocol` interface bridges listener-owned transport state and dispatch. I
 `PacketDispatchChannel` is the engine of Nalix. It provides:
 
 - **Worker sharding** — Multiple worker loops (parallel to CPU core count) prevent head-of-line blocking. One slow handler does not stall unrelated packets.
-- **Wake-signaling** — Coalesced signaling using a `SemaphoreSlim` wake signal minimizes thread context switching under bursty load.
+- **Wake-signaling** — Each dispatch worker parks on its own allocation-free, reusable wake signal; a producer wakes exactly one parked worker per newly ready connection, with no timer polling.
 - **Prioritization** — Native support for `PacketPriority` (`URGENT`, `HIGH`, `MEDIUM`, `LOW`, `NONE`).
 
 ### 4. Packet Registry

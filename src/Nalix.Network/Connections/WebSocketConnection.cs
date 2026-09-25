@@ -315,6 +315,12 @@ public sealed class WebSocketConnection :
 
     internal void TriggerPostProcessEvent()
     {
+        // Only pay for event args + a thread-pool hop when someone listens to MessageProcessed.
+        if (Volatile.Read(ref _backing)?.MessageProcessed is null)
+        {
+            return;
+        }
+
         ConnectionEventArgs args = this.AcquireEventArgs();
         args.Initialize(this);
 
@@ -330,6 +336,16 @@ public sealed class WebSocketConnection :
         if (backing == null)
         {
             lease.Dispose();
+            return;
+        }
+
+        // Fast path: see Connection.OnFrameReceived — a non-blocking frame processor runs on the
+        // receive loop directly instead of via a thread-pool work item.
+        if (Internal.Transport.AsyncCallback.CanRunInline(backing.MessageProcessing))
+        {
+            ConnectionEventArgs inlineArgs = this.AcquireEventArgs();
+            inlineArgs.Initialize(lease, this);
+            Internal.Transport.AsyncCallback.InvokeInline(MessageProcessingBridge, this, inlineArgs);
             return;
         }
 

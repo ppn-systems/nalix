@@ -55,8 +55,8 @@ Dispatch runtime needs efficient enqueue/dequeue behavior with per-connection is
 
 - `TotalPackets`, `TotalConnections`, `ReadyConnections`
 - `PendingPerPriority`, `PendingPerConnection`
-- `WakeSignals`, `WakeReads`, `WakeRequested`
-- The worker wake path is currently based on a `SemaphoreSlim` plus a coalesced `_wakeRequested` flag in `src/Nalix.Runtime/Dispatching/PacketDispatchChannel.cs`.
+- `WakeSignals`, `WakeReads`, `IdleWorkers`
+- The worker wake path uses one allocation-free `WorkerWakeSignal` per worker (`src/Nalix.Runtime/Internal/Routing/WorkerWakeSignal.cs`) plus per-worker parked flags in `src/Nalix.Runtime/Dispatching/PacketDispatchChannel.cs`. No timer polling.
 
 ## Related APIs
 

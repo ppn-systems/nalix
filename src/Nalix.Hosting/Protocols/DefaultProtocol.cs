@@ -39,6 +39,12 @@ public sealed class DefaultProtocol : Protocol
     /// <inheritdoc/>
     public override IFrameProcessor FrameProcessor => _frameProcessor;
 
+    /// <summary>
+    /// Gets a value indicating whether packets are handed to the queued <see cref="PacketDispatchChannel"/>,
+    /// whose <c>HandlePacket</c> only enqueues and never runs handlers on the caller's thread.
+    /// </summary>
+    internal bool UsesQueuedDispatch => _dispatch is PacketDispatchChannel;
+
     /// <inheritdoc/>
     public override IOpCodeExtractor OpCodeExtractor => s_opCodeExtractor;
 

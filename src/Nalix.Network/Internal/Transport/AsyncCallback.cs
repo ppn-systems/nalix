@@ -247,6 +247,42 @@ internal static class AsyncCallback
         return QUEUE(s_invokeHigh, callback, sender, args, isHigh: true, releasePendingPacketOnCompletion: false, CallbackLane.Process);
     }
 
+    /// <summary>
+    /// Returns <see langword="true"/> when the frame handler is a single <see cref="IFrameProcessor"/>
+    /// that declared <see cref="IFrameProcessor.SupportsInlineProcessing"/>, so the receive
+    /// completion may run it directly instead of queuing a thread-pool work item.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool CanRunInline([NotNullWhen(true)] EventHandler<IConnectionEventArgs>? callback)
+        => callback is not null
+           && callback.HasSingleTarget
+           && callback.Target is IFrameProcessor { SupportsInlineProcessing: true };
+
+    /// <summary>
+    /// Runs a process-lane callback synchronously on the calling (receive) thread.
+    /// </summary>
+    /// <remarks>
+    /// Used only for frame processors that declared themselves non-blocking (see
+    /// <see cref="CanRunInline"/>). Queuing such a callback adds a thread-pool hop per frame and
+    /// buys no isolation: the processor only transforms the frame and hands it to the dispatch
+    /// queue, which already decouples handler execution from the transport. Running it inline
+    /// also keeps per-connection frame order. Exceptions are contained exactly like the queued path.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void InvokeInline(EventHandler<IConnectionEventArgs> callback, object? sender, IConnectionEventArgs args)
+    {
+        _ = Interlocked.Increment(ref s_totalInvoked);
+
+        try
+        {
+            callback(sender, args);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            LOG_THROTTLED_ERROR_SAFE(ref s_callbackErrorTicks, ref s_callbackErrorSuppressed, "async.callback_error", ex);
+        }
+    }
+
     /// <summary>Gets diagnostic statistics about callback processing.</summary>
     public static AsyncCallbackMetrics GetStatistics()
         => new(

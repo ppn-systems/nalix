@@ -730,6 +730,19 @@ public sealed partial class Connection :
             return false;
         }
 
+        // Fast path: a non-blocking frame processor (the default protocol over the queued
+        // dispatcher) runs directly on the receive completion. It only decodes and enqueues into
+        // the dispatch channel, which is the real hand-off to worker threads, so the extra
+        // thread-pool hop bought no isolation. Per-connection pending limits do not apply because
+        // nothing is left pending once the call returns.
+        if (Internal.Transport.AsyncCallback.CanRunInline(backing.MessageProcessing))
+        {
+            ConnectionEventArgs inlineArgs = this.AcquireEventArgs();
+            inlineArgs.Initialize(lease, this);
+            Internal.Transport.AsyncCallback.InvokeInline(MessageProcessingBridge, this, inlineArgs);
+            return true;
+        }
+
         int pending = Interlocked.Increment(ref backing.PendingProcessCallbacks);
 
         if (pending > s_callbackOptions.MaxPerConnectionPendingPackets)
@@ -761,6 +774,12 @@ public sealed partial class Connection :
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void OnFrameSent()
     {
+        // Only pay for event args + a thread-pool hop when someone listens to MessageProcessed.
+        if (Volatile.Read(ref _backing)?.MessageProcessed is null)
+        {
+            return;
+        }
+
         ConnectionEventArgs args = this.AcquireEventArgs();
         args.Initialize(this);
 
