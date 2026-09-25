@@ -142,7 +142,8 @@ public static class RequestExtensions
                     client,
                     predicate: effectivePredicate,
                     timeoutMs: options.TimeoutMs,
-                    sendAsync: token => client.SendAsync(request, encrypt: options.Encrypt, token),
+                    request,
+                    options.Encrypt,
                     ct).ConfigureAwait(false);
 
                 return result;
