@@ -93,9 +93,10 @@ public sealed class CustomSessionPersistencePolicyTests
     }
 
     /// <summary>
-    /// Area 6 boundary: MinAttributesForPersistence defaults to 20 and the policy check is
-    /// <c>Count &lt;= MinAttributesForPersistence</c> — exactly 20 attributes (including the
-    /// RuntimeState internal flag) must still be rejected; the count must exceed the threshold.
+    /// Area 6 boundary: the policy check is <c>Count &lt;= MinAttributesForPersistence</c> — a count
+    /// exactly at the configured threshold (including the RuntimeState internal flag) must still be
+    /// rejected; the count must exceed it. The threshold is read from options rather than hardcoded,
+    /// since the default is tunable (it moved from 20 to 10 in #333).
     /// </summary>
     [Fact]
     public void DefaultSessionPersistencePolicy_Fails_WhenAttributeCountExactlyAtThreshold()
@@ -107,17 +108,25 @@ public sealed class CustomSessionPersistencePolicyTests
         runtimeState.HandshakeEstablished = true;
         attributes[ConnectionAttributes.RuntimeState] = runtimeState;
 
-        // 19 extra keys + 1 RuntimeState key = 20 total, exactly at the default threshold.
-        for (int i = 0; i < 19; i++)
+        int threshold = Nalix.Environment.Configuration.ConfigurationManager.Instance
+            .Get<Nalix.Runtime.Options.SessionStoreOptions>().MinAttributesForPersistence;
+
+        // (threshold - 1) extra keys + 1 RuntimeState key = exactly threshold total.
+        for (int i = 0; i < threshold - 1; i++)
         {
             attributes[AttributeKey.FromName($"key_{i}")] = i;
         }
         mockConnection.Attributes.Returns(attributes);
+        attributes.Count.Should().Be(threshold);
 
         var policy = new DefaultSessionPersistencePolicy();
 
         policy.ShouldPersist(mockConnection).Should().BeFalse(
-            "Count <= MinAttributesForPersistence (20 <= 20) must reject, not just Count < MinAttributesForPersistence");
+            $"Count <= MinAttributesForPersistence ({threshold} <= {threshold}) must reject, not just Count < MinAttributesForPersistence");
+
+        // One more attribute crosses the threshold and must be accepted.
+        attributes[AttributeKey.FromName("key_over")] = 0;
+        policy.ShouldPersist(mockConnection).Should().BeTrue();
 
         attributes.Return();
     }

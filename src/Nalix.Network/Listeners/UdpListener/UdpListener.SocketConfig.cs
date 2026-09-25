@@ -29,7 +29,26 @@ public abstract partial class UdpListenerBase
         IPAddress bindAddress = _options.EnableDualStack ? IPAddress.IPv6Any : IPAddress.Any;
         AddressFamily af = _options.EnableDualStack ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
 
-        _socket = new Socket(af, SocketType.Dgram, ProtocolType.Udp);
+        try
+        {
+            _socket = new Socket(af, SocketType.Dgram, ProtocolType.Udp);
+        }
+        catch (SocketException ex) when (af == AddressFamily.InterNetworkV6 &&
+            ex.SocketErrorCode is SocketError.AddressFamilyNotSupported or SocketError.ProtocolNotSupported)
+        {
+            // Host has IPv6 disabled (e.g. ipv6.disable=1, minimal containers). Mirror the TCP
+            // listener and fall back to IPv4-only instead of failing to bind at all.
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+            {
+                DiagnosticsEvents.Write(
+                    DiagnosticsEvents.Internal.Warning,
+                    new DiagnosticLog("NW.UdpListenerBase:Initialize", $"ipv6-unavailable fallback=ipv4 port={_port}", ex));
+            }
+
+            af = AddressFamily.InterNetwork;
+            bindAddress = IPAddress.Any;
+            _socket = new Socket(af, SocketType.Dgram, ProtocolType.Udp);
+        }
 
         bool actualDualMode = false;
         bool requestedDualMode = af == AddressFamily.InterNetworkV6 && _options.DualMode;
