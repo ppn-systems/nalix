@@ -1,0 +1,5 @@
+body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 48rem; }
+section { margin-bottom: 1.5rem; }
+input { padding: .3rem; margin-right: .3rem; }
+button { padding: .3rem .8rem; margin-right: .3rem; }
+.error { color: #b00020; }

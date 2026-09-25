@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>BlazorWasm.Server</RootNamespace>
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\BlazorWasm.Contracts\BlazorWasm.Contracts.csproj" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.9" />
+		<PackageReference Include="Nalix.Abstractions" Version="14.3.1" />
+		<PackageReference Include="Nalix.Hosting" Version="14.3.1" />
+	</ItemGroup>
+
+</Project>
