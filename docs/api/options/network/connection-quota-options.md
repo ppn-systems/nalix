@@ -13,6 +13,7 @@
 
 | Property | Default | Validation | Runtime consumer |
 | --- | ---: | --- | --- |
+| `ExemptLoopback` | `true` | Boolean | Loopback clients (`127.0.0.0/8`, `::1`, `::ffff:127.x.x.x`) bypass per-IP and per-subnet caps, rate windows, and automatic bans. The global `ConnectionGuardOptions.MaxConnections` cap still applies. |
 | `MaxConnectionsPerIpAddress` | `10` | `1..10_000` | `ConnectionGuard` concurrent slot limit per endpoint. |
 | `MaxConnectionsPerWindow` | `10` | `1..10_000_000` | `ConnectionGuard` rate-window admission check. |
 | `ConnectionRateWindow` | `00:00:05` | `00:00:01..00:10:00` | Sliding window used to trim recent connection timestamps. |
@@ -22,6 +23,20 @@
 | `InactivityThreshold` | `00:05:00` | `00:00:01..1.00:00:00` | Age cutoff for removing inactive zero-connection entries. |
 | `MaxCleanupKeysPerRun` | `0` | `0..10_000_000` | Max endpoint keys scanned per cleanup cycle; `0` auto-scales based on tracked entry count. |
 | `DailyResetTimeOffset` | `00:00:00` | `-14:00:00..14:00:00` | UTC offset used to determine the start-of-day for daily connection-limit resets. |
+
+!!! note "Loopback and local benchmarks"
+    With the stock limits (10 concurrent / 10 attempts per 5 s, halved in burst mode) a single
+    remote IP that opens more than a handful of connections at once is rejected and then
+    progressively banned. Loopback is exempt by default so local development, integration tests,
+    and load generators on the same host are not banned. Set `ExemptLoopback = false` if untrusted
+    traffic can reach the server through a loopback hop (for example a same-host reverse proxy
+    that does not forward the real client address) — in that setup prefer configuring
+    `TrustedProxyOptions` so the real client IP is limited instead.
+
+!!! tip "Configure order"
+    `ConnectionGuard` is created during `Build()`, after every `Configure<TOptions>()` delegate
+    runs, so `Configure<ConnectionQuotaOptions>(...)` may appear before or after
+    `UseSecureConnections()` / `UseSystemControl()`.
 
 `Validate()` runs DataAnnotation validation and throws `ValidationException` when constraints are violated.
 

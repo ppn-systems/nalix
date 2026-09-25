@@ -151,6 +151,10 @@ internal static class ServiceRegistrar
         {
             InstanceManager.Instance.Register<IConnectionGuard>(guard);
             InstanceManager.Instance.Register<IProofOfWorkPolicy>(guard);
+
+            // Also expose the concrete type so code resolving ConnectionGuard directly
+            // gets the same instance the listeners use (not a second, differently-configured one).
+            InstanceManager.Instance.Register<ConnectionGuard>(guard);
         }
         catch
         {

@@ -367,7 +367,7 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
 
         ConnectionAllowResult result = this.TRY_ACQUIRE_CONNECTION_SLOT(key, now, endPoint.Address);
 
-        if (result.Allowed)
+        if (result.Allowed && !this.IS_EXEMPT_LOOPBACK(key))
         {
             SubnetAllowResult subnetResult = this.TRY_ACQUIRE_SUBNET_SLOT(endPoint.Address, now.Ticks);
             if (!subnetResult.Allowed)
@@ -485,7 +485,7 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
         // Zero-alloc connection slot: trusted-proxy check uses SocketEndpoint directly.
         ConnectionAllowResult result = this.TRY_ACQUIRE_CONNECTION_SLOT(endpoint, now);
 
-        if (result.Allowed)
+        if (result.Allowed && !this.IS_EXEMPT_LOOPBACK(endpoint))
         {
             // Zero-alloc subnet slot: extract subnet key from raw bytes via TryGetSubnetKey.
             SubnetAllowResult subnetResult = this.TRY_ACQUIRE_SUBNET_SLOT(endpoint, now.Ticks);

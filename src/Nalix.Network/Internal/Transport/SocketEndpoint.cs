@@ -388,6 +388,19 @@ internal readonly struct SocketEndpoint : INetworkEndpoint, IEquatable<SocketEnd
         }
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the address is a loopback address
+    /// (<c>127.0.0.0/8</c>, <c>::1</c>, or an IPv4-mapped <c>::ffff:127.x.x.x</c>).
+    /// </summary>
+    public bool IsLoopback
+    {
+        [Pure]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => !this.IsIPv6
+            ? ((uint)_lo >> 24) == 127u
+            : _hi == 0UL && (_lo == 1UL || ((_lo >> 32) == 0xFFFFUL && (((uint)_lo) >> 24) == 127u));
+    }
+
     public int Port
     {
         [Pure]

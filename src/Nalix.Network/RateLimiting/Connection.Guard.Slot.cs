@@ -18,6 +18,49 @@ public sealed partial class ConnectionGuard
     #region Connection Slot Management
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IS_EXEMPT_LOOPBACK(SocketEndpoint key) => _config.ExemptLoopback && key.IsLoopback;
+
+    /// <summary>
+    /// Loopback fast path: counts the connection (so release stays balanced) but skips
+    /// per-IP caps, rate windows, burst detection, and bans.
+    /// </summary>
+    private ConnectionAllowResult ACQUIRE_LOOPBACK_SLOT(SocketEndpoint key, DateTime now)
+    {
+        while (true)
+        {
+            ConnectionLimitEntry entry = _map.GetOrAdd(key, static _ => new ConnectionLimitEntry());
+            _ = Interlocked.Exchange(ref entry.LastSeenAtTicks, now.Ticks);
+
+            bool lockTaken = false;
+            try
+            {
+                entry.SpinLock.Enter(ref lockTaken);
+                if (entry.IsRemoved)
+                {
+                    continue;
+                }
+
+                entry.Info = entry.Info with
+                {
+                    CurrentConnections = entry.Info.CurrentConnections + 1,
+                    TotalConnectionsToday = CALCULATE_TOTAL_CONNECTIONS_TODAY(entry.Info, now, _config.DailyResetTimeOffset),
+                    LastConnectionTime = now
+                };
+                entry.LastAcceptTimeTicks = now.Ticks;
+
+                return new ConnectionAllowResult { Allowed = true, CurrentConnections = entry.Info.CurrentConnections };
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    entry.SpinLock.Exit();
+                }
+            }
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void UPDATE_EWMA_SHARED()
     {
         long nowTicks = Clock.NowUtc().Ticks;
@@ -75,6 +118,11 @@ public sealed partial class ConnectionGuard
 
     private ConnectionAllowResult TRY_ACQUIRE_CONNECTION_SLOT(SocketEndpoint key, DateTime now)
     {
+        if (this.IS_EXEMPT_LOOPBACK(key))
+        {
+            return this.ACQUIRE_LOOPBACK_SLOT(key, now);
+        }
+
         // Zero-alloc trusted proxy check via raw-byte CIDR matching.
         bool isTrustedProxy = _accessList.IsTrustedProxy(key);
 
@@ -401,6 +449,11 @@ public sealed partial class ConnectionGuard
     /// <param name="address"></param>
     private ConnectionAllowResult TRY_ACQUIRE_CONNECTION_SLOT(SocketEndpoint key, DateTime now, IPAddress address)
     {
+        if (this.IS_EXEMPT_LOOPBACK(key))
+        {
+            return this.ACQUIRE_LOOPBACK_SLOT(key, now);
+        }
+
         // 3. Trusted proxy check
         bool isTrustedProxy = _accessList.IsTrustedProxy(address);
 

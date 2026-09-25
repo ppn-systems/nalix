@@ -19,7 +19,13 @@ public sealed class ConnectionGuardTests
     private static IPAddress GetUniqueIp()
     {
         byte[] b = Guid.NewGuid().ToByteArray();
-        return new IPAddress(new byte[] { (byte)(b[0] % 223 + 1), b[1], b[2], b[3] });
+        byte first = (byte)(b[0] % 223 + 1);
+        if (first == 127)
+        {
+            first = 126; // loopback is exempt from quotas by default
+        }
+
+        return new IPAddress(new byte[] { first, b[1], b[2], b[3] });
     }
 
     [Fact]
@@ -42,6 +48,51 @@ public sealed class ConnectionGuardTests
 
         guard.TryAccept(endpoint).Should().BeTrue();
         guard.TryAccept(endpoint).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("127.12.34.56")]
+    [InlineData("::1")]
+    [InlineData("::ffff:127.0.0.1")]
+    public void TryAccept_LoopbackByDefault_IsNotThrottledOrBanned(string address)
+    {
+        ConnectionQuotaOptions options = new()
+        {
+            MaxConnectionsPerIpAddress = 2,
+            MaxConnectionsPerWindow = 2,
+            MaxConnectionsPerSubnet = 2,
+            MaxSubnetConnectionsPerWindow = 2,
+        };
+        using ConnectionGuard guard = new(options);
+        IPEndPoint endpoint = new(IPAddress.Parse(address), 12345);
+
+        for (int i = 0; i < 64; i++)
+        {
+            guard.TryAccept(endpoint).Should().BeTrue($"loopback connection #{i} must not be rejected");
+        }
+    }
+
+    [Fact]
+    public void TryAccept_LoopbackWithExemptionDisabled_IsLimited()
+    {
+        ConnectionQuotaOptions options = new() { MaxConnectionsPerIpAddress = 1, ExemptLoopback = false };
+        using ConnectionGuard guard = new(options);
+        IPEndPoint endpoint = new(IPAddress.Parse("127.0.0.77"), 12345);
+
+        guard.TryAccept(endpoint).Should().BeTrue();
+        guard.TryAccept(endpoint).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryAccept_RemoteIp_StillLimitedWhileLoopbackExempt()
+    {
+        ConnectionQuotaOptions options = new() { MaxConnectionsPerIpAddress = 1 };
+        using ConnectionGuard guard = new(options);
+        IPEndPoint remote = new(GetUniqueIp(), 12345);
+
+        guard.TryAccept(remote).Should().BeTrue();
+        guard.TryAccept(remote).Should().BeFalse();
     }
 
 #if DEBUG
@@ -386,7 +437,7 @@ public sealed class ConnectionGuardTests
         byte[] subnetPrefix = Guid.NewGuid().ToByteArray();
         IPEndPoint MappedEndpoint(byte lastOctet)
         {
-            IPAddress v4 = new(new byte[] { (byte)(subnetPrefix[0] % 223 + 1), subnetPrefix[1], subnetPrefix[2], lastOctet });
+            IPAddress v4 = new(new byte[] { (byte)(subnetPrefix[0] % 126 + 1), subnetPrefix[1], subnetPrefix[2], lastOctet });
             IPAddress mapped = v4.MapToIPv6();
             mapped.AddressFamily.Should().Be(System.Net.Sockets.AddressFamily.InterNetworkV6);
             return new IPEndPoint(mapped, 12345);
