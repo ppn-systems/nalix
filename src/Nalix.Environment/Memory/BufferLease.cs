@@ -499,21 +499,22 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
 
         if (buf is not null)
         {
-            if (len > 0)
+            if (this.ZeroOnDispose)
             {
-                Span<byte> slice = new(buf, start, len);
-
-                if (this.ZeroOnDispose)
-                {
-                    slice.Clear();
-                }
-#if DEBUG
-                if (EnablePoisonOnDispose)
-                {
-                    slice.Fill(PoisonByte);
-                }
-#endif
+                // [SECURITY] Secret material can sit outside the committed slice: callers write
+                // headers into the headroom below _start, and SpanFull lets them write past
+                // Length before committing it (or without committing it at all, when a transform
+                // fails). Scrubbing only [start, start + Length) would leave those bytes in the
+                // pool, so the whole rented array is cleared instead.
+                buf.AsSpan().Clear();
             }
+
+#if DEBUG
+            if (EnablePoisonOnDispose && len > 0)
+            {
+                new Span<byte>(buf, start, len).Fill(PoisonByte);
+            }
+#endif
 
             ByteArrayPool.Return(buf);
         }

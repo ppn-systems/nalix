@@ -54,58 +54,28 @@ public ref struct Poly1305
     public const byte TagSize = 16;
 
     /// <summary>
-    /// Number of 32-bit words in the accumulator / r / prime representation (130 bits -> 5 words).
-    /// </summary>
-    private const byte WordCount = 5;
-
-    /// <summary>
-    /// Number of 32-bit words in the s part of the key (128 bits -> 4 words).
-    /// </summary>
-    private const byte SWordCount = 4;
-
-    /// <summary>
     /// Block size in bytes for Poly1305 message processing.
     /// </summary>
     private const byte BlockBytes = 16;
 
     /// <summary>
-    /// Block size + 1 byte for the 0x01 padding sentinel.
+    /// Bits carried by each of the five limbs that represent a 130-bit value.
     /// </summary>
-    private const byte PaddedBlockBytes = 17;
+    private const int LimbBits = 26;
+
+    /// <summary>
+    /// Mask of one limb: <c>2²⁶ − 1</c>.
+    /// </summary>
+    private const uint LimbMask = (1u << LimbBits) - 1u;
+
+    /// <summary>
+    /// The implicit high bit appended to every full 16-byte block per RFC 8439 §2.5.1.
+    /// </summary>
+    private const uint BlockHighBit = 1u << 24;
 
     #endregion Constants
 
     #region Inline Array Definitions
-
-    /// <summary>
-    /// Inline buffer: 5 × <see cref="uint"/> = 20 bytes.
-    /// Used for the accumulator, r key part, and arithmetic scratch space.
-    /// </summary>
-    [System.Runtime.CompilerServices.InlineArray(WordCount)]
-    private struct UInt32x5
-    {
-        private uint _e0;
-    }
-
-    /// <summary>
-    /// Inline buffer: 4 × <see cref="uint"/> = 16 bytes.
-    /// Used for the s key part.
-    /// </summary>
-    [System.Runtime.CompilerServices.InlineArray(SWordCount)]
-    private struct UInt32x4
-    {
-        private uint _e0;
-    }
-
-    /// <summary>
-    /// Inline buffer: 10 × <see cref="uint"/> = 40 bytes.
-    /// Used as scratch space during 130-bit multiplication.
-    /// </summary>
-    [System.Runtime.CompilerServices.InlineArray(10)]
-    private struct UInt32x10
-    {
-        private uint _e0;
-    }
 
     /// <summary>
     /// Inline buffer: 16 × <see cref="byte"/> = 16 bytes.
@@ -117,60 +87,36 @@ public ref struct Poly1305
         private byte _e0;
     }
 
-    /// <summary>
-    /// Inline buffer: 17 × <see cref="byte"/> = 17 bytes.
-    /// Used to hold a padded message block (16 data bytes + 0x01 sentinel).
-    /// </summary>
-    [System.Runtime.CompilerServices.InlineArray(PaddedBlockBytes)]
-    private struct ByteBlock17
-    {
-        private byte _e0;
-    }
-
     #endregion Inline Array Definitions
 
-    #region Static Read-Only
 
-    /// <summary>
-    /// The prime number p = 2¹³⁰ − 5, represented as five 32-bit little-endian words.
-    /// </summary>
-    private static readonly UInt32x5 s_prime = CreatePrime();
-
-    /// <summary>
-    /// Initializes the compile-time constant for the Poly1305 prime.
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-    private static UInt32x5 CreatePrime()
-    {
-        UInt32x5 p = default;
-        System.Span<uint> span = p;
-        span[0] = 0xFFFF_FFFB;
-        span[1] = 0xFFFF_FFFF;
-        span[2] = 0xFFFF_FFFF;
-        span[3] = 0xFFFF_FFFF;
-        span[4] = 0x0000_0003;
-        return p;
-    }
-
-    #endregion Static Read-Only
 
     #region Fields
 
-    /// <summary>
-    /// The clamped r part of the key (5 words, 130-bit representation).
-    /// </summary>
-    private UInt32x5 _r;
+    /// <summary>The clamped key <c>r</c>, as five 26-bit limbs.</summary>
+    private Limbs _r;
 
     /// <summary>
-    /// The s part of the key (4 words, 128-bit).
+    /// <c>r[1..4] × 5</c>, precomputed. The reduction folds the high limbs back in multiplied by
+    /// five (since 2¹³⁰ ≡ 5 mod p), so keeping these out of the inner loop saves four multiplies
+    /// per block.
     /// </summary>
-    private UInt32x4 _s;
+    private Limbs _r5;
 
-    /// <summary>
-    /// The running accumulator h (5 words, 130-bit).
-    /// </summary>
-    private UInt32x5 _acc;
+    /// <summary>The <c>s</c> part of the key, as four little-endian 32-bit words.</summary>
+    private uint _pad0;
+
+    /// <summary>The second word of <c>s</c>.</summary>
+    private uint _pad1;
+
+    /// <summary>The third word of <c>s</c>.</summary>
+    private uint _pad2;
+
+    /// <summary>The fourth word of <c>s</c>.</summary>
+    private uint _pad3;
+
+    /// <summary>The running accumulator <c>h</c>, as five 26-bit limbs.</summary>
+    private Limbs _acc;
 
     /// <summary>
     /// Buffer holding a partial (not-yet-full) message block between <see cref="Update"/> calls.
@@ -220,18 +166,13 @@ public ref struct Poly1305
         _finalized = false;
         _cleared = false;
 
-        // Extract and clamp r (first 16 bytes) per RFC 8439 §2.5
-        ClampR(key[..16], _r);
+        ClampR(key[..16], ref _r, ref _r5);
 
-        // Extract s (last 16 bytes) as four little-endian 32-bit words
         System.ReadOnlySpan<byte> sBytes = key.Slice(16, 16);
-        System.Span<uint> sSpan = _s;
-
-        for (int i = 0; i < SWordCount; i++)
-        {
-            sSpan[i] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(
-                sBytes.Slice(i * 4, 4));
-        }
+        _pad0 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(sBytes[..4]);
+        _pad1 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(sBytes.Slice(4, 4));
+        _pad2 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(sBytes.Slice(8, 4));
+        _pad3 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(sBytes.Slice(12, 4));
     }
 
     #endregion Constructors
@@ -378,37 +319,22 @@ public ref struct Poly1305
                 $"Destination buffer must be at least {TagSize} bytes.", nameof(destination));
         }
 
-        // Fresh accumulator for the one-shot path
-        UInt32x5 accumulator = default;
+        // The one-shot path ignores whatever Update may have accumulated and starts from zero.
+        Limbs h = default;
 
-        int offset = 0;
-        int messageLength = message.Length;
-
-        // Scratch block (17 bytes: 16 data + 0x01 padding)
-        ByteBlock17 block17 = default;
-
-        while (offset < messageLength)
+        int fullBlocks = message.Length / BlockBytes;
+        if (fullBlocks > 0)
         {
-            // Clear block to avoid stale data from the previous iteration
-            ((System.Span<byte>)block17).Clear();
-
-            // Determine block size (final block may be < 16 bytes)
-            int blockSize = System.Math.Min(BlockBytes, messageLength - offset);
-
-            // Copy message slice into the block
-            message.Slice(offset, blockSize).CopyTo(block17);
-
-            // Append 0x01 padding byte after the data
-            ((System.Span<byte>)block17)[blockSize] = 0x01;
-
-            // Absorb: isFinalBlock = true only when blockSize < 16 (last partial block)
-            this.AddBlock(accumulator, ((System.ReadOnlySpan<byte>)block17)[..(blockSize + 1)], blockSize < BlockBytes);
-
-            offset += blockSize;
+            this.AbsorbFullBlocks(ref h, message[..(fullBlocks * BlockBytes)]);
         }
 
-        // Produce the tag
-        this.FinalizeTagCore(accumulator, destination);
+        System.ReadOnlySpan<byte> tail = message[(fullBlocks * BlockBytes)..];
+        if (!tail.IsEmpty)
+        {
+            this.AbsorbFinalBlock(ref h, tail);
+        }
+
+        this.FinalizeTagCore(ref h, destination);
 
         // Securely zero all sensitive key material after one-shot use
         this.Clear();
@@ -439,11 +365,9 @@ public ref struct Poly1305
                 "Poly1305 has already been finalized.");
         }
 
-        ByteBlock17 block17 = default;
-        System.Span<byte> block17Span = block17;
         System.Span<byte> pendingSpan = _pending;
 
-        // ── Try to fill the pending buffer to a full 16-byte block ──
+        // ── Top up the pending buffer to a full 16-byte block first ──
         if (_pendingLen > 0)
         {
             int need = BlockBytes - _pendingLen;
@@ -458,29 +382,20 @@ public ref struct Poly1305
 
             if (_pendingLen is BlockBytes)
             {
-                // Full block ready — absorb it
-                pendingSpan.CopyTo(block17Span);
-                block17Span[BlockBytes] = 0x01;
-
-                this.AddBlock(_acc, ((System.ReadOnlySpan<byte>)block17)[..PaddedBlockBytes], isFinalBlock: false);
-
+                this.AbsorbFullBlocks(ref _acc, pendingSpan);
                 _pendingLen = 0;
             }
         }
 
-        // ── Process as many full 16-byte blocks as possible ──
-        while (data.Length >= BlockBytes)
+        // ── Absorb whole blocks straight from the caller's buffer ──
+        int fullBlocks = data.Length / BlockBytes;
+        if (fullBlocks > 0)
         {
-            block17Span.Clear();
-            data[..BlockBytes].CopyTo(block17Span);
-            block17Span[BlockBytes] = 0x01;
-
-            this.AddBlock(_acc, ((System.ReadOnlySpan<byte>)block17)[..PaddedBlockBytes], isFinalBlock: false);
-
-            data = data[BlockBytes..];
+            this.AbsorbFullBlocks(ref _acc, data[..(fullBlocks * BlockBytes)]);
+            data = data[(fullBlocks * BlockBytes)..];
         }
 
-        // ── Stash remaining tail (< 16 bytes) ──
+        // ── Stash the remaining tail (< 16 bytes) ──
         if (!data.IsEmpty)
         {
             data.CopyTo(pendingSpan[_pendingLen..]);
@@ -518,28 +433,15 @@ public ref struct Poly1305
                 "Poly1305 has already been finalized.");
         }
 
-        // ── Absorb any remaining partial block ──
         if (_pendingLen > 0)
         {
-            ByteBlock17 block = default;
-            System.Span<byte> blockSpan = block;
-            blockSpan.Clear();
-
-            ((System.ReadOnlySpan<byte>)_pending)[.._pendingLen].CopyTo(blockSpan);
-            blockSpan[_pendingLen] = 0x01;
-
-            // Partial final block: isFinalBlock = true -> n[4] = 0
-            this.AddBlock(
-                _acc,
-                ((System.ReadOnlySpan<byte>)block)[..(_pendingLen + 1)],
-                isFinalBlock: true);
+            this.AbsorbFinalBlock(ref _acc, ((System.ReadOnlySpan<byte>)_pending)[.._pendingLen]);
 
             ((System.Span<byte>)_pending).Clear();
             _pendingLen = 0;
         }
 
-        // ── Produce the tag = (accumulator mod p) + s ──
-        this.FinalizeTagCore(_acc, tag16);
+        this.FinalizeTagCore(ref _acc, tag16);
 
         _finalized = true;
 
@@ -601,10 +503,18 @@ public ref struct Poly1305
     {
         if (!_cleared)
         {
-            MemorySecurity.ZeroMemory(System.Runtime.InteropServices.MemoryMarshal.AsBytes((System.Span<uint>)_r));
-            MemorySecurity.ZeroMemory(System.Runtime.InteropServices.MemoryMarshal.AsBytes((System.Span<uint>)_s));
-            MemorySecurity.ZeroMemory(System.Runtime.InteropServices.MemoryMarshal.AsBytes((System.Span<uint>)_acc));
+            MemorySecurity.ZeroMemory(System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+                System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref _r, 0x01)));
+            MemorySecurity.ZeroMemory(System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+                System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref _r5, 0x01)));
+            MemorySecurity.ZeroMemory(System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+                System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref _acc, 0x01)));
             MemorySecurity.ZeroMemory(_pending);
+
+            _pad0 = 0;
+            _pad1 = 0;
+            _pad2 = 0;
+            _pad3 = 0;
 
             _pendingLen = 0;
             _cleared = true;
@@ -616,25 +526,39 @@ public ref struct Poly1305
     #region Private — Initialization
 
     /// <summary>
-    /// Clamps the r value according to RFC 8439 §2.5.
-    /// Certain bits of r are cleared to ensure that multiplication stays within bounds.
+    /// Clamps <c>r</c> per RFC 8439 §2.5 and splits it into five 26-bit limbs, together with the
+    /// <c>r × 5</c> values the reduction needs.
     /// </summary>
     /// <param name="rBytes">The first 16 bytes of the key.</param>
-    /// <param name="r">Destination: 5-word clamped r value.</param>
+    /// <param name="r">Destination for the clamped limbs.</param>
+    /// <param name="r5">Destination for <c>r[1..4] × 5</c>; element 0 is unused.</param>
     [System.Runtime.CompilerServices.MethodImpl(
         System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
     private static void ClampR(
         System.ReadOnlySpan<byte> rBytes,
-        System.Span<uint> r)
+        ref Limbs r,
+        ref Limbs r5)
     {
         System.Diagnostics.Debug.Assert(rBytes.Length >= 16);
-        System.Diagnostics.Debug.Assert(r.Length >= WordCount);
 
-        r[0] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(rBytes[..4]) & 0x0FFFFFFF;
-        r[1] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(rBytes.Slice(4, 4)) & 0x0FFFFFFC;
-        r[2] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(rBytes.Slice(8, 4)) & 0x0FFFFFFC;
-        r[3] = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(rBytes.Slice(12, 4)) & 0x0FFFFFFC;
-        r[4] = 0;
+        uint t0 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(rBytes[..4]);
+        uint t1 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(rBytes.Slice(4, 4));
+        uint t2 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(rBytes.Slice(8, 4));
+        uint t3 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(rBytes.Slice(12, 4));
+
+        // The clamp masks are the 26-bit-limb form of clearing the top four bits of each 32-bit
+        // word of r and the low two bits of the upper three, which is what §2.5 prescribes.
+        r.L0 = t0 & 0x03FF_FFFFu;
+        r.L1 = ((t0 >> 26) | (t1 << 6)) & 0x03FF_FF03u;
+        r.L2 = ((t1 >> 20) | (t2 << 12)) & 0x03FF_C0FFu;
+        r.L3 = ((t2 >> 14) | (t3 << 18)) & 0x03F0_3FFFu;
+        r.L4 = (t3 >> 8) & 0x000F_FFFFu;
+
+        r5.L0 = 0u;
+        r5.L1 = r.L1 * 5u;
+        r5.L2 = r.L2 * 5u;
+        r5.L3 = r.L3 * 5u;
+        r5.L4 = r.L4 * 5u;
     }
 
     #endregion Private — Initialization
@@ -661,366 +585,250 @@ public ref struct Poly1305
     #region Private — Block Processing
 
     /// <summary>
-    /// Adds a (possibly partial) padded message block to the accumulator, multiplies by r,
-    /// and reduces modulo 2¹³⁰ − 5.
+    /// A 130-bit value held as five 26-bit limbs, little-endian.
     /// </summary>
-    /// <param name="accumulator">The running accumulator (modified in-place).</param>
-    /// <param name="block">
-    /// Padded block data: up to 17 bytes (16 message + 0x01 sentinel).
-    /// </param>
-    /// <param name="isFinalBlock">
-    /// <see langword="true"/> for the last (possibly short) block — the high word is set to 0
-    /// instead of reading the 17th byte.
-    /// </param>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private readonly void AddBlock(
-        scoped System.Span<uint> accumulator,
-        scoped System.ReadOnlySpan<byte> block,
-        bool isFinalBlock)
+    /// <remarks>
+    /// Splitting at 26 bits rather than 32 is what makes the inner loop cheap: the five partial
+    /// products of <c>h × r</c> each fit in a <see cref="ulong"/> with room to spare, so the whole
+    /// multiply-and-reduce runs without a single carry chain over 32-bit words.
+    /// </remarks>
+    private struct Limbs
     {
-        UInt32x5 nBuf = default;
-        System.Span<uint> n = nBuf;
+        /// <summary>Bits 0–25.</summary>
+        public uint L0;
 
-        n[0] = isFinalBlock && block.Length < 4
-            ? ReadPartialUInt32(block, 0)
-            : System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block[..4]);
+        /// <summary>Bits 26–51.</summary>
+        public uint L1;
 
-        n[1] = isFinalBlock && block.Length < 8
-            ? ReadPartialUInt32(block, 4)
-            : System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(4, 4));
+        /// <summary>Bits 52–77.</summary>
+        public uint L2;
 
-        n[2] = isFinalBlock && block.Length < 12
-            ? ReadPartialUInt32(block, 8)
-            : System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(8, 4));
+        /// <summary>Bits 78–103.</summary>
+        public uint L3;
 
-        n[3] = isFinalBlock && block.Length < 16
-            ? ReadPartialUInt32(block, 12)
-            : System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(12, 4));
-
-        n[4] = (uint)(isFinalBlock && block.Length <= 16 ? 0 : block[16]);
-
-        // accumulator += n
-        Add(accumulator, nBuf);
-
-        // accumulator *= r
-        Multiply(accumulator, _r);
-
-        // accumulator %= p
-        Modulo(accumulator);
+        /// <summary>Bits 104–129.</summary>
+        public uint L4;
     }
 
     /// <summary>
-    /// Reads up to 4 bytes starting at <paramref name="offset"/> from <paramref name="data"/>,
-    /// returning them as a little-endian <see cref="uint"/>.
-    /// Out-of-range bytes are treated as zero.
+    /// Absorbs one or more whole 16-byte blocks into <paramref name="h"/>.
     /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining | System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static uint ReadPartialUInt32(
-        System.ReadOnlySpan<byte> data,
-        int offset)
+    /// <param name="h">The accumulator, updated in place.</param>
+    /// <param name="blocks">A whole number of 16-byte blocks.</param>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private readonly void AbsorbFullBlocks(
+        ref Limbs h,
+        scoped System.ReadOnlySpan<byte> blocks)
     {
-        uint result = 0;
-        int available = System.Math.Min(4, System.Math.Max(0, data.Length - offset));
+        System.Diagnostics.Debug.Assert(blocks.Length % BlockBytes == 0);
 
-        for (int i = 0; i < available; i++)
+        for (int offset = 0; offset < blocks.Length; offset += BlockBytes)
         {
-            result |= (uint)data[offset + i] << (8 * i);
+            this.AbsorbBlock(ref h, blocks.Slice(offset, BlockBytes), BlockHighBit);
         }
+    }
 
-        return result;
+    /// <summary>
+    /// Absorbs the last, short block: the 0x01 sentinel goes inside the block instead of the
+    /// implicit high bit a full block carries.
+    /// </summary>
+    /// <param name="h">The accumulator, updated in place.</param>
+    /// <param name="tail">Between 1 and 15 bytes.</param>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private readonly void AbsorbFinalBlock(
+        ref Limbs h,
+        scoped System.ReadOnlySpan<byte> tail)
+    {
+        System.Diagnostics.Debug.Assert(tail.Length is > 0 and < BlockBytes);
+
+        System.Span<byte> padded = stackalloc byte[BlockBytes];
+        padded.Clear();
+
+        tail.CopyTo(padded);
+        padded[tail.Length] = 0x01;
+
+        this.AbsorbBlock(ref h, padded, 0u);
+
+        MemorySecurity.ZeroMemory(padded);
+    }
+
+    /// <summary>
+    /// Computes <c>h = (h + block) × r mod 2¹³⁰ − 5</c> for one block.
+    /// </summary>
+    /// <param name="h">The accumulator, updated in place.</param>
+    /// <param name="block">Exactly 16 bytes.</param>
+    /// <param name="highBit">
+    /// <see cref="BlockHighBit"/> for a full block, or zero for the padded final block.
+    /// </param>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private readonly void AbsorbBlock(
+        ref Limbs h,
+        scoped System.ReadOnlySpan<byte> block,
+        uint highBit)
+    {
+        uint t0 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block[..4]);
+        uint t1 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(4, 4));
+        uint t2 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(8, 4));
+        uint t3 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(12, 4));
+
+        // h += block
+        uint h0 = h.L0 + (t0 & LimbMask);
+        uint h1 = h.L1 + (((t0 >> 26) | (t1 << 6)) & LimbMask);
+        uint h2 = h.L2 + (((t1 >> 20) | (t2 << 12)) & LimbMask);
+        uint h3 = h.L3 + (((t2 >> 14) | (t3 << 18)) & LimbMask);
+        uint h4 = h.L4 + ((t3 >> 8) | highBit);
+
+        uint r0 = _r.L0, r1 = _r.L1, r2 = _r.L2, r3 = _r.L3, r4 = _r.L4;
+        uint s1 = _r5.L1, s2 = _r5.L2, s3 = _r5.L3, s4 = _r5.L4;
+
+        // h *= r, with the limbs above 2¹³⁰ folded back in times five.
+        ulong d0 = ((ulong)h0 * r0) + ((ulong)h1 * s4) + ((ulong)h2 * s3) + ((ulong)h3 * s2) + ((ulong)h4 * s1);
+        ulong d1 = ((ulong)h0 * r1) + ((ulong)h1 * r0) + ((ulong)h2 * s4) + ((ulong)h3 * s3) + ((ulong)h4 * s2);
+        ulong d2 = ((ulong)h0 * r2) + ((ulong)h1 * r1) + ((ulong)h2 * r0) + ((ulong)h3 * s4) + ((ulong)h4 * s3);
+        ulong d3 = ((ulong)h0 * r3) + ((ulong)h1 * r2) + ((ulong)h2 * r1) + ((ulong)h3 * r0) + ((ulong)h4 * s4);
+        ulong d4 = ((ulong)h0 * r4) + ((ulong)h1 * r3) + ((ulong)h2 * r2) + ((ulong)h3 * r1) + ((ulong)h4 * r0);
+
+        // Single carry pass; the accumulator is left partially reduced on purpose, which is what
+        // lets the next block start without a full modular reduction.
+        ulong carry = d0 >> LimbBits;
+        h0 = (uint)d0 & LimbMask;
+
+        d1 += carry;
+        carry = d1 >> LimbBits;
+        h1 = (uint)d1 & LimbMask;
+
+        d2 += carry;
+        carry = d2 >> LimbBits;
+        h2 = (uint)d2 & LimbMask;
+
+        d3 += carry;
+        carry = d3 >> LimbBits;
+        h3 = (uint)d3 & LimbMask;
+
+        d4 += carry;
+        carry = d4 >> LimbBits;
+        h4 = (uint)d4 & LimbMask;
+
+        h0 += (uint)carry * 5u;
+        h1 += h0 >> LimbBits;
+        h0 &= LimbMask;
+
+        h.L0 = h0;
+        h.L1 = h1;
+        h.L2 = h2;
+        h.L3 = h3;
+        h.L4 = h4;
     }
 
     #endregion Private — Block Processing
 
-    #region Private — 130-bit Arithmetic
-
-    /// <summary>
-    /// Adds two 130-bit integers: <c>a += b</c>.
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static void Add(
-        System.Span<uint> a,
-        System.ReadOnlySpan<uint> b)
-    {
-        System.Diagnostics.Debug.Assert(a.Length >= WordCount);
-        System.Diagnostics.Debug.Assert(b.Length >= WordCount);
-
-        ulong carry = 0;
-
-        carry += (ulong)a[0] + b[0];
-        a[0] = (uint)carry;
-        carry >>= 32;
-
-        carry += (ulong)a[1] + b[1];
-        a[1] = (uint)carry;
-        carry >>= 32;
-
-        carry += (ulong)a[2] + b[2];
-        a[2] = (uint)carry;
-        carry >>= 32;
-
-        carry += (ulong)a[3] + b[3];
-        a[3] = (uint)carry;
-        carry >>= 32;
-
-        carry += (ulong)a[4] + b[4];
-        a[4] = (uint)carry;
-    }
-
-    /// <summary>
-    /// Multiplies two 130-bit integers: <c>a = a × b mod p</c>.
-    /// Uses a 10-word intermediate product buffer (inline array, stack-allocated).
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static void Multiply(
-        System.Span<uint> a,
-        System.ReadOnlySpan<uint> b)
-    {
-        UInt32x10 productBuf = default;
-        System.Span<uint> product = productBuf;
-        product.Clear();
-
-        // Schoolbook multiplication: 5 × 5 -> 10 words
-        MultiplyRow(a, b, product, 0);
-        MultiplyRow(a, b, product, 1);
-        MultiplyRow(a, b, product, 2);
-        MultiplyRow(a, b, product, 3);
-        MultiplyRow(a, b, product, 4);
-
-        // Reduce the 260-bit product modulo p = 2¹³⁰ − 5
-        ReduceProduct(a, productBuf);
-    }
-
-    /// <summary>
-    /// Computes one row of the schoolbook multiplication:
-    /// <c>product[row..row+5] += a[row] × b[0..4]</c>.
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static void MultiplyRow(
-        System.ReadOnlySpan<uint> a,
-        System.ReadOnlySpan<uint> b,
-        System.Span<uint> product,
-        int row)
-    {
-        ulong carry = 0;
-        uint aVal = a[row];
-
-        // j = 0
-        ulong t = ((ulong)aVal * b[0]) + product[row] + carry;
-        product[row] = (uint)t;
-        carry = t >> 32;
-
-        // j = 1
-        t = ((ulong)aVal * b[1]) + product[row + 1] + carry;
-        product[row + 1] = (uint)t;
-        carry = t >> 32;
-
-        // j = 2
-        t = ((ulong)aVal * b[2]) + product[row + 2] + carry;
-        product[row + 2] = (uint)t;
-        carry = t >> 32;
-
-        // j = 3
-        t = ((ulong)aVal * b[3]) + product[row + 3] + carry;
-        product[row + 3] = (uint)t;
-        carry = t >> 32;
-
-        // j = 4
-        t = ((ulong)aVal * b[4]) + product[row + 4] + carry;
-        product[row + 4] = (uint)t;
-        carry = t >> 32;
-
-        // Store the final carry into the next word (if within bounds)
-        if (row + 5 < 10)
-        {
-            product[row + 5] = (uint)carry;
-        }
-    }
-
-    /// <summary>
-    /// Reduces a 260-bit product modulo p = 2¹³⁰ − 5.
-    /// Since 2¹³⁰ ≡ 5 (mod p), the high 130 bits are shifted down and multiplied by 5.
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static void ReduceProduct(
-        System.Span<uint> result,
-        System.ReadOnlySpan<uint> product)
-    {
-        // P = L + H * 2^130
-        // L = product[0..3] , product[4] & 3
-        // H = product >> 130
-        uint h0 = (product[4] >> 2) | (product[5] << 30);
-        uint h1 = (product[5] >> 2) | (product[6] << 30);
-        uint h2 = (product[6] >> 2) | (product[7] << 30);
-        uint h3 = (product[7] >> 2) | (product[8] << 30);
-        uint h4 = (product[8] >> 2) | (product[9] << 30);
-        uint h5 = product[9] >> 2;
-
-        result[0] = product[0];
-        result[1] = product[1];
-        result[2] = product[2];
-        result[3] = product[3];
-        result[4] = product[4] & 3;
-
-        // result += H * 5
-        ulong c = ((ulong)h0 * 5) + result[0];
-        result[0] = (uint)c;
-        c >>= 32;
-        c += ((ulong)h1 * 5) + result[1];
-        result[1] = (uint)c;
-        c >>= 32;
-        c += ((ulong)h2 * 5) + result[2];
-        result[2] = (uint)c;
-        c >>= 32;
-        c += ((ulong)h3 * 5) + result[3];
-        result[3] = (uint)c;
-        c >>= 32;
-        c += ((ulong)h4 * 5) + result[4];
-        result[4] = (uint)c;
-        c >>= 32;
-        c += (ulong)h5 * 5;
-
-        // One more pass to handle the 130-bit overflow from the addition
-        uint h_extra = result[4] >> 2;
-        result[4] &= 3;
-        c += (ulong)h_extra * 5;
-
-        for (int i = 0; i < 5 && c > 0; i++)
-        {
-            c += result[i];
-            result[i] = (uint)c;
-            c >>= 32;
-        }
-
-        // Final conditional reduction
-        Modulo(result);
-    }
-
-    /// <summary>
-    /// Conditionally subtracts p if <paramref name="value"/> ≥ p.
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static void Modulo(System.Span<uint> value)
-    {
-        if (IsGreaterOrEqual(value, s_prime))
-        {
-            Subtract(value, s_prime);
-        }
-    }
-
-    /// <summary>
-    /// Determines if <paramref name="a"/> ≥ <paramref name="b"/> (unsigned, most-significant-first).
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static bool IsGreaterOrEqual(
-        System.ReadOnlySpan<uint> a,
-        System.ReadOnlySpan<uint> b)
-    {
-        // Compare from most significant word (index 4) down to least (index 0).
-        for (int i = WordCount - 1; i >= 0; i--)
-        {
-            if (a[i] > b[i])
-            {
-                return true;
-            }
-
-            if (a[i] < b[i])
-            {
-                return false;
-            }
-        }
-
-        // All words equal -> a == b -> a ≥ b is true.
-        return true;
-    }
-
-    /// <summary>
-    /// Subtracts <paramref name="b"/> from <paramref name="a"/>: <c>a -= b</c>.
-    /// Assumes a ≥ b (no underflow).
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static void Subtract(
-        System.Span<uint> a,
-        System.ReadOnlySpan<uint> b)
-    {
-        ulong borrow = 0;
-
-        // i = 0
-        ulong diff = (ulong)a[0] - b[0] - borrow;
-        a[0] = (uint)diff;
-        borrow = (diff >> 63) & 1;
-
-        // i = 1
-        diff = (ulong)a[1] - b[1] - borrow;
-        a[1] = (uint)diff;
-        borrow = (diff >> 63) & 1;
-
-        // i = 2
-        diff = (ulong)a[2] - b[2] - borrow;
-        a[2] = (uint)diff;
-        borrow = (diff >> 63) & 1;
-
-        // i = 3
-        diff = (ulong)a[3] - b[3] - borrow;
-        a[3] = (uint)diff;
-        borrow = (diff >> 63) & 1;
-
-        // i = 4
-        diff = (ulong)a[4] - b[4] - borrow;
-        a[4] = (uint)diff;
-    }
-
-    #endregion Private — 130-bit Arithmetic
-
     #region Private — Tag Finalization
 
     /// <summary>
-    /// Produces the final 16-byte tag: <c>tag = (accumulator mod p) + s</c>, serialized as
-    /// four little-endian 32-bit words. The 5th accumulator word (bits 128–129) is discarded
-    /// after the addition because the tag is only 128 bits.
+    /// Produces the final 16-byte tag: <c>tag = (h mod p) + s</c>, serialized little-endian.
     /// </summary>
-    /// <param name="accumulator">The fully-reduced 130-bit accumulator.</param>
+    /// <param name="h">The partially reduced accumulator. Consumed, not preserved.</param>
     /// <param name="tag">Destination for the 16-byte tag.</param>
+    /// <remarks>
+    /// The final reduction is a masked select rather than a branch on <c>h ≥ p</c>, so the time it
+    /// takes does not depend on the accumulator — the previous implementation compared and
+    /// conditionally subtracted, which leaked that comparison through timing.
+    /// </remarks>
     [System.Runtime.CompilerServices.MethodImpl(
         System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
     private readonly void FinalizeTagCore(
-        System.ReadOnlySpan<uint> accumulator,
+        ref Limbs h,
         System.Span<byte> tag)
     {
         System.Diagnostics.Debug.Assert(tag.Length >= TagSize);
 
-        // Copy accumulator for final operations
-        UInt32x5 resultBuf = default;
-        System.Span<uint> result = resultBuf;
-        accumulator.CopyTo(result);
+        uint h0 = h.L0, h1 = h.L1, h2 = h.L2, h3 = h.L3, h4 = h.L4;
 
-        // Ensure fully reduced modulo p
-        Modulo(result);
+        // Fully carry the accumulator.
+        uint c = h1 >> LimbBits;
+        h1 &= LimbMask;
 
-        // Add s (128-bit addition — only 4 words)
-        System.ReadOnlySpan<uint> sSpan = _s;
-        ulong carry = 0;
+        h2 += c;
+        c = h2 >> LimbBits;
+        h2 &= LimbMask;
 
-        for (int i = 0; i < SWordCount; i++)
-        {
-            carry += (ulong)result[i] + sSpan[i];
-            result[i] = (uint)carry;
-            carry >>= 32;
-        }
+        h3 += c;
+        c = h3 >> LimbBits;
+        h3 &= LimbMask;
 
-        // Serialize the low 4 words (128 bits) as little-endian bytes
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(tag[..4], result[0]);
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(tag.Slice(4, 4), result[1]);
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(tag.Slice(8, 4), result[2]);
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(tag.Slice(12, 4), result[3]);
+        h4 += c;
+        c = h4 >> LimbBits;
+        h4 &= LimbMask;
+
+        h0 += c * 5u;
+        c = h0 >> LimbBits;
+        h0 &= LimbMask;
+
+        h1 += c;
+
+        // Compute h + (-p) = h + 5 - 2¹³⁰ and keep it only if it did not go negative.
+        uint g0 = h0 + 5u;
+        c = g0 >> LimbBits;
+        g0 &= LimbMask;
+
+        uint g1 = h1 + c;
+        c = g1 >> LimbBits;
+        g1 &= LimbMask;
+
+        uint g2 = h2 + c;
+        c = g2 >> LimbBits;
+        g2 &= LimbMask;
+
+        uint g3 = h3 + c;
+        c = g3 >> LimbBits;
+        g3 &= LimbMask;
+
+        uint g4 = unchecked(h4 + c - (1u << LimbBits));
+
+        // g4's borrow bit selects between h and g without branching: the subtraction above
+        // borrowed exactly when h < p, and then mask is 0 so h is kept unchanged.
+        uint mask = unchecked((g4 >> 31) - 1u);
+
+        g0 &= mask;
+        g1 &= mask;
+        g2 &= mask;
+        g3 &= mask;
+        g4 &= mask;
+
+        mask = ~mask;
+
+        h0 = (h0 & mask) | g0;
+        h1 = (h1 & mask) | g1;
+        h2 = (h2 & mask) | g2;
+        h3 = (h3 & mask) | g3;
+        h4 = (h4 & mask) | g4;
+
+        // Repack the limbs into four 32-bit words.
+        h0 = h0 | (h1 << 26);
+        h1 = (h1 >> 6) | (h2 << 20);
+        h2 = (h2 >> 12) | (h3 << 14);
+        h3 = (h3 >> 18) | (h4 << 8);
+
+        // tag = h + s, 128-bit addition.
+        ulong f = (ulong)h0 + _pad0;
+        h0 = (uint)f;
+
+        f = (ulong)h1 + _pad1 + (f >> 32);
+        h1 = (uint)f;
+
+        f = (ulong)h2 + _pad2 + (f >> 32);
+        h2 = (uint)f;
+
+        f = (ulong)h3 + _pad3 + (f >> 32);
+        h3 = (uint)f;
+
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(tag[..4], h0);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(tag.Slice(4, 4), h1);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(tag.Slice(8, 4), h2);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(tag.Slice(12, 4), h3);
     }
 
     #endregion Private — Tag Finalization

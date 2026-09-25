@@ -284,6 +284,25 @@ public readonly struct Bytes32 : IEquatable<Bytes32>, IFixedSizeSerializable
             MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in _v1), 0x04));
     }
 
+    /// <summary>
+    /// Overwrites <paramref name="value"/> with zeroes in place.
+    /// </summary>
+    /// <param name="value">The value to destroy.</param>
+    /// <remarks>
+    /// <para>
+    /// A <see cref="Bytes32"/> holding key material is a value type, so every copy of it —
+    /// a local, a field, an argument — is a separate 32-byte copy of the secret that outlives the
+    /// scope it was used in. Call this on each copy once it is no longer needed, so a later heap
+    /// dump or stack scan cannot recover it.
+    /// </para>
+    /// <para>
+    /// The write is not elided: the span alias defeats the JIT's dead-store analysis, the same way
+    /// <c>MemorySecurity.ZeroMemory</c> does for byte buffers.
+    /// </para>
+    /// </remarks>
+    public static void Wipe(ref Bytes32 value)
+        => MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref value, 0x01)).Clear();
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(Bytes32 left, Bytes32 right) => left.Equals(right);

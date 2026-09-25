@@ -49,7 +49,7 @@ public sealed class ZeroizationTests
     }
 
     [Fact]
-    public void ChaCha20ClearZeroesStateWorkingAndKeystreamBuffers()
+    public void ChaCha20ClearZeroesStateAndKeystreamBuffers()
     {
         byte[] key = new byte[32];
         byte[] nonce = new byte[12];
@@ -62,7 +62,6 @@ public sealed class ZeroizationTests
         cipher.Clear();
 
         Assert.True(AllFieldBytesAreZero(cipher, "_state"), "ChaCha20._state was not fully zeroed after Clear().");
-        Assert.True(AllFieldBytesAreZero(cipher, "_working"), "ChaCha20._working was not fully zeroed after Clear().");
         Assert.True(AllFieldBytesAreZero(cipher, "_keystream"), "ChaCha20._keystream was not fully zeroed after Clear().");
     }
 

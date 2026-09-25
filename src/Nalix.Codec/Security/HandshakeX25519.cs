@@ -48,6 +48,7 @@ public static class HandshakeX25519
 
         public static Bytes32 Expand(Bytes32 prk, ReadOnlySpan<byte> info)
         {
+            // prk arrived by value, so this frame owns a 32-byte copy of the secret.
             Span<byte> okm = stackalloc byte[32];
             Span<byte> t = stackalloc byte[info.Length + 1];
 
@@ -63,6 +64,7 @@ public static class HandshakeX25519
             {
                 MemorySecurity.ZeroMemory(okm);
                 MemorySecurity.ZeroMemory(t);
+                Bytes32.Wipe(ref prk);
             }
         }
     }
@@ -88,6 +90,8 @@ public static class HandshakeX25519
         finally
         {
             MemorySecurity.ZeroMemory(ikm);
+            Bytes32.Wipe(ref sharedSecretEE);
+            Bytes32.Wipe(ref sharedSecretSE);
         }
     }
 
@@ -96,10 +100,17 @@ public static class HandshakeX25519
     /// </summary>
     public static Bytes32 ComputeServerProof(Bytes32 masterSecret, Bytes32 transcriptHash)
     {
-        Span<byte> info = stackalloc byte[ServerProofLabel.Length + 32];
-        ServerProofLabel.CopyTo(info);
-        transcriptHash.WriteTo(info[ServerProofLabel.Length..]);
-        return Hkdf.Expand(masterSecret, info);
+        try
+        {
+            Span<byte> info = stackalloc byte[ServerProofLabel.Length + 32];
+            ServerProofLabel.CopyTo(info);
+            transcriptHash.WriteTo(info[ServerProofLabel.Length..]);
+            return Hkdf.Expand(masterSecret, info);
+        }
+        finally
+        {
+            Bytes32.Wipe(ref masterSecret);
+        }
     }
 
     /// <summary>
@@ -107,10 +118,17 @@ public static class HandshakeX25519
     /// </summary>
     public static Bytes32 ComputeClientProof(Bytes32 masterSecret, Bytes32 transcriptHash)
     {
-        Span<byte> info = stackalloc byte[ClientProofLabel.Length + 32];
-        ClientProofLabel.CopyTo(info);
-        transcriptHash.WriteTo(info[ClientProofLabel.Length..]);
-        return Hkdf.Expand(masterSecret, info);
+        try
+        {
+            Span<byte> info = stackalloc byte[ClientProofLabel.Length + 32];
+            ClientProofLabel.CopyTo(info);
+            transcriptHash.WriteTo(info[ClientProofLabel.Length..]);
+            return Hkdf.Expand(masterSecret, info);
+        }
+        finally
+        {
+            Bytes32.Wipe(ref masterSecret);
+        }
     }
 
     /// <summary>
@@ -118,10 +136,17 @@ public static class HandshakeX25519
     /// </summary>
     public static Bytes32 ComputeServerFinishProof(Bytes32 masterSecret, Bytes32 transcriptHash)
     {
-        Span<byte> info = stackalloc byte[ServerFinishLabel.Length + 32];
-        ServerFinishLabel.CopyTo(info);
-        transcriptHash.WriteTo(info[ServerFinishLabel.Length..]);
-        return Hkdf.Expand(masterSecret, info);
+        try
+        {
+            Span<byte> info = stackalloc byte[ServerFinishLabel.Length + 32];
+            ServerFinishLabel.CopyTo(info);
+            transcriptHash.WriteTo(info[ServerFinishLabel.Length..]);
+            return Hkdf.Expand(masterSecret, info);
+        }
+        finally
+        {
+            Bytes32.Wipe(ref masterSecret);
+        }
     }
 
     /// <summary>
@@ -129,19 +154,26 @@ public static class HandshakeX25519
     /// </summary>
     public static Bytes32 DeriveSessionKey(Bytes32 masterSecret, Bytes32 clientNonce, Bytes32 serverNonce, Bytes32 transcriptHash)
     {
-        Span<byte> info = stackalloc byte[SessionLabel.Length + 96];
-        int offset = 0;
+        try
+        {
+            Span<byte> info = stackalloc byte[SessionLabel.Length + 96];
+            int offset = 0;
 
-        SessionLabel.CopyTo(info);
-        offset += SessionLabel.Length;
+            SessionLabel.CopyTo(info);
+            offset += SessionLabel.Length;
 
-        clientNonce.WriteTo(info[offset..]);
-        offset += 32;
-        serverNonce.WriteTo(info[offset..]);
-        offset += 32;
-        transcriptHash.WriteTo(info[offset..]);
+            clientNonce.WriteTo(info[offset..]);
+            offset += 32;
+            serverNonce.WriteTo(info[offset..]);
+            offset += 32;
+            transcriptHash.WriteTo(info[offset..]);
 
-        return Hkdf.Expand(masterSecret, info[..(offset + 32)]);
+            return Hkdf.Expand(masterSecret, info[..(offset + 32)]);
+        }
+        finally
+        {
+            Bytes32.Wipe(ref masterSecret);
+        }
     }
 
     /// <summary>
@@ -150,8 +182,15 @@ public static class HandshakeX25519
     /// </summary>
     public static Bytes32 DeriveRekeySecret(Bytes32 currentSecret)
     {
-        ReadOnlySpan<byte> info = "nalix-session/rekey"u8;
-        return Hkdf.Expand(currentSecret, info);
+        try
+        {
+            ReadOnlySpan<byte> info = "nalix-session/rekey"u8;
+            return Hkdf.Expand(currentSecret, info);
+        }
+        finally
+        {
+            Bytes32.Wipe(ref currentSecret);
+        }
     }
 
     /// <summary>

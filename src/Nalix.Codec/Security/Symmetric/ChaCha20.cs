@@ -54,13 +54,7 @@ public struct ChaCha20
         private uint _e0;
     }
 
-    [System.Runtime.CompilerServices.InlineArray(StateLength)]
-    private struct WorkingBuffer
-    {
-        private uint _e0;
-    }
-
-    [System.Runtime.CompilerServices.InlineArray(BlockSize)]
+    [System.Runtime.CompilerServices.InlineArray(2 * BlockSize)]
     private struct KeystreamBuffer
     {
         private byte _e0;
@@ -72,7 +66,6 @@ public struct ChaCha20
 
     private bool _cleared;
     private StateBuffer _state;
-    private WorkingBuffer _working;
     private KeystreamBuffer _keystream;
 
     #endregion Fields
@@ -131,10 +124,9 @@ public struct ChaCha20
         this.ThrowIfCleared();
 
         System.Span<uint> stateSpan = _state;
-        System.Span<uint> workingSpan = _working;
         System.Span<byte> keystreamSpan = _keystream;
 
-        GenerateBlock(stateSpan, workingSpan, keystreamSpan);
+        GenerateBlock(stateSpan, keystreamSpan);
 
         int n = dst.Length < BlockSize ? dst.Length : BlockSize;
         keystreamSpan[..n].CopyTo(dst);
@@ -199,7 +191,6 @@ public struct ChaCha20
         if (!_cleared)
         {
             MemorySecurity.ZeroMemory(System.Runtime.InteropServices.MemoryMarshal.AsBytes((System.Span<uint>)_state));
-            MemorySecurity.ZeroMemory(System.Runtime.InteropServices.MemoryMarshal.AsBytes((System.Span<uint>)_working));
             MemorySecurity.ZeroMemory(_keystream);
             _cleared = true;
         }
@@ -267,63 +258,44 @@ public struct ChaCha20
 
     #region Private — Core Block Function
 
+    /// <summary>
+    /// Writes one 64-byte keystream block for the current counter and advances the counter by one.
+    /// </summary>
     [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     private static void GenerateBlock(
         System.Span<uint> state,
-        System.Span<uint> working,
         System.Span<byte> keystream)
     {
-        state.CopyTo(working);
-
-        for (int i = 0; i < 10; i++)
+        if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
         {
-            // Column rounds
-            QuarterRound(working, 0, 4, 8, 12);
-            QuarterRound(working, 1, 5, 9, 13);
-            QuarterRound(working, 2, 6, 10, 14);
-            QuarterRound(working, 3, 7, 11, 15);
-            // Diagonal rounds
-            QuarterRound(working, 0, 5, 10, 15);
-            QuarterRound(working, 1, 6, 11, 12);
-            QuarterRound(working, 2, 7, 8, 13);
-            QuarterRound(working, 3, 4, 9, 14);
+            ChaCha20Core.KeyStreamOneBlock(state, keystream);
+        }
+        else
+        {
+            ChaCha20Core.KeyStreamScalar(state, keystream);
         }
 
-        for (int i = 0; i < StateLength; i++)
-        {
-            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(
-                keystream[(4 * i)..],
-                BitwiseOperations.Add(working[i], state[i]));
-        }
+        AdvanceCounter(state, 1);
+    }
 
-        // Advance block counter — UInt32 wraps naturally; check == 0 for overflow
-        state[12] = BitwiseOperations.AddOne(state[12]);
+    /// <summary>
+    /// Advances the block counter by <paramref name="blocks"/>, rejecting the counter wrap that
+    /// RFC 8439 §2.4 forbids.
+    /// </summary>
+    /// <exception cref="Abstractions.Exceptions.CipherException">Thrown when the counter wraps.</exception>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    private static void AdvanceCounter(System.Span<uint> state, uint blocks)
+    {
+        uint next = state[12] + blocks;
+        state[12] = next;
 
-        if (state[12] == 0u)
+        if (next < blocks)
         {
             // Counter overflow: MUST NOT reuse key/nonce (RFC 8439 §2.4)
             throw new Abstractions.Exceptions.CipherException("ChaCha20 block counter overflow. Maximum data limit (256 GiB) reached for a single key/nonce pair.");
         }
-    }
-
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-    private static void QuarterRound(
-        System.Span<uint> x,
-        int a, int b, int c, int d)
-    {
-        x[a] = BitwiseOperations.Add(x[a], x[b]);
-        x[d] = System.Numerics.BitOperations.RotateLeft(BitwiseOperations.XOr(x[d], x[a]), 16);
-
-        x[c] = BitwiseOperations.Add(x[c], x[d]);
-        x[b] = System.Numerics.BitOperations.RotateLeft(BitwiseOperations.XOr(x[b], x[c]), 12);
-
-        x[a] = BitwiseOperations.Add(x[a], x[b]);
-        x[d] = System.Numerics.BitOperations.RotateLeft(BitwiseOperations.XOr(x[d], x[a]), 8);
-
-        x[c] = BitwiseOperations.Add(x[c], x[d]);
-        x[b] = System.Numerics.BitOperations.RotateLeft(BitwiseOperations.XOr(x[b], x[c]), 7);
     }
 
     #endregion Private — Core Block Function
@@ -343,31 +315,36 @@ public struct ChaCha20
         }
 
         System.Span<uint> stateSpan = _state;
-        System.Span<uint> workingSpan = _working;
         System.Span<byte> keystreamSpan = _keystream;
 
         int offset = 0;
-        int fullBlocks = numBytes / BlockSize;
-        int tailBytes = numBytes - (fullBlocks * BlockSize);
+        int remaining = numBytes;
 
-        for (int block = 0; block < fullBlocks; block++)
+        // Two blocks per pass while the payload is long enough to fill both 128-bit lanes.
+        if (ChaCha20Core.TwoBlockPathSupported)
         {
-            GenerateBlock(stateSpan, workingSpan, keystreamSpan);
-            for (int i = 0; i < BlockSize; i++)
-            {
-                dst[offset + i] = (byte)(src[offset + i] ^ keystreamSpan[i]);
-            }
+            const int pairSize = 2 * BlockSize;
 
-            offset += BlockSize;
+            while (remaining >= pairSize)
+            {
+                ChaCha20Core.KeyStreamTwoBlocks(stateSpan, keystreamSpan);
+                AdvanceCounter(stateSpan, 2);
+                ChaCha20Core.Xor(src[offset..], keystreamSpan, dst[offset..], pairSize);
+
+                offset += pairSize;
+                remaining -= pairSize;
+            }
         }
 
-        if (tailBytes > 0)
+        while (remaining > 0)
         {
-            GenerateBlock(stateSpan, workingSpan, keystreamSpan);
-            for (int i = 0; i < tailBytes; i++)
-            {
-                dst[offset + i] = (byte)(src[offset + i] ^ keystreamSpan[i]);
-            }
+            GenerateBlock(stateSpan, keystreamSpan);
+
+            int n = remaining < BlockSize ? remaining : BlockSize;
+            ChaCha20Core.Xor(src[offset..], keystreamSpan, dst[offset..], n);
+
+            offset += n;
+            remaining -= n;
         }
     }
 

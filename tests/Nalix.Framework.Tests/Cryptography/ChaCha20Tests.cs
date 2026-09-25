@@ -282,6 +282,66 @@ public sealed class ChaCha20Tests
         Assert.Equal(plaintext.Length, written);
         Assert.Equal(expected, actual);
     }
+
+    /// <summary>
+    /// Covers the block-pair path, the single-block path and every tail length in one sweep: a
+    /// stream encrypted in one call must equal the same stream encrypted 64 bytes at a time.
+    /// </summary>
+    [Fact]
+    public void EncryptInOneCallMatchesEncryptBlockByBlock()
+    {
+        byte[] key = new byte[ChaCha20.KeySize];
+        byte[] nonce = new byte[ChaCha20.NonceSize];
+
+        for (int i = 0; i < key.Length; i++)
+        {
+            key[i] = (byte)(0x40 + i);
+        }
+
+        for (int i = 0; i < nonce.Length; i++)
+        {
+            nonce[i] = (byte)(0x90 + i);
+        }
+
+        for (int length = 0; length <= 321; length++)
+        {
+            byte[] plaintext = new byte[length];
+            for (int i = 0; i < length; i++)
+            {
+                plaintext[i] = (byte)(i * 7);
+            }
+
+            byte[] oneCall = new byte[length];
+            ChaCha20 bulk = new(key, nonce, 1);
+            try
+            {
+                _ = bulk.Encrypt(plaintext, oneCall);
+            }
+            finally
+            {
+                bulk.Clear();
+            }
+
+            byte[] chunked = new byte[length];
+            ChaCha20 stepwise = new(key, nonce, 1);
+            try
+            {
+                for (int offset = 0; offset < length; offset += ChaCha20.BlockSize)
+                {
+                    int take = Math.Min(ChaCha20.BlockSize, length - offset);
+                    _ = stepwise.Encrypt(
+                        plaintext.AsSpan(offset, take),
+                        chunked.AsSpan(offset, take));
+                }
+            }
+            finally
+            {
+                stepwise.Clear();
+            }
+
+            Assert.Equal(chunked, oneCall);
+        }
+    }
 }
 
 

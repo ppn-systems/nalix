@@ -93,73 +93,89 @@ public static partial class HandshakeHandlers
         }
 
         X25519.X25519KeyPair serverKey = X25519.GenerateKeyPair();
-        Bytes32 sharedSecretEE;
+
+        // Declared up front so the finally below scrubs them on every exit path — including the
+        // early rejects. Each is a value type, so a copy of the key material would otherwise stay
+        // readable in this frame after the handshake completes.
+        Bytes32 sharedSecretEE = default;
+        Bytes32 sharedSecretSE = default;
+        Bytes32 masterSecret = default;
+
         try
         {
-            sharedSecretEE = X25519.Agreement(serverKey.PrivateKey, packet.PublicKey);
+            try
+            {
+                sharedSecretEE = X25519.Agreement(serverKey.PrivateKey, packet.PublicKey);
+            }
+            catch (InvalidOperationException)
+            {
+                return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
+            }
+
+            if (sharedSecretEE.IsZero)
+            {
+                return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
+            }
+
+                    try
+            {
+                sharedSecretSE = X25519.Agreement(s_certificate, packet.PublicKey);
+            }
+            catch (InvalidOperationException)
+            {
+                return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
+            }
+
+            if (sharedSecretSE.IsZero)
+            {
+                return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
+            }
+
+            masterSecret = HandshakeX25519.ComputeMasterSecret(sharedSecretEE, sharedSecretSE);
+
+            Span<byte> nonceBytes = stackalloc byte[Bytes32.Size];
+            Csprng.Fill(nonceBytes);
+            Bytes32 serverNonce = new(nonceBytes);
+            MemorySecurity.ZeroMemory(nonceBytes);
+
+            Bytes32 transcriptHash = HandshakeX25519.ComputeTranscriptHash(
+                packet.PublicKey,
+                packet.Nonce,
+                serverKey.PublicKey,
+                serverNonce);
+
+            HandshakeContext state = s_pool.Get<HandshakeContext>();
+            state.SharedSecret = masterSecret;
+            state.TranscriptHash = transcriptHash;
+            state.SessionKey = HandshakeX25519.DeriveSessionKey(masterSecret, packet.Nonce, serverNonce, transcriptHash);
+
+            if (!TryPublishHandshakeState(connection, state))
+            {
+                return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.STATE_VIOLATION);
+            }
+
+            PacketScope<SessionChallenge> lease = PacketFactory<SessionChallenge>.Acquire();
+            try
+            {
+                SessionChallenge reply = lease.Value;
+
+                reply.Initialize(serverKey.PublicKey, serverNonce, HandshakeX25519.ComputeServerProof(masterSecret, transcriptHash));
+                reply.SequenceId = packet.SequenceId;
+
+                return context.Sender.SendAsync(reply).DisposeOnCompletionAsync(lease);
+            }
+            catch
+            {
+                lease.Dispose();
+                throw;
+            }
         }
-        catch (InvalidOperationException)
+        finally
         {
-            return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
-        }
-
-        if (sharedSecretEE.IsZero)
-        {
-            return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
-        }
-
-        Bytes32 sharedSecretSE;
-        try
-        {
-            sharedSecretSE = X25519.Agreement(s_certificate, packet.PublicKey);
-        }
-        catch (InvalidOperationException)
-        {
-            return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
-        }
-
-        if (sharedSecretSE.IsZero)
-        {
-            return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
-        }
-
-        Bytes32 masterSecret = HandshakeX25519.ComputeMasterSecret(sharedSecretEE, sharedSecretSE);
-
-        Span<byte> nonceBytes = stackalloc byte[Bytes32.Size];
-        Csprng.Fill(nonceBytes);
-        Bytes32 serverNonce = new(nonceBytes);
-        MemorySecurity.ZeroMemory(nonceBytes);
-
-        Bytes32 transcriptHash = HandshakeX25519.ComputeTranscriptHash(
-            packet.PublicKey,
-            packet.Nonce,
-            serverKey.PublicKey,
-            serverNonce);
-
-        HandshakeContext state = s_pool.Get<HandshakeContext>();
-        state.SharedSecret = masterSecret;
-        state.TranscriptHash = transcriptHash;
-        state.SessionKey = HandshakeX25519.DeriveSessionKey(masterSecret, packet.Nonce, serverNonce, transcriptHash);
-
-        if (!TryPublishHandshakeState(connection, state))
-        {
-            return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.STATE_VIOLATION);
-        }
-
-        PacketScope<SessionChallenge> lease = PacketFactory<SessionChallenge>.Acquire();
-        try
-        {
-            SessionChallenge reply = lease.Value;
-
-            reply.Initialize(serverKey.PublicKey, serverNonce, HandshakeX25519.ComputeServerProof(masterSecret, transcriptHash));
-            reply.SequenceId = packet.SequenceId;
-
-            return context.Sender.SendAsync(reply).DisposeOnCompletionAsync(lease);
-        }
-        catch
-        {
-            lease.Dispose();
-            throw;
+            serverKey.Wipe();
+            Bytes32.Wipe(ref sharedSecretEE);
+            Bytes32.Wipe(ref sharedSecretSE);
+            Bytes32.Wipe(ref masterSecret);
         }
     }
 

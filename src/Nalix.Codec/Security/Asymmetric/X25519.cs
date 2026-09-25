@@ -34,6 +34,18 @@ public static class X25519
         /// The public key (32 bytes).
         /// </summary>
         public Bytes32 PublicKey { get; set; }
+
+        /// <summary>
+        /// Overwrites both keys with zeroes, leaving the pair unusable.
+        /// </summary>
+        /// <remarks>
+        /// Call this once the agreement that needed <see cref="PrivateKey"/> has run. The pair is a
+        /// value type, so an ephemeral private key otherwise stays readable in whatever frame — or,
+        /// in an <c>async</c> method, whatever heap-allocated state machine — the local lived in.
+        /// </remarks>
+        public void Wipe()
+            => System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+                System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref this, 0x01)).Clear();
     }
 
     /// <summary>
