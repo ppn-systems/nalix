@@ -220,6 +220,43 @@ internal sealed partial class SocketConnection
         return this.SEND_ASYNC_SAFE(data, totalLength, cancellationToken);
     }
 
+    /// <summary>
+    /// Sends a frame whose 2-byte length header space was reserved by the caller directly in front
+    /// of the payload, so no rent + copy is needed to prepend the header.
+    /// </summary>
+    /// <param name="buffer">The array holding <c>[header space][payload]</c>. Owned by the caller; not returned to any pool.</param>
+    /// <param name="offset">Offset of the reserved header space (the payload starts at <c>offset + 2</c>).</param>
+    /// <param name="payloadLength">Payload length in bytes.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The send result. The caller must keep <paramref name="buffer"/> alive until it completes.</returns>
+    /// <remarks>
+    /// Only valid for <see cref="TransportFraming.UInt16LengthPrefixed"/> framing and frames below the
+    /// fragmentation threshold; <see cref="CanSendWithReservedHeader"/> checks both.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ValueTask<SendResult> SendWithReservedHeaderAsync(byte[] buffer, int offset, int payloadLength, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, nameof(SocketConnection));
+
+        int totalLength = payloadLength + HeaderSize;
+        BinaryPrimitives.WriteUInt16LittleEndian(MemoryExtensions.AsSpan(buffer, offset, HeaderSize), (ushort)totalLength);
+
+        return this.SEND_BUFFER_ASYNC(buffer, offset, totalLength, pooled: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets whether a payload of <paramref name="payloadLength"/> bytes can be sent through
+    /// <see cref="SendWithReservedHeaderAsync"/> (single un-fragmented UInt16-prefixed frame).
+    /// </summary>
+    /// <param name="payloadLength">Payload length in bytes.</param>
+    /// <returns><see langword="true"/> when the reserved-header fast path applies.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool CanSendWithReservedHeader(int payloadLength)
+        => _framing != TransportFraming.VarIntLengthPrefixed
+           && payloadLength > 0
+           && payloadLength < s_fragmentOptions.MaxChunkSize
+           && payloadLength + HeaderSize <= ushort.MaxValue;
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private ValueTask<SendResult> SEND_ASYNC_SAFE(ReadOnlyMemory<byte> data, int totalLength, CancellationToken cancellationToken)
     {
@@ -228,19 +265,37 @@ internal sealed partial class SocketConnection
         try
         {
             WRITE_FRAME_HEADER(MemoryExtensions.AsSpan(heapBuf), (ushort)totalLength, data.Span);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            BufferLease.ByteArrayPool.Return(heapBuf);
+            return ValueTask.FromResult(SendResult.Failed);
+        }
 
+        return this.SEND_BUFFER_ASYNC(heapBuf, 0, totalLength, pooled: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes <c>buffer[offset..offset+totalLength)</c> (a complete frame) to the socket.
+    /// When <paramref name="pooled"/> is <see langword="true"/> the buffer is returned to the pool once the write ends.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private ValueTask<SendResult> SEND_BUFFER_ASYNC(byte[] heapBuf, int offset, int totalLength, bool pooled, CancellationToken cancellationToken)
+    {
+        try
+        {
             int sent = 0;
             while (sent < totalLength)
             {
                 ValueTask<int> vt = _socket.SendAsync(MemoryExtensions
-                                           .AsMemory(heapBuf, sent, totalLength - sent), SocketFlags.None, cancellationToken);
+                                           .AsMemory(heapBuf, offset + sent, totalLength - sent), SocketFlags.None, cancellationToken);
 
                 if (vt.IsCompletedSuccessfully)
                 {
                     int n = vt.Result;
                     if (n == 0)
                     {
-                        BufferLease.ByteArrayPool.Return(heapBuf);
+                        RETURN_IF_POOLED(heapBuf, pooled);
                         this.CANCEL_RECEIVE_ONCE();
                         this.INVOKE_CLOSE_ONCE();
                         return ValueTask.FromResult(SendResult.PeerClosed);
@@ -251,12 +306,12 @@ internal sealed partial class SocketConnection
                 }
                 else
                 {
-                    return AWAIT_SEND(this, vt, heapBuf, sent, totalLength, cancellationToken);
+                    return AWAIT_SEND(this, vt, heapBuf, offset, sent, totalLength, pooled, cancellationToken);
                 }
             }
 
             this.INVOKE_POST_CALLBACK();
-            BufferLease.ByteArrayPool.Return(heapBuf);
+            RETURN_IF_POOLED(heapBuf, pooled);
             return ValueTask.FromResult(SendResult.Success);
         }
         catch (SocketException ex) when (ex.SocketErrorCode is
@@ -265,17 +320,17 @@ internal sealed partial class SocketConnection
                SocketError.Shutdown or
                SocketError.OperationAborted)
         {
-            BufferLease.ByteArrayPool.Return(heapBuf);
+            RETURN_IF_POOLED(heapBuf, pooled);
             return ValueTask.FromResult(SendResult.Aborted);
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            BufferLease.ByteArrayPool.Return(heapBuf);
+            RETURN_IF_POOLED(heapBuf, pooled);
             return ValueTask.FromResult(SendResult.Failed);
         }
 
         [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-        static async ValueTask<SendResult> AWAIT_SEND(SocketConnection self, ValueTask<int> vt, byte[] heapBuf, int sent, int totalLength, CancellationToken token)
+        static async ValueTask<SendResult> AWAIT_SEND(SocketConnection self, ValueTask<int> vt, byte[] heapBuf, int offset, int sent, int totalLength, bool pooled, CancellationToken token)
         {
             try
             {
@@ -292,7 +347,7 @@ internal sealed partial class SocketConnection
 
                 while (sent < totalLength)
                 {
-                    n = await self._socket.SendAsync(MemoryExtensions.AsMemory(heapBuf, sent, totalLength - sent), SocketFlags.None, token).ConfigureAwait(false);
+                    n = await self._socket.SendAsync(MemoryExtensions.AsMemory(heapBuf, offset + sent, totalLength - sent), SocketFlags.None, token).ConfigureAwait(false);
                     if (n == 0)
                     {
                         self.CANCEL_RECEIVE_ONCE();
@@ -321,8 +376,17 @@ internal sealed partial class SocketConnection
             }
             finally
             {
-                BufferLease.ByteArrayPool.Return(heapBuf);
+                RETURN_IF_POOLED(heapBuf, pooled);
             }
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void RETURN_IF_POOLED(byte[] buffer, bool pooled)
+    {
+        if (pooled)
+        {
+            BufferLease.ByteArrayPool.Return(buffer);
         }
     }
 

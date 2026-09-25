@@ -1,24 +1,19 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Net;
 using System.Net.WebSockets;
-using System.Threading;
-using System.Threading.Tasks;
 using FluentAssertions;
 using Nalix.Abstractions.Networking;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Transport;
-using Xunit;
 
 namespace Nalix.Network.Tests;
 
 /// <summary>
 /// Regression tests for the WebSocket sequence-reservation/wire-write race fixed via
-/// <see cref="IConnection.ITransport.AcquireSendLockAsync"/>/<see cref="IConnection.ITransport.SendAsyncCore"/>.
+/// <see cref="IConnection.ITransport.AcquireSendLockAsync"/>/<see cref="IConnection.ITransport.SendAsyncCore(System.ReadOnlyMemory{byte}, System.Threading.CancellationToken)"/>.
 /// Without holding the send lock across reservation + write, concurrent senders can reserve
 /// sequence numbers in one order but land on the wire in the opposite order.
 /// </summary>
@@ -67,9 +62,9 @@ public sealed class WebSocketTransportSendOrderingTests
     public async Task ConcurrentSends_PreserveMonotonicWireOrder_WithSendLockHeldAcrossReservation()
     {
         // Arrange
-        var socket = new DelayingStubWebSocket();
-        var wsConn = new WebSocketConnection(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        var transport = new WebSocketTransport();
+        DelayingStubWebSocket socket = new DelayingStubWebSocket();
+        WebSocketConnection wsConn = new WebSocketConnection(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
+        WebSocketTransport transport = new WebSocketTransport();
         transport.Initialize(wsConn, socket);
 
         IConnection.ITransport iface = transport;
@@ -94,7 +89,7 @@ public sealed class WebSocketTransportSendOrderingTests
         // Assert: wire order must match reservation order (1..count), because the send lock
         // is held across both reservation and write.
         byte[] observed = [.. socket.WriteOrder];
-        observed.Should().BeInAscendingOrder();
-        observed.Should().Equal([.. Enumerable.Range(1, count).Select(x => (byte)x)]);
+        _ = observed.Should().BeInAscendingOrder();
+        _ = observed.Should().Equal([.. Enumerable.Range(1, count).Select(x => (byte)x)]);
     }
 }

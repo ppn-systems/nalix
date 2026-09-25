@@ -149,6 +149,7 @@ internal sealed class UdpFrameReader : IDisposable
             {
                 _state.Secret.AsSpan().CopyTo(datagram.SpanFull[dataLen..]);
                 uint computedHash = XxHash32.Compute(datagram.SpanFull[..(dataLen + Bytes32.Size)]);
+                datagram.SpanFull.Slice(dataLen, Bytes32.Size).Clear(); // [SECURITY] scrub the copied secret
                 if (computedHash != receivedHash)
                 {
                     return; // Drop spoofed packet
@@ -160,7 +161,7 @@ internal sealed class UdpFrameReader : IDisposable
                 datagram.Span[..dataLen].CopyTo(temp);
                 _state.Secret.AsSpan().CopyTo(temp.AsSpan(dataLen));
                 uint computedHash = XxHash32.Compute(temp.AsSpan(0, dataLen + Bytes32.Size));
-                BufferLease.ByteArrayPool.Return(temp);
+                BufferLease.ByteArrayPool.Return(temp, clearArray: true); // [SECURITY] holds the secret
                 if (computedHash != receivedHash)
                 {
                     return; // Drop spoofed packet

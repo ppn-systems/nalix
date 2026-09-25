@@ -159,7 +159,8 @@ public static class FramePipeline
             }
 
             // 3. Rent final lease for the fully decompressed packet
-            BufferLease finalLease = BufferLease.Rent(FrameTransformer.Offset + decompressedSize);
+            // [SECURITY] Holds decrypted plaintext: scrub the used range when the lease is released.
+            BufferLease finalLease = BufferLease.Rent(FrameTransformer.Offset + decompressedSize, zeroOnDispose: true);
             finalLease.IsReliable = current.IsReliable;
             finalLease.EncryptedOnWire = true;
 
@@ -218,6 +219,14 @@ public static class FramePipeline
             Throw.EncryptRequestedButNoCipher();
         }
 
+        // [SECURITY] The source frame is the plaintext of an encrypted message. Pooled arrays are
+        // not scrubbed on return (see BufferLease.ByteArrayPool.Return), so ask the owner's lease
+        // to clear its used range when it is finally released.
+        if (enableEncrypt && original is BufferLease plaintextLease)
+        {
+            plaintextLease.ZeroOnDispose = true;
+        }
+
         if (doCompress && enableEncrypt)
         {
             if (seq == null)
@@ -257,7 +266,7 @@ public static class FramePipeline
 
         // 2. RENT A SINGLE LEASE: capacity = Header + Final Ciphertext + Temp Compressed Data
         int totalRequiredCapacity = FrameTransformer.Offset + maxFinalSize + maxCompSize;
-        BufferLease singleLease = BufferLease.Rent(totalRequiredCapacity);
+        BufferLease singleLease = BufferLease.Rent(totalRequiredCapacity, zeroOnDispose: false, BufferLease.TransportHeadroom);
         singleLease.IsReliable = current.IsReliable;
 
         try

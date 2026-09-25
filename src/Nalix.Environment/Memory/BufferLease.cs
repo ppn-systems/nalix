@@ -150,9 +150,27 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte[] Rent(int capacity = 256) => Volatile.Read(ref s_rentFunc)(capacity);
 
-        /// <summary>Returns a raw buffer to the pool (fallback path).</summary>
+        /// <summary>Returns a raw buffer to the pool <b>without</b> clearing it.</summary>
+        /// <remarks>
+        /// <para>
+        /// Security: pooled arrays are not scrubbed on every return. Clearing the whole
+        /// power-of-two array on every send/receive was a measurable hot-path cost, and most
+        /// buffers only ever hold ciphertext or data that was plaintext on the wire anyway.
+        /// Buffers that hold secrets (key material, or the plaintext of an encrypted frame) must
+        /// be cleared by their owner: use <see cref="Return(byte[], bool)"/> with
+        /// <c>clearArray: true</c>, clear the used range before returning, or rent the lease with
+        /// <c>zeroOnDispose: true</c> / set <see cref="ZeroOnDispose"/>. The codec pipeline does this
+        /// for decrypted frames, pre-encryption source frames and its crypto scratch regions.
+        /// </para>
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Return(byte[] array) => Volatile.Read(ref s_returnFunc)(array, true);
+        public static void Return(byte[] array) => Volatile.Read(ref s_returnFunc)(array, false);
+
+        /// <summary>Returns a raw buffer to the pool, optionally clearing the whole array first.</summary>
+        /// <param name="array">The buffer to return.</param>
+        /// <param name="clearArray">Whether to clear the entire array before it goes back to the pool.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Return(byte[] array, bool clearArray) => Volatile.Read(ref s_returnFunc)(array, clearArray);
 
     }
 
@@ -160,6 +178,12 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     /// Maximum buffer size for stack allocation in <see cref="CopyFrom"/>. Larger buffers will be heap-allocated.
     /// </summary>
     public static readonly int StackAllocThreshold = 512;
+
+    /// <summary>
+    /// Headroom reserved in front of outbound frames so a stream transport can prepend its
+    /// 2-byte length prefix in place instead of renting and copying a new buffer.
+    /// </summary>
+    public const int TransportHeadroom = 2;
 
     #endregion Static
 
@@ -172,6 +196,12 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
 
     /// <summary>slice start (≥ 0, ≤ RawCapacity)</summary>
     private int _start;
+
+    /// <summary>
+    /// Bytes directly before <c>_start</c> that were reserved by <see cref="Rent(int, bool, int)"/>
+    /// for a transport header and are not part of the payload (0 when none were reserved).
+    /// </summary>
+    private int _headroom;
 
     /// <summary>reference count (≥ 0)</summary>
     private int _refCount;
@@ -205,7 +235,7 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
 
     /// <summary>
     /// Parameterless constructor for free-list reuse.
-    /// Do not call directly — use <see cref="Rent"/>, <see cref="CopyFrom"/>, or <see cref="TakeOwnership"/>.
+    /// Do not call directly — use <see cref="Rent(int, bool)"/>, <see cref="CopyFrom"/>, or <see cref="TakeOwnership"/>.
     /// </summary>
     public BufferLease() { }
 
@@ -224,6 +254,7 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
         _refCount = 1;
         _detached = 0;
         _start = start;
+        _headroom = 0;
         _buffer = buffer;
 
         this.Length = length;
@@ -238,6 +269,7 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     {
         _buffer = null;
         _start = 0;
+        _headroom = 0;
         _refCount = 0;
         _detached = 0;
         this.Length = 0;
@@ -285,6 +317,38 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     /// Gets the total capacity (underlying array length).
     /// </summary>
     public int RawCapacity => _buffer?.Length ?? 0;
+
+    /// <summary>
+    /// Gets the number of bytes reserved directly in front of the payload for a transport header
+    /// (see <see cref="Rent(int, bool, int)"/>). Always 0 for leases created any other way.
+    /// </summary>
+    public int Headroom => _buffer is null ? 0 : _headroom;
+
+    /// <summary>
+    /// Gets the backing array segment that starts <paramref name="headerSize"/> bytes before the
+    /// payload and ends at the end of the payload, so a transport can write its length header in
+    /// place and send header + payload without copying.
+    /// </summary>
+    /// <param name="headerSize">The header size to prepend; must not exceed <see cref="Headroom"/>.</param>
+    /// <param name="segment">The <c>[header][payload]</c> segment when successful.</param>
+    /// <returns><see langword="true"/> when enough headroom was reserved.</returns>
+    /// <remarks>
+    /// The header bytes belong to this lease's reserved headroom and are never part of
+    /// <see cref="Span"/>/<see cref="Memory"/>, so writing them does not change the payload.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryGetSegmentWithHeader(int headerSize, out ArraySegment<byte> segment)
+    {
+        byte[]? buffer = _buffer;
+        if (buffer is null || headerSize <= 0 || headerSize > _headroom)
+        {
+            segment = default;
+            return false;
+        }
+
+        segment = new ArraySegment<byte>(buffer, _start - headerSize, this.Length + headerSize);
+        return true;
+    }
 
     /// <summary>
     /// Gets or sets whether the slice should be zeroed before returning to the pool.
@@ -532,6 +596,7 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
         length = this.Length;
 
         _start = 0;
+        _headroom = 0;
         this.Length = 0;
         return buffer is not null;
     }
@@ -553,6 +618,30 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
         byte[] arr = ByteArrayPool.Rent(capacity);
         BufferLease lease = RENT_LEASE_SHELL();
         lease.Initialize(arr, start: 0, length: 0, zeroOnDispose);
+        return lease;
+    }
+
+    /// <summary>
+    /// Rents a buffer whose payload starts <paramref name="headroom"/> bytes into the array, keeping
+    /// that prefix free for a transport header (see <see cref="TryGetSegmentWithHeader"/>).
+    /// The lease behaves exactly like one from <see cref="Rent(int, bool)"/>: <see cref="Span"/>,
+    /// <see cref="SpanFull"/> and <see cref="Capacity"/> all start after the headroom.
+    /// </summary>
+    /// <param name="capacity">The minimum payload capacity.</param>
+    /// <param name="zeroOnDispose">Whether to clear the used payload before returning it to the pool.</param>
+    /// <param name="headroom">Bytes to reserve in front of the payload.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="capacity"/> or <paramref name="headroom"/> is negative.</exception>
+    [DebuggerStepThrough]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static BufferLease Rent(int capacity, bool zeroOnDispose, int headroom)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
+        ArgumentOutOfRangeException.ThrowIfNegative(headroom);
+
+        byte[] arr = ByteArrayPool.Rent(capacity + headroom);
+        BufferLease lease = RENT_LEASE_SHELL();
+        lease.Initialize(arr, start: headroom, length: 0, zeroOnDispose);
+        lease._headroom = headroom;
         return lease;
     }
 

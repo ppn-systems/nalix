@@ -29,9 +29,19 @@ internal static class PacketPipeline
     internal static BufferLease Serialize(IPacket packet)
     {
         int packetLength = packet.Length;
-        BufferLease lease = BufferLease.Rent(packetLength);
+        // Reserve transport headroom so the stream transport can prepend its length header in place.
+        BufferLease lease = BufferLease.Rent(packetLength, zeroOnDispose: false, BufferLease.TransportHeadroom);
         int written = packet.Serialize(lease.SpanFull);
         lease.CommitLength(written);
+        return lease;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static BufferLease CloneWithHeadroom(ReadOnlySpan<byte> source)
+    {
+        BufferLease lease = BufferLease.Rent(source.Length, zeroOnDispose: false, BufferLease.TransportHeadroom);
+        source.CopyTo(lease.SpanFull);
+        lease.CommitLength(source.Length);
         return lease;
     }
 
@@ -45,7 +55,7 @@ internal static class PacketPipeline
         bool needEncrypt, bool enableCompress, int minSizeToCompress, CancellationToken ct, bool cloneLease = true)
     {
         // Clone raw lease for per-connection mutation if cloneLease is true
-        BufferLease workingLease = cloneLease ? BufferLease.CopyFrom(rawLease.Span) : (BufferLease)rawLease;
+        BufferLease workingLease = cloneLease ? CloneWithHeadroom(rawLease.Span) : (BufferLease)rawLease;
 
         try
         {
@@ -95,6 +105,10 @@ internal static class PacketPipeline
                         connection.Secret.AsSpan().CopyTo(signedLease.SpanFull[dataLen..]);
                         uint hash = XxHash32.Compute(signedLease.SpanFull[..(dataLen + Bytes32.Size)]);
                         System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(signedLease.SpanFull.Slice(dataLen, 4), hash);
+
+                        // [SECURITY] Scrub the rest of the secret: it sits past the committed length and
+                        // the pool does not clear arrays on return.
+                        signedLease.SpanFull.Slice(dataLen + 4, Bytes32.Size - 4).Clear();
                         signedLease.CommitLength(dataLen + 4);
 
                         await transport.SendAsyncCore(signedLease.Memory, ct).ConfigureAwait(false);
@@ -106,7 +120,7 @@ internal static class PacketPipeline
                 }
                 else
                 {
-                    await transport.SendAsyncCore(current.Memory, ct).ConfigureAwait(false);
+                    await transport.SendAsyncCore(current, ct).ConfigureAwait(false);
                 }
             }
             finally

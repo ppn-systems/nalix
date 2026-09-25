@@ -235,6 +235,9 @@ public ref struct DataWriter
 
         if (oldOwner is not null)
         {
+            // Scrub only the bytes this writer produced (serialized packet data); the pool no
+            // longer clears whole arrays on return.
+            MemoryExtensions.AsSpan(oldOwner, 0, Math.Min(this.WrittenCount, oldOwner.Length)).Clear();
             BufferLease.ByteArrayPool.Return(oldOwner);
         }
 
@@ -356,6 +359,8 @@ public ref struct DataWriter
         {
             if (_rent)
             {
+                // Scrub only the bytes this writer produced; the pool no longer clears on return.
+                MemoryExtensions.AsSpan(_owner, 0, Math.Min(this.WrittenCount, _owner.Length)).Clear();
                 BufferLease.ByteArrayPool.Return(_owner);
             }
 

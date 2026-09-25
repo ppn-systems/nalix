@@ -26,9 +26,17 @@ internal static class LZ4HashTablePool
 
     /// <summary>
     /// Gets a thread-local hash table for compression operations.
-    /// The hash table is automatically cleared before returning.
     /// </summary>
-    /// <returns>A cleared hash table ready for use.</returns>
+    /// <remarks>
+    /// A reused thread-local table is <b>not</b> cleared. Its entries are only match hints (input
+    /// offsets): <c>MatchFinder.FindLongestMatch</c> rejects any candidate that is negative, not
+    /// before the current position, outside the 64 KB window, or whose 4 bytes differ from the
+    /// current sequence. A stale entry left by a previous block therefore behaves exactly like a
+    /// hash collision: it can only cost a missed match, never a wrong one, and it cannot expose data
+    /// from the previous block because the table stores offsets, not bytes. Skipping the clear saves
+    /// up to 256 KB of memset per compressed frame. Freshly pooled tables are still cleared once.
+    /// </remarks>
+    /// <returns>A hash table ready for use.</returns>
     public static int[] Rent(int hashBits)
     {
         int size = 1 << hashBits;
@@ -36,7 +44,6 @@ internal static class LZ4HashTablePool
 
         if (hashTable is not null && hashTable.Length >= size)
         {
-            new Span<int>(hashTable, 0, size).Clear();
             t_hashTable = null;
             return hashTable;
         }

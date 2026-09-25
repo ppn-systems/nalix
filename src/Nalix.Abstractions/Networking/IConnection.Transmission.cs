@@ -73,7 +73,7 @@ public partial interface IConnection
         /// <summary>
         /// Acquires a scope that must be held across sequence-number reservation
         /// (<see cref="ITransportSequencer.NextSendSequence"/>) and the corresponding wire write
-        /// (<see cref="SendAsyncCore"/>), so that reservation order and wire-write order stay consistent
+        /// (<see cref="SendAsyncCore(ReadOnlyMemory{byte}, CancellationToken)"/>), so that reservation order and wire-write order stay consistent
         /// under concurrent sends.
         /// </summary>
         /// <remarks>
@@ -94,6 +94,21 @@ public partial interface IConnection
         /// <param name="cancellationToken">A token to cancel the sending operation.</param>
         ValueTask SendAsyncCore(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default) =>
             this.SendAsync(message, cancellationToken);
+
+        /// <summary>
+        /// Writes the payload of <paramref name="frame"/> to the transport without acquiring any additional
+        /// send lock. Same contract as <see cref="SendAsyncCore(ReadOnlyMemory{byte}, CancellationToken)"/>,
+        /// but a transport may use space the lease reserved in front of the payload to write its own framing
+        /// header in place instead of copying the frame. The caller keeps ownership of <paramref name="frame"/>
+        /// and must keep it alive until the returned task completes.
+        /// </summary>
+        /// <param name="frame">The frame to send.</param>
+        /// <param name="cancellationToken">A token to cancel the sending operation.</param>
+        ValueTask SendAsyncCore(IBufferLease frame, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(frame);
+            return this.SendAsyncCore(frame.Memory, cancellationToken);
+        }
     }
 
     /// <summary>
