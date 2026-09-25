@@ -17,6 +17,10 @@ public sealed partial class CompressionOptions : ConfigurationLoader, IValidatab
     /// <summary>
     /// Gets or sets whether compression is enabled globally.
     /// </summary>
+    /// <remarks>
+    /// Frames whose LZ4 output is not at least 12.5 % smaller than the payload are sent
+    /// uncompressed, so enabling compression costs little on incompressible traffic.
+    /// </remarks>
     [IniComment("Enable or disable compression (true = enabled, false = disabled)")]
     public bool Enabled { get; set; } = true;
 
