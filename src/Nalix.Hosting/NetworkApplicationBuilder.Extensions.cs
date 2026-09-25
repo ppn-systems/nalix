@@ -7,7 +7,6 @@ using Nalix.Abstractions.Networking.Sessions;
 using Nalix.Abstractions.Security;
 using Nalix.Framework.Injection;
 using Nalix.Hosting.Internal;
-using Nalix.Network.RateLimiting;
 using Nalix.Runtime.Groups;
 using Nalix.Runtime.Handlers;
 using Nalix.Runtime.Security;
@@ -45,9 +44,9 @@ public static class NetworkApplicationBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        _ = InstanceManager.Instance.GetOrCreateInstance<ConnectionGuard>();
-
-        _ = builder.MapHandlers(typeof(SystemControlHandlers));
+        // The ConnectionGuard is created in Build() (after Configure<...>() delegates run),
+        // so options configured before or after this call are both honoured.
+        MapHandlersOnce(builder, typeof(SystemControlHandlers));
 
         return builder;
     }
@@ -56,6 +55,12 @@ public static class NetworkApplicationBuilderExtensions
     /// Enables the X25519 handshake and key exchange protocol, and initializes
     /// the server identity certificate.
     /// </summary>
+    /// <remarks>
+    /// Also enables <see cref="UseSystemControl"/> (idempotent): the handshake's TOFU key
+    /// exchange is served by the system control handlers. The connection guard is created
+    /// during <c>Build()</c>, so <c>Configure&lt;ConnectionQuotaOptions&gt;()</c> may be called
+    /// before or after this method.
+    /// </remarks>
     /// <param name="builder">The application builder.</param>
     /// <param name="certificatePath">
     /// Optional explicit path to the server certificate file.
@@ -73,10 +78,15 @@ public static class NetworkApplicationBuilderExtensions
             );
         }
 
-        _ = InstanceManager.Instance.GetOrCreateInstance<ConnectionGuard>();
+        // Do NOT create the ConnectionGuard here: doing so froze ConnectionQuotaOptions
+        // before any later Configure<ConnectionQuotaOptions>() ran. Build() creates it.
+        MapHandlersOnce(builder, typeof(HandshakeHandlers));
+        MapHandlersOnce(builder, typeof(ProofOfWorkHandlers));
 
-        _ = builder.MapHandlers(typeof(HandshakeHandlers));
-        _ = builder.MapHandlers(typeof(ProofOfWorkHandlers));
+        // The client handshake starts with a PUBLIC_KEY_REQUEST control frame (answered with
+        // SessionTofu) which is served by SystemControlHandlers. Without it the client just
+        // times out, so the secure pipeline always brings system control with it.
+        MapHandlersOnce(builder, typeof(SystemControlHandlers));
 
         if (certificatePath is not null)
         {
@@ -168,5 +178,21 @@ public static class NetworkApplicationBuilderExtensions
         ArgumentNullException.ThrowIfNull(sessionFactory);
         InstanceManager.Instance.Register<ISessionFactory>(sessionFactory);
         return builder;
+    }
+
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2067",
+        Justification = "Only called with statically known handler types that are preserved by MapHandlers.")]
+    private static void MapHandlersOnce(
+        INetworkApplicationBuilder builder,
+        [System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(
+            System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicConstructors |
+            System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicMethods)] Type handlerType)
+    {
+        if (builder is NetworkApplicationBuilder concrete && concrete.IsHandlerMapped(handlerType))
+        {
+            return;
+        }
+
+        _ = builder.MapHandlers(handlerType);
     }
 }

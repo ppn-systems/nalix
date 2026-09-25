@@ -126,6 +126,7 @@ public sealed class PacketContextBridgeLeakTests
             connection: new FakeConnection(),
             descriptor: metadata,
             reliable: true,
+            encryptedOnWire: false,
             ownsPacket: true);
 
         return context;

@@ -118,6 +118,8 @@ public sealed class WebSocketAdvancedEdgeCasesTests : IDisposable
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
         ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().MaxConnectionsPerIpAddress = 1;
+        // The test clients are on loopback, which is exempt from per-IP quotas by default.
+        ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().ExemptLoopback = false;
 
         ConnectionHub hub = new();
         var builder = NetworkApplication.CreateBuilder();
@@ -158,6 +160,7 @@ public sealed class WebSocketAdvancedEdgeCasesTests : IDisposable
         finally
         {
             ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().MaxConnectionsPerIpAddress = 1000;
+            ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().ExemptLoopback = true;
             await app.DeactivateAsync();
         }
     }

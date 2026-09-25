@@ -529,6 +529,19 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
     // AOT-safe: assembly scanning (Assembly.GetTypes) has been removed.
     // Handlers are registered explicitly via MapHandlers<T>() / MapHandlers(Type)
     // or discovered at compile time via source-generated PacketHandlerRegistry.
+    internal bool IsHandlerMapped(Type handlerType)
+    {
+        for (int i = 0; i < _state.Handlers.Count; i++)
+        {
+            if (_state.Handlers[i].HandlerType == handlerType)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static IEnumerable<HandlerDescriptor> ResolveHandlerRegistrations(HostingBuilderContext state) => state.Handlers;
 
     private void ValidateHandlerRegistration([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type handlerType, Func<object> factory)

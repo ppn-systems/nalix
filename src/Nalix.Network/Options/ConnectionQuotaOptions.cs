@@ -22,6 +22,21 @@ public sealed partial class ConnectionQuotaOptions : ConfigurationLoader, IValid
     public int MaxConnectionsPerIpAddress { get; set; } = 10;
 
     /// <summary>
+    /// Gets or sets a value indicating whether loopback clients (<c>127.0.0.0/8</c>, <c>::1</c>)
+    /// are exempt from per-IP / per-subnet quotas, rate windows, and automatic bans.
+    /// </summary>
+    /// <remarks>
+    /// Enabled by default so local development, integration tests, benchmarks, and
+    /// same-host reverse proxies are not throttled or banned after a handful of
+    /// concurrent connections. The global <see cref="ConnectionGuardOptions.MaxConnections"/>
+    /// cap still applies. Set to <see langword="false"/> if untrusted traffic can reach the
+    /// server through a loopback hop (for example a local proxy that does not forward the
+    /// client address) and you want loopback throttled like any remote IP.
+    /// </remarks>
+    [IniComment("Exempt loopback clients (127.0.0.0/8, ::1) from per-IP/subnet quotas, rate limits and auto-bans (default true)")]
+    public bool ExemptLoopback { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the hard cap on tracked endpoint entries in the ConnectionGuard map.
     /// When the map reaches this limit, new unique IPs are rejected until stale entries
     /// are evicted via random-sampling (O(1) Redis-style eviction).

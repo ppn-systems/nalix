@@ -27,6 +27,8 @@ await app.RunAsync(cts.Token);
 
 `UseSecureConnections()` sets up the handshake handlers and generates a certificate automatically the first time you run the server, if one doesn't already exist. Every request is rejected until the client completes the handshake.
 
+`UseSecureConnections()` also enables `UseSystemControl()` for you (calling both is harmless): the client's first handshake step — the TOFU `PUBLIC_KEY_REQUEST` answered with `SessionTofu` — is served by the system control handlers. Before this was automatic, forgetting `UseSystemControl()` made unpinned clients time out waiting for `SessionTofu`.
+
 Full source: `samples/SecureMultiTransportHelloWorld/SecureMultiTransportHelloWorld.Server/Program.cs`
 
 !!! note "TCP and UDP share a port"

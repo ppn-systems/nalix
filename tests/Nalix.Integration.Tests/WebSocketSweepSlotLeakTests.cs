@@ -134,6 +134,8 @@ public sealed class WebSocketSweepSlotLeakTests : IDisposable
         // but generous enough that legitimate concurrent traffic in a healthy build still fits.
         const int maxPerIp = 3;
         ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().MaxConnectionsPerIpAddress = maxPerIp;
+        // The test clients are on loopback, which is exempt from per-IP quotas by default.
+        ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().ExemptLoopback = false;
         ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().MaxConnectionsPerWindow = 2000;
         ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().MaxConnectionsPerSubnet = 2000;
         ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().MaxSubnetConnectionsPerWindow = 2000;
@@ -200,6 +202,7 @@ public sealed class WebSocketSweepSlotLeakTests : IDisposable
                 try { s.Close(); } catch { /* best-effort cleanup */ }
             }
             ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().HandshakeTimeoutMs = oldHandshakeTimeout;
+            ConfigurationManager.Instance.Get<ConnectionQuotaOptions>().ExemptLoopback = true;
             await app.DeactivateAsync();
         }
     }
