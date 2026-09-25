@@ -48,7 +48,7 @@ graph LR
 
 - **Managed Drain Budget** — A "drain budget" ensures that each wake cycle processes a batch of packets before yielding, balancing latency and throughput.
 - **Parallel execution** — Workers are scaled to match logical CPU cores in auto mode.
-- **Coalesced wake** — Uses `SemaphoreSlim` signaling to wake just enough workers based on incoming load, avoiding unnecessary thread pool pressure.
+- **Coalesced wake** — Per-worker `IValueTaskSource` wake signals (no allocation, no timer) wake one parked worker per newly ready connection, avoiding unnecessary thread pool pressure.
 
 ## 3. 64-bit Snowflake Identifiers
 

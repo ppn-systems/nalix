@@ -19,7 +19,7 @@ flowchart LR
     A["Transport IBufferLease"] --> B["HandlePacket"]
     B --> C["Retain lease"]
     C --> D["DispatchChannel.PushCore"]
-    D --> E["RequestWake via SemaphoreSlim"]
+    D --> E["RequestWake: set one parked worker's signal"]
     E --> F["Dispatch worker loop"]
     F --> G["PacketRegistry.TryDeserialize"]
     G --> H["MiddlewarePipeline + handler"]
@@ -54,9 +54,19 @@ and workers are scheduled with `WorkerPriority.HIGH`.
 
 ## Wake and Drain Behavior
 
-The current implementation uses a `SemaphoreSlim` wake signal, not a channel-based
-wake pipe. `RequestWake()` coalesces wake requests with `_wakeRequested` so repeated
-packet arrivals do not always release another semaphore count.
+Each worker owns a reusable, allocation-free auto-reset signal (`WorkerWakeSignal`, backed by
+`ManualResetValueTaskSourceCore<bool>`) and a "parked" flag. There is no timer poll.
+
+- A worker that finds no claimable connection marks itself parked (interlocked), re-checks the ready
+  queues, and only then awaits its signal. A producer publishes the ready entry (interlocked) before
+  `RequestWake()` scans the parked flags, so either the worker sees the work or the producer sees the
+  worker parked: a wake cannot be lost.
+- `RequestWake()` wakes **one** parked worker per connection that becomes ready, starting at a rotating
+  index so wake-ups are spread across workers. A worker that claims a session while more connections
+  are still claimable wakes another parked worker, so bursts fan out.
+- Signals are sticky and coalesced: a `Set()` before the wait makes the next wait complete synchronously.
+- `Deactivate()` sets every worker's signal, and each worker registers its cancellation token once to set
+  its own signal, so shutdown and external cancellation are observed without polling.
 
 Worker loops drain up to `_maxDrainPerWake` packets before waiting again. The drain
 budget is calculated in the constructor:
@@ -106,8 +116,8 @@ When a worker pulls a lease:
 | `Running` | Whether workers are currently active. |
 | `DispatchLoops` | Number of scheduled dispatch worker loops. |
 | `WakeSignals` | Number of calls that released wake signals. |
-| `WakeReads` | Counter field included in reports. |
-| `WakeRequested` | Current coalesced wake-request flag. |
+| `WakeReads` | Number of times a parked worker resumed from its wake signal. |
+| `IdleWorkers` | Workers currently parked or about to park. |
 | `TotalPackets` | Total queued packets in `DispatchChannel`. |
 | `TotalConnections` | Active tracked connection states. |
 | `ReadyConnections` | Connections currently marked ready. |
