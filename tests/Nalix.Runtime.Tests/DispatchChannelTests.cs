@@ -363,6 +363,134 @@ public sealed class DispatchChannelTests
 
     #endregion
 
+    #region Test Case 7b: Stale ready entry with exhausted budget is purged
+
+    /// <summary>
+    /// Regression for the idle busy-spin after #369: a removed connection leaves a stale entry in
+    /// the ready queue after its packets are drained. When the priority budget was already spent,
+    /// TryClaim never reset it (HasPacket == false), so the entry was never purged and
+    /// HasClaimableConnection stayed true forever, keeping dispatch workers from parking.
+    /// </summary>
+    [Fact]
+    public void TryClaim_StaleEntryWithExhaustedBudget_PurgesEntrySoWorkersCanPark()
+    {
+        using DispatchChannel<FakePacket> channel = new();
+        FakeConnection[] live = [new(), new()];
+        FakeConnection dead = new();
+
+        // NONE priority has weight 1: two claims exhaust its budget.
+        foreach (FakeConnection c in live)
+        {
+            channel.Push(c, CreatePacketLease(1, PacketPriority.NONE));
+        }
+
+        channel.Push(dead, CreatePacketLease(1, PacketPriority.NONE));
+
+        for (int i = 0; i < live.Length; i++)
+        {
+            Assert.True(channel.TryClaim(out IDispatchSession? s));
+            using (s)
+            {
+                while (s.TryDequeue(out IBufferLease? lease))
+                {
+                    lease.Dispose();
+                }
+            }
+        }
+
+        InvokeRemoveConnection(channel, dead);
+        Assert.Equal(0, channel.TotalPackets);
+
+        Assert.False(channel.TryClaim(out _));
+        Assert.False(channel.HasClaimableConnection);
+        Assert.Equal(0, channel.ReadyConnections);
+    }
+
+    #endregion
+
+    #region Test Case 7c: Ready-entry counter never drifts above the queue
+
+    /// <summary>
+    /// Regression for the idle busy-spin after #369: EnqueueReady published the entry before
+    /// counting it, so a racing TryClaim could read it and clamp the decrement at 0; the late
+    /// increment then left a phantom ready entry that kept HasClaimableConnection true forever.
+    /// After a concurrent push/claim/remove storm fully drains, nothing may look claimable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentPushClaimRemove_AfterDrain_NoPhantomClaimableEntries()
+    {
+        using DispatchChannel<FakePacket> channel = new();
+        FakeConnection[] conns = new FakeConnection[16];
+        for (int i = 0; i < conns.Length; i++)
+        {
+            conns[i] = new FakeConnection();
+        }
+
+        using CancellationTokenSource stop = new();
+        Task[] consumers = new Task[4];
+        for (int c = 0; c < consumers.Length; c++)
+        {
+            consumers[c] = Task.Run(() =>
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    if (!channel.TryClaim(out IDispatchSession? session))
+                    {
+                        Thread.SpinWait(4);
+                        continue;
+                    }
+
+                    using (session)
+                    {
+                        if (session.TryDequeue(out IBufferLease? lease))
+                        {
+                            lease.Dispose();
+                        }
+                    }
+                }
+            });
+        }
+
+        Task[] producers = new Task[conns.Length];
+        for (int p = 0; p < conns.Length; p++)
+        {
+            FakeConnection conn = conns[p];
+            bool remove = (p & 3) == 0;
+            producers[p] = Task.Run(() =>
+            {
+                for (int n = 1; n <= 5_000; n++)
+                {
+                    channel.Push(conn, CreatePacketLease(n, (n & 7) == 0 ? PacketPriority.HIGH : PacketPriority.NONE));
+                }
+
+                if (remove)
+                {
+                    InvokeRemoveConnection(channel, conn);
+                }
+            });
+        }
+
+        await Task.WhenAll(producers);
+
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        while ((channel.TotalPackets > 0 || channel.HasClaimableConnection) && sw.Elapsed < TimeSpan.FromSeconds(30))
+        {
+            await Task.Delay(5);
+        }
+
+        stop.Cancel();
+        await Task.WhenAll(consumers);
+
+        int[] pending = new int[8];
+        channel.CopyPendingPerPriority(pending);
+        Assert.True(channel.TotalPackets == 0 && !channel.HasClaimableConnection,
+            $"total={channel.TotalPackets} ready={channel.ReadyConnections} pending=[{string.Join(',', pending)}]");
+        Assert.Equal(0, channel.TotalPackets);
+        Assert.False(channel.HasClaimableConnection);
+    }
+
+    #endregion
+
     #region Test Case 8: Weak reference — removed connection is GC-collectible
 
     [Fact]
