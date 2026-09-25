@@ -105,6 +105,13 @@ internal sealed class ReconnectSupervisor
                 _ = tcs.TrySetResult(true);
                 return;
             }
+            catch (ObjectDisposedException ex)
+            {
+                // The session was disposed while reconnecting; retrying can never succeed.
+                _readyTcs = null;
+                _ = tcs.TrySetException(ex);
+                return;
+            }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
                 // Keep retrying until attempts are exhausted; transient connect/handshake

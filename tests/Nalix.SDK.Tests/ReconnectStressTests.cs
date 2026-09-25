@@ -120,25 +120,12 @@ public sealed class ReconnectStressTests : IDisposable
     {
         int port = TestUtils.GetFreePort();
 
-        var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
-        builder.UseSecureConnections();
-        builder.UseSystemControl();
-        builder.UseTimeSync();
-        using NetworkApplication app = builder.Build();
+        using NetworkApplication app = BuildSecureServer(port);
         await app.ActivateAsync();
 
         try
         {
-            using TcpSession session = new(new TransportOptions
-            {
-                Address = "127.0.0.1",
-                Port = (ushort)port,
-                ServerPublicKey = TestUtils.GetServerPublicKey(),
-                AutoReconnectEnabled = true,
-                ReconnectBaseDelayMillis = 50,
-                ReconnectMaxDelayMillis = 200,
-            });
+            using TcpSession session = CreateAutoReconnectSession(port);
 
             bool reauthCalled = false;
             session.OnReauthenticateAsync = _ =>
@@ -147,47 +134,120 @@ public sealed class ReconnectStressTests : IDisposable
                 return Task.CompletedTask;
             };
 
+            TaskCompletionSource dropped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.OnDisconnected += (_, _) => dropped.TrySetResult();
+
             await session.ConnectAsync();
             Assert.True(session.IsConnected);
 
-            // Simulate an unexpected drop: the server goes away out from under the client (not a
-            // client-initiated DisconnectAsync). The next send fails, which routes through
-            // HandleError -> DisconnectInternalAsync, letting the ReconnectSupervisor's
-            // OnDisconnected handler start a reconnect loop — a new server on the same port
-            // stands in for the restart.
+            // Simulate an unexpected drop: the server shuts down under the client (not a
+            // client-initiated DisconnectAsync). Deactivating the server must close its
+            // established connections so the client observes the drop and the
+            // ReconnectSupervisor starts its loop; a new server on the same port stands in
+            // for the restart.
             await app.DeactivateAsync();
 
-            var builder2 = NetworkApplication.CreateBuilder();
-            builder2.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
-            builder2.UseSecureConnections();
-            builder2.UseSystemControl();
-            builder2.UseTimeSync();
-            using NetworkApplication app2 = builder2.Build();
+            using NetworkApplication app2 = BuildSecureServer(port);
             await app2.ActivateAsync();
 
-            var ping = new Nalix.Codec.ProtocolFrames.TimeSync();
-            ping.Initialize(Nalix.Abstractions.Networking.Protocols.ControlType.PING, 99, Nalix.Abstractions.Networking.Packets.PacketFlags.NONE);
+            try
+            {
+                await dropped.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-            // The request either observes the dead socket (triggering HandleError -> disconnect ->
-            // reconnect) or lands after the reconnect has already completed; either way it must
-            // eventually succeed against the replacement server. Generous timeout + retry to
-            // absorb CI scheduling jitter around when the dead socket is actually detected.
-            Nalix.Codec.ProtocolFrames.TimeSync response = await session.RequestAsync<Nalix.Codec.ProtocolFrames.TimeSync>(
-                ping,
-                options: RequestOptions.Default.WithTimeout(8000).WithRetry(2),
-                predicate: p => p.Header.SequenceId == 99);
+                // A request issued while the session is down/reconnecting waits for the
+                // reconnect (+ re-auth) to finish instead of failing. Waiting for readiness
+                // explicitly keeps the assertion deterministic: a request that is already
+                // in flight when the socket drops fails with NetworkException by design
+                // (RequestAsync only retries timeouts), and that race is not what this test
+                // is about.
+                await session.WaitUntilReadyAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
-            Assert.Equal(99u, response.Header.SequenceId);
-            Assert.True(session.IsConnected);
-            Assert.True(reauthCalled);
+                var ping = new Nalix.Codec.ProtocolFrames.TimeSync();
+                ping.Initialize(Nalix.Abstractions.Networking.Protocols.ControlType.PING, 99, Nalix.Abstractions.Networking.Packets.PacketFlags.NONE);
 
-            await app2.DeactivateAsync();
+                Nalix.Codec.ProtocolFrames.TimeSync response = await session.RequestAsync<Nalix.Codec.ProtocolFrames.TimeSync>(
+                    ping,
+                    options: RequestOptions.Default.WithTimeout(8000),
+                    predicate: p => p.Header.SequenceId == 99);
+
+                Assert.Equal(99u, response.Header.SequenceId);
+                Assert.True(session.IsConnected);
+                Assert.True(reauthCalled);
+            }
+            finally
+            {
+                await app2.DeactivateAsync();
+            }
         }
         finally
         {
             await app.DeactivateAsync();
         }
     }
+
+    [Fact]
+    public async Task AutoReconnect_DisconnectAsyncWhileAlreadyDisconnected_DoesNotSuppressNextReconnect()
+    {
+        int port = TestUtils.GetFreePort();
+
+        using NetworkApplication app = BuildSecureServer(port);
+        await app.ActivateAsync();
+
+        try
+        {
+            using TcpSession session = CreateAutoReconnectSession(port);
+
+            // Disconnecting a session that was never connected raises no OnDisconnected, so
+            // the "intentional disconnect" marker must not linger and swallow the next drop.
+            await session.DisconnectAsync();
+
+            TaskCompletionSource dropped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.OnDisconnected += (_, _) => dropped.TrySetResult();
+
+            await session.ConnectAsync();
+            Assert.True(session.IsConnected);
+
+            await app.DeactivateAsync();
+
+            using NetworkApplication app2 = BuildSecureServer(port);
+            await app2.ActivateAsync();
+
+            try
+            {
+                await dropped.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await session.WaitUntilReadyAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.True(session.IsConnected);
+            }
+            finally
+            {
+                await app2.DeactivateAsync();
+            }
+        }
+        finally
+        {
+            await app.DeactivateAsync();
+        }
+    }
+
+    private static NetworkApplication BuildSecureServer(int port)
+    {
+        var builder = NetworkApplication.CreateBuilder();
+        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.UseSecureConnections();
+        builder.UseSystemControl();
+        builder.UseTimeSync();
+        return builder.Build();
+    }
+
+    private static TcpSession CreateAutoReconnectSession(int port) => new(new TransportOptions
+    {
+        Address = "127.0.0.1",
+        Port = (ushort)port,
+        ServerPublicKey = TestUtils.GetServerPublicKey(),
+        AutoReconnectEnabled = true,
+        ReconnectBaseDelayMillis = 50,
+        ReconnectMaxDelayMillis = 200,
+    });
 
     [Fact]
     public async Task DeliberateDisconnect_AutoReconnectEnabled_DoesNotReconnect()
