@@ -48,11 +48,11 @@ public sealed class SdkUpgradeTests : IDisposable
 
             TimeSync first = new();
             Assert.Equal((ushort)0, first.Header.SequenceId);
-            await client.SendAsync(first);
+            await client.SendAsync(first, CancellationToken.None);
             ushort firstSeq = await ReadSequenceIdAsync(serverSide);
 
             TimeSync second = new();
-            await client.SendAsync(second);
+            await client.SendAsync(second, CancellationToken.None);
             ushort secondSeq = await ReadSequenceIdAsync(serverSide);
 
             Assert.NotEqual((ushort)0, firstSeq);
@@ -81,7 +81,7 @@ public sealed class SdkUpgradeTests : IDisposable
             TimeSync request = new();
             request.Initialize(ControlType.PING, 7777, PacketFlags.NONE);
 
-            await client.SendAsync(request);
+            await client.SendAsync(request, CancellationToken.None);
             ushort observedSeq = await ReadSequenceIdAsync(serverSide);
 
             Assert.Equal((ushort)7777, observedSeq);
@@ -210,7 +210,7 @@ public sealed class SdkUpgradeTests : IDisposable
 
             await Assert.ThrowsAsync<TimeoutException>(async () =>
             {
-                await foreach (TimeSyncStreamable _ in client.StreamAsync<TimeSyncStreamable>(
+                await foreach (NullablePacketStreamTests.NullableStreamItem _ in client.StreamAsync<NullablePacketStreamTests.NullableStreamItem>(
                     request, ct: cts.Token, inactivityTimeoutMs: 100))
                 {
                 }
