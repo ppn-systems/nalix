@@ -21,6 +21,17 @@ namespace Nalix.Codec.Transforms;
 public static class FramePipeline
 {
     /// <summary>
+    /// A compressed payload is only sent when it is at least 1/<c>2^MinGainShift</c> (12.5 %) smaller
+    /// than the original. Otherwise the frame goes out uncompressed (no <c>COMPRESSED</c> flag), which
+    /// is wire-compatible: receivers only decompress frames that carry the flag.
+    /// </summary>
+    private const int MinGainShift = 3;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsCompressionWorthwhile(int compressedLength, int originalLength)
+        => compressedLength <= originalLength - (originalLength >> MinGainShift);
+
+    /// <summary>
     /// Applies inbound transforms in transport order: decrypt first, then decompress.
     /// Mutates the <paramref name="current"/> lease directly via <see langword="ref"/> to optimize performance.
     /// </summary>
@@ -231,7 +242,17 @@ public static class FramePipeline
 
         if (doCompress)
         {
-            current = FrameCompression.CompressFrame(current);
+            IBufferLease compressed = FrameCompression.CompressFrame(current);
+
+            if (IsCompressionWorthwhile(compressed.Length - FrameTransformer.Offset, payloadSize))
+            {
+                current = compressed;
+            }
+            else
+            {
+                // Incompressible payload: send it raw. The receiver skips decompression too.
+                compressed.Dispose();
+            }
         }
         else if (enableEncrypt)
         {
@@ -271,9 +292,12 @@ public static class FramePipeline
 
             // 4. LZ4 compress directly into tempRegion
             int compLen = LZ4.LZ4Codec.Encode(srcSpan[FrameTransformer.Offset..], tempRegion);
+            bool compressedWins = IsCompressionWorthwhile(compLen, payloadSize);
 
-            // 5. Encrypt from tempRegion into finalRegion
-            EnvelopeCipher.Encrypt(secret, tempRegion[..compLen], finalRegion, null, seq, algorithm, out int encLen);
+            // 5. Encrypt the compressed block, or the raw payload when compression did not pay off
+            //    (maxFinalSize is sized from maxCompSize >= payloadSize, so the raw payload fits too).
+            ReadOnlySpan<byte> plaintext = compressedWins ? tempRegion[..compLen] : srcSpan[FrameTransformer.Offset..];
+            EnvelopeCipher.Encrypt(secret, plaintext, finalRegion, null, seq, algorithm, out int encLen);
 
             // [SECURITY] 5.5: Clear intermediate compressed data from the memory pool
             tempRegion[..compLen].Clear();
@@ -282,7 +306,7 @@ public static class FramePipeline
             srcSpan[..FrameTransformer.Offset].CopyTo(destFull[..FrameTransformer.Offset]);
 
             ref PacketHeader header = ref destFull.AsHeaderRef();
-            header.Flags |= PacketFlags.COMPRESSED | PacketFlags.ENCRYPTED;
+            header.Flags |= compressedWins ? PacketFlags.COMPRESSED | PacketFlags.ENCRYPTED : PacketFlags.ENCRYPTED;
 
             // 7. Finalize length
             singleLease.CommitLength(FrameTransformer.Offset + encLen);

@@ -170,6 +170,13 @@ public static class LZ4BlockEncoder
         int hashShift = 32 - hashBits;
         int hashMask = (1 << hashBits) - 1;
 
+        // Match-search acceleration (same idea as the reference LZ4 "skip trigger"): after every
+        // 2^SkipTrigger consecutive misses the scan step grows by one byte, so incompressible input
+        // is skipped quickly instead of hashing every position. Only the encoder's search changes;
+        // the block format and the decoder are unaffected.
+        const int skipTrigger = 6;
+        int searchMatchNb = 1 << skipTrigger;
+
         while (inputPtr < matchFindInputLimit)
         {
             int currentInputOffset = (int)(inputPtr - inputBase);
@@ -182,9 +189,11 @@ public static class LZ4BlockEncoder
 
             if (!match.Found)
             {
-                inputPtr++;
+                inputPtr += searchMatchNb++ >> skipTrigger;
                 continue;
             }
+
+            searchMatchNb = 1 << skipTrigger;
 
             int literalLength = (int)(inputPtr - literalStartPtr);
             int matchLength = match.Length;

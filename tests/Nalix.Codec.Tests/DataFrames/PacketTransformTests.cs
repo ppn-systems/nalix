@@ -144,8 +144,13 @@ public sealed class PacketTransformTests
     [Fact]
     public void FramePipeline_CompressAndEncryptFused_RoundtripShouldSucceed()
     {
+        // Compressible payload: incompressible data is now sent without the COMPRESSED flag
+        // (covered by the *_IncompressiblePayload_* tests below).
         byte[] originalPayload = new byte[1024];
-        Csprng.NextBytes(originalPayload);
+        for (int i = 0; i < originalPayload.Length; i++)
+        {
+            originalPayload[i] = (byte)(i % 13);
+        }
 
         using BufferLease src = BufferLease.Rent(FrameTransformer.Offset + originalPayload.Length);
         src.CommitLength(FrameTransformer.Offset + originalPayload.Length);
@@ -183,6 +188,81 @@ public sealed class PacketTransformTests
         Assert.True(restored.EncryptedOnWire);
         Assert.Equal(src.Length, restored.Length);
         Assert.Equal(src.Span.ToArray(), restored.Span.ToArray());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FramePipeline_IncompressiblePayload_IsSentWithoutCompressedFlag(bool encrypt)
+    {
+        byte[] originalPayload = new byte[1024];
+        Csprng.NextBytes(originalPayload);
+
+        using BufferLease src = BufferLease.Rent(FrameTransformer.Offset + originalPayload.Length);
+        src.CommitLength(FrameTransformer.Offset + originalPayload.Length);
+        src.Span[..FrameTransformer.Offset].Clear();
+        src.Span.AsHeaderRef() = new PacketHeader { Flags = PacketFlags.NONE };
+        originalPayload.CopyTo(src.Span[FrameTransformer.Offset..]);
+
+        IBufferLease outbound = src;
+        FramePipeline.ProcessOutbound(
+            ref outbound,
+            enableCompress: true,
+            minSizeToCompress: 1,
+            enableEncrypt: encrypt,
+            secret: s_testKey,
+            seq: encrypt ? 7u : null,
+            algorithm: encrypt ? CipherSuiteType.Chacha20Poly1305 : CipherSuiteType.None);
+
+        PacketFlags flags = outbound.Span.AsHeaderRef().Flags;
+        Assert.False(flags.HasFlag(PacketFlags.COMPRESSED));
+        Assert.Equal(encrypt, flags.HasFlag(PacketFlags.ENCRYPTED));
+
+        if (!encrypt)
+        {
+            // Compression was attempted and discarded: the original lease is sent as-is.
+            Assert.Same(src, outbound);
+            Assert.Equal(originalPayload, outbound.Span[FrameTransformer.Offset..].ToArray());
+            return;
+        }
+
+        IBufferLease inbound = outbound;
+        FramePipeline.ProcessInbound(ref inbound, s_testKey, CipherSuiteType.Chacha20Poly1305, out uint? seq);
+
+        using IBufferLease restored = inbound;
+        Assert.Equal(7u, seq);
+        Assert.True(restored.EncryptedOnWire);
+        Assert.Equal(src.Span.ToArray(), restored.Span.ToArray());
+        outbound.Dispose();
+    }
+
+    [Fact]
+    public void FramePipeline_CompressiblePayload_CompressOnly_SetsCompressedFlagAndRoundTrips()
+    {
+        byte[] originalPayload = new byte[2048];
+        for (int i = 0; i < originalPayload.Length; i++)
+        {
+            originalPayload[i] = (byte)(i / 32);
+        }
+
+        using BufferLease src = BufferLease.Rent(FrameTransformer.Offset + originalPayload.Length);
+        src.CommitLength(FrameTransformer.Offset + originalPayload.Length);
+        src.Span[..FrameTransformer.Offset].Clear();
+        src.Span.AsHeaderRef() = new PacketHeader { Flags = PacketFlags.NONE };
+        originalPayload.CopyTo(src.Span[FrameTransformer.Offset..]);
+
+        IBufferLease outbound = src;
+        FramePipeline.ProcessOutbound(ref outbound, true, 1, false, default, null, CipherSuiteType.None);
+
+        using IBufferLease compressed = outbound;
+        Assert.NotSame(src, compressed);
+        Assert.True(compressed.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.COMPRESSED));
+        Assert.True(compressed.Length < src.Length / 2);
+
+        IBufferLease inbound = compressed;
+        FramePipeline.ProcessInbound(ref inbound, default, CipherSuiteType.None, out _);
+        using IBufferLease restored = inbound;
+        Assert.Equal(originalPayload, restored.Span[FrameTransformer.Offset..].ToArray());
     }
 }
 
