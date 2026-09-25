@@ -57,6 +57,6 @@ Open <http://localhost:5230> in two browser tabs:
 - For production, copy the `Server public key` printed by the server into
   `wwwroot/appsettings.json` → `Nalix:ServerPublicKey` (pinning instead of trust-on-first-use),
   and serve over `https://` + `wss://` (`UseTls: true`) behind a TLS-terminating proxy.
-- The server relaxes the per-IP connection quota because every tab and reload comes from
-  `127.0.0.1`; with the stock limits loopback is banned after a few quick reloads.
+- Every tab and reload comes from `127.0.0.1`. The stock `ConnectionQuotaOptions.ExemptLoopback`
+  (on by default) keeps loopback out of the per-IP quotas and auto-bans, so no relaxation is needed.
 - See the guide's *Pitfalls* section for origin checks, trimming, and browser limits.
