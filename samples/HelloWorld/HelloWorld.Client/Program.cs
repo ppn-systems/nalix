@@ -33,7 +33,7 @@ internal static class Program
 
         // Create and connect a TCP session.
         using TcpSession session = new(options);
-        await session.ConnectAsync(Host, Port);
+        await session.ConnectAsync();
 
         Console.WriteLine($"Connected to {Host}:{Port}.");
 
