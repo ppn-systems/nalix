@@ -10,6 +10,8 @@ IBenchLibrary[] all =
     new NalixLibrary(NalixMode.Tcp),
     new NalixLibrary(NalixMode.TcpAead),
     new NalixLibrary(NalixMode.WebSocket),
+    new NalixLibrary(NalixMode.TcpNoCompression),
+    new NalixLibrary(NalixMode.TcpInline),
     new KestrelWebSocketLibrary(),
     new SignalRLibrary(),
     new GrpcLibrary(duplex: false, tls: false),

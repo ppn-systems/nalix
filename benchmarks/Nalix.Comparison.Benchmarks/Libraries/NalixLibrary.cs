@@ -18,6 +18,12 @@ public enum NalixMode
     Tcp,
     TcpAead,
     WebSocket,
+
+    /// <summary>Diagnostic variant: TCP with LZ4 frame compression disabled on both ends.</summary>
+    TcpNoCompression,
+
+    /// <summary>Diagnostic variant: TCP with the InlinePacketDispatcher instead of the default channel dispatcher.</summary>
+    TcpInline,
 }
 
 public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
@@ -26,6 +32,8 @@ public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
     {
         NalixMode.Tcp => "nalix-tcp",
         NalixMode.TcpAead => "nalix-tcp-aead",
+        NalixMode.TcpNoCompression => "nalix-tcp-nocomp",
+        NalixMode.TcpInline => "nalix-tcp-inline",
         _ => "nalix-ws",
     };
 
@@ -33,6 +41,8 @@ public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
     {
         NalixMode.Tcp => "Nalix TCP, plaintext, no handshake, TcpSession.RequestAsync",
         NalixMode.TcpAead => "Nalix TCP, X25519 handshake + AEAD encryption both directions",
+        NalixMode.TcpNoCompression => "[diagnostic] Nalix TCP plaintext with LZ4 compression disabled (server + client)",
+        NalixMode.TcpInline => "[diagnostic] Nalix TCP plaintext with InlinePacketDispatcher",
         _ => "Nalix WebSocket transport, plaintext, WebSocketSession.RequestAsync",
     };
 
@@ -56,7 +66,16 @@ public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
         q.MinConnectionIntervalMs = 0;
         q.BurstThreshold = 100;
 
+        if (mode == NalixMode.TcpNoCompression)
+        {
+            Nalix.Environment.Configuration.ConfigurationManager.Instance.Get<Nalix.Codec.Options.CompressionOptions>().Enabled = false;
+        }
+
         INetworkApplicationBuilder b = NetworkApplication.CreateBuilder().UseLogger(logger);
+        if (mode == NalixMode.TcpInline)
+        {
+            b = b.ConfigureDispatch(opts => new Nalix.Runtime.Dispatching.InlinePacketDispatcher(opts));
+        }
         if (mode == NalixMode.TcpAead)
         {
             b = b.UseSecureConnections().UseSystemControl().MapHandlers(typeof(EchoEncryptedHandlers));
@@ -85,7 +104,12 @@ public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
 
         public async Task ConnectAsync()
         {
-            TransportOptions o = new() { Address = "127.0.0.1", Port = (ushort)port };
+            TransportOptions o = new()
+            {
+                Address = "127.0.0.1",
+                Port = (ushort)port,
+                CompressionEnabled = mode != NalixMode.TcpNoCompression,
+            };
             if (mode == NalixMode.WebSocket)
             {
                 WebSocketSession ws = new(o, new WebSocketTransportOptions { Path = "/ws" });
