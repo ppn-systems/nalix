@@ -34,102 +34,109 @@ internal static class PacketAwaiter
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="TimeoutException"></exception>
     /// <exception cref="OperationCanceledException"></exception>
-    public static async Task<TPkt> AwaitAsync<TPkt>(
+    public static Task<TPkt> AwaitAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate,
         int timeoutMs, Func<CancellationToken, Task> sendAsync, CancellationToken ct)
         where TPkt : class, IPacket, IPacketStaticOpcode
     {
+        ArgumentNullException.ThrowIfNull(sendAsync);
+
+        return CoreAsync(client, predicate, timeoutMs, request: null, encrypt: null, sendAsync, ct);
+    }
+
+    /// <summary>
+    /// Subscribes for a matching packet, sends <paramref name="request"/>, and waits for the
+    /// response — the same exchange as the delegate-based overload, without the caller having to
+    /// build a send closure.
+    /// </summary>
+    /// <typeparam name="TPkt">The response packet type.</typeparam>
+    /// <param name="client">The session to send on and listen to.</param>
+    /// <param name="predicate">Decides whether an arriving packet is the response.</param>
+    /// <param name="timeoutMs">How long to wait; 0 means forever.</param>
+    /// <param name="request">The packet to send once the subscription is in place.</param>
+    /// <param name="encrypt">Per-send encryption override, or <see langword="null"/> for the session default.</param>
+    /// <param name="ct">Cancels the exchange.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="timeoutMs"/> is negative.</exception>
+    /// <exception cref="TimeoutException">Thrown when no matching packet arrives in time.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="ct"/> is cancelled.</exception>
+    public static Task<TPkt> AwaitAsync<TPkt>(
+        ITransportSession client, Func<TPkt, bool> predicate,
+        int timeoutMs, IPacket request, bool? encrypt, CancellationToken ct)
+        where TPkt : class, IPacket, IPacketStaticOpcode
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CoreAsync(client, predicate, timeoutMs, request, encrypt, sendAsync: null, ct);
+    }
+
+    private static async Task<TPkt> CoreAsync<TPkt>(
+        ITransportSession client, Func<TPkt, bool> predicate, int timeoutMs,
+        IPacket? request, bool? encrypt, Func<CancellationToken, Task>? sendAsync, CancellationToken ct)
+        where TPkt : class, IPacket, IPacketStaticOpcode
+    {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(predicate);
-        ArgumentNullException.ThrowIfNull(sendAsync);
 
         if (timeoutMs < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(timeoutMs), "timeoutMs must be >= 0 (0 = infinite)");
         }
 
-        TaskCompletionSource<TPkt> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-
-        if (timeoutMs > 0)
-        {
-            linkedCts.CancelAfter(timeoutMs);
-        }
-
-        using CancellationTokenRegistration registration = linkedCts.Token.Register(() =>
-        {
-            _ = tcs.TrySetCanceled(linkedCts.Token);
-        });
-
-#pragma warning disable CS0618 // Type or member is obsolete
-        IDisposable subscription = client.OnOnce<TPkt>(
-            predicate: packet =>
-            {
-                try
-                {
-                    return predicate(packet);
-                }
-                catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
-                {
-                    _ = tcs.TrySetException(ex);
-                    return false;
-                }
-            },
-            handler: packet =>
-            {
-                _ = tcs.TrySetResult(packet);
-            },
-            disposeAfter: false);
-#pragma warning restore CS0618 // Type or member is obsolete
-
-        void DisconnectHandler(object? _, Exception ex)
-        {
-            Exception error = new Abstractions.Exceptions.NetworkException(
-                $"Disconnected while waiting for {typeof(TPkt).Name}.",
-                ex ?? new InvalidOperationException("The TCP session was disconnected."));
-
-            _ = tcs.TrySetException(error);
-        }
-
-        client.OnDisconnected += DisconnectHandler;
-        IDisposable disconnectSub = new DelegateDisposable(() => client.OnDisconnected -= DisconnectHandler);
-
-        using CompositeSubscription composite = client.Subscribe(subscription, disconnectSub);
+        PendingRequest<TPkt> pending = new(client, predicate);
+        pending.Subscribe();
 
         try
         {
-            await sendAsync(linkedCts.Token).ConfigureAwait(false);
-        }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new TimeoutException($"No {typeof(TPkt).Name} received within {timeoutMs} ms (send phase).");
-        }
-        catch (Exception sendEx) when (ExceptionClassifier.IsNonFatal(sendEx))
-        {
-            if (sendEx is InvalidOperationException)
+            try
             {
-                Exception wrapped = new Abstractions.Exceptions.NetworkException(
-                    $"Disconnected while sending {typeof(TPkt).Name}.", sendEx);
+                Task send = sendAsync is not null
+                    ? sendAsync(ct)
+                    : request is not null
+                        ? client.SendAsync(request, encrypt, ct)
+                        : Task.CompletedTask;
 
-                _ = tcs.TrySetException(wrapped);
-                throw wrapped;
+                await send.ConfigureAwait(false);
+            }
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException($"No {typeof(TPkt).Name} received within {timeoutMs} ms (send phase).");
+            }
+            catch (Exception sendEx) when (ExceptionClassifier.IsNonFatal(sendEx))
+            {
+                if (sendEx is InvalidOperationException)
+                {
+                    NetworkException wrapped = new(
+                        $"Disconnected while sending {typeof(TPkt).Name}.", sendEx);
+
+                    pending.TrySetException(wrapped);
+                    throw wrapped;
+                }
+
+                pending.TrySetException(sendEx);
+                throw;
             }
 
-            _ = tcs.TrySetException(sendEx);
-            throw;
+            try
+            {
+                // Task.WaitAsync arms the timer and the cancellation hook itself, which is why this
+                // path builds no linked CancellationTokenSource, CancelAfter timer or registration.
+                return timeoutMs > 0
+                    ? await pending.Task.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs), ct).ConfigureAwait(false)
+                    : await pending.Task.WaitAsync(ct).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                throw new TimeoutException($"No {typeof(TPkt).Name} received within {timeoutMs} ms.");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(ct);
+            }
         }
-
-        try
+        finally
         {
-            return await tcs.Task.ConfigureAwait(false);
-        }
-        catch (TaskCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw new OperationCanceledException(ct);
-        }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new TimeoutException($"No {typeof(TPkt).Name} received within {timeoutMs} ms.");
+            pending.Unsubscribe();
         }
     }
+
 }
