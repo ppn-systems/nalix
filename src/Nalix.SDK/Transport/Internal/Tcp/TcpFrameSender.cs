@@ -71,6 +71,14 @@ internal sealed class TcpFrameSender : IDisposable
     private async Task<bool> SEND_CORE(IBufferLease lease, bool encrypt, bool sync, CancellationToken ct)
     {
         IBufferLease current = lease;
+
+        // [SECURITY] The caller's lease is the plaintext of an encrypted frame. The pool does not
+        // clear arrays on return, so mark it for scrubbing before anything can throw.
+        if (encrypt && lease is BufferLease plaintextLease)
+        {
+            plaintextLease.ZeroOnDispose = true;
+        }
+
         try
         {
             if (encrypt && _sequence.IsApproachingOverflow())
