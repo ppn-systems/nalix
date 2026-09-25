@@ -67,14 +67,16 @@ public sealed class DispatchChurnRegressionTests(ITestOutputHelper output)
             {
                 self.Refresh();
                 TimeSpan cpu0 = self.TotalProcessorTime;
-                completedPerRound[round] = await RunChurnRoundAsync(port);
+                System.Collections.Concurrent.ConcurrentQueue<string> errors = new();
+                completedPerRound[round] = await RunChurnRoundAsync(port, errors).WaitAsync(TimeSpan.FromSeconds(30));
                 self.Refresh();
                 double cpuMs = (self.TotalProcessorTime - cpu0).TotalMilliseconds;
                 cpuMsPerRequest[round] = cpuMs / Math.Max(1, completedPerRound[round]);
 
                 output.WriteLine(
                     $"round {round}: completed={completedPerRound[round]} cpu={cpuMs:F0} ms " +
-                    $"cpu/req={cpuMsPerRequest[round]:F3} ms");
+                    $"cpu/req={cpuMsPerRequest[round]:F3} ms errors={errors.Count} " +
+                    $"first={(errors.TryPeek(out string? e) ? e : "-")}");
             }
 
             // Every client is gone now: the server must park.
@@ -112,7 +114,7 @@ public sealed class DispatchChurnRegressionTests(ITestOutputHelper output)
     /// <see cref="RoundWindow"/>. Half of them are dropped abruptly halfway through, with
     /// requests still in flight, while the other half keep going. Returns completed requests.
     /// </summary>
-    private static async Task<long> RunChurnRoundAsync(int port)
+    private static async Task<long> RunChurnRoundAsync(int port, System.Collections.Concurrent.ConcurrentQueue<string> errors)
     {
         TcpSession[] sessions = new TcpSession[ClientsPerRound];
         for (int i = 0; i < ClientsPerRound; i++)
@@ -123,7 +125,7 @@ public sealed class DispatchChurnRegressionTests(ITestOutputHelper output)
                 Port = (ushort)port,
                 CompressionEnabled = false
             });
-            await sessions[i].ConnectAsync();
+            await sessions[i].ConnectAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
 
         long completed = 0;
@@ -148,6 +150,7 @@ public sealed class DispatchChurnRegressionTests(ITestOutputHelper output)
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
                     // Dropped sessions and timeouts end this client's loop.
+                    errors.Enqueue(ex.GetType().Name + ": " + ex.Message);
                     return;
                 }
             }
