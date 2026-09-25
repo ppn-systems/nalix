@@ -160,6 +160,7 @@ Runnable end-to-end projects, from beginner to production-grade:
 | **[HelloWorld](samples/HelloWorld)** | Minimal TCP client/server — request/response packets, `[PacketHandler]`, graceful shutdown. Start here. |
 | **[ChatRoom](samples/ChatRoom)** | Server push — broadcasting to all clients via `IConnectionBroadcaster`, `session.On<T>()` on the client. |
 | **[SecureMultiTransportHelloWorld](samples/SecureMultiTransportHelloWorld)** | TCP + UDP + WebSocket under one secure session — X25519 handshake, AEAD encryption, authenticated UDP. |
+| **[BlazorWasm](samples/BlazorWasm)** | Browser client — Blazor WebAssembly over WebSocket with the X25519 handshake, request/response, server push, reconnect, DI-registered session. [Guide](docs/guides/blazor-wasm.md) |
 
 ---
 

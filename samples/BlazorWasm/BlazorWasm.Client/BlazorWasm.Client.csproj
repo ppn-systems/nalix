@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>BlazorWasm.Client</RootNamespace>
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.9" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.9" PrivateAssets="all" />
+		<PackageReference Include="Nalix.SDK" Version="14.3.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\BlazorWasm.Contracts\BlazorWasm.Contracts.csproj" />
+	</ItemGroup>
+
+	<!--
+		Trimming (on by default for Release publish of Blazor WASM): packet types are discovered by
+		PacketRegistry at startup. Root the contracts assembly so the trimmer keeps every packet
+		and its generated formatter even if no code path constructs it directly.
+	-->
+	<ItemGroup>
+		<TrimmerRootAssembly Include="BlazorWasm.Contracts" />
+	</ItemGroup>
+
+</Project>

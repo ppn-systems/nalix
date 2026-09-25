@@ -1,0 +1,112 @@
+@page "/"
+@implements IDisposable
+@inject NalixClient Nalix
+
+<section>
+    <p>Status: <strong id="status">@Nalix.Status</strong>@(Nalix.LastConnectResumed ? " (resumed)" : "")</p>
+    <button id="connect" @onclick="ConnectAsync" disabled="@(Nalix.Status == ConnectionStatus.Connected)">Connect</button>
+    <button id="drop" @onclick="Nalix.SimulateDrop" disabled="@(Nalix.Status != ConnectionStatus.Connected)">Simulate drop</button>
+    <button id="disconnect" @onclick="Nalix.DisconnectAsync">Disconnect</button>
+    @if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+</section>
+
+<section>
+    <h2>Request / response</h2>
+    <input id="echo-input" @bind="_echoText" />
+    <button id="echo" @onclick="EchoAsync">Echo</button>
+    <p id="echo-result">@_echoResult</p>
+</section>
+
+<section>
+    <h2>Chat (server push)</h2>
+    <input id="chat-name" @bind="_name" placeholder="name" />
+    <input id="chat-input" @bind="_chatText" @onkeydown="OnChatKeyDown" placeholder="message" />
+    <button id="chat-send" @onclick="SendChatAsync">Send</button>
+    <ul id="chat-log">
+        @foreach (ChatLine line in _chat)
+        {
+            <li><b>@line.Username</b>: @line.Message</li>
+        }
+    </ul>
+</section>
+
+@code {
+    private readonly List<ChatLine> _chat = [];
+    private string _echoText = "hello nalix";
+    private string? _echoResult;
+    private string _name = "browser-" + Random.Shared.Next(100, 999);
+    private string _chatText = string.Empty;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nalix.StatusChanged += OnStatusChanged;
+        Nalix.ChatReceived += OnChatReceived;
+        await ConnectAsync();
+    }
+
+    private async Task ConnectAsync()
+    {
+        try
+        {
+            _error = null;
+            await Nalix.EnsureConnectedAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Connect failed: {ex.Message}";
+        }
+    }
+
+    private async Task EchoAsync()
+    {
+        try
+        {
+            EchoResult r = await Nalix.EchoAsync(_echoText);
+            _echoResult = $"{r.Text} @ {r.ServerTime:HH:mm:ss.fff}";
+        }
+        catch (Exception ex)
+        {
+            _echoResult = $"Error: {ex.Message}";
+        }
+    }
+
+    private async Task SendChatAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_chatText))
+        {
+            return;
+        }
+
+        try
+        {
+            await Nalix.SendChatAsync(_name, _chatText.Trim());
+            _chatText = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Send failed: {ex.Message}";
+        }
+    }
+
+    private Task OnChatKeyDown(KeyboardEventArgs e) => e.Key == "Enter" ? SendChatAsync() : Task.CompletedTask;
+
+    // SDK callbacks do not run through the renderer: marshal back with InvokeAsync.
+    private void OnStatusChanged(ConnectionStatus status) => _ = InvokeAsync(StateHasChanged);
+
+    private void OnChatReceived(ChatLine line) => _ = InvokeAsync(() =>
+    {
+        _chat.Add(line);
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        // Unsubscribe, or the singleton keeps this component alive and keeps re-rendering it.
+        Nalix.StatusChanged -= OnStatusChanged;
+        Nalix.ChatReceived -= OnChatReceived;
+    }
+}

@@ -122,6 +122,7 @@ nav:
   - Guides:
       - Overview: guides/index.md
       - Build a Chat Room: guides/build-a-chat-room.md
+      - Blazor WebAssembly Client: guides/blazor-wasm.md
       - Securing Your Server: guides/securing-your-server.md
       - Application Logic:
           - Implementing Packet Handlers: guides/application/packet-handlers.md
