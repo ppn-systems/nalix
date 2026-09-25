@@ -10,8 +10,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Nalix.Abstractions" Version="14.2.4" />
-		<PackageReference Include="Nalix.Codec" Version="14.2.4" />
+		<PackageReference Include="Nalix.Abstractions" Version="14.3.1" />
+		<PackageReference Include="Nalix.Codec" Version="14.3.1" />
 	</ItemGroup>
 
 </Project>

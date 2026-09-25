@@ -12,8 +12,8 @@
 	<ItemGroup>
 		<ProjectReference Include="..\HelloWorld.Contracts\HelloWorld.Contracts.csproj" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.9" />
-		<PackageReference Include="Nalix.Abstractions" Version="14.2.4" />
-		<PackageReference Include="Nalix.Hosting" Version="14.2.4" />
+		<PackageReference Include="Nalix.Abstractions" Version="14.3.1" />
+		<PackageReference Include="Nalix.Hosting" Version="14.3.1" />
 	</ItemGroup>
 
 	<!-- Source generator: produces PacketHandler dispatch code -->

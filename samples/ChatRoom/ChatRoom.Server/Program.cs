@@ -36,7 +36,7 @@ internal static class Program
         await using NetworkApplication app = NetworkApplication.CreateBuilder()
             .UseLogger(logger)
             .MapHandlers(typeof(ChatHandlers))
-            .ListenTcp<DefaultProtocol>().OnPort(Port).Bind()
+            .MapTcp<DefaultProtocol>().OnPort(Port).Bind()
             .Build();
 
         // Graceful shutdown on Ctrl+C.

@@ -43,9 +43,9 @@ internal static class Program
             .UseSecureConnections()
             .UseSystemControl()
             .MapHandlers(typeof(HelloHandlers))
-            .ListenTcp<DefaultProtocol>().OnPort(TcpPort).Bind()
-            .ListenUdp<DefaultProtocol>().OnPort(UdpPort).Bind()
-            .ListenWebSocket<DefaultProtocol>().OnPort(WebSocketPort).WithPath("/ws").Bind()
+            .MapTcp<DefaultProtocol>().OnPort(TcpPort).Bind()
+            .MapUdp<DefaultProtocol>().OnPort(UdpPort).Bind()
+            .MapWebSocket<DefaultProtocol>().OnPort(WebSocketPort).WithPath("/ws").Bind()
             .Build();
 
         // Graceful shutdown on Ctrl+C.
