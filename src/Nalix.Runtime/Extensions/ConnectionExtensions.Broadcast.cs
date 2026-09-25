@@ -39,7 +39,8 @@ public static partial class ConnectionExtensions
         ArgumentNullException.ThrowIfNull(hub);
         ArgumentNullException.ThrowIfNull(packet);
 
-        BufferLease rawLease = PacketPipeline.Serialize(packet);
+        // [SECURITY] An encrypted broadcast serializes plaintext: scrub it when the lease is released.
+        BufferLease rawLease = PacketPipeline.Serialize(packet, zeroOnDispose: enableEncrypt);
         try
         {
             bool enableCompress = s_options.Enabled;
@@ -52,6 +53,7 @@ public static partial class ConnectionExtensions
                 IBufferLease temp = FrameCompression.CompressFrame(rawLease);
                 rawLease.Dispose();
                 rawLease = (BufferLease)temp;
+                rawLease.ZeroOnDispose = enableEncrypt; // [SECURITY] compressed plaintext
                 enableCompress = false;
             }
 
@@ -96,7 +98,8 @@ public static partial class ConnectionExtensions
         ArgumentException.ThrowIfNullOrEmpty(groupName);
         ArgumentNullException.ThrowIfNull(packet);
 
-        BufferLease rawLease = PacketPipeline.Serialize(packet);
+        // [SECURITY] An encrypted broadcast serializes plaintext: scrub it when the lease is released.
+        BufferLease rawLease = PacketPipeline.Serialize(packet, zeroOnDispose: enableEncrypt);
         try
         {
             bool enableCompress = s_options.Enabled;
@@ -109,6 +112,7 @@ public static partial class ConnectionExtensions
                 IBufferLease temp = FrameCompression.CompressFrame(rawLease);
                 rawLease.Dispose();
                 rawLease = (BufferLease)temp;
+                rawLease.ZeroOnDispose = enableEncrypt; // [SECURITY] compressed plaintext
                 enableCompress = false;
             }
 
@@ -156,7 +160,8 @@ public static partial class ConnectionExtensions
         ArgumentNullException.ThrowIfNull(excludedConnection);
         ArgumentNullException.ThrowIfNull(packet);
 
-        BufferLease rawLease = PacketPipeline.Serialize(packet);
+        // [SECURITY] An encrypted broadcast serializes plaintext: scrub it when the lease is released.
+        BufferLease rawLease = PacketPipeline.Serialize(packet, zeroOnDispose: enableEncrypt);
         try
         {
             bool enableCompress = s_options.Enabled;
@@ -169,6 +174,7 @@ public static partial class ConnectionExtensions
                 IBufferLease temp = FrameCompression.CompressFrame(rawLease);
                 rawLease.Dispose();
                 rawLease = (BufferLease)temp;
+                rawLease.ZeroOnDispose = enableEncrypt; // [SECURITY] compressed plaintext
                 enableCompress = false;
             }
 

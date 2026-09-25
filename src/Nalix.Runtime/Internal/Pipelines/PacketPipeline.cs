@@ -26,20 +26,23 @@ internal static class PacketPipeline
     /// The caller owns the returned lease and must dispose it.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static BufferLease Serialize(IPacket packet)
+    internal static BufferLease Serialize(IPacket packet, bool zeroOnDispose = false)
     {
         int packetLength = packet.Length;
         // Reserve transport headroom so the stream transport can prepend its length header in place.
-        BufferLease lease = BufferLease.Rent(packetLength, zeroOnDispose: false, BufferLease.TransportHeadroom);
+        // [SECURITY] Callers pass zeroOnDispose when the frame will be encrypted: the pool does not
+        // clear arrays on return, so the plaintext must be scrubbed by its owner even if the send
+        // bails out before FramePipeline.ProcessOutbound runs (cancellation, sequence overflow).
+        BufferLease lease = BufferLease.Rent(packetLength, zeroOnDispose, BufferLease.TransportHeadroom);
         int written = packet.Serialize(lease.SpanFull);
         lease.CommitLength(written);
         return lease;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static BufferLease CloneWithHeadroom(ReadOnlySpan<byte> source)
+    private static BufferLease CloneWithHeadroom(ReadOnlySpan<byte> source, bool zeroOnDispose)
     {
-        BufferLease lease = BufferLease.Rent(source.Length, zeroOnDispose: false, BufferLease.TransportHeadroom);
+        BufferLease lease = BufferLease.Rent(source.Length, zeroOnDispose, BufferLease.TransportHeadroom);
         source.CopyTo(lease.SpanFull);
         lease.CommitLength(source.Length);
         return lease;
@@ -55,7 +58,9 @@ internal static class PacketPipeline
         bool needEncrypt, bool enableCompress, int minSizeToCompress, CancellationToken ct, bool cloneLease = true)
     {
         // Clone raw lease for per-connection mutation if cloneLease is true
-        BufferLease workingLease = cloneLease ? CloneWithHeadroom(rawLease.Span) : (BufferLease)rawLease;
+        // [SECURITY] The clone holds the plaintext of an encrypted frame: scrub it on release,
+        // including when the send exits early (lock cancellation, sequence overflow, exception).
+        BufferLease workingLease = cloneLease ? CloneWithHeadroom(rawLease.Span, needEncrypt) : (BufferLease)rawLease;
 
         try
         {

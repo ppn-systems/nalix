@@ -57,6 +57,10 @@ internal sealed class UdpFrameSender : IDisposable
         try
         {
             bool encrypt = encryptOverride ?? _state.EncryptionEnabled;
+
+            // [SECURITY] src is the plaintext of an encrypted datagram: scrub it on release even if
+            // the send throws before FramePipeline.ProcessOutbound marks it.
+            src.ZeroOnDispose = encrypt;
             if (encrypt && _sequence.IsApproachingOverflow())
             {
                 throw new CipherException(

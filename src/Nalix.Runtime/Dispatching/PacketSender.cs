@@ -131,7 +131,7 @@ public sealed class PacketSender : IPacketSender
 
         // Serialize into a pooled buffer first so the subsequent compression/encryption
         // branches can reuse the same payload without reserializing the packet.
-        BufferLease rawLease = PacketPipeline.Serialize(packet);
+        BufferLease rawLease = PacketPipeline.Serialize(packet, zeroOnDispose: needEncrypt);
 
         try
         {

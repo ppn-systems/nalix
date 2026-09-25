@@ -326,6 +326,11 @@ public static class FramePipeline
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
+            // [SECURITY] The temp region may hold (partially) compressed plaintext and sits past the
+            // committed length, so ZeroOnDispose would not reach it. Scrub the whole region before
+            // the array goes back to the pool; this is the failure path, so the cost is irrelevant.
+            singleLease.SpanFull.Slice(FrameTransformer.Offset + maxFinalSize, maxCompSize).Clear();
+
             singleLease.Dispose();
             throw;
         }
