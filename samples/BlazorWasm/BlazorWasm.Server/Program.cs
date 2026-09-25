@@ -7,10 +7,8 @@
 #pragma warning disable CA1303
 
 using Microsoft.Extensions.Logging;
-using Nalix.Environment.Configuration;
 using Nalix.Hosting;
 using Nalix.Hosting.Protocols;
-using Nalix.Network.Options;
 using Nalix.Runtime.Handlers;
 
 namespace BlazorWasm.Server;
@@ -33,15 +31,6 @@ internal static class Program
         });
 
         ILogger logger = loggerFactory.CreateLogger("BlazorWasm");
-
-        // Local development: every browser tab, page reload and reconnect comes from 127.0.0.1.
-        // The default per-IP guard (10 attempts / 5 s, halved on bursts) bans loopback after a
-        // few quick reloads. Relax it here - set real limits (or server.ini) in production.
-        // Set on the live options object *before* building so the guard picks it up regardless
-        // of builder call order.
-        ConnectionQuotaOptions quota = ConfigurationManager.Instance.Get<ConnectionQuotaOptions>();
-        quota.MaxConnectionsPerIpAddress = 1_000;
-        quota.MaxConnectionsPerWindow = 10_000;
 
         await using NetworkApplication app = NetworkApplication.CreateBuilder()
             .UseLogger(logger)
