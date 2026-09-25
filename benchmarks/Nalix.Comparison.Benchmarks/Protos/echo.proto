@@ -1,0 +1,10 @@
+syntax = "proto3";
+option csharp_namespace = "Nalix.Comparison.Benchmarks.Grpc";
+package bench;
+
+message EchoMessage { bytes data = 1; }
+
+service Echo {
+  rpc Unary (EchoMessage) returns (EchoMessage);
+  rpc Duplex (stream EchoMessage) returns (stream EchoMessage);
+}

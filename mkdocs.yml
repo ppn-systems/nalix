@@ -360,3 +360,4 @@ nav:
       - Security & Cryptography: benchmarks/security.md
       - Serialization: benchmarks/serialization.md
       - Serialization Method Comparison: benchmarks/serialization-method-compare.md
+      - End-to-End Network Comparison: benchmarks/network-comparison.md

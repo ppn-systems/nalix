@@ -6,9 +6,13 @@
   <Project Path="../src/Nalix.Codec/Nalix.Codec.csproj" />
   <Project Path="../src/Nalix.Environment/Nalix.Environment.csproj" />
   <Project Path="../src/Nalix.Framework/Nalix.Framework.csproj" />
+  <Project Path="../src/Nalix.Hosting/Nalix.Hosting.csproj" />
   <Project Path="../src/Nalix.Network/Nalix.Network.csproj" />
   <Project Path="../src/Nalix.Runtime/Nalix.Runtime.csproj" />
+  <Project Path="../src/Nalix.SDK/Nalix.SDK.csproj" />
   <Project Path="Nalix.Benchmarks.Shared/Nalix.Benchmarks.Shared.csproj" />
+  <Project Path="Nalix.Comparison.Benchmarks/Nalix.Comparison.Benchmarks.csproj" />
+  <Project Path="Nalix.Comparison.MagicOnion/Nalix.Comparison.MagicOnion.csproj" />
   <Project Path="Nalix.Codec.Benchmarks/Nalix.Codec.Benchmarks.csproj" />
   <Project Path="Nalix.Framework.Benchmarks/Nalix.Framework.Benchmarks.csproj" />
   <Project Path="Nalix.Network.Benchmarks/Nalix.Network.Benchmarks.csproj" />

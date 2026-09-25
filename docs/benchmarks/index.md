@@ -21,6 +21,7 @@ Explore detailed metrics by subsystem:
 - [**Security & Cryptography**](security.md): Handshakes, Envelope Ciphers, and Hashing.
 - [**Serialization**](serialization.md): LiteSerializer performance details.
 - [**Serialization Method Comparison**](serialization-method-compare.md): Comprehensive compared methods (LiteSerializer, MemoryPack, MessagePack, System.Text.Json).
+- [**End-to-End Network Comparison**](network-comparison.md): Real loopback request/response latency, throughput and allocations vs SignalR, gRPC and MagicOnion.
 
 ---
 
