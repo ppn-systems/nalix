@@ -351,6 +351,7 @@ public abstract partial class UdpListenerBase
         {
             connection.Secret.AsSpan().CopyTo(lease.SpanFull[dataLen..]);
             uint computedHash = XxHash32.Compute(lease.SpanFull[..(dataLen + Bytes32.Size)]);
+            lease.SpanFull.Slice(dataLen, Bytes32.Size).Clear(); // [SECURITY] scrub the copied secret
 
             if (computedHash != receivedHash)
             {
@@ -365,7 +366,7 @@ public abstract partial class UdpListenerBase
             lease.Span[..dataLen].CopyTo(temp);
             connection.Secret.AsSpan().CopyTo(temp.AsSpan(dataLen));
             uint computedHash = XxHash32.Compute(temp.AsSpan(0, dataLen + Bytes32.Size));
-            BufferLease.ByteArrayPool.Return(temp);
+            BufferLease.ByteArrayPool.Return(temp, clearArray: true); // [SECURITY] holds the secret
 
             if (computedHash != receivedHash)
             {

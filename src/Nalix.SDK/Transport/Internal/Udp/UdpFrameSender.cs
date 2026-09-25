@@ -100,6 +100,10 @@ internal sealed class UdpFrameSender : IDisposable
             // 5. Overwrite the start of Secret with the 4-byte Tag
             BinaryPrimitives.WriteUInt32LittleEndian(finalLease.SpanFull.Slice(dataLen, 4), hash);
 
+            // [SECURITY] Scrub the rest of the secret: it sits past the committed length and the
+            // pool does not clear arrays on return.
+            finalLease.SpanFull.Slice(dataLen + 4, Bytes32.Size - 4).Clear();
+
             // 6. Commit the final datagram length (Token + Payload + Tag)
             finalLease.CommitLength(dataLen + 4);
 

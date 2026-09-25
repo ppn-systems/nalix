@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Security;
+using Nalix.Environment.Memory;
 using Nalix.Environment.Sequencing;
 using Nalix.Network.Connections;
 
@@ -156,6 +157,52 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IPoolab
     /// <inheritdoc/>
     ValueTask IConnection.ITransport.SendAsyncCore(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
         => this.SEND_ASYNC(message, cancellationToken, acquireLock: false);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// When the lease reserved <see cref="BufferLease.TransportHeadroom"/> bytes in front of the payload,
+    /// the 2-byte length prefix is written into that space and the frame is sent in place, skipping the
+    /// rent + copy that <see cref="SocketConnection.SendAsync(ReadOnlyMemory{byte}, CancellationToken)"/> needs.
+    /// </remarks>
+    ValueTask IConnection.ITransport.SendAsyncCore(IBufferLease frame, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+
+        SocketConnection? socket = _socket;
+        if (socket is not null
+            && frame is BufferLease lease
+            && socket.CanSendWithReservedHeader(lease.Length)
+            && lease.TryGetSegmentWithHeader(BufferLease.TransportHeadroom, out ArraySegment<byte> segment))
+        {
+            return COMPLETE_SEND(socket.SendWithReservedHeaderAsync(segment.Array!, segment.Offset, lease.Length, cancellationToken));
+        }
+
+        return this.SEND_ASYNC(frame.Memory, cancellationToken, acquireLock: false);
+
+        static ValueTask COMPLETE_SEND(ValueTask<SocketConnection.SendResult> vt)
+        {
+            if (vt.IsCompletedSuccessfully)
+            {
+                SocketConnection.SendResult result = vt.Result;
+                return result is SocketConnection.SendResult.Success
+                              or SocketConnection.SendResult.PeerClosed
+                              or SocketConnection.SendResult.Aborted
+                    ? default
+                    : ValueTask.FromException(Throw.GetSendFailed());
+            }
+
+            return AWAIT(vt);
+
+            static async ValueTask AWAIT(ValueTask<SocketConnection.SendResult> vt)
+            {
+                SocketConnection.SendResult result = await vt.ConfigureAwait(false);
+                if (result != SocketConnection.SendResult.Success)
+                {
+                    throw Throw.GetSendFailed();
+                }
+            }
+        }
+    }
 
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

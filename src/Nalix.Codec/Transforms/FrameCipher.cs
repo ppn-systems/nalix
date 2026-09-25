@@ -40,8 +40,9 @@ public static class FrameCipher
             Throw.CiphertextFrameTooShort();
         }
 
+        // [SECURITY] Holds decrypted plaintext: scrub the used range when the lease is released.
         IBufferLease dest = BufferLease.Rent(FrameTransformer.Offset + FrameTransformer
-                                       .GetPlaintextLength(src.Span));
+                                       .GetPlaintextLength(src.Span), zeroOnDispose: true);
         dest.IsReliable = src.IsReliable;
         try
         {
@@ -94,7 +95,8 @@ public static class FrameCipher
             return false;
         }
 
-        IBufferLease localDest = BufferLease.Rent(FrameTransformer.Offset + plaintextLength);
+        // [SECURITY] Holds decrypted plaintext: scrub the used range when the lease is released.
+        IBufferLease localDest = BufferLease.Rent(FrameTransformer.Offset + plaintextLength, zeroOnDispose: true);
         localDest.IsReliable = src.IsReliable;
 
         if (!FrameTransformer.TryDecrypt(src, localDest, key, expectedAlgorithm, out seq))
@@ -122,8 +124,9 @@ public static class FrameCipher
     {
         ArgumentNullException.ThrowIfNull(src);
 
+        // Ciphertext only; reserve transport headroom so the wire header is written in place.
         IBufferLease dest = BufferLease.Rent(FrameTransformer.Offset + FrameTransformer
-                                       .GetMaxCiphertextSize(suite, src.Length - FrameTransformer.Offset));
+                                       .GetMaxCiphertextSize(suite, src.Length - FrameTransformer.Offset), zeroOnDispose: false, BufferLease.TransportHeadroom);
         dest.IsReliable = src.IsReliable;
         try
         {
