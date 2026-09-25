@@ -17,12 +17,13 @@
 
 ---
 
-**Nalix** is low-latency binary realtime networking for .NET 10 — for Blazor WebAssembly, MAUI and game servers — with a zero-allocation hot path and built-in X25519 + AEAD encryption.
+**Nalix** is low-latency binary realtime networking for .NET 10 — for Blazor WebAssembly, MAUI and game servers — with a pooled, near-zero-allocation hot path (~120 B per message on the server, the lowest of the frameworks measured below) and built-in X25519 + AEAD encryption.
 
 You define packets as plain C# classes, write handlers keyed by opcode, and talk to the server over TCP, UDP or WebSocket from the Nalix client SDK. There is no HTTP layer in between.
 
 ## Table of Contents
 
+- [Features](#-features)
 - [Why Nalix](#-why-nalix)
 - [Benchmarks](#-benchmarks)
 - [Quick Start](#-quick-start)
@@ -37,9 +38,22 @@ You define packets as plain C# classes, write handlers keyed by opcode, and talk
 
 ---
 
+## ✨ Features
+
+| Category | Highlights |
+| :--- | :--- |
+| **Security built in** | X25519 handshake with server identity pinning, ChaCha20-Poly1305 per packet, and session resumption. No certificates needed. |
+| **Multi-transport** | TCP, UDP and WebSocket behind one packet model; browser clients through Blazor WebAssembly. |
+| **Performance** | Source-generated serializers, pooled buffers and packets, and shard-aware dispatch. |
+| **Middleware pipeline** | Permission, rate limiting, timeout and traffic shaping built in, or plug in your own. |
+| **Developer experience** | Attribute-based packet routing, fluent builder APIs, and Roslyn analyzers that catch mistakes at compile time. |
+| **Native AOT** | Every package is trimmable and AOT-compatible. |
+
+---
+
 ## 🤔 Why Nalix
 
-How Nalix compares with the usual .NET choices for realtime traffic:
+How Nalix compares with the usual .NET choices for realtime traffic (competitor columns are based on each project's public documentation as of September 2026; corrections welcome):
 
 | | **Nalix** | **SignalR** | **gRPC (.NET)** | **MagicOnion** |
 | :--- | :--- | :--- | :--- | :--- |
@@ -131,24 +145,26 @@ public static class HelloHandlers
 
 await using NetworkApplication app = NetworkApplication.CreateBuilder()
     .MapHandlers(typeof(HelloHandlers))
-    .ListenTcp<DefaultProtocol>().OnPort(57206).Bind()
+    .MapTcp<DefaultProtocol>().OnPort(57206).Bind()
     .Build();
 
-await app.RunAsync(cts.Token);
+await app.RunAsync();
 ```
 
 Call it from the client:
 
 ```csharp
 using TcpSession session = new(new TransportOptions { Address = "127.0.0.1", Port = 57206 });
-await session.ConnectAsync("127.0.0.1", 57206);
+await session.ConnectAsync();
 
 HelloResponsePacket response = await session.RequestAsync<HelloResponsePacket>(
-    new HelloRequestPacket(),
+    new HelloRequestPacket(), // Greeting defaults to 1
     RequestOptions.Default.WithTimeout(5_000));
 ```
 
-Run it: `dotnet run --project samples/HelloWorld/HelloWorld.Server`, then `dotnet run --project samples/HelloWorld/HelloWorld.Client` in a second terminal. The snippets above are trimmed from the sample (doc comments, logging and Ctrl+C handling removed); the sample itself builds and runs as-is.
+To encrypt the connection, add `.UseSecureConnections()` to the server builder and `await session.HandshakeAsync();` after connecting on the client. See [`samples/SecureMultiTransportHelloWorld`](samples/SecureMultiTransportHelloWorld).
+
+Run it: `dotnet run --project samples/HelloWorld/HelloWorld.Server`, then `dotnet run --project samples/HelloWorld/HelloWorld.Client` in a second terminal. The snippets above are trimmed from the sample (doc comments, logging and Ctrl+C handling removed) and use the current `MapTcp` API; the sample itself builds and runs as-is against its pinned package version.
 
 ## 📂 Samples
 
