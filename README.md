@@ -12,40 +12,166 @@
 </p>
 
 <p align="center">
-  <b><a href="DOCUMENTATION.md">Documentation</a></b> · <b><a href="samples/">Samples</a></b> · <b><a href="#-benchmarks">Benchmarks</a></b> · <b><a href="CONTRIBUTING.md">Contributing</a></b>
+  <b><a href="DOCUMENTATION.md">Documentation</a></b> · <b><a href="samples/">Samples</a></b> · <b><a href="docs/benchmarks/network-comparison.md">Benchmarks</a></b> · <b><a href="CONTRIBUTING.md">Contributing</a></b>
 </p>
 
 ---
 
-**Nalix** is a modular, high-performance networking framework for .NET 10. It provides a complete stack for building real-time server applications — from low-level transport (TCP/UDP) to middleware pipelines, packet routing, and client SDKs — with a focus on zero-allocation hot paths, pluggable protocols, and enterprise-grade security.
+**Nalix** is low-latency binary realtime networking for .NET 10 — for Blazor WebAssembly, MAUI and game servers — with a zero-allocation hot path and built-in X25519 + AEAD encryption.
+
+You define packets as plain C# classes, write handlers keyed by opcode, and talk to the server over TCP, UDP or WebSocket from the Nalix client SDK. There is no HTTP layer in between.
 
 ## Table of Contents
 
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Requirements](#-requirements)
+- [Why Nalix](#-why-nalix)
 - [Benchmarks](#-benchmarks)
-- [Packages](#-nuget-packages)
 - [Quick Start](#-quick-start)
+- [Samples](#-samples)
+- [Requirements](#-requirements)
+- [Architecture](#%EF%B8%8F-architecture)
+- [Packages](#-nuget-packages)
 - [Installation](#-installation)
-- [Contributing](#-contributing)
-- [Security](#-security)
+- [Contributing](#%EF%B8%8F-contributing)
+- [Security](#%EF%B8%8F-security)
 - [License](#-license)
 
 ---
 
-## ✨ Features
+## 🤔 Why Nalix
 
-| Category | Highlights |
+How Nalix compares with the usual .NET choices for realtime traffic:
+
+| | **Nalix** | **SignalR** | **gRPC (.NET)** | **MagicOnion** |
+| :--- | :--- | :--- | :--- | :--- |
+| Wire format | Custom binary frames, source-generated serializers | JSON or MessagePack over HTTP transports | Protobuf over HTTP/2 | MessagePack over gRPC (HTTP/2) |
+| Encryption and handshake | Built in: X25519 handshake with server key pinning, ChaCha20-Poly1305 per packet; no certificate needed | TLS (HTTPS) | TLS | TLS |
+| Session resume after reconnect | Yes (session token resume) | Stateful reconnect (.NET 8+) | No | No |
+| Transports | TCP, UDP, WebSocket | WebSocket, SSE, long polling | HTTP/2 (HTTP/3) | HTTP/2 |
+| Native AOT | Yes (`IsAotCompatible` on every package) | Partial | Yes | Via source generator |
+| Browser (Blazor WASM) client | Yes, over WebSocket ([sample](samples/BlazorWasm)) | Yes | gRPC-Web only | No |
+| Server middleware | Permission, rate limit, timeout, plus your own | Hub filters | Interceptors | Filters |
+
+**When NOT to use Nalix:**
+
+- You need **HTTP/REST interop**, proxies or API gateways that understand HTTP semantics. Use gRPC or plain ASP.NET Core.
+- You have **polyglot clients** (JavaScript, Go, Python, Java). The only client SDK is .NET; gRPC and SignalR have clients for many languages.
+- You are on **.NET 8/9 or .NET Framework**. Nalix targets .NET 10 only.
+- You are building a **Unity** client. Unity does not run .NET 10, so the SDK cannot be used there today; MagicOnion supports Unity.
+- You need **large encrypted payloads at peak throughput**. For 1 KB encrypted messages gRPC over TLS is faster (see below).
+
+---
+
+## 📈 Benchmarks
+
+End-to-end echo over loopback, every framework with its own client, same machine, one session: 4 vCPU Xeon @ 2.80 GHz container,
+.NET 10.0.12, `master` 0b58c2824, median of 3 runs. 32 B payload unless noted. Raw data and all cells: **[full comparison](docs/benchmarks/network-comparison.md)**.
+
+| Library | p50 latency (µs) | p99 latency (µs) | ops/s, 64 clients | ops/s, 64 clients, 1 KB | server alloc/op (B) | server CPU/op (µs) |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Nalix TCP** | **92** | **312** | 44,287 | 36,880 | **120** | 45.2 |
+| Nalix WebSocket | 115 | 403 | 43,016 | 35,809 | 256 | 45.2 |
+| SignalR (WebSocket, MessagePack) | 157 | 492 | **45,904** | **38,780** | 672 | **36.3** |
+| gRPC bidi stream (h2c) | 123 | 379 | 44,388 | 37,740 | 264 | 39.8 |
+| gRPC unary (h2c) | 217 | 748 | 33,187 | 32,226 | 969 | 48.1 |
+| MagicOnion StreamingHub | 161 | 557 | 39,715 | 33,729 | 200 | 44.8 |
+| MagicOnion unary | 239 | 812 | 32,050 | 28,380 | 1,433 | 49.7 |
+| *Nalix TCP + X25519/ChaCha20-Poly1305* | 126 | 416 | 34,645 | 20,171 | 120 | 60.2 |
+| *gRPC bidi stream + TLS* | 209 | 702 | 31,970 | 27,049 | 804 | 55.7 |
+
+Latency is one client, sequential calls; allocation and CPU are per message at 64 clients.
+
+- **Nalix wins** single-client latency (p50 and p99, at 32 B and 1 KB) and server allocations per message.
+- **Nalix loses** peak throughput at 64 clients to SignalR (by 3–5 %) and roughly ties gRPC bidi streaming; its server CPU per message is about 25 % higher than SignalR's.
+- **Encrypted:** Nalix AEAD beats gRPC + TLS for small messages but is about 25 % slower for 1 KB messages (managed ChaCha20-Poly1305 vs hardware AES-GCM).
+
+> **Caveats:** 4 shared vCPUs over container loopback — compare the stacks with each other, not as absolute capacity. Differences of a few percent are within run-to-run noise. The encrypted rows are not like-for-like (per-packet AEAD vs TLS stream).
+
+Micro-benchmarks (serialization, codec, memory) are in [`docs/benchmarks`](docs/benchmarks/).
+
+---
+
+## 🚀 Quick Start
+
+A request/response round trip, taken from [`samples/HelloWorld`](samples/HelloWorld). Define a packet (shared by client and server):
+
+```csharp
+[Packet]
+[GenerateFormatter]
+[SerializePackable(SerializeLayout.Explicit)]
+public sealed partial class HelloRequestPacket
+    : PacketBase<HelloRequestPacket>,
+      IFixedSizeSerializable,
+      IPacketStaticOpcode
+{
+    public static ushort StaticOpCode => 0x7001;
+
+    [SerializeOrder(0)]
+    public byte Greeting { get; set; }
+}
+// HelloResponsePacket is the same shape: opcode 0x7002, one byte `Message`.
+```
+
+Handle it on the server and start a TCP listener:
+
+```csharp
+[PacketHandler("HelloWorld.Greetings")]
+public static class HelloHandlers
+{
+    [PacketOpcode(0x7001)]
+    public static async ValueTask HandleHelloAsync(IPacketContext<HelloRequestPacket> context)
+    {
+        // Rent a response packet from the pool (zero-allocation on repeat calls).
+        using PacketScope<HelloResponsePacket> lease = PacketFactory<HelloResponsePacket>.Acquire();
+        HelloResponsePacket response = lease.Value;
+        response.Message = 1; // "Hello from Nalix!"
+
+        await context.Sender.SendAsync(response).ConfigureAwait(false);
+    }
+}
+
+await using NetworkApplication app = NetworkApplication.CreateBuilder()
+    .MapHandlers(typeof(HelloHandlers))
+    .ListenTcp<DefaultProtocol>().OnPort(57206).Bind()
+    .Build();
+
+await app.RunAsync(cts.Token);
+```
+
+Call it from the client:
+
+```csharp
+using TcpSession session = new(new TransportOptions { Address = "127.0.0.1", Port = 57206 });
+await session.ConnectAsync("127.0.0.1", 57206);
+
+HelloResponsePacket response = await session.RequestAsync<HelloResponsePacket>(
+    new HelloRequestPacket(),
+    RequestOptions.Default.WithTimeout(5_000));
+```
+
+Run it: `dotnet run --project samples/HelloWorld/HelloWorld.Server`, then `dotnet run --project samples/HelloWorld/HelloWorld.Client` in a second terminal. The snippets above are trimmed from the sample (doc comments, logging and Ctrl+C handling removed); the sample itself builds and runs as-is.
+
+## 📂 Samples
+
+Runnable end-to-end projects, from beginner to production-grade:
+
+| Sample | Demonstrates |
 | :--- | :--- |
-| **Cross-Platform** | Runs on Windows, Linux, and macOS with .NET 10+. |
-| **High Performance** | Zero-allocation serialization, shard-aware dispatch, and buffer pooling for thousands of concurrent connections. |
-| **Security-First** | AEAD encryption (ChaCha20-Poly1305), Static-Ephemeral X25519 (Noise Protocol) with server identity pinning, and zero-RTT session resumption. |
-| **Pluggable Protocols** | Swap network, serialization, or security protocols without modifying core logic. |
-| **Middleware Pipeline** | Built-in authentication, rate limiting, traffic shaping, and audit logging — or write your own. |
-| **Real-Time Updates** | Instant messaging, state synchronization, and live event broadcasting. |
-| **Extensible** | Attribute-based packet routing, auto-discovered controllers, and fluent builder APIs. |
-| **Modern C#** | Leverages C# 14 features — `Span<T>`, `ref struct`, pattern matching, and more. |
+| **[HelloWorld](samples/HelloWorld)** | Minimal TCP client/server — request/response packets, `[PacketHandler]`, graceful shutdown. Start here. |
+| **[ChatRoom](samples/ChatRoom)** | Server push — broadcasting to all clients via `IConnectionBroadcaster`, `session.On<T>()` on the client. |
+| **[SecureMultiTransportHelloWorld](samples/SecureMultiTransportHelloWorld)** | TCP + UDP + WebSocket under one secure session — X25519 handshake, AEAD encryption, authenticated UDP. |
+| **[BlazorWasm](samples/BlazorWasm)** | Browser client — Blazor WebAssembly over WebSocket with the X25519 handshake, request/response, server push, reconnect, DI-registered session. [Guide](docs/guides/blazor-wasm.md) |
+
+---
+
+## 🔧 Requirements
+
+| Requirement | Version |
+| :--- | :--- |
+| .NET SDK | [10.0+](https://dotnet.microsoft.com/download/dotnet/10.0) — **.NET 10 only** |
+| C# Language | 14+ |
+| IDE | [Visual Studio 2026](https://visualstudio.microsoft.com/downloads/) / [VS Code](https://code.visualstudio.com/) / [Rider](https://www.jetbrains.com/rider/) |
+
+Every package targets `net10.0` only. The hot path relies on recent runtime and language features (C# 14, `Span<T>`/`ref struct` APIs, static abstract interface members for packet opcodes and formatters), and a single target keeps the packages trimmable and Native AOT-compatible without multi-targeting shims.
 
 ---
 
@@ -63,40 +189,6 @@ Level 2  Nalix.Codec          Framing, crypto, serialization
 Level 1  Nalix.Environment    IO primitives, buffer leasing
 Level 0  Nalix.Abstractions   Contracts, enums (zero deps)
 ```
-
----
-
-## 🔧 Requirements
-
-| Requirement | Version |
-| :--- | :--- |
-| .NET SDK | [10.0+](https://dotnet.microsoft.com/download/dotnet/10.0) |
-| C# Language | 14+ |
-| IDE | [Visual Studio 2026](https://visualstudio.microsoft.com/downloads/) / [VS Code](https://code.visualstudio.com/) / [Rider](https://www.jetbrains.com/rider/) |
-
----
-
-## 📈 Benchmarks
-
-> All benchmarks run on **.NET 10.0**, **Windows 11**, using **BenchmarkDotNet v0.15.8**.
-
-### Environment
-
-- CPU: 13th Gen Intel Core i7-13620H (10C/16T)
-- Runtime: .NET `10.0.5` (X64 RyuJIT, Server GC)
-- SDK: .NET SDK `10.0.201`
-- Job config: `IterationCount=20`, `LaunchCount=3`, `WarmupCount=10`, `RunStrategy=Throughput`
-
-### 🔄 Serialization (128 items, DTO payload)
-
-| Serializer | Serialize | Deserialize | Allocated |
-| :--- | ---: | ---: | ---: |
-| LiteSerializer | 149.9 ns | 142.9 ns | 664–856 B |
-| MemoryPack | 121.6 ns | 145.0 ns | 664–888 B |
-| MessagePack | 422.5 ns | 1,095.2 ns | 504–888 B |
-| System.Text.Json | 897.7 ns | 2,548.2 ns | 1,976–7,200 B |
-
-> **More details:** See the [`docs/benchmarks`](docs/benchmarks/) folder for full data and additional test cases.
 
 ---
 
@@ -127,40 +219,6 @@ Nalix is composed of several modular packages — install only what you need.
 | :--- | :--- |
 | **[Nalix.SDK](src/Nalix.SDK)** | Client-side SDK: transport sessions, request/response patterns, and encryption. |
 | **[Nalix.Analyzers](analyzers/Nalix.Analyzers)** | Roslyn analyzers, code fixes, and source generators — packed into `Nalix.Abstractions`. |
-
----
-
-## 🚀 Quick Start
-
-Build a high-performance network application in minutes:
-
-```csharp
-using Nalix.Hosting;
-using Nalix.Network.Options;
-using Nalix.Runtime.Handlers;
-using Nalix.Hosting.Protocols;
-
-// Initialize and configure the application host
-using var host = NetworkApplication.CreateBuilder()
-    .MapTcp<DefaultProtocol>().OnPort(8080).Bind()
-    .MapHandlers<HandshakeHandlers>()
-    .Configure<NetworkSocketOptions>(opt => opt.NoDelay = true)
-    .Build();
-
-// Run the server
-await host.RunAsync();
-```
-
-### 📂 Samples
-
-Runnable end-to-end projects, from beginner to production-grade:
-
-| Sample | Demonstrates |
-| :--- | :--- |
-| **[HelloWorld](samples/HelloWorld)** | Minimal TCP client/server — request/response packets, `[PacketHandler]`, graceful shutdown. Start here. |
-| **[ChatRoom](samples/ChatRoom)** | Server push — broadcasting to all clients via `IConnectionBroadcaster`, `session.On<T>()` on the client. |
-| **[SecureMultiTransportHelloWorld](samples/SecureMultiTransportHelloWorld)** | TCP + UDP + WebSocket under one secure session — X25519 handshake, AEAD encryption, authenticated UDP. |
-| **[BlazorWasm](samples/BlazorWasm)** | Browser client — Blazor WebAssembly over WebSocket with the X25519 handshake, request/response, server push, reconnect, DI-registered session. [Guide](docs/guides/blazor-wasm.md) |
 
 ---
 
