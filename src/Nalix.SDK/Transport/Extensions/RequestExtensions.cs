@@ -36,6 +36,15 @@ namespace Nalix.SDK.Transport.Extensions;
 /// requests can result in duplicate side effects.
 /// </para>
 /// <para>
+/// <b>Auto-reconnect:</b> when <see cref="Options.TransportOptions.AutoReconnectEnabled"/> is set and the
+/// session is not connected at call time, the request first waits (bounded by the request timeout)
+/// for the in-progress reconnect and re-authentication to finish. A request that is already in
+/// flight when the transport drops fails with <see cref="NetworkException"/> and is <b>not</b>
+/// replayed after the reconnect: the server may already have processed it, so only the caller
+/// can decide whether re-sending is safe. Await <see cref="TransportSession.WaitUntilReadyAsync"/>
+/// and re-issue idempotent requests if needed.
+/// </para>
+/// <para>
 /// <see cref="RequestAsync{TResponse}"/> is the safe, race-condition-free way to
 /// send a packet and await a correlated reply. It subscribes <b>before</b> sending — eliminating
 /// the window where the server response could arrive before the local handler is registered.

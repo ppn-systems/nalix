@@ -175,6 +175,10 @@ public class WebSocketSession : TransportSession
         }
         finally
         {
+            // OnDisconnected only fires (and consumes the flag) when a live socket was torn
+            // down. If the session was already disconnected the flag would otherwise stay set
+            // and silently suppress auto-reconnect for the next genuine drop.
+            _ = this.ConsumeIntentionalDisconnect();
             _ = _connectionLock.Release();
         }
     }
@@ -306,6 +310,9 @@ public class WebSocketSession : TransportSession
             return;
         }
 
+        // Disposal is an application decision: the OnDisconnected raised below must not
+        // start an auto-reconnect loop against a disposed session.
+        this.MarkIntentionalDisconnect();
         _ = this.DisconnectInternalAsync();
         _sender.Dispose();
         _reader.Dispose();

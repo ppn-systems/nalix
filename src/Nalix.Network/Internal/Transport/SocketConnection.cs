@@ -74,6 +74,11 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
 
     public void ResetForPool()
     {
+        // A pooled instance must never receive a shutdown callback meant for its previous
+        // connection. DISPOSE already unregisters; this is a defensive second release.
+        _shutdownRegistration.Dispose();
+        _shutdownRegistration = default;
+
         _socket = null!;
         _owner = null!;
         _connectionOwner = null;
@@ -168,6 +173,7 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     private long _bytesReceived;
     private int _openFragmentStreams;
     private Task? _receiveLoopTask;
+    private CancellationTokenRegistration _shutdownRegistration;
     private FragmentAssembler? _fragmentAssembler;
 
     /// <summary>
@@ -299,6 +305,18 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Debug, new DiagnosticLog("NW.SocketConnection:BeginReceive", $"saea-receive-loop started endpoint={_endpointString} framing={_framing}"));
         }
 #endif
+
+        // The receive loop only observes the token between receives, and a pending SAEA receive
+        // is not cancellable through it. Without this registration a listener shutdown (e.g.
+        // NetworkApplication.DeactivateAsync) cancels the token but leaves every established
+        // connection open until the peer happens to send another frame, so clients never learn
+        // the server went away and never auto-reconnect. Shutting the socket down completes the
+        // pending receive and lets the loop run its normal close path.
+        if (cancellationToken.CanBeCanceled)
+        {
+            _shutdownRegistration = cancellationToken.UnsafeRegister(
+                static state => ((SocketConnection)state!).ABORT_RECEIVE_ON_SHUTDOWN(), this);
+        }
 
         if (_framing == TransportFraming.VarIntLengthPrefixed)
         {
@@ -871,6 +889,7 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         {
             // 1. Signal cancellation so the receive loop exits cleanly and stops
             //    scheduling any more receives.
+            _shutdownRegistration.Dispose();
             this.CANCEL_RECEIVE_ONCE();
 
             // 2. Shutdown and close the socket. This forces any in-flight SAEA
@@ -1086,6 +1105,29 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         }
 
         _connectionOwner?.OnTransportClosed();
+    }
+
+    private void ABORT_RECEIVE_ON_SHUTDOWN()
+    {
+        if (Volatile.Read(ref _disposed) != 0 || Volatile.Read(ref _socketDetached) != 0)
+        {
+            return;
+        }
+
+        this.CANCEL_RECEIVE_ONCE();
+
+        try
+        {
+            _socket.Shutdown(SocketShutdown.Both);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already torn down by a concurrent close.
+        }
+        catch (SocketException)
+        {
+            // Not connected any more; the receive loop is already exiting.
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
