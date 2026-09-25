@@ -143,5 +143,135 @@ public sealed class WorkerWakeSignalTests
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal(0, allocated);
     }
+    /// <summary>
+    /// Many concurrent setters racing one waiter that also calls Clear(): every wait must still
+    /// complete once a later Set() arrives, and the core must never be reset under a pending
+    /// SetResult (which would throw or hang).
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentSetClearWait_Stress_NeverHangsOrThrows()
+    {
+        WorkerWakeSignal signal = new();
+        using CancellationTokenSource stop = new();
+        const int iterations = 20_000;
+
+        Task[] setters = new Task[3];
+        for (int t = 0; t < setters.Length; t++)
+        {
+            setters[t] = Task.Run(() =>
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    _ = signal.Set();
+                    Thread.SpinWait(16);
+                }
+            });
+        }
+
+        Task waiter = Task.Run(async () =>
+        {
+            for (int i = 0; i < iterations; i++)
+            {
+                if ((i & 3) == 0)
+                {
+                    signal.Clear();
+                }
+
+                await signal.WaitAsync();
+            }
+        });
+
+        Task done = await Task.WhenAny(waiter, Task.Delay(TimeSpan.FromSeconds(30)));
+        stop.Cancel();
+        await Task.WhenAll(setters);
+
+        Assert.Same(waiter, done);
+        await waiter;
+    }
+
+    /// <summary>
+    /// Models the dispatch worker park handshake (publish parked -> re-check work -> wait, vs.
+    /// publish work -> claim parked flag -> Set) under stress: no work item may be stranded while
+    /// the consumer sleeps, and the consumer must actually park when there is no work (bounded
+    /// number of loop turns, i.e. no busy spin).
+    /// </summary>
+    [Fact]
+    public async Task ParkHandshake_Stress_NoLostWakeAndNoSpin()
+    {
+        WorkerWakeSignal signal = new();
+        int parked = 0;
+        long pending = 0;
+        long consumed = 0;
+        long loopTurns = 0;
+        const int items = 50_000;
+        using CancellationTokenSource stop = new();
+
+        Task consumer = Task.Run(async () =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                _ = Interlocked.Increment(ref loopTurns);
+                if (Interlocked.Read(ref pending) > 0)
+                {
+                    _ = Interlocked.Decrement(ref pending);
+                    _ = Interlocked.Increment(ref consumed);
+                    continue;
+                }
+
+                _ = Interlocked.Exchange(ref parked, 1);
+                if (Interlocked.Read(ref pending) > 0 || stop.IsCancellationRequested)
+                {
+                    if (Interlocked.Exchange(ref parked, 0) == 0)
+                    {
+                        signal.Clear();
+                    }
+
+                    continue;
+                }
+
+                await signal.WaitAsync();
+                _ = Interlocked.Exchange(ref parked, 0);
+            }
+        });
+
+        Task producer = Task.Run(() =>
+        {
+            for (int i = 0; i < items; i++)
+            {
+                _ = Interlocked.Increment(ref pending);
+                if (Volatile.Read(ref parked) == 1 && Interlocked.CompareExchange(ref parked, 0, 1) == 1)
+                {
+                    _ = signal.Set();
+                }
+
+                if ((i & 63) == 0)
+                {
+                    Thread.Yield();
+                }
+            }
+        });
+
+        await producer;
+        using (CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30)))
+        {
+            while (Interlocked.Read(ref consumed) < items)
+            {
+                await Task.Delay(1, timeout.Token);
+            }
+        }
+
+        // Idle: the consumer must be parked, so loop turns stop growing.
+        await Task.Delay(100);
+        long turns0 = Interlocked.Read(ref loopTurns);
+        await Task.Delay(300);
+        long turns1 = Interlocked.Read(ref loopTurns);
+
+        stop.Cancel();
+        _ = signal.Set();
+        await consumer.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(items, Interlocked.Read(ref consumed));
+        Assert.True(turns1 - turns0 <= 1, $"consumer kept looping while idle ({turns1 - turns0} turns)");
+    }
 }
 #endif

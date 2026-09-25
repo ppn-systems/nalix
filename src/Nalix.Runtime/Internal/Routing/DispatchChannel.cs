@@ -217,9 +217,13 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             return true;
         }
 
-        // Attempt 2: If we failed to claim but there are still packets, all active
+        // Attempt 2: If we failed to claim but packets or ready entries remain, all active
         // priorities might have exhausted their budgets. Reset and try one more time.
-        if (this.HasPacket)
+        // Ready entries must count too: a removed connection leaves a stale entry in the
+        // ready queue after its packets were drained (HasPacket == false). Without a reset
+        // an exhausted budget would never let a worker purge that entry, so
+        // HasClaimableConnection would stay true and idle workers would never park (busy spin).
+        if (this.HasPacket || this.HasClaimableConnection)
         {
             this.ResetBudgets();
             return this.TryClaimWeighted(out session);
@@ -271,7 +275,9 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
 
             if (!state.IsActive)
             {
-                // Connection died. Try another one at THIS priority since we still have budget.
+                // Connection died: purging its stale entry is not a dispatch, so refund the
+                // budget slot and try another one at THIS priority.
+                _ = Interlocked.Increment(ref _prioBudgets[p]);
                 p++;
                 continue;
             }
@@ -433,6 +439,15 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             return false;
         }
 
+        // Count the packet BEFORE it becomes visible to the dispatching worker. If the counters
+        // were bumped after TryEnqueue, a worker could dequeue the packet first; its decrements
+        // clamp at 0 and the late increments then leave phantom counts (TotalCount / TotalPackets
+        // > 0 over empty queues). A phantom count makes Release() re-enqueue the connection
+        // forever, so idle workers never park (busy spin). Counting first keeps every counter
+        // >= the number of queued packets.
+        _ = state.OnEnqueued(priority);
+        long currentTotal = Interlocked.Increment(ref _packetCount.Value);
+
         if (!state.TryEnqueue(priority, raw))
         {
             if (_maxPerConnectionQueue > 0 &&
@@ -444,12 +459,11 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             }
             else
             {
+                _ = state.OnDequeued(priority);
+                DecrementNonNegative(ref _packetCount.Value);
                 return false;
             }
         }
-
-        _ = state.OnEnqueued(priority);
-        long currentTotal = Interlocked.Increment(ref _packetCount.Value);
 
         long peak = Volatile.Read(ref _peakPacketCount);
         while (currentTotal > peak)
@@ -610,6 +624,22 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             mask = state.NonEmptyMask;
         }
 
+        // The mask can under-report: a dequeuer that took a priority's count to 0 may clear the
+        // bit AFTER a concurrent producer re-set it for a new packet. Without this scan that
+        // packet is stranded while TotalCount stays > 0, so the connection is re-queued and
+        // claimed over and over without progress. Rare path: only when the mask found nothing.
+        if (state.TotalCount > 0)
+        {
+            for (int priority = HighestPriorityIndex; priority >= LowestPriorityIndex; priority--)
+            {
+                if (state.TryDequeue(priority, out raw))
+                {
+                    dequeuedFrom = priority;
+                    return true;
+                }
+            }
+        }
+
         raw = null!;
         dequeuedFrom = -1;
         return false;
@@ -625,11 +655,18 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             priority = LowestPriorityIndex;
         }
 
+        // Count the entry BEFORE publishing it. If the increment came after TryWrite, a worker
+        // could read the entry first and its DecrementNonNegative would clamp at 0; the late
+        // increment then leaves the counter at 1 over an empty queue forever, so
+        // HasClaimableConnection stays true and idle workers never park (busy spin).
+        // Counting first keeps the counter >= the queue length at all times.
+        _ = Interlocked.Increment(ref _readyEntriesByPrio[priority]);
         if (_readyByPrio[priority].Writer.TryWrite(state))
         {
-            _ = Interlocked.Increment(ref _readyEntriesByPrio[priority]);
             return;
         }
+
+        DecrementNonNegative(ref _readyEntriesByPrio[priority]);
 
         if (state.TryReleaseReady())
         {
