@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Separate executable: MagicOnion 7 depends on MessagePack v3, while the SignalR MessagePack
+       protocol in Nalix.Comparison.Benchmarks is compiled against MessagePack v2. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);CA1303;CA2007;CA2000;CA1707;CA1812;CA1031;CS1591</NoWarn>
+    <TieredPGO>true</TieredPGO>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Nalix.Comparison.Benchmarks\Harness\Harness.cs" Link="Harness\Harness.cs" />
+    <Compile Include="..\Nalix.Comparison.Benchmarks\Libraries\AspNetHost.cs" Link="Libraries\AspNetHost.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MagicOnion.Server" Version="7.11.0" />
+    <PackageReference Include="MagicOnion.Client" Version="7.11.0" />
+    <PackageReference Include="Grpc.AspNetCore.Server" Version="2.84.0" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.84.0" />
+  </ItemGroup>
+</Project>
