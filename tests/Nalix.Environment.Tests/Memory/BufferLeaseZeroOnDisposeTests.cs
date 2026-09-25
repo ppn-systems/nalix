@@ -34,18 +34,36 @@ public sealed class BufferLeaseZeroOnDisposeTests
     [Fact]
     public void Dispose_WithZeroOnDispose_ClearsBytesPastTheCommittedLength()
     {
-        byte[] array = FillAndRelease(zeroOnDispose: true, commit: 16);
+        const int headroom = 8;
+        const int commit = 16;
 
-        _ = array.Should().AllBeEquivalentTo<byte>(
+        byte[] array = FillAndRelease(zeroOnDispose: true, commit);
+
+        // Everything past the committed payload — where SpanFull lets a caller write before, or
+        // without, committing a length — must come back scrubbed.
+        _ = array[(headroom + commit)..].Should().AllBeEquivalentTo<byte>(
             0,
-            "a lease marked ZeroOnDispose must not leave secret bytes anywhere in the pooled array");
+            "a lease marked ZeroOnDispose must not leave secret bytes past its committed length");
     }
 
     [Fact]
     public void Dispose_WithZeroOnDispose_ClearsTheHeaderHeadroom()
     {
+        const int headroom = 8;
+
+        byte[] array = FillAndRelease(zeroOnDispose: true, commit: 16);
+
+        _ = array[..headroom].Should().AllBeEquivalentTo<byte>(
+            0,
+            "the transport header a caller writes into the headroom sits below the committed slice");
+    }
+
+    [Fact]
+    public void Dispose_WithZeroOnDispose_AndNothingCommitted_ClearsTheWholeArray()
+    {
         // A committed length of zero used to skip the scrub entirely, leaving whatever the caller
-        // had written into the transport headroom in the pool.
+        // had written through SpanFull in the pool. Nothing is committed here, so the DEBUG poison
+        // does not apply either and the whole array must read back as zeroes.
         byte[] array = FillAndRelease(zeroOnDispose: true, commit: 0);
 
         _ = array.Should().AllBeEquivalentTo<byte>(0);
