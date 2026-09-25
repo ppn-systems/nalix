@@ -241,8 +241,15 @@ public abstract partial class WebSocketListenerBase
         string? origin = result.Origin.IsEmpty ? null : Encoding.UTF8.GetString(result.Origin);
         if (!_wsconfig.IsOriginAllowed(origin))
         {
+            // CSWSH protection: reject before the 101 upgrade so no connection/session is created.
             this.Metrics.RECORD_ERROR();
-            this.ReleaseWsUpgradeContext(state, args, success: false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning, new DiagnosticLog(
+                    "NW.ws:origin", $"ws-origin-rejected port={_config.Port} origin={(origin is null ? "<missing>" : SanitizeForLog(origin))} remote={state.Socket?.RemoteEndPoint}"));
+            }
+
+            this.SEND_STATIC_RESPONSE(state, args, ForbiddenOriginResponse);
             return;
         }
 
@@ -601,5 +608,24 @@ public abstract partial class WebSocketListenerBase
 
             current = next;
         }
+    }
+
+    private static string SanitizeForLog(string value)
+    {
+        const int MaxLen = 128;
+        ReadOnlySpan<char> span = value.AsSpan();
+        if (span.Length > MaxLen)
+        {
+            span = span[..MaxLen];
+        }
+
+        return string.Create(span.Length, value, static (dst, src) =>
+        {
+            for (int i = 0; i < dst.Length; i++)
+            {
+                char c = src[i];
+                dst[i] = char.IsControl(c) ? '?' : c;
+            }
+        });
     }
 }

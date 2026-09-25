@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Concurrency;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Networking;
 using Nalix.Environment.Configuration;
 using Nalix.Framework.Injection;
@@ -119,6 +120,14 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
         if (_recurringHandle != null && _recurringHandle.IsRunning)
         {
             return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_wsconfig.AllowedOrigins) &&
+            DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning, new DiagnosticLog(
+                "NW.ws:origin",
+                $"ws-origin-check-disabled port={_config.Port} NetworkWebSocketOptions.AllowedOrigins is empty; any browser origin may open a WebSocket (CSWSH risk). Set AllowedOrigins for browser-facing deployments."));
         }
 
         // Start the WebSocket handshake timeout sweeper (fire and forget, as requested)
