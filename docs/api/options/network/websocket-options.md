@@ -24,6 +24,19 @@ The options map to INI configuration sections:
 | `ProcessChannelDrainTimeout` | `int` | `5000` (ms) | Time in milliseconds to wait for the internal processing channel queue to drain during listener deactivation. |
 | `ProcessChannelCapacity` | `int` | `256` | Bounded capacity of the pending connection channel. Reaching this capacity will drop/throttle new handshakes. |
 | `MaxMessageSize` | `int` | `1,048_576` (1 MB) | The maximum permitted size of a single inbound WebSocket frame payload in bytes. |
+| `AllowedOrigins` | `string` | `""` (check disabled) | Comma-separated allowlist of browser origins (`scheme://host[:port]`) permitted to upgrade. Empty disables the check. |
+| `AllowMissingOrigin` | `bool` | `true` | When an allowlist is set, whether an upgrade with **no** `Origin` header (native/non-browser clients) is accepted. Ignored when `AllowedOrigins` is empty. |
+
+## Origin Enforcement (CSWSH protection)
+
+Browsers attach an `Origin` header to every WebSocket upgrade, and any page the user visits can try to open a socket to your server (cross-site WebSocket hijacking). When `AllowedOrigins` is non-empty the listener checks `Origin` **before** the `101 Switching Protocols` response:
+
+- The match is exact on scheme, host and port. Scheme and host compare case-insensitively, and a trailing `/` is ignored. `https://app.example.com` does **not** match `http://app.example.com`, `https://app.example.com:8443` or `https://evil.app.example.com`.
+- There is no wildcard. `*` is not special; list every origin explicitly.
+- A request without `Origin` is accepted only if `AllowMissingOrigin = true`. Native clients (the Nalix SDK, console/MAUI/Unity) send none. Set it to `false` for browser-only deployments.
+- A rejected request gets `HTTP/1.1 403 Forbidden` and the socket is closed. No connection or session is created. The listener writes a `NW.ws:origin` warning diagnostic (`ws-origin-rejected`) with the origin and remote endpoint.
+
+The default (`AllowedOrigins` empty) keeps the legacy accept-everything behaviour for backward compatibility. The listener writes a `ws-origin-check-disabled` warning at startup in that case. Set `AllowedOrigins` in any deployment that browsers can reach.
 
 ## Usage Example
 
@@ -43,6 +56,8 @@ builder.Configure<NetworkWebSocketOptions>(options =>
     options.EnableTimeout = true;
     options.ProcessChannelCapacity = 512;
     options.MaxMessageSize = 2_097_152; // 2 MB
+    options.AllowedOrigins = "https://app.example.com,https://admin.example.com";
+    options.AllowMissingOrigin = false; // browser-only deployment
 });
 ```
 
@@ -59,6 +74,8 @@ EnableTimeout = true
 ProcessChannelDrainTimeout = 5000
 ProcessChannelCapacity = 256
 MaxMessageSize = 1048576
+AllowedOrigins =
+AllowMissingOrigin = true
 ```
 
 ## See Also

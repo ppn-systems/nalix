@@ -85,4 +85,24 @@ public class WebSocketOriginValidationTests
         Assert.False(opt.IsOriginAllowed("https://a.com"));
         Assert.True(opt.IsOriginAllowed("https://b.com"));
     }
+
+    [Fact]
+    public void PortMismatch_IsRejected()
+    {
+        NetworkWebSocketOptions opt = new() { AllowedOrigins = "https://app.example.com:8443" };
+
+        Assert.True(opt.IsOriginAllowed("https://app.example.com:8443"));
+        Assert.False(opt.IsOriginAllowed("https://app.example.com"));
+        Assert.False(opt.IsOriginAllowed("https://app.example.com:9443"));
+    }
+
+    [Fact]
+    public void SubdomainOrSuffix_IsNotAPrefixMatch()
+    {
+        NetworkWebSocketOptions opt = new() { AllowedOrigins = "https://example.com" };
+
+        Assert.False(opt.IsOriginAllowed("https://evil.example.com"));
+        Assert.False(opt.IsOriginAllowed("https://example.com.evil.net"));
+        Assert.False(opt.IsOriginAllowed("null"));
+    }
 }

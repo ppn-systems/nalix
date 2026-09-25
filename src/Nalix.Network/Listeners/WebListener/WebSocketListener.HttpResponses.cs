@@ -20,4 +20,7 @@ public abstract partial class WebSocketListenerBase
     private static ReadOnlySpan<byte> CorsPreflightResponse =>
         "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n"u8;
 
+    private static ReadOnlySpan<byte> ForbiddenOriginResponse =>
+        "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: 16\r\nConnection: close\r\n\r\nOrigin forbidden"u8;
+
 }
