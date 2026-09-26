@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -171,6 +172,40 @@ public sealed class PacketHandlerGeneratorBehaviorTests
             "NalixUsageAnalyzer reports NALIX003 for this signature at compile time");
     }
 
+    /// <summary>
+    /// #391 regression test: a handler with a bridge (generic) context returning
+    /// <c>IAsyncEnumerable&lt;EchoPacket&gt;</c> must still have a valid, non-reused context by the
+    /// time its body actually runs (after the first <c>await</c> inside the iterator). Before the
+    /// fix, the generator's synchronous <c>try/finally</c> returned the bridge context to the object
+    /// pool the instant this method was CALLED — before the iterator body ever executed — so this
+    /// test either crashed (uncontended: a cleared context) or silently sent nothing, since the
+    /// dispatch pipeline swallows the resulting exception. With the fix
+    /// (<see cref="Nalix.Runtime.Dispatching.PacketContextBridge.WrapStream{TConcrete, TChunk}"/>),
+    /// the context stays rented for the whole enumeration and the handler's own request SequenceId
+    /// round-trips correctly.
+    /// </summary>
+    [Fact]
+    public async Task StreamHandlerWithBridgeContext_ContextStaysValidAfterFirstAwait()
+    {
+        EchoController controller = new();
+        PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
+        FakeConnection connection = new();
+
+        const ushort requestSeq = 4242;
+        _ = options.TryResolveHandler(EchoController.StreamOpCode, out PacketHandler<EchoPacket> descriptor);
+        await options.ExecuteResolvedHandlerAsync(
+            descriptor,
+            new EchoPacket { Header = new PacketHeader { OpCode = EchoController.StreamOpCode, SequenceId = requestSeq } },
+            connection,
+            reliable: true,
+            encryptedOnWire: false);
+
+        connection.FakeTcp.SentMessages.Should().HaveCount(1,
+            "the stream handler's single yielded item must reach the wire — a cleared or reused pooled context " +
+            "before the fix would throw inside the iterator (reading context.Packet.Header.SequenceId AFTER the " +
+            "first await), which the dispatch pipeline swallows, silently sending nothing");
+    }
+
     [Fact]
     public async Task FromScopeHandler_ResolvesServiceAndExecutesSuccessfully()
     {
@@ -308,6 +343,7 @@ public sealed class EchoController
     public const ushort TaskOfTOpCode = 0x2105;
     public const ushort ContextOpCode = 0x2106;
     public const ushort ThrowingOpCode = 0x2107;
+    public const ushort StreamOpCode = 0x210B;
 
     public bool VoidInvoked { get; private set; }
     public bool ValueTaskInvoked { get; private set; }
@@ -364,6 +400,20 @@ public sealed class EchoController
     {
         await Task.Yield();
         throw new InvalidOperationException("intentional test failure");
+    }
+
+    // #391 regression coverage: an IAsyncEnumerable<T>-returning handler with a bridge (generic)
+    // context runs its body lazily — nothing in it executes until the first MoveNextAsync — so this
+    // handler deliberately reads context.Packet.Header.SequenceId AFTER an `await Task.Yield()`
+    // inside the iterator, exactly the shape that observed a cleared or reused pooled context before
+    // the fix (the bridge context was returned to the pool the instant this method was CALLED, long
+    // before the first yield ran).
+    [PacketOpcode(StreamOpCode)]
+    public static async IAsyncEnumerable<EchoPacket> HandleStream(IPacketContext<EchoPacket> context)
+    {
+        ushort requestSeq = context.Packet.Header.SequenceId;
+        await Task.Yield();
+        yield return new EchoPacket { Header = new PacketHeader { OpCode = StreamOpCode, SequenceId = requestSeq } };
     }
 
     public const ushort TwoParamOpCode = 0x2108;

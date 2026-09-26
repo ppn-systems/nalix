@@ -67,12 +67,14 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
         public string MetadataExpr { get; }
         public bool ReturnsTaskOrValueTask { get; }
         public bool ReturnsVoid { get; }
+        public bool ReturnsAsyncEnumerable { get; }
         public ImmutableArray<ScopeParameterModel> ScopeParameters { get; }
 
         public HandlerMethodModel(
             string methodName, bool isStatic, ushort opcodeVal, string returnTypeStr,
             string expectedPacketTypeStr, bool isGenericContext, string? packetTypeStr,
             string metadataExpr, bool returnsTaskOrValueTask, bool returnsVoid,
+            bool returnsAsyncEnumerable,
             ImmutableArray<ScopeParameterModel> scopeParameters)
         {
             this.MethodName = methodName;
@@ -85,6 +87,7 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             this.MetadataExpr = metadataExpr;
             this.ReturnsTaskOrValueTask = returnsTaskOrValueTask;
             this.ReturnsVoid = returnsVoid;
+            this.ReturnsAsyncEnumerable = returnsAsyncEnumerable;
             this.ScopeParameters = scopeParameters;
         }
 
@@ -99,6 +102,7 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             this.MetadataExpr == other.MetadataExpr &&
             this.ReturnsTaskOrValueTask == other.ReturnsTaskOrValueTask &&
             this.ReturnsVoid == other.ReturnsVoid &&
+            this.ReturnsAsyncEnumerable == other.ReturnsAsyncEnumerable &&
             Internal.ModelEquality.SequenceEqual(this.ScopeParameters, other.ScopeParameters);
 
         public override bool Equals(object obj) => obj is HandlerMethodModel other && this.Equals(other);
@@ -118,6 +122,7 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 hash = (hash * 23) + (this.MetadataExpr?.GetHashCode() ?? 0);
                 hash = (hash * 23) + this.ReturnsTaskOrValueTask.GetHashCode();
                 hash = (hash * 23) + this.ReturnsVoid.GetHashCode();
+                hash = (hash * 23) + this.ReturnsAsyncEnumerable.GetHashCode();
                 if (!this.ScopeParameters.IsDefaultOrEmpty)
                 {
                     foreach (ScopeParameterModel p in this.ScopeParameters)
@@ -368,6 +373,15 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 // We'll just rely on the fact it isn't void.
             }
 
+            // #391: a handler that returns IAsyncEnumerable<T> runs its body lazily — nothing in it
+            // executes until the first MoveNextAsync — so a bridge (concrete-typed) context must stay
+            // rented until the whole stream is consumed or disposed, not just until this method call
+            // returns the (not-yet-started) enumerable object. See PacketContextBridge.WrapStream.
+            bool returnsAsyncEnumerable =
+                method.ReturnType is INamedTypeSymbol namedEnumerable &&
+                namedEnumerable.IsGenericType &&
+                namedEnumerable.Name == "IAsyncEnumerable";
+
             string metadataExpr = EmitMetadataExpression(method, opcodeVal);
 
             methods.Add(new HandlerMethodModel(
@@ -381,6 +395,7 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 metadataExpr: metadataExpr,
                 returnsTaskOrValueTask: returnsTaskOrValueTask,
                 returnsVoid: returnsVoid,
+                returnsAsyncEnumerable: returnsAsyncEnumerable,
                 scopeParameters: scopeParams.ToImmutable()
             ));
         }
@@ -514,15 +529,26 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             string contextCast;
             bool needsBridgeCleanup = false;
 
+            // #391: an IAsyncEnumerable<T>-returning handler runs its body lazily, so a synchronous
+            // try/finally around the call (the branch below) would return the bridge context to the
+            // pool before the handler has read anything from it — see PacketContextBridge.WrapStream
+            // for the full failure mode. Such handlers keep the context alive via WrapStream instead,
+            // so they get no try/finally here at all.
+            bool isBridgedStream = method.IsGenericContext && method.PacketTypeStr != null && method.ReturnsAsyncEnumerable;
+
             if (method.IsGenericContext && method.PacketTypeStr != null)
             {
                 _ = sb.AppendLine($"                var concretePacket = ({method.PacketTypeStr})(object)context.Packet;");
                 _ = sb.AppendLine($"                var concreteContext = global::Nalix.Runtime.Dispatching.PacketContextBridge.Create<{method.PacketTypeStr}, TPacket>(");
                 _ = sb.AppendLine($"                    (global::Nalix.Runtime.Dispatching.PacketContext<TPacket>)context, concretePacket);");
-                _ = sb.AppendLine($"                try");
-                _ = sb.AppendLine($"                {{");
                 contextCast = "concreteContext";
-                needsBridgeCleanup = true;
+
+                if (!isBridgedStream)
+                {
+                    _ = sb.AppendLine($"                try");
+                    _ = sb.AppendLine($"                {{");
+                    needsBridgeCleanup = true;
+                }
             }
             else
             {
@@ -559,6 +585,13 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             {
                 _ = sb.AppendLine($"                    await {typeCall}{method.MethodName}({invocationArgs});");
                 _ = sb.AppendLine($"                    return null;");
+            }
+            else if (isBridgedStream)
+            {
+                // #391: keep concreteContext rented for the whole enumeration instead of returning it
+                // the instant this (lazy, not-yet-started) enumerable object is constructed.
+                _ = sb.AppendLine($"                    return global::Nalix.Runtime.Dispatching.PacketContextBridge.WrapStream(");
+                _ = sb.AppendLine($"                        {typeCall}{method.MethodName}({invocationArgs}), concreteContext);");
             }
             else
             {
