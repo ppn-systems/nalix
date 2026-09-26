@@ -54,6 +54,13 @@ internal sealed class UdpFrameSender : IDisposable
         BufferLease src = BufferLease.CopyFrom(payload.Span);
         IBufferLease current = src;
 
+        // Captured once, before anything below can throw. A framing/encryption failure below has
+        // nothing to do with which physical socket is live by the time the catch runs — re-reading
+        // _getSocket() there would report whatever the field points to NOW, which a fast reconnect
+        // racing this call can have already moved to a newer connection's socket. Reporting the
+        // socket THIS call actually started with keeps HandleError's identity check meaningful.
+        Socket? originatingSocket = _getSocket();
+
         try
         {
             bool encrypt = encryptOverride ?? _state.EncryptionEnabled;
@@ -115,7 +122,7 @@ internal sealed class UdpFrameSender : IDisposable
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            _onError(ex, _getSocket());
+            _onError(ex, originatingSocket);
             return false;
         }
         finally

@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using System.Reflection;
 using Nalix.Environment.Memory;
 using Nalix.SDK.Options;
@@ -26,7 +27,8 @@ public sealed class UdpSessionTests
             .GetMethod("DispatchMessageAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
         using BufferLease lease = BufferLease.CopyFrom([1, 2, 3, 4]);
-        await (Task)dispatch.Invoke(reader, [lease, CancellationToken.None])!;
+        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        await (Task)dispatch.Invoke(reader, [lease, CancellationToken.None, socket])!;
 
         Assert.Equal(1, calls);
     }

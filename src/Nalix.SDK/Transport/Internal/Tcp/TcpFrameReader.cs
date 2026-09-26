@@ -66,9 +66,14 @@ internal sealed class TcpFrameReader : IDisposable
     /// <param name="token">A cancellation token used to stop the receive loop.</param>
     public async Task ReceiveLoopAsync(CancellationToken token)
     {
+        // Captured once for the whole loop, before the outer try, so the outer catch below reports
+        // the socket THIS loop is reading from — not whatever _getSocket() resolves to by the time
+        // the catch runs, which a fast reconnect racing this failure can have already moved on from.
+        Socket? s = null;
+
         try
         {
-            Socket s = _getSocket();
+            s = _getSocket();
             byte[] headerBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(TcpSession.HeaderSize);
             Memory<byte> headerMemory = new(headerBuffer, 0, TcpSession.HeaderSize);
 
@@ -134,7 +139,7 @@ internal sealed class TcpFrameReader : IDisposable
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            _onError(ex, _getSocket());
+            _onError(ex, s);
         }
         finally
         {
