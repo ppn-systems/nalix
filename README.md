@@ -100,7 +100,7 @@ Latency is one client, sequential calls; allocation and CPU are per message at 6
 
 > **Caveats:** 4 shared vCPUs over container loopback — compare the stacks with each other, not as absolute capacity. Differences of a few percent are within run-to-run noise. The encrypted rows are not like-for-like (per-packet AEAD vs TLS stream).
 
-Micro-benchmarks (serialization, codec, memory) are in [`docs/benchmarks`](docs/benchmarks/).
+Micro-benchmarks (serialization, codec, memory, dispatch) are in [`docs/benchmarks`](docs/benchmarks/) — including the dispatch ready-queue's `Channel<T>` → `ConcurrentQueue<T>` swap ([−12% per message at that hop](docs/benchmarks/infrastructure.md#dispatch-ready-queue), not yet distinguishable from noise in the end-to-end numbers above).
 
 ---
 
