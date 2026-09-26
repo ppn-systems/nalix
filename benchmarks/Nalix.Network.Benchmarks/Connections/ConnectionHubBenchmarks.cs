@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using BenchmarkDotNet.Attributes;
 using Nalix.Abstractions.Identity;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Environment.Configuration;
 using Nalix.Network.Connections;
 using Nalix.Network.Options;
@@ -20,14 +21,23 @@ public class ConnectionHubBenchmarks
     private ConnectionHub _hub = null!;
     private Connection _preRegisteredConnection = null!;
     private Connection _benchmarkConnection = null!;
-    private ISnowflake _preRegisteredId = null!;
+    private ulong _preRegisteredId;
+
+    /// <summary>
+    /// Minimal op-code reader. The hub never inspects a payload, so a local stub keeps this
+    /// benchmark from pulling in Nalix.Hosting just for DefaultOpCodeExtractor.
+    /// </summary>
+    private sealed class StubOpCodeExtractor : IOpCodeExtractor
+    {
+        public ushort Extract(ReadOnlySpan<byte> payload) => 0;
+    }
 
     [GlobalSetup]
     public void Setup()
     {
-        // Disable limit checks during simple benchmarks
+        // ConnectionHubOptions no longer caps the connection count, so only the shard count is
+        // pinned here to keep the measurement stable across machines.
         var options = ConfigurationManager.Instance.Get<ConnectionHubOptions>();
-        options.MaxConnections = 100000;
         options.ShardCount = 8;
 
         _hub = new ConnectionHub();
@@ -42,11 +52,13 @@ public class ConnectionHubBenchmarks
         _client.Connect(_listener.LocalEndPoint!);
         _serverSocket = acceptTask.GetAwaiter().GetResult();
 
-        _preRegisteredConnection = new Connection(_serverSocket);
-        _preRegisteredId = _preRegisteredConnection.ID;
+        StubOpCodeExtractor packetClassifier = new();
+
+        _preRegisteredConnection = new Connection(_serverSocket, packetClassifier);
+        _preRegisteredId = _preRegisteredConnection.ConnectionId;
         _hub.RegisterConnection(_preRegisteredConnection);
-        
-        _benchmarkConnection = new Connection(_serverSocket);
+
+        _benchmarkConnection = new Connection(_serverSocket, packetClassifier);
     }
 
     [GlobalCleanup]

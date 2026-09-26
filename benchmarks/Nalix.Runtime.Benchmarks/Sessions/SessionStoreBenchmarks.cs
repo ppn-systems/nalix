@@ -4,10 +4,10 @@ using BenchmarkDotNet.Attributes;
 using Nalix.Abstractions.Identity;
 using Nalix.Abstractions.Networking.Sessions;
 using Nalix.Abstractions.Security;
-using Nalix.Network.Sessions;
+using Nalix.Runtime.Sessions;
 using Nalix.Benchmarks.Shared;
 
-namespace Nalix.Network.Benchmarks.Sessions;
+namespace Nalix.Runtime.Benchmarks.Sessions;
 
 [Config(typeof(NalixBenchmarkConfig))]
 public class SessionStoreBenchmarks
@@ -38,6 +38,10 @@ public class SessionStoreBenchmarks
     public async Task StoreAndConsume()
     {
         await _store.StoreAsync(_entry);
-        await _store.ConsumeAsync(_token);
+
+        // The scope is deliberately not disposed: disposing it returns the snapshot to its pool,
+        // and the next iteration stores the same entry again, which would then be reading a
+        // recycled snapshot. Leaving it undisposed keeps every iteration measuring the same work.
+        _ = await _store.ConsumeAsync(_token);
     }
 }

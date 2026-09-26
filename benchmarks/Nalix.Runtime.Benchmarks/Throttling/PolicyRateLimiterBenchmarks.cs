@@ -31,18 +31,31 @@ public class PolicyRateLimiterBenchmarks
         public override bool Equals(object? obj) => obj is BenchmarkNetworkEndpoint other && Address == other.Address;
     }
 
+    /// <summary>Minimal op-code reader; the rate limiter never inspects a payload.</summary>
+    private sealed class StubOpCodeExtractor : Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor
+    {
+        public ushort Extract(ReadOnlySpan<byte> payload) => 0;
+    }
+
     private class BenchmarkConnection : IConnection
     {
         public bool IsDisposed => false;
         public bool IsUdpCreated => false;
-        public ulong ID => 0;
+        public ulong ConnectionId => 0;
         public string? UserId { get; set; }
         public long UpTime => 0;
         public long BytesSent => 0;
         public long BytesReceived => 0;
         public long LastPingTime => 0;
         public INetworkEndpoint NetworkEndpoint { get; } = new BenchmarkNetworkEndpoint();
-        public IObjectMap<string, object> Attributes => null!;
+        public IObjectMap<AttributeKey, object> Attributes => null!;
+
+        public bool ExcludeFromIdleTimeout { get; set; }
+
+        public Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor PacketClassifier { get; } =
+            new StubOpCodeExtractor();
+
+        public void UpdateIdleTimeout(int newTimeoutMs) { }
 
         private System.Collections.Concurrent.ConcurrentDictionary<ushort, object>? _rateLimitCache;
         public System.Collections.Concurrent.ConcurrentDictionary<ushort, object> RateLimitCache => _rateLimitCache ??= new();
@@ -90,6 +103,7 @@ public class PolicyRateLimiterBenchmarks
         public IConnection Connection { get; }
         public PacketMetadata Attributes { get; }
         public IPacketSender Sender => null!;
+        public Nalix.Abstractions.Injection.IPacketScope Scope => null!;
         public System.Threading.CancellationToken CancellationToken => System.Threading.CancellationToken.None;
 
         public BenchmarkPacketContext(IConnection connection, PacketRateLimitAttribute rateLimit)
@@ -102,7 +116,6 @@ public class PolicyRateLimiterBenchmarks
                 permission: null,
                 encryption: null,
                 rateLimit: rateLimit,
-                concurrencyLimit: null,
                 transport: null);
         }
 
