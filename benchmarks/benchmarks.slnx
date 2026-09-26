@@ -1,8 +1,8 @@
 <Solution>
   <Project Path="../src/Nalix.Abstractions/Nalix.Abstractions.csproj" />
-  <Project Path="../src/Nalix.Analyzers.CodeFixes/Nalix.Analyzers.CodeFixes.csproj" />
-  <Project Path="../src/Nalix.Analyzers.Generators/Nalix.Analyzers.Generators.csproj" />
-  <Project Path="../src/Nalix.Analyzers/Nalix.Analyzers.csproj" />
+  <Project Path="../analyzers/Nalix.Analyzers.CodeFixes/Nalix.Analyzers.CodeFixes.csproj" />
+  <Project Path="../analyzers/Nalix.Analyzers.Generators/Nalix.Analyzers.Generators.csproj" />
+  <Project Path="../analyzers/Nalix.Analyzers/Nalix.Analyzers.csproj" />
   <Project Path="../src/Nalix.Codec/Nalix.Codec.csproj" />
   <Project Path="../src/Nalix.Environment/Nalix.Environment.csproj" />
   <Project Path="../src/Nalix.Framework/Nalix.Framework.csproj" />

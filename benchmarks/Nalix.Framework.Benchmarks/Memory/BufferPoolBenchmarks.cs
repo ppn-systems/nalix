@@ -20,9 +20,9 @@ public class BufferPoolBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        // Disable trimming to avoid scheduling recurring jobs that depend on TaskManager/InstanceManager
+        // Leak tracking is off so the measurement is the pool itself. BufferPoolManager no longer
+        // schedules a recurring trim, so there is nothing else here to keep off the benchmark.
         var options = ConfigurationManager.Instance.Get<BufferOptions>();
-        options.EnableMemoryTrimming = false;
         options.EnableBufferLeakDetection = false;
         options.EnableBufferLeakStackTrace = false;
 
