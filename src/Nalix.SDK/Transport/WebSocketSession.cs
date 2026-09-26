@@ -106,6 +106,10 @@ public class WebSocketSession : TransportSession
 
         await _connectionLock.WaitAsync(ct).ConfigureAwait(false);
 
+        // #393: tracks whether THIS attempt's socket ever reached OnConnected, so the catch below
+        // knows whether a raised OnDisconnected would have a matching "connected" event to pair with.
+        bool connected = false;
+
         try
         {
             string effectiveHost = string.IsNullOrWhiteSpace(host) ? this.Options.Address : host;
@@ -136,6 +140,7 @@ public class WebSocketSession : TransportSession
             }
 
             await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
+            connected = true;
             this.OnConnected?.Invoke(this, EventArgs.Empty);
 
             _loopCts = new CancellationTokenSource();
@@ -148,7 +153,11 @@ public class WebSocketSession : TransportSession
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+            // #393: when `connected` is false there is no matching "connected" event for a raised
+            // OnDisconnected to pair with — suppress it and let the NetworkException thrown below be
+            // the one signal. During an outage every failed retry would otherwise raise one, making
+            // "one OnDisconnected per real transport close" not a guarantee callers can build on.
+            await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected).ConfigureAwait(false);
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"WebSocket Connection failed: {ex.Message}", ex);
         }
@@ -183,7 +192,7 @@ public class WebSocketSession : TransportSession
         }
     }
 
-    private async Task DisconnectInternalAsync(ClientWebSocket? expectedSocket = null, bool waitForLoop = false)
+    private async Task DisconnectInternalAsync(ClientWebSocket? expectedSocket = null, bool waitForLoop = false, bool raiseDisconnected = true)
     {
         ClientWebSocket? socket;
         CancellationTokenSource? loopCts;
@@ -246,7 +255,15 @@ public class WebSocketSession : TransportSession
             }
 
             socket.Dispose();
-            this.OnDisconnected?.Invoke(this, new NetworkException("The WebSocket session was disconnected."));
+
+            // #393: a socket that never reached OnConnected (a failed/timed-out/refused connect
+            // attempt) must not raise OnDisconnected — an app has no matching OnConnected to pair it
+            // with, and during an outage every failed retry would otherwise raise one, making "one
+            // OnDisconnected per real transport close" not a guarantee callers can build on.
+            if (raiseDisconnected)
+            {
+                this.OnDisconnected?.Invoke(this, new NetworkException("The WebSocket session was disconnected."));
+            }
         }
 
         if (waitForLoop && loopTask is { IsCompleted: false })
