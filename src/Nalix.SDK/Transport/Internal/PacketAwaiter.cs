@@ -34,7 +34,7 @@ internal static class PacketAwaiter
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="TimeoutException"></exception>
     /// <exception cref="OperationCanceledException"></exception>
-    public static Task<TPkt> AwaitAsync<TPkt>(
+    public static ValueTask<TPkt> AwaitAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate,
         int timeoutMs, Func<CancellationToken, Task> sendAsync, CancellationToken ct)
         where TPkt : class, IPacket, IPacketStaticOpcode
@@ -59,7 +59,7 @@ internal static class PacketAwaiter
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="timeoutMs"/> is negative.</exception>
     /// <exception cref="TimeoutException">Thrown when no matching packet arrives in time.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="ct"/> is cancelled.</exception>
-    public static Task<TPkt> AwaitAsync<TPkt>(
+    public static ValueTask<TPkt> AwaitAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate,
         int timeoutMs, IPacket request, bool? encrypt, CancellationToken ct)
         where TPkt : class, IPacket, IPacketStaticOpcode
@@ -69,7 +69,8 @@ internal static class PacketAwaiter
         return CoreAsync(client, predicate, timeoutMs, request, encrypt, sendAsync: null, ct);
     }
 
-    private static async Task<TPkt> CoreAsync<TPkt>(
+    [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder<>))]
+    private static async ValueTask<TPkt> CoreAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate, int timeoutMs,
         IPacket? request, bool? encrypt, Func<CancellationToken, Task>? sendAsync, CancellationToken ct)
         where TPkt : class, IPacket, IPacketStaticOpcode
@@ -82,7 +83,9 @@ internal static class PacketAwaiter
             throw new ArgumentOutOfRangeException(nameof(timeoutMs), "timeoutMs must be >= 0 (0 = infinite)");
         }
 
-        PendingRequest<TPkt> pending = new(client, predicate);
+        // Rented, not allocated: PendingRequest<TPkt> and its two event-handler delegates come from a
+        // small per-type pool instead of the heap on every call (see PendingRequest<TPkt> remarks).
+        PendingRequest<TPkt> pending = PendingRequest<TPkt>.Rent(client, predicate);
         pending.Subscribe();
 
         try
@@ -136,6 +139,10 @@ internal static class PacketAwaiter
         finally
         {
             pending.Unsubscribe();
+
+            // Safe here: the Task has already been fully awaited (or thrown) above, so nothing
+            // still holds a reference to this instance's in-flight state.
+            pending.Return();
         }
     }
 
