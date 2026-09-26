@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,6 +31,14 @@ namespace Nalix.SDK.Transport.Internal;
 /// handlers are method groups bound once per instance.
 /// </para>
 /// <para>
+/// <b>Instance pooling:</b> instances are rented from a small per-<typeparamref name="TPkt"/> pool
+/// (<see cref="Rent"/>/<see cref="Return"/>) instead of allocated fresh per request, so the two event
+/// handler delegates and the <see cref="TaskCompletionSource{TPkt}"/> are the only things a live
+/// request still needs from the heap — the wrapper object and its delegates are reused across
+/// requests. A request is only returned to the pool once its <see cref="Task"/> has been fully
+/// observed (see <see cref="PacketAwaiter"/>), never while still in flight.
+/// </para>
+/// <para>
 /// Completion is single-shot and races are resolved by <see cref="Interlocked"/>: whichever of the
 /// three outcomes gets there first wins, and the rest are no-ops.
 /// </para>
@@ -37,28 +46,72 @@ namespace Nalix.SDK.Transport.Internal;
 internal sealed class PendingRequest<TPkt>
     where TPkt : class, IPacket, IPacketStaticOpcode
 {
-    private readonly TaskCompletionSource<TPkt> _completion =
+    // Bounded so a burst of concurrent requests does not grow the pool without limit; beyond this,
+    // Rent() falls back to allocating a fresh instance exactly as before pooling existed.
+    private const int MaxPooled = 64;
+
+    private static readonly ConcurrentQueue<PendingRequest<TPkt>> s_pool = new();
+
+    private TaskCompletionSource<TPkt> _completion =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private readonly ITransportSession _session;
-    private readonly Func<TPkt, bool> _predicate;
-    private readonly ushort _opcode;
+    private ITransportSession? _session;
+    private Func<TPkt, bool>? _predicate;
+    private ushort _opcode;
 
-    // Bound once. A method group in a += or -= builds a fresh delegate every time, so subscribing
-    // and unsubscribing around one request would otherwise cost four delegate allocations.
+    // Bound once per pooled instance (not once per request). A method group in a += or -= builds a
+    // fresh delegate every time, so subscribing and unsubscribing around one request would otherwise
+    // cost four delegate allocations; pooling the instance means these are created at most
+    // MaxPooled times total across the process, not once per request.
     private readonly EventHandler<IBufferLease> _onMessage;
     private readonly EventHandler<Exception> _onDisconnected;
 
     private int _completed;
 
-    internal PendingRequest(ITransportSession session, Func<TPkt, bool> predicate)
+    private PendingRequest()
     {
-        _session = session;
-        _predicate = predicate;
-        _opcode = TPkt.StaticOpCode;
-
         _onMessage = this.OnMessageReceived;
         _onDisconnected = this.OnDisconnected;
+    }
+
+    /// <summary>
+    /// Rents a pooled instance (or allocates one if the pool is empty) and binds it to
+    /// <paramref name="session"/> and <paramref name="predicate"/> for one request.
+    /// </summary>
+    internal static PendingRequest<TPkt> Rent(ITransportSession session, Func<TPkt, bool> predicate)
+    {
+        if (!s_pool.TryDequeue(out PendingRequest<TPkt>? pending))
+        {
+            pending = new PendingRequest<TPkt>();
+        }
+
+        pending._session = session;
+        pending._predicate = predicate;
+        pending._opcode = TPkt.StaticOpCode;
+        pending._completed = 0;
+
+        // A completed TaskCompletionSource cannot be reused for a new await, so each rental gets a
+        // fresh one. This — plus the Task<TPkt> it wraps — is the one per-request heap allocation
+        // pooling cannot remove: the awaited result has to live in a real async completion object.
+        pending._completion = new TaskCompletionSource<TPkt>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        return pending;
+    }
+
+    /// <summary>
+    /// Clears per-request state and returns the instance to the pool for reuse. Only call this once
+    /// <see cref="Task"/> has been fully awaited (or faulted) — never while a caller might still be
+    /// observing it.
+    /// </summary>
+    internal void Return()
+    {
+        _session = null;
+        _predicate = null;
+
+        if (s_pool.Count < MaxPooled)
+        {
+            s_pool.Enqueue(this);
+        }
     }
 
     /// <summary>The task that completes with the matching packet, or faults.</summary>
@@ -67,14 +120,14 @@ internal sealed class PendingRequest<TPkt>
     /// <summary>Starts watching the session's inbound stream.</summary>
     internal void Subscribe()
     {
-        _session.OnMessageReceived += _onMessage;
+        _session!.OnMessageReceived += _onMessage;
         _session.OnDisconnected += _onDisconnected;
     }
 
     /// <summary>Stops watching. Safe to call more than once.</summary>
     internal void Unsubscribe()
     {
-        _session.OnMessageReceived -= _onMessage;
+        _session!.OnMessageReceived -= _onMessage;
         _session.OnDisconnected -= _onDisconnected;
     }
 
@@ -119,7 +172,7 @@ internal sealed class PendingRequest<TPkt>
 
                 try
                 {
-                    matches = _predicate(typed);
+                    matches = _predicate!(typed);
                 }
                 catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
                 {
@@ -140,7 +193,7 @@ internal sealed class PendingRequest<TPkt>
                 }
 
                 delivered = true;
-                _session.OnMessageReceived -= _onMessage;
+                _session!.OnMessageReceived -= _onMessage;
 
                 _ = _completion.TrySetResult(typed);
             }
