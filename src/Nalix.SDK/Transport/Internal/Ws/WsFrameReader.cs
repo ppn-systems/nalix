@@ -77,7 +77,7 @@ internal sealed class WsFrameReader : IDisposable
                             $"WebSocket message size {result.Count} exceeds maximum {_webSocketOptions.MaxMessageSize}.");
                     }
 
-                    this.PROCESS_FRAME(buffer.AsSpan(0, result.Count));
+                    this.PROCESS_FRAME(buffer.AsSpan(0, result.Count), socket);
                 }
                 else
                 {
@@ -144,11 +144,11 @@ internal sealed class WsFrameReader : IDisposable
 
             if (ms.TryGetBuffer(out ArraySegment<byte> fullBuffer))
             {
-                this.PROCESS_FRAME(fullBuffer.AsSpan());
+                this.PROCESS_FRAME(fullBuffer.AsSpan(), socket);
             }
             else
             {
-                this.PROCESS_FRAME(ms.ToArray());
+                this.PROCESS_FRAME(ms.ToArray(), socket);
             }
         }
         finally
@@ -157,7 +157,7 @@ internal sealed class WsFrameReader : IDisposable
         }
     }
 
-    private void PROCESS_FRAME(ReadOnlySpan<byte> frameData)
+    private void PROCESS_FRAME(ReadOnlySpan<byte> frameData, ClientWebSocket socket)
     {
         IBufferLease lease = BufferLease.Rent(frameData.Length);
         frameData.CopyTo(lease.SpanFull);
@@ -191,7 +191,10 @@ internal sealed class WsFrameReader : IDisposable
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            _onError?.Invoke(ex, _getSocket());
+            // Report the socket this frame was actually read from, not whatever _getSocket()
+            // resolves to now — a fast reconnect racing this decode failure can have already moved
+            // the field to a newer connection's socket (see the same fix in WsFrameSender.SEND_CORE).
+            _onError?.Invoke(ex, socket);
         }
         finally
         {

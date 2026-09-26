@@ -72,6 +72,13 @@ internal sealed class TcpFrameSender : IDisposable
     {
         IBufferLease current = lease;
 
+        // Captured once, before anything below can throw. A framing/encryption failure below has
+        // nothing to do with which physical socket is live by the time the catch runs — re-reading
+        // _getSocket() there would report whatever the field points to NOW, which a fast reconnect
+        // racing this call can have already moved to a newer connection's socket. Reporting the
+        // socket THIS call actually started with keeps HandleError's identity check meaningful.
+        Socket originatingSocket = _getSocket();
+
         // [SECURITY] The caller's lease is the plaintext of an encrypted frame. The pool does not
         // clear arrays on return, so mark it for scrubbing before anything can throw.
         if (encrypt && lease is BufferLease plaintextLease)
@@ -102,7 +109,7 @@ internal sealed class TcpFrameSender : IDisposable
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            _onError?.Invoke(ex, _getSocket());
+            _onError?.Invoke(ex, originatingSocket);
             return false;
         }
         finally

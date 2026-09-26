@@ -98,7 +98,7 @@ internal sealed class UdpFrameReader : IDisposable
                     IBufferLease lease = BufferLease.TakeOwnership(rawBuffer, 0, received);
                     rawBuffer = null;
 
-                    await this.ProcessDatagramAsync(lease, cancellationToken)
+                    await this.ProcessDatagramAsync(lease, cancellationToken, socket)
                               .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -129,7 +129,7 @@ internal sealed class UdpFrameReader : IDisposable
         }
     }
 
-    private async Task ProcessDatagramAsync(IBufferLease datagram, CancellationToken ct)
+    private async Task ProcessDatagramAsync(IBufferLease datagram, CancellationToken ct, Socket socket)
     {
         IBufferLease original = datagram;
         uint? seq = null;
@@ -189,7 +189,7 @@ internal sealed class UdpFrameReader : IDisposable
             }
 
             // Dispatch
-            await this.DispatchMessageAsync(datagram, ct).ConfigureAwait(false);
+            await this.DispatchMessageAsync(datagram, ct, socket).ConfigureAwait(false);
         }
         finally
         {
@@ -206,7 +206,7 @@ internal sealed class UdpFrameReader : IDisposable
         }
     }
 
-    private async Task DispatchMessageAsync(IBufferLease lease, CancellationToken _)
+    private async Task DispatchMessageAsync(IBufferLease lease, CancellationToken _, Socket socket)
     {
         // Sync handler (hot path)
         _onMessageReceived?.Invoke(lease);
@@ -221,7 +221,10 @@ internal sealed class UdpFrameReader : IDisposable
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                _onError(ex, _getSocket());
+                // Report the socket this datagram was actually received on, not whatever
+                // _getSocket() resolves to now — a fast reconnect racing this handler failure can
+                // have already moved the field to a newer connection's socket.
+                _onError(ex, socket);
             }
             finally
             {
