@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Threading;
@@ -304,6 +305,92 @@ public sealed class RuntimeDispatchAndHandlersTests
     }
 
     /// <summary>
+    /// A handler returning <c>IAsyncEnumerable&lt;TResponse&gt;</c> must have every yielded item sent,
+    /// with the LAST item (and only the last) marked <see cref="IPacketStreamable.IsEndOfStream"/> —
+    /// the runtime, not the handler, owns that bookkeeping. Covers the synchronous-completion path
+    /// (<c>ExecuteTerminalHandler</c>'s fast path into <c>SendHandlerResponseAsync</c>).
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_SyncStreamHandler_SendsAllItemsAndFlagsOnlyLastAsEndOfStream()
+    {
+        PacketDispatchOptions<TestPacket> options = new();
+        StreamTestPacket[] yielded = [new() { Value = 1 }, new() { Value = 2 }, new() { Value = 3 }];
+
+        static async IAsyncEnumerable<StreamTestPacket> ToStream(StreamTestPacket[] items)
+        {
+            foreach (StreamTestPacket item in items)
+            {
+                yield return item;
+            }
+
+            await Task.CompletedTask;
+        }
+
+        PacketHandler<TestPacket> descriptor = CreateDescriptor(
+            (_, _) => new ValueTask<object?>(ToStream(yielded)));
+
+        FakeConnection connection = new();
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+
+            connection.FakeTcp.SentMessages.Should().HaveCount(3,
+                "every item the handler's stream yields must be sent as its own packet");
+            yielded[0].IsEndOfStream.Should().BeFalse();
+            yielded[1].IsEndOfStream.Should().BeFalse();
+            yielded[2].IsEndOfStream.Should().BeTrue(
+                "the runtime must mark the LAST yielded item as the end of the stream so the client's StreamAsync completes");
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Same contract as the synchronous test above, but for a handler that yields asynchronously
+    /// (an <c>await</c> before the first item) — covers <c>AwaitHandlerAndRespondAsync</c>'s copy of
+    /// the same stream branch.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_AsyncStreamHandler_SendsAllItemsAndFlagsOnlyLastAsEndOfStream()
+    {
+        PacketDispatchOptions<TestPacket> options = new();
+        StreamTestPacket[] yielded = [new() { Value = 1 }, new() { Value = 2 }];
+
+        static async IAsyncEnumerable<StreamTestPacket> ToStream(StreamTestPacket[] items)
+        {
+            foreach (StreamTestPacket item in items)
+            {
+                await Task.Yield();
+                yield return item;
+            }
+        }
+
+        PacketHandler<TestPacket> descriptor = CreateDescriptor(async (_, _) =>
+        {
+            await Task.Yield();
+            return (object?)ToStream(yielded);
+        });
+
+        FakeConnection connection = new();
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+
+            connection.FakeTcp.SentMessages.Should().HaveCount(2);
+            yielded[0].IsEndOfStream.Should().BeFalse();
+            yielded[1].IsEndOfStream.Should().BeTrue();
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
     /// A handler marked [PacketEncryption(true)] must be denied with ProtocolReason.FORBIDDEN
     /// when the packet context reports the frame did not arrive encrypted on the wire —
     /// EncryptedOnWire is the dedicated audit signal CanExecute reads (the packet header's
@@ -486,6 +573,20 @@ public sealed class RuntimeDispatchAndHandlersTests
         public PacketHeader Header { get; set; }
         public byte[] Serialize() => [];
         public int Serialize(Span<byte> buffer) => 0;
+    }
+
+    private sealed class StreamTestPacket : IPacket, IPacketStreamable
+    {
+        public int Length => 1;
+        public PacketHeader Header { get; set; }
+        public bool IsEndOfStream { get; set; }
+        public int Value { get; init; }
+        public byte[] Serialize() => [(byte)Value];
+        public int Serialize(Span<byte> buffer)
+        {
+            buffer[0] = (byte)Value;
+            return 1;
+        }
     }
 }
 
