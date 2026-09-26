@@ -79,28 +79,29 @@ How Nalix compares with the usual .NET choices for realtime traffic (competitor 
 
 End-to-end echo over loopback, every framework with its own client, same machine, one session: 4 vCPU Xeon @ 2.80 GHz container,
 .NET 10.0.12, `master` 0b58c2824, median of 3 runs. 32 B payload unless noted. Raw data and all cells: **[full comparison](docs/benchmarks/network-comparison.md)**.
+The three Nalix rows were re-measured against the current `perf/dispatch-readyqueue` branch; the other libraries' rows are from the prior full run and were not re-run.
 
 | Library | p50 latency (µs) | p99 latency (µs) | ops/s, 64 clients | ops/s, 64 clients, 1 KB | server alloc/op (B) | server CPU/op (µs) |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Nalix TCP** | **92** | **312** | 44,287 | 36,880 | **120** | 45.2 |
-| Nalix WebSocket | 115 | 403 | 43,016 | 35,809 | 256 | 45.2 |
-| SignalR (WebSocket, MessagePack) | 157 | 492 | **45,904** | **38,780** | 672 | **36.3** |
+| **Nalix TCP** | **89.3** | **260.6** | 47,954 | 41,335 | **120** | 44.5 |
+| Nalix WebSocket | 102.7 | 300.9 | 43,678 | 37,271 | 256 | 43.5 |
+| SignalR (WebSocket, MessagePack) | 157 | 492 | 45,904 | 38,780 | 672 | **36.3** |
 | gRPC bidi stream (h2c) | 123 | 379 | 44,388 | 37,740 | 264 | 39.8 |
 | gRPC unary (h2c) | 217 | 748 | 33,187 | 32,226 | 969 | 48.1 |
 | MagicOnion StreamingHub | 161 | 557 | 39,715 | 33,729 | 200 | 44.8 |
 | MagicOnion unary | 239 | 812 | 32,050 | 28,380 | 1,433 | 49.7 |
-| *Nalix TCP + X25519/ChaCha20-Poly1305* | 126 | 416 | 34,645 | 20,171 | 120 | 60.2 |
+| *Nalix TCP + X25519/ChaCha20-Poly1305* | 103.2 | 307.0 | **41,780** | 33,117 | 120 | 50.4 |
 | *gRPC bidi stream + TLS* | 209 | 702 | 31,970 | 27,049 | 804 | 55.7 |
 
 Latency is one client, sequential calls; allocation and CPU are per message at 64 clients.
 
 - **Nalix wins** single-client latency (p50 and p99, at 32 B and 1 KB) and server allocations per message.
-- **Nalix loses** peak throughput at 64 clients to SignalR (by 3–5 %) and roughly ties gRPC bidi streaming; its server CPU per message is about 25 % higher than SignalR's.
-- **Encrypted:** Nalix AEAD beats gRPC + TLS for small messages but is about 25 % slower for 1 KB messages (managed ChaCha20-Poly1305 vs hardware AES-GCM).
+- **Nalix vs. SignalR throughput/CPU**: with only the Nalix rows refreshed, Nalix TCP's throughput at 64 clients now reads slightly above SignalR's — but SignalR was not re-run under identical conditions, so this is not a verified reversal; treat the two as roughly tied within noise until both are measured in the same pass. Nalix's server CPU per message is still noticeably higher than SignalR's.
+- **Encrypted:** Nalix AEAD is close to gRPC + TLS for small messages and now clearly ahead for 1 KB messages in this run (throughput), though again only the Nalix side was re-measured.
 
-> **Caveats:** 4 shared vCPUs over container loopback — compare the stacks with each other, not as absolute capacity. Differences of a few percent are within run-to-run noise. The encrypted rows are not like-for-like (per-packet AEAD vs TLS stream).
+> **Caveats:** 4 shared vCPUs over container loopback — compare the stacks with each other, not as absolute capacity. Differences of a few percent are within run-to-run noise. The encrypted rows are not like-for-like (per-packet AEAD vs TLS stream). Mixing a freshly-measured library against others' older numbers can shift apparent rankings that a same-pass re-run might not confirm — see the caveat above.
 
-Micro-benchmarks (serialization, codec, memory, dispatch) are in [`docs/benchmarks`](docs/benchmarks/) — including the dispatch ready-queue's `Channel<T>` → `ConcurrentQueue<T>` swap ([−12% per message at that hop](docs/benchmarks/infrastructure.md#dispatch-ready-queue), not yet distinguishable from noise in the end-to-end numbers above).
+Micro-benchmarks (serialization, codec, memory) are in [`docs/benchmarks`](docs/benchmarks/).
 
 ---
 
