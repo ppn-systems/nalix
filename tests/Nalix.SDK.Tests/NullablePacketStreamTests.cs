@@ -69,6 +69,39 @@ public sealed partial class NullablePacketStreamTests
     }
 
     [Fact]
+    public async Task StreamAsyncWhenRequestSequenceIdIsUnsetStillReceivesReply()
+    {
+        // Regression test: the request is left at SequenceId 0, exactly as a caller who forgot to
+        // stamp it would send it. The response below is stamped with the id a *fresh* session's own
+        // outbound counter produces on its first send (1) — the same value TcpSession/UdpSession/
+        // WebSocketSession's SendAsync would have stamped the wire packet with, had StreamAsync not
+        // pre-stamped it itself. Before the fix, StreamAsync latched expectedSeqId = 0 (the request's
+        // unset value) before ever sending, so this reply — matching what actually went out — would
+        // never equal expectedSeqId and would be silently disposed: no exception, the stream just
+        // never completes.
+        NullableStreamRequest request = new();
+        Assert.Equal(0, request.Header.SequenceId);
+
+        NullableStreamItem response = new() { IsEndOfStream = true, Capacity = 42 };
+        response.Header = response.Header with { SequenceId = 1 };
+
+        FakeStreamSession session = new(response);
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(3));
+
+        List<NullableStreamSnapshot> snapshots = [];
+        await foreach (NullableStreamItem item in session.StreamAsync<NullableStreamItem>(request, ct: cts.Token))
+        {
+            snapshots.Add(new NullableStreamSnapshot(
+                item.Header.SequenceId, item.IsEndOfStream, item.Capacity, item.Duration));
+        }
+
+        // The request must have been stamped with a real id before send, matching the reply's id.
+        Assert.Equal(1, request.Header.SequenceId);
+        NullableStreamSnapshot snapshot = Assert.Single(snapshots);
+        Assert.Equal(42, snapshot.Capacity);
+    }
+
+    [Fact]
     public async Task StreamAsyncWhenSequenceDoesNotMatchDisposesIgnoredPacket()
     {
         NullableStreamItem.DisposeCount = 0;

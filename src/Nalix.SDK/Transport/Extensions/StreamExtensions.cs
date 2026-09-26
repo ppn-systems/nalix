@@ -63,6 +63,19 @@ public static class StreamExtensions
             await RequestExtensions.AwaitReadyOrThrowAsync(client, options.TimeoutMs, typeof(TResponse).Name, ct).ConfigureAwait(false);
         }
 
+        // Stamp here — before latching expectedSeqId and before subscribing — rather than letting
+        // SendAsync stamp it later. SendAsync's own stamp only replaces a still-zero SequenceId, so
+        // this is a no-op for callers who already assigned one; for callers who left it at 0, it
+        // guarantees expectedSeqId and the value actually put on the wire are the same number. Without
+        // this, a caller who leaves SequenceId unset would latch expectedSeqId = 0 here, SendAsync
+        // would then stamp the wire packet with a fresh non-zero id, and every reply — including the
+        // terminator — would be silently dropped by the SequenceId check below: no exception, the
+        // `await foreach` simply never completes.
+        if (client is TransportSession session)
+        {
+            session.StampSequenceIdIfUnset(request);
+        }
+
         ushort expectedSeqId = request.Header.SequenceId;
 
         // Use Unbounded channel to prevent blocking the network reader thread.

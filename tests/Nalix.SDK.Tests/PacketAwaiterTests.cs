@@ -26,7 +26,7 @@ public sealed class PacketAwaiterTests
         byte[] data = packet.Serialize();
         ManualLease lease = new(data);
 
-        Task<Nalix.Codec.ProtocolFrames.Control> awaitTask = PacketAwaiter.AwaitAsync<Nalix.Codec.ProtocolFrames.Control>(
+        ValueTask<Nalix.Codec.ProtocolFrames.Control> awaitTask = PacketAwaiter.AwaitAsync<Nalix.Codec.ProtocolFrames.Control>(
             session,
             p => p.Header.OpCode == Nalix.Codec.ProtocolFrames.Control.StaticOpCode,
             1000,
