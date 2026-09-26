@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
 using System.IO;
@@ -166,6 +167,10 @@ public sealed partial class PacketDispatchOptions<TPacket>
             {
                 await SendRawAsync(context, mem).ConfigureAwait(false);
             }
+            else if (result is IAsyncEnumerable<IPacket> stream)
+            {
+                await SendStreamResponseAsync(context, stream, ct).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -183,6 +188,64 @@ public sealed partial class PacketDispatchOptions<TPacket>
                 if (responsePacket is IDisposable disposableResponse)
                 {
                     disposableResponse.Dispose();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sends every item a handler's <see cref="IAsyncEnumerable{IPacket}"/> return value yields, one
+    /// packet per <c>SendAsync</c> call (each auto-stamped with the request's <c>SequenceId</c> by
+    /// <see cref="Dispatching.PacketSender"/>, exactly like a single-packet response). The handler
+    /// writes a plain <c>async IAsyncEnumerable&lt;TResponse&gt;</c> method and never touches
+    /// end-of-stream bookkeeping itself.
+    /// </summary>
+    /// <remarks>
+    /// The LAST item the enumerable actually yields has its <see cref="IPacketStreamable.IsEndOfStream"/>
+    /// set to <see langword="true"/> before it is sent (a one-item look-ahead: the loop asks for the
+    /// next item before sending the current one, so it always knows whether the current item is the
+    /// last). This is what <c>Nalix.SDK</c>'s <c>StreamExtensions.StreamAsync</c> watches for to
+    /// complete its <c>IAsyncEnumerable</c> on the client, and it needs no separate terminator packet:
+    /// the response type only has to implement <see cref="IPacketStreamable"/>, which the client's own
+    /// generic constraint already requires.
+    /// <para>
+    /// <b>Known limitation:</b> an empty stream (zero items yielded) or a fault the enumerable throws
+    /// before yielding a final item leaves the client's stream with no end-of-stream signal — there is
+    /// no wire-level "abort this stream" frame today, and this method only ever sees the erased
+    /// <c>object</c> result, so it cannot construct a fresh terminator of the concrete response type
+    /// on the handler's behalf. A stream handler
+    /// should always yield at least one item, and callers that need faults to fail fast rather than
+    /// hang should pass a non-zero <c>inactivityTimeoutMs</c> to <c>StreamAsync</c>.
+    /// </para>
+    /// </remarks>
+    private static async ValueTask SendStreamResponseAsync(
+        PacketContext<TPacket> context, IAsyncEnumerable<IPacket> stream, CancellationToken ct)
+    {
+        await using IAsyncEnumerator<IPacket> enumerator = stream.GetAsyncEnumerator(ct);
+
+        bool hasCurrent = await enumerator.MoveNextAsync().ConfigureAwait(false);
+
+        while (hasCurrent)
+        {
+            IPacket current = enumerator.Current;
+            bool disposeCurrent = !ReferenceEquals(current, context.Packet);
+
+            try
+            {
+                hasCurrent = await enumerator.MoveNextAsync().ConfigureAwait(false);
+
+                if (!hasCurrent && current is IPacketStreamable streamable)
+                {
+                    streamable.IsEndOfStream = true;
+                }
+
+                await AwaitReturnAsync(context.Sender.SendAsync(current, ct), ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (disposeCurrent && current is IDisposable disposableCurrent)
+                {
+                    disposableCurrent.Dispose();
                 }
             }
         }
@@ -215,6 +278,10 @@ public sealed partial class PacketDispatchOptions<TPacket>
                 else if (result is Memory<byte> mem)
                 {
                     await SendRawAsync(context, mem).ConfigureAwait(false);
+                }
+                else if (result is IAsyncEnumerable<IPacket> stream)
+                {
+                    await SendStreamResponseAsync(context, stream, ct).ConfigureAwait(false);
                 }
             }
         }
