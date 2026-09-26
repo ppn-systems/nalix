@@ -91,9 +91,13 @@ public abstract class TransportSession : IDisposable, ITransportSession
     /// <summary>
     /// Assigns an auto-incrementing <c>SequenceId</c> to <paramref name="packet"/> when the caller
     /// left it unset (<c>0</c>). Packets with a caller-assigned SequenceId are never overwritten.
-    /// Called by concrete sessions from their <c>SendAsync(IPacket, ...)</c> override, before serialization.
+    /// Called by concrete sessions from their <c>SendAsync(IPacket, ...)</c> override, before serialization,
+    /// and by <see cref="Extensions.StreamExtensions"/> so it can latch the same value it will send with
+    /// before subscribing, instead of racing the stamp that <c>SendAsync</c> would otherwise apply later.
+    /// Internal rather than private protected so extension code in this assembly can call it directly on
+    /// a concrete session without widening the public API.
     /// </summary>
-    private protected void StampSequenceIdIfUnset(IPacket packet)
+    internal void StampSequenceIdIfUnset(IPacket packet)
     {
         if (packet.Header.SequenceId != 0)
         {
