@@ -195,10 +195,11 @@ public sealed partial class PacketDispatchOptions<TPacket>
 
     /// <summary>
     /// Sends every item a handler's <see cref="IAsyncEnumerable{IPacket}"/> return value yields, one
-    /// packet per <c>SendAsync</c> call (each auto-stamped with the request's <c>SequenceId</c> by
-    /// <see cref="Dispatching.PacketSender"/>, exactly like a single-packet response). The handler
-    /// writes a plain <c>async IAsyncEnumerable&lt;TResponse&gt;</c> method and never touches
-    /// end-of-stream bookkeeping itself.
+    /// packet per <c>ReplyAsync</c> call (each auto-stamped with the request's <c>SequenceId</c> by
+    /// <see cref="Dispatching.PacketSender.ReplyAsync"/>, exactly like a single-packet response — plain
+    /// <c>SendAsync</c> does NOT stamp it, which is what a client's <c>StreamAsync</c> correlates every
+    /// chunk against). The handler writes a plain <c>async IAsyncEnumerable&lt;TResponse&gt;</c> method
+    /// and never touches end-of-stream or correlation-id bookkeeping itself.
     /// </summary>
     /// <remarks>
     /// The LAST item the enumerable actually yields has its <see cref="IPacketStreamable.IsEndOfStream"/>
@@ -239,7 +240,7 @@ public sealed partial class PacketDispatchOptions<TPacket>
                     streamable.IsEndOfStream = true;
                 }
 
-                await AwaitReturnAsync(context.Sender.SendAsync(current, ct), ct).ConfigureAwait(false);
+                await AwaitReturnAsync(context.Sender.ReplyAsync(current, ct), ct).ConfigureAwait(false);
             }
             finally
             {

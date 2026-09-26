@@ -329,11 +329,13 @@ public sealed class RuntimeDispatchAndHandlersTests
         PacketHandler<TestPacket> descriptor = CreateDescriptor(
             (_, _) => new ValueTask<object?>(ToStream(yielded)));
 
+        TestPacket request = new() { Header = new PacketHeader { SequenceId = 777 } };
+
         FakeConnection connection = new();
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, request, connection, reliable: true, encryptedOnWire: false).AsTask();
 
             connection.FakeTcp.SentMessages.Should().HaveCount(3,
                 "every item the handler's stream yields must be sent as its own packet");
@@ -341,6 +343,19 @@ public sealed class RuntimeDispatchAndHandlersTests
             yielded[1].IsEndOfStream.Should().BeFalse();
             yielded[2].IsEndOfStream.Should().BeTrue(
                 "the runtime must mark the LAST yielded item as the end of the stream so the client's StreamAsync completes");
+
+            // #392: every stream frame must go out via ReplyAsync (which echoes the request's
+            // SequenceId onto response.Header in place before sending), not plain SendAsync —
+            // otherwise a client's StreamAsync, which correlates replies by SequenceId, silently
+            // discards every frame including the terminator. ReplyAsync mutates the same packet
+            // instance that was yielded, so checking each item's Header.SequenceId after the send
+            // proves which send path actually ran, without needing to decode wire bytes (this test's
+            // StreamTestPacket.Serialize does not even emit a header).
+            foreach (StreamTestPacket item in yielded)
+            {
+                item.Header.SequenceId.Should().Be(request.Header.SequenceId,
+                    "every stream frame must echo the request's SequenceId so the client can correlate it");
+            }
         }
         finally
         {
