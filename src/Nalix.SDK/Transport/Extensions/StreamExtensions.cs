@@ -25,7 +25,12 @@ public static class StreamExtensions
     /// <typeparam name="TResponse">The expected type of the response chunks.</typeparam>
     /// <param name="client">The connected client session.</param>
     /// <param name="request">The request packet initiating the stream.</param>
-    /// <param name="options">Options for the request (e.g., encryption).</param>
+    /// <param name="options">
+    /// Options for the request (e.g., encryption). <see cref="RequestOptions.TimeoutMs"/> is consulted
+    /// ONLY while waiting for the connection to become ready before the initial send — it has no
+    /// effect on how long the stream itself may run once started. Bound the overall stream duration
+    /// with <paramref name="ct"/> (a deadline-based token) or <paramref name="inactivityTimeoutMs"/>.
+    /// </param>
     /// <param name="ct">The cancellation token to cancel the stream.</param>
     /// <param name="inactivityTimeoutMs">
     /// Milliseconds to wait for the next chunk before failing the stream with a <see cref="TimeoutException"/>.
@@ -172,13 +177,25 @@ public static class StreamExtensions
     /// <param name="timeoutMs">The timeout in milliseconds for each attempt. Use 0 to wait indefinitely.</param>
     /// <param name="maxAttempts">The maximum number of attempts.</param>
     /// <param name="ct">The cancellation token for the full operation.</param>
+    /// <param name="options">
+    /// Forwarded to <see cref="StreamAsync{TResponse}"/> for each attempt (e.g. <see cref="RequestOptions.Encrypt"/>).
+    /// <see langword="null"/> (the default) uses <see cref="RequestOptions.Default"/>, which is
+    /// unencrypted — pass an explicit <see cref="RequestOptions"/> to request per-frame encryption,
+    /// since there was previously no way to ask this method for it short of re-implementing the
+    /// collect loop directly over <see cref="StreamAsync{TResponse}"/>. Trailing rather than
+    /// alongside <paramref name="timeoutMs"/>/<paramref name="maxAttempts"/> to preserve existing
+    /// positional call sites.
+    /// </param>
     /// <returns>The collected stream items.</returns>
+#pragma warning disable CA1068 // options must stay trailing to preserve existing positional call sites.
     public static async Task<List<TResponse>> CollectStreamAsync<TResponse>(
         this ITransportSession client,
         Func<IPacket> requestFactory,
         int timeoutMs = 9_000,
         int maxAttempts = 2,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        RequestOptions? options = null)
+#pragma warning restore CA1068
         where TResponse : class, IPacket, IPacketStaticOpcode, IPacketStreamable
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -198,7 +215,7 @@ public static class StreamExtensions
                 using CancellationTokenSource attemptCts = CreateAttemptTokenSource(timeoutMs, ct);
                 List<TResponse> items = [];
 
-                await foreach (TResponse item in client.StreamAsync<TResponse>(request, ct: attemptCts.Token).ConfigureAwait(false))
+                await foreach (TResponse item in client.StreamAsync<TResponse>(request, options, ct: attemptCts.Token).ConfigureAwait(false))
                 {
                     if (IsExplicitTerminator(item))
                     {
@@ -237,14 +254,21 @@ public static class StreamExtensions
     /// <param name="timeoutMs">The timeout in milliseconds for each attempt. Use 0 to wait indefinitely.</param>
     /// <param name="maxAttempts">The maximum number of attempts.</param>
     /// <param name="ct">The cancellation token for the full operation.</param>
+    /// <param name="options">
+    /// Forwarded to <see cref="StreamAsync{TResponse}"/> for each attempt; see the single-type-parameter
+    /// <see cref="CollectStreamAsync{TResponse}"/> overload for the full contract.
+    /// </param>
     /// <returns>The collected stream items.</returns>
+#pragma warning disable CA1068 // options must stay trailing to preserve existing positional call sites.
     public static async Task<List<TResponse>> CollectStreamAsync<TResponse, TKey>(
         this ITransportSession client,
         Func<IPacket> requestFactory,
         Func<TResponse, TKey> keySelector,
         int timeoutMs = 9_000,
         int maxAttempts = 2,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        RequestOptions? options = null)
+#pragma warning restore CA1068
         where TResponse : class, IPacket, IPacketStaticOpcode, IPacketStreamable
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -266,7 +290,7 @@ public static class StreamExtensions
                 List<TResponse> items = [];
                 HashSet<TKey> seen = [];
 
-                await foreach (TResponse item in client.StreamAsync<TResponse>(request, ct: attemptCts.Token).ConfigureAwait(false))
+                await foreach (TResponse item in client.StreamAsync<TResponse>(request, options, ct: attemptCts.Token).ConfigureAwait(false))
                 {
                     if (IsExplicitTerminator(item))
                     {
@@ -316,6 +340,11 @@ public static class StreamExtensions
     /// <param name="timeoutMs">The timeout in milliseconds for each attempt. Use 0 to wait indefinitely.</param>
     /// <param name="maxAttempts">The maximum number of attempts.</param>
     /// <param name="ct">The cancellation token for the full operation.</param>
+    /// <param name="options">
+    /// Forwarded to <see cref="StreamAsync{TResponse}"/> for each attempt; see
+    /// <see cref="CollectStreamAsync{TResponse}"/> for the full contract.
+    /// </param>
+#pragma warning disable CA1068 // options must stay trailing to preserve existing positional call sites.
     public static async Task StreamIntoAsync<TResponse, TKey>(
         this ITransportSession client,
         Func<IPacket> requestFactory,
@@ -326,7 +355,9 @@ public static class StreamExtensions
         int batchMs = 100,
         int timeoutMs = 9_000,
         int maxAttempts = 2,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        RequestOptions? options = null)
+#pragma warning restore CA1068
         where TResponse : class, IPacket, IPacketStaticOpcode, IPacketStreamable
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -364,7 +395,7 @@ public static class StreamExtensions
                 int pending = 0;
                 long lastBatchTicks = System.Environment.TickCount64;
 
-                await foreach (TResponse item in client.StreamAsync<TResponse>(request, ct: attemptCts.Token).ConfigureAwait(false))
+                await foreach (TResponse item in client.StreamAsync<TResponse>(request, options, ct: attemptCts.Token).ConfigureAwait(false))
                 {
                     if (IsExplicitTerminator(item))
                     {

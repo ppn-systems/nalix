@@ -117,6 +117,37 @@ public sealed class ConnectFailureResilienceTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// #393: a WebSocket connect attempt that never reaches <c>OnConnected</c> (no listener, refused
+    /// immediately) must not raise <c>OnDisconnected</c> either — an app has no matching "connected"
+    /// event to pair it with, so treating a failed connect as a disconnect makes "one OnDisconnected
+    /// per real transport close" not a guarantee callers can build on (every failed retry during an
+    /// outage would raise one).
+    /// </summary>
+    [Fact]
+    public async Task ConnectAsync_WebSocket_NoListener_DoesNotRaiseOnDisconnected()
+    {
+        int port = TestUtils.GetFreePort();
+
+        using WebSocketSession session = new(new TransportOptions
+        {
+            Address = "127.0.0.1",
+            Port = (ushort)port,
+            ConnectTimeoutMillis = 2000
+        });
+
+        int disconnectedCount = 0;
+        int connectedCount = 0;
+        session.OnDisconnected += (_, _) => disconnectedCount++;
+        session.OnConnected += (_, _) => connectedCount++;
+
+        _ = await Assert.ThrowsAsync<NetworkException>(() => session.ConnectAsync());
+
+        Assert.Equal(0, connectedCount);
+        Assert.Equal(0, disconnectedCount);
+        Assert.False(session.IsConnected);
+    }
+
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
 #endif
