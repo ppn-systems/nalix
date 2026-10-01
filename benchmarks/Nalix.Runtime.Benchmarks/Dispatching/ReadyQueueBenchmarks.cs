@@ -20,6 +20,8 @@ namespace Nalix.Runtime.Benchmarks.Dispatching;
 [MemoryDiagnoser]
 public class ReadyQueueBenchmarks
 {
+    private const int TwoThreadOperations = 20_000;
+
     private sealed class Token;
 
     private Channel<Token> _channel = null!;
@@ -62,15 +64,18 @@ public class ReadyQueueBenchmarks
     /// production shape where a socket-completion callback writes and a dispatch
     /// worker reads from a different thread.
     /// </summary>
-    [Benchmark]
+    [Benchmark(OperationsPerInvoke = TwoThreadOperations)]
     public void Channel_WriteRead_TwoThreads()
     {
-        const int n = 20_000;
+        using ManualResetEventSlim startGate = new(false);
+        using CountdownEvent ready = new(2);
         using CountdownEvent done = new(2);
 
         var producer = new Thread(() =>
         {
-            for (int i = 0; i < n; i++)
+            ready.Signal();
+            startGate.Wait();
+            for (int i = 0; i < TwoThreadOperations; i++)
             {
                 while (!_channel.Writer.TryWrite(_item)) { Thread.SpinWait(1); }
             }
@@ -79,8 +84,10 @@ public class ReadyQueueBenchmarks
 
         var consumer = new Thread(() =>
         {
+            ready.Signal();
+            startGate.Wait();
             int received = 0;
-            while (received < n)
+            while (received < TwoThreadOperations)
             {
                 if (_channel.Reader.TryRead(out _))
                 {
@@ -92,18 +99,23 @@ public class ReadyQueueBenchmarks
 
         producer.Start();
         consumer.Start();
+        ready.Wait();
+        startGate.Set();
         done.Wait();
     }
 
-    [Benchmark]
+    [Benchmark(OperationsPerInvoke = TwoThreadOperations)]
     public void ConcurrentQueue_WriteRead_TwoThreads()
     {
-        const int n = 20_000;
+        using ManualResetEventSlim startGate = new(false);
+        using CountdownEvent ready = new(2);
         using CountdownEvent done = new(2);
 
         var producer = new Thread(() =>
         {
-            for (int i = 0; i < n; i++)
+            ready.Signal();
+            startGate.Wait();
+            for (int i = 0; i < TwoThreadOperations; i++)
             {
                 _queue.Enqueue(_item);
             }
@@ -112,8 +124,10 @@ public class ReadyQueueBenchmarks
 
         var consumer = new Thread(() =>
         {
+            ready.Signal();
+            startGate.Wait();
             int received = 0;
-            while (received < n)
+            while (received < TwoThreadOperations)
             {
                 if (_queue.TryDequeue(out _))
                 {
@@ -125,6 +139,8 @@ public class ReadyQueueBenchmarks
 
         producer.Start();
         consumer.Start();
+        ready.Wait();
+        startGate.Set();
         done.Wait();
     }
 }
