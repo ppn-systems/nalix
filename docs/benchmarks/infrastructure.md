@@ -57,11 +57,11 @@ The `PacketRegistry` maps payload identifiers to concrete handler contracts.
 
 | Method | Mean | Error | StdDev | Allocated |
 | :--- | ---: | ---: | ---: | ---: |
-| **TryDeserialize** | **9.506 ns** | 0.2138 ns | 0.2377 ns | 24 B |
+| **TryDeserialize** | **3.498 ns** | 0.0349 ns | 0.0466 ns | 0 B |
 
 ### Behind the design
 
-- **Zero-Allocation Deserialization Mapping**: Mapping an incoming packet type identifier to its deserialization logic is fully pre-compiled and cached. A resolution path executes in under 10 ns with a single small allocation for the returned packet instance.
+- **Zero-Allocation Deserialization Mapping**: Mapping an incoming packet type identifier to its deserialization logic is fully pre-compiled and cached. A resolution path executes in under 4 ns with true zero heap allocation (0 B).
 
 ---
 
@@ -71,10 +71,10 @@ The `PacketRegistry` maps payload identifiers to concrete handler contracts.
 
 | Method | Mean | Ratio | Allocated |
 | :--- | ---: | ---: | ---: |
-| **Channel\<T\> write+read, single thread** | 2.00 μs | 1.00 | 0 B |
-| **ConcurrentQueue\<T\> write+read, single thread** | **0.48 μs** | **0.24** | 0 B |
-| **Channel\<T\> write+read, producer/consumer threads** | 2,263.4 μs / 20k ops | 1.00 | 66.6 KB |
-| **ConcurrentQueue\<T\> write+read, producer/consumer threads** | **391.7 μs / 20k ops** | **0.17** | 526 KB |
+| **Channel\<T\> write+read, single thread** | 2.45 μs | 1.00 | 0 B |
+| **ConcurrentQueue\<T\> write+read, single thread** | **0.89 μs** | **0.38** | 0 B |
+| **Channel\<T\> write+read, producer/consumer threads** | 149.20 ns / op | 1.00 | 0 B |
+| **ConcurrentQueue\<T\> write+read, producer/consumer threads** | **24.96 ns / op** | **0.17** | 3 B |
 
 End-to-end, exercising `DispatchChannel<IPacket>.Push` → `TryClaim` → `TryDequeue` → `Release` directly (the real per-message path):
 

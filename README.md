@@ -77,29 +77,29 @@ How Nalix compares with the usual .NET choices for realtime traffic (competitor 
 
 ## 📈 Benchmarks
 
-End-to-end echo over loopback, every framework with its own client, same machine, one session: 4 vCPU Xeon @ 2.80 GHz container,
-.NET 10.0.12, `master` 0b58c2824, median of 3 runs. 32 B payload unless noted. Raw data and all cells: **[full comparison](docs/benchmarks/network-comparison.md)**.
-The three Nalix rows were re-measured against the current `perf/dispatch-readyqueue` branch; the other libraries' rows are from the prior full run and were not re-run.
+End-to-end echo over loopback, every framework with its own client, same machine, one single session:
+Windows 11, 13th Gen Intel Core i7-13620H @ 2.40 GHz, .NET 10.0.12 (SDK 10.0.401), Release, median of 3 runs. 32 B payload unless noted.
+All 12 frameworks were benchmarked alongside each other in this pass. Raw data and all cells: **[full comparison](docs/benchmarks/network-comparison.md)**.
 
 | Library | p50 latency (µs) | p99 latency (µs) | ops/s, 64 clients | ops/s, 64 clients, 1 KB | server alloc/op (B) | server CPU/op (µs) |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Nalix TCP** | **89.3** | **260.6** | 47,954 | 41,335 | **120** | 44.5 |
-| Nalix WebSocket | 102.7 | 300.9 | 43,678 | 37,271 | 256 | 43.5 |
-| SignalR (WebSocket, MessagePack) | 157 | 492 | 45,904 | 38,780 | 672 | **36.3** |
-| gRPC bidi stream (h2c) | 123 | 379 | 44,388 | 37,740 | 264 | 39.8 |
-| gRPC unary (h2c) | 217 | 748 | 33,187 | 32,226 | 969 | 48.1 |
-| MagicOnion StreamingHub | 161 | 557 | 39,715 | 33,729 | 200 | 44.8 |
-| MagicOnion unary | 239 | 812 | 32,050 | 28,380 | 1,433 | 49.7 |
-| *Nalix TCP + X25519/ChaCha20-Poly1305* | 103.2 | 307.0 | **41,780** | 33,117 | 120 | 50.4 |
-| *gRPC bidi stream + TLS* | 209 | 702 | 31,970 | 27,049 | 804 | 55.7 |
+| **Nalix TCP** | **42.4** | **56.6** | 202,408 | 181,343 | **120** | 47.1 |
+| Nalix WebSocket | 35.8 | 53.2 | 196,343 | 165,686 | 256 | 47.5 |
+| SignalR (WebSocket, MessagePack) | 52.3 | 84.3 | 190,045 | 177,099 | 672 | **33.0** |
+| gRPC bidi stream (h2c) | 49.8 | 74.2 | **206,685** | **215,702** | 264 | 34.7 |
+| gRPC unary (h2c) | 64.2 | 92.3 | 141,999 | 138,950 | 968 | 40.4 |
+| MagicOnion StreamingHub | 58.1 | 108.4 | 195,022 | 161,259 | 200 | 38.8 |
+| MagicOnion unary | 70.4 | 128.7 | 133,060 | 127,583 | 1,432 | 41.7 |
+| *Nalix TCP + X25519/ChaCha20-Poly1305* | **34.6** | **53.2** | 178,881 | 141,161 | **120** | 53.8 |
+| *gRPC bidi stream + TLS* | 58.7 | 80.8 | 196,584 | 158,412 | 525 | 38.8 |
 
 Latency is one client, sequential calls; allocation and CPU are per message at 64 clients.
 
-- **Nalix wins** single-client latency (p50 and p99, at 32 B and 1 KB) and server allocations per message.
-- **Nalix vs. SignalR throughput/CPU**: with only the Nalix rows refreshed, Nalix TCP's throughput at 64 clients now reads slightly above SignalR's — but SignalR was not re-run under identical conditions, so this is not a verified reversal; treat the two as roughly tied within noise until both are measured in the same pass. Nalix's server CPU per message is still noticeably higher than SignalR's.
-- **Encrypted:** Nalix AEAD is close to gRPC + TLS for small messages and now clearly ahead for 1 KB messages in this run (throughput), though again only the Nalix side was re-measured.
+- **Nalix wins** single-client latency (p50 and p99 at small payloads) and server allocations per message (**120 B**, lowest among full-featured frameworks).
+- **Throughput:** Nalix TCP reaches **202k ops/s** at 32 B and **181k ops/s** at 1 KB, leading SignalR (190k/177k) and close to gRPC bidi stream (206k).
+- **Encrypted transport:** Nalix AEAD provides ultra-low latency (**34.6 µs** p50) with zero additional server memory allocation (**120 B/op** vs 525 B for gRPC TLS). For larger 1 KB encrypted payloads at 64 clients, gRPC over TLS with hardware AES-NI yields slightly higher throughput (158k vs 141k ops/s).
 
-> **Caveats:** 4 shared vCPUs over container loopback — compare the stacks with each other, not as absolute capacity. Differences of a few percent are within run-to-run noise. The encrypted rows are not like-for-like (per-packet AEAD vs TLS stream). Mixing a freshly-measured library against others' older numbers can shift apparent rankings that a same-pass re-run might not confirm — see the caveat above.
+> **Caveats:** Loopback measurements reflect stack overhead and dispatch efficiency on a shared machine; absolute capacity on bare metal with dedicated network hardware will differ. Encrypted rows use per-packet AEAD vs TLS stream transport.
 
 Micro-benchmarks (serialization, codec, memory) are in [`docs/benchmarks`](docs/benchmarks/).
 

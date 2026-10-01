@@ -16,7 +16,7 @@ public class NalixBenchmarkConfig : ManualConfig
         AddJob(Job.Default
             .WithGcServer(true)
             .WithGcConcurrent(true)
-            .WithWarmupCount(3)
-            .WithIterationCount(20));
+            .WithWarmupCount(10)
+            .WithIterationCount(25));
     }
 }
