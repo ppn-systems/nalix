@@ -84,7 +84,7 @@ public sealed class PacketContextScopePoolingTests
             Nalix.Abstractions.Injection.IPacketScope secondScope = context.Scope;
 
             // Assert: Must reuse the same embedded instance
-            secondScope.Should().BeSameAs(firstScope, "embedded _defaultScope must be preserved across pool resets");
+            secondScope.Should().BeSameAs(firstScope, "embedded _scope must be preserved across pool resets");
 
             DisposableTracker tracker2 = new();
             context.Scope.RegisterForDisposal(tracker2);

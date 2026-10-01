@@ -30,7 +30,7 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
 
     #region Fields
 
-    private readonly PacketScope _defaultScope = new();
+    private readonly PacketScope _scope = new();
     private int _state;
     private bool _ownsPacket;
     private bool _isInitialized;
@@ -185,7 +185,7 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
         this.Connection = connection;
         this.Attributes = descriptor;
         this.CancellationToken = token;
-        this.Scope = scope ?? _defaultScope;
+        this.Scope = scope ?? _scope;
 
         if (this.Scope is PacketScope packetScope)
         {
@@ -241,9 +241,9 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
             if (_ownsPacket && this.Scope is IDisposable disposableScope)
             {
                 disposableScope.Dispose();
-                if (ReferenceEquals(this.Scope, _defaultScope))
+                if (ReferenceEquals(this.Scope, _scope))
                 {
-                    _defaultScope.ResetForPool();
+                    _scope.ResetForPool();
                 }
                 else if (this.Scope is PacketScope pooledScope)
                 {
@@ -289,9 +289,9 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
                     disposableScope.Dispose();
                 }
 
-                if (ReferenceEquals(this.Scope, _defaultScope))
+                if (ReferenceEquals(this.Scope, _scope))
                 {
-                    _defaultScope.ResetForPool();
+                    _scope.ResetForPool();
                 }
                 else if (this.Scope is PacketScope pooledScope)
                 {
