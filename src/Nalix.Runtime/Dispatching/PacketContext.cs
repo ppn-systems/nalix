@@ -30,6 +30,7 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
 
     #region Fields
 
+    private readonly PacketScope _defaultScope = new();
     private int _state;
     private bool _ownsPacket;
     private bool _isInitialized;
@@ -184,7 +185,7 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
         this.Connection = connection;
         this.Attributes = descriptor;
         this.CancellationToken = token;
-        this.Scope = scope ?? s_pool.Get<PacketScope>();
+        this.Scope = scope ?? _defaultScope;
 
         if (this.Scope is PacketScope packetScope)
         {
@@ -240,7 +241,11 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
             if (_ownsPacket && this.Scope is IDisposable disposableScope)
             {
                 disposableScope.Dispose();
-                if (this.Scope is PacketScope pooledScope)
+                if (ReferenceEquals(this.Scope, _defaultScope))
+                {
+                    _defaultScope.ResetForPool();
+                }
+                else if (this.Scope is PacketScope pooledScope)
                 {
                     s_pool.Return(pooledScope);
                 }
@@ -273,13 +278,26 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
     {
         if (_isInitialized)
         {
-            if (_ownsPacket && this.Scope is IAsyncDisposable asyncScope)
+            if (_ownsPacket && this.Scope is not null)
             {
-                await asyncScope.DisposeAsync().ConfigureAwait(false);
-                if (this.Scope is PacketScope pooledScope)
+                if (this.Scope is IAsyncDisposable asyncScope)
+                {
+                    await asyncScope.DisposeAsync().ConfigureAwait(false);
+                }
+                else if (this.Scope is IDisposable disposableScope)
+                {
+                    disposableScope.Dispose();
+                }
+
+                if (ReferenceEquals(this.Scope, _defaultScope))
+                {
+                    _defaultScope.ResetForPool();
+                }
+                else if (this.Scope is PacketScope pooledScope)
                 {
                     s_pool.Return(pooledScope);
                 }
+
                 this.Scope = default!;
             }
         }

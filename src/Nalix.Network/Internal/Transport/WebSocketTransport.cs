@@ -48,6 +48,9 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
     private WebSocket _webSocket = null!;
     private SemaphoreSlim _sendLock = null!;
+#pragma warning disable CA2213 // Scoped wrapper over _sendLock; does not own standalone unmanaged resources
+    private SendLockScope _sendLockScope = null!;
+#pragma warning restore CA2213
 
     internal WebSocket WebSocket => _webSocket;
     internal SemaphoreSlim SendLock => _sendLock;
@@ -68,6 +71,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         _webSocket = webSocket ?? throw new ArgumentNullException(nameof(webSocket));
         _options = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
         _sendLock = new SemaphoreSlim(1, 1);
+        _sendLockScope = new SendLockScope(_sendLock);
         _disposed = 0;
         _receiveStarted = 0;
         _receiveLoopTask = null;
@@ -87,6 +91,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         try { _sendLock?.Dispose(); }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
 
+        _sendLockScope = null!;
         _sendLock = null!;
     }
 
@@ -149,21 +154,31 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     }
 
     /// <inheritdoc/>
+    [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     ValueTask<IAsyncDisposable> IConnection.ITransport.AcquireSendLockAsync(CancellationToken cancellationToken)
-        => this.ACQUIRE_SEND_LOCK_ASYNC(cancellationToken);
+    {
+        if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
+        {
+            return new ValueTask<IAsyncDisposable>(_sendLockScope);
+        }
+
+        return this.ACQUIRE_SEND_LOCK_ASYNC(cancellationToken);
+    }
 
     private async ValueTask<IAsyncDisposable> ACQUIRE_SEND_LOCK_ASYNC(CancellationToken cancellationToken)
     {
         await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return new SendLockScope(_sendLock);
+        return _sendLockScope;
     }
 
     /// <summary>
     /// Releases a <see cref="WebSocketTransport"/> send lock previously acquired via
     /// <see cref="ACQUIRE_SEND_LOCK_ASYNC"/>.
     /// </summary>
-    private readonly struct SendLockScope(SemaphoreSlim sendLock) : IAsyncDisposable
+    private sealed class SendLockScope(SemaphoreSlim sendLock) : IAsyncDisposable
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueTask DisposeAsync()
         {
             _ = sendLock.Release();
