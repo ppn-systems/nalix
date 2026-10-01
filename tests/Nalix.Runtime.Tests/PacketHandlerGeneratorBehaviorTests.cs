@@ -152,6 +152,62 @@ public sealed class PacketHandlerGeneratorBehaviorTests
             "an exception thrown asynchronously inside a generated handler must be converted to a FAIL control, not swallowed silently");
     }
 
+    [Fact]
+    public async Task SyncValueTaskOfTHandler_FastPathSendsResponse()
+    {
+        EchoController controller = new();
+        PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
+        FakeConnection connection = new();
+
+        _ = options.TryResolveHandler(EchoController.SyncValueTaskOfTOpCode, out PacketHandler<EchoPacket> descriptor);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncValueTaskOfTOpCode), connection, reliable: true, encryptedOnWire: false);
+
+        connection.FakeTcp.SentMessages.Should().NotBeEmpty(
+            "a synchronous ValueTask<T> handler must return result and send response via fast-path");
+    }
+
+    [Fact]
+    public async Task SyncTaskOfTHandler_FastPathSendsResponse()
+    {
+        EchoController controller = new();
+        PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
+        FakeConnection connection = new();
+
+        _ = options.TryResolveHandler(EchoController.SyncTaskOfTOpCode, out PacketHandler<EchoPacket> descriptor);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncTaskOfTOpCode), connection, reliable: true, encryptedOnWire: false);
+
+        connection.FakeTcp.SentMessages.Should().NotBeEmpty(
+            "a completed Task<T> handler must return result and send response via fast-path");
+    }
+
+    [Fact]
+    public async Task SyncDirectValueHandler_FastPathSendsResponse()
+    {
+        EchoController controller = new();
+        PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
+        FakeConnection connection = new();
+
+        _ = options.TryResolveHandler(EchoController.SyncDirectValueOpCode, out PacketHandler<EchoPacket> descriptor);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncDirectValueOpCode), connection, reliable: true, encryptedOnWire: false);
+
+        connection.FakeTcp.SentMessages.Should().NotBeEmpty(
+            "a synchronous direct IPacket handler must return result and send response");
+    }
+
+    [Fact]
+    public async Task SyncThrowingHandler_ExceptionSurfacesAsFailDirective_NotSwallowed()
+    {
+        EchoController controller = new();
+        PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
+        FakeConnection connection = new();
+
+        _ = options.TryResolveHandler(EchoController.SyncThrowingOpCode, out PacketHandler<EchoPacket> descriptor);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncThrowingOpCode), connection, reliable: true, encryptedOnWire: false);
+
+        connection.FakeTcp.SentMessages.Should().NotBeEmpty(
+            "an exception thrown synchronously inside a generated handler must be converted to a FAIL control");
+    }
+
     /// <summary>
     /// Single-shape policy: only a single <c>IPacketContext&lt;T&gt;</c> parameter is a supported
     /// handler signature. A legacy 2-parameter <c>(TPacket packet, IConnection connection)</c> shape
@@ -344,6 +400,10 @@ public sealed class EchoController
     public const ushort ContextOpCode = 0x2106;
     public const ushort ThrowingOpCode = 0x2107;
     public const ushort StreamOpCode = 0x210B;
+    public const ushort SyncValueTaskOfTOpCode = 0x210C;
+    public const ushort SyncTaskOfTOpCode = 0x210D;
+    public const ushort SyncDirectValueOpCode = 0x210E;
+    public const ushort SyncThrowingOpCode = 0x210F;
 
     public bool VoidInvoked { get; private set; }
     public bool ValueTaskInvoked { get; private set; }
@@ -414,6 +474,30 @@ public sealed class EchoController
         ushort requestSeq = context.Packet.Header.SequenceId;
         await Task.Yield();
         yield return new EchoPacket { Header = new PacketHeader { OpCode = StreamOpCode, SequenceId = requestSeq } };
+    }
+
+    [PacketOpcode(SyncValueTaskOfTOpCode)]
+    public ValueTask<EchoPacket> HandleSyncValueTaskOfT(IPacketContext<EchoPacket> context)
+    {
+        return new ValueTask<EchoPacket>(new EchoPacket { Header = new PacketHeader { OpCode = SyncValueTaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } });
+    }
+
+    [PacketOpcode(SyncTaskOfTOpCode)]
+    public Task<EchoPacket> HandleSyncTaskOfT(IPacketContext<EchoPacket> context)
+    {
+        return Task.FromResult(new EchoPacket { Header = new PacketHeader { OpCode = SyncTaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } });
+    }
+
+    [PacketOpcode(SyncDirectValueOpCode)]
+    public EchoPacket HandleSyncDirectValue(IPacketContext<EchoPacket> context)
+    {
+        return new EchoPacket { Header = new PacketHeader { OpCode = SyncDirectValueOpCode, SequenceId = context.Packet.Header.SequenceId } };
+    }
+
+    [PacketOpcode(SyncThrowingOpCode)]
+    public ValueTask HandleSyncThrowing(IPacketContext<EchoPacket> context)
+    {
+        throw new InvalidOperationException("intentional synchronous test failure");
     }
 
     public const ushort TwoParamOpCode = 0x2108;

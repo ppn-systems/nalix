@@ -128,8 +128,8 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     public void Send(ReadOnlySpan<byte> message) => Throw.WebSocketSyncSendNotSupported();
 
     [StackTraceHidden]
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-    public async ValueTask SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ValueTask SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default)
     {
         // Peer already closed/closing -- swallow here (same as SocketTcpTransport's
         // PeerClosed/Aborted swallow) instead of throwing, so callers several layers up
@@ -137,19 +137,58 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         // message string.
         if (_owner.IsDisposed || _webSocket.State != WebSocketState.Open)
         {
-            return;
+            return default;
         }
 
         // WebSockets handle framing natively, so we just send the message as binary.
         // A SemaphoreSlim is used because WebSocket.SendAsync doesn't support concurrent calls.
-        await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
         {
-            await this.SEND_CORE_ASYNC(message, cancellationToken).ConfigureAwait(false);
+            ValueTask vt;
+            try
+            {
+                vt = this.SEND_CORE_ASYNC(message, cancellationToken);
+            }
+            catch
+            {
+                _ = _sendLock.Release();
+                throw;
+            }
+
+            if (vt.IsCompletedSuccessfully)
+            {
+                _ = _sendLock.Release();
+                return default;
+            }
+
+            return AWAIT_WITH_RELEASE_ASYNC(_sendLock, vt);
         }
-        finally
+
+        return AWAIT_ACQUIRE_AND_SEND_ASYNC(this, message, cancellationToken);
+
+        static async ValueTask AWAIT_WITH_RELEASE_ASYNC(SemaphoreSlim sendLock, ValueTask vt)
         {
-            _ = _sendLock.Release();
+            try
+            {
+                await vt.ConfigureAwait(false);
+            }
+            finally
+            {
+                _ = sendLock.Release();
+            }
+        }
+
+        static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(WebSocketTransport transport, ReadOnlyMemory<byte> msg, CancellationToken ct)
+        {
+            await transport._sendLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await transport.SEND_CORE_ASYNC(msg, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _ = transport._sendLock.Release();
+            }
         }
     }
 

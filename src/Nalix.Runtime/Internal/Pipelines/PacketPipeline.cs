@@ -53,42 +53,39 @@ internal static class PacketPipeline
     /// then sends via the specified transport.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static async ValueTask ProcessAndSendAsync(
+    internal static ValueTask ProcessAndSendAsync(
         IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease rawLease,
         bool needEncrypt, bool enableCompress, int minSizeToCompress, CancellationToken ct, bool cloneLease = true)
     {
-        // Clone raw lease for per-connection mutation if cloneLease is true
-        // [SECURITY] The clone holds the plaintext of an encrypted frame: scrub it on release,
-        // including when the send exits early (lock cancellation, sequence overflow, exception).
+        ValueTask<IAsyncDisposable> lockVt = transport.AcquireSendLockAsync(ct);
+        if (lockVt.IsCompletedSuccessfully)
+        {
+            return EXECUTE_WITH_LOCK(connection, transport, rawLease, lockVt.Result, needEncrypt, enableCompress, minSizeToCompress, ct, cloneLease);
+        }
+
+        return AWAIT_LOCK_AND_SEND_ASYNC(lockVt, connection, transport, rawLease, needEncrypt, enableCompress, minSizeToCompress, ct, cloneLease);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ValueTask EXECUTE_WITH_LOCK(
+        IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease rawLease,
+        IAsyncDisposable sendScope, bool needEncrypt, bool enableCompress, int minSizeToCompress, CancellationToken ct, bool cloneLease)
+    {
         BufferLease workingLease = cloneLease ? CloneWithHeadroom(rawLease.Span, needEncrypt) : (BufferLease)rawLease;
+        IBufferLease current = workingLease;
+        bool completed = false;
 
         try
         {
-            IBufferLease current = workingLease;
-
-            // Sequence reservation and the wire write must be atomic per-transport: reserving
-            // NextSendSequence() before the actual write can complete lets two concurrent senders
-            // reserve seq in one order yet hit the wire in the opposite order, causing the
-            // receiver's strict monotonic check to drop the lower-seq packet as a false replay.
-            // ITransport.AcquireSendLockAsync/SendAsyncCore let each transport define what
-            // "atomic with reservation" means: ordered async streams such as TCP/WebSocket
-            // lock across reservation and write, while UDP remains datagram/window based.
-            await using ConfiguredAsyncDisposable sendScope = (await transport.AcquireSendLockAsync(ct)
-                .ConfigureAwait(false)).ConfigureAwait(false);
-
             if (needEncrypt && transport.SendSequence.IsApproachingOverflow())
             {
-                // Pre-emptively disconnect before the counter can wrap and force nonce reuse.
-                // Existing key-rotation (RekeyExtensions.RekeyAsync) resets counters on the client
-                // side; a clean disconnect here is the server-side equivalent when no rekey has
-                // happened in time.
                 connection.Disconnect("Send sequence counter approaching overflow; reconnect required.");
-                return;
+                completed = true;
+                return DISPOSE_AND_RETURN(sendScope, current, workingLease, cloneLease);
             }
 
             uint? sequenceToUse = needEncrypt ? transport.NextSendSequence() : null;
 
-            // FramePipeline mutates `current` and properly cleans up older leases.
             FramePipeline.ProcessOutbound(
                 ref current,
                 enableCompress,
@@ -98,52 +95,132 @@ internal static class PacketPipeline
                 sequenceToUse,
                 connection.Algorithm);
 
-            try
+            ValueTask sendVt;
+            if (transport == connection.UDP)
             {
-                if (transport == connection.UDP)
-                {
-                    int dataLen = current.Length;
-                    BufferLease signedLease = BufferLease.Rent(dataLen + Math.Max(4, Bytes32.Size));
-                    try
-                    {
-                        current.Span.CopyTo(signedLease.SpanFull);
-                        connection.Secret.AsSpan().CopyTo(signedLease.SpanFull[dataLen..]);
-                        uint hash = XxHash32.Compute(signedLease.SpanFull[..(dataLen + Bytes32.Size)]);
-                        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(signedLease.SpanFull.Slice(dataLen, 4), hash);
-
-                        // [SECURITY] Scrub the rest of the secret: it sits past the committed length and
-                        // the pool does not clear arrays on return.
-                        signedLease.SpanFull.Slice(dataLen + 4, Bytes32.Size - 4).Clear();
-                        signedLease.CommitLength(dataLen + 4);
-
-                        await transport.SendAsyncCore(signedLease.Memory, ct).ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        signedLease.Dispose();
-                    }
-                }
-                else
-                {
-                    await transport.SendAsyncCore(current, ct).ConfigureAwait(false);
-                }
+                sendVt = SEND_UDP_ASYNC(connection, transport, current, ct);
             }
-            finally
+            else
             {
-                // Only dispose `current` if it was replaced.
-                // `workingLease` itself will be disposed in the outer finally or by the caller.
+                sendVt = transport.SendAsyncCore(current, ct);
+            }
+
+            if (sendVt.IsCompletedSuccessfully)
+            {
+                completed = true;
+                return DISPOSE_AND_RETURN(sendScope, current, workingLease, cloneLease);
+            }
+
+            completed = true;
+            return AWAIT_SEND_AND_CLEANUP_ASYNC(sendVt, sendScope, current, workingLease, cloneLease);
+        }
+        finally
+        {
+            if (!completed)
+            {
                 if (current != workingLease)
                 {
                     current.Dispose();
                 }
+                if (cloneLease)
+                {
+                    workingLease.Dispose();
+                }
+
+                ValueTask disp = sendScope.DisposeAsync();
+#pragma warning disable CA1849 // Synchronous rollback path
+                if (disp.IsCompletedSuccessfully)
+                {
+                    disp.GetAwaiter().GetResult();
+                }
+                else
+                {
+                    disp.AsTask().GetAwaiter().GetResult();
+                }
+#pragma warning restore CA1849
             }
+        }
+
+        static ValueTask DISPOSE_AND_RETURN(IAsyncDisposable scope, IBufferLease cur, BufferLease work, bool clone)
+        {
+            if (cur != work)
+            {
+                cur.Dispose();
+            }
+            if (clone)
+            {
+                work.Dispose();
+            }
+
+            ValueTask disp = scope.DisposeAsync();
+            if (disp.IsCompletedSuccessfully)
+            {
+                return default;
+            }
+
+            return AWAIT_DISPOSE_ASYNC(disp);
+        }
+
+        static async ValueTask AWAIT_DISPOSE_ASYNC(ValueTask disp) => await disp.ConfigureAwait(false);
+    }
+
+    private static async ValueTask AWAIT_LOCK_AND_SEND_ASYNC(
+        ValueTask<IAsyncDisposable> lockVt,
+        IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease rawLease,
+        bool needEncrypt, bool enableCompress, int minSizeToCompress, CancellationToken ct, bool cloneLease)
+    {
+        IAsyncDisposable sendScope = await lockVt.ConfigureAwait(false);
+        await EXECUTE_WITH_LOCK(connection, transport, rawLease, sendScope, needEncrypt, enableCompress, minSizeToCompress, ct, cloneLease).ConfigureAwait(false);
+    }
+
+    private static async ValueTask AWAIT_SEND_AND_CLEANUP_ASYNC(
+        ValueTask sendVt, IAsyncDisposable sendScope, IBufferLease current, BufferLease workingLease, bool cloneLease)
+    {
+        try
+        {
+            await sendVt.ConfigureAwait(false);
         }
         finally
         {
-            if (cloneLease)
+            try
             {
-                workingLease.Dispose();
+                await sendScope.DisposeAsync().ConfigureAwait(false);
             }
+            finally
+            {
+                if (current != workingLease)
+                {
+                    current.Dispose();
+                }
+                if (cloneLease)
+                {
+                    workingLease.Dispose();
+                }
+            }
+        }
+    }
+
+    private static async ValueTask SEND_UDP_ASYNC(IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease current, CancellationToken ct)
+    {
+        int dataLen = current.Length;
+        BufferLease signedLease = BufferLease.Rent(dataLen + Math.Max(4, Bytes32.Size));
+        try
+        {
+            current.Span.CopyTo(signedLease.SpanFull);
+            connection.Secret.AsSpan().CopyTo(signedLease.SpanFull[dataLen..]);
+            uint hash = XxHash32.Compute(signedLease.SpanFull[..(dataLen + Bytes32.Size)]);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(signedLease.SpanFull.Slice(dataLen, 4), hash);
+
+            // [SECURITY] Scrub the rest of the secret: it sits past the committed length and
+            // the pool does not clear arrays on return.
+            signedLease.SpanFull.Slice(dataLen + 4, Bytes32.Size - 4).Clear();
+            signedLease.CommitLength(dataLen + 4);
+
+            await transport.SendAsyncCore(signedLease.Memory, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            signedLease.Dispose();
         }
     }
 }

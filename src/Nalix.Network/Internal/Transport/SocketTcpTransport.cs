@@ -267,18 +267,59 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IPoolab
         }
     }
 
-    private async ValueTask SEND_WITH_LOCK_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private ValueTask SEND_WITH_LOCK_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
-        await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
         {
-            await this.SEND_ASYNC(message, cancellationToken, acquireLock: false).ConfigureAwait(false);
+            ValueTask vt;
+            try
+            {
+                vt = this.SEND_ASYNC(message, cancellationToken, acquireLock: false);
+            }
+            catch
+            {
+                _ = _sendLock.Release();
+                throw;
+            }
+
+            if (vt.IsCompletedSuccessfully)
+            {
+                _ = _sendLock.Release();
+                return default;
+            }
+
+            return AWAIT_WITH_RELEASE_ASYNC(_sendLock, vt);
         }
-        finally
+
+        return AWAIT_ACQUIRE_AND_SEND_ASYNC(this, message, cancellationToken);
+
+        static async ValueTask AWAIT_WITH_RELEASE_ASYNC(SemaphoreSlim sendLock, ValueTask vt)
         {
-            _ = _sendLock.Release();
+            try
+            {
+                await vt.ConfigureAwait(false);
+            }
+            finally
+            {
+                _ = sendLock.Release();
+            }
+        }
+
+        static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(SocketTcpTransport transport, ReadOnlyMemory<byte> msg, CancellationToken ct)
+        {
+            await transport._sendLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await transport.SEND_ASYNC(msg, ct, acquireLock: false).ConfigureAwait(false);
+            }
+            finally
+            {
+                _ = transport._sendLock.Release();
+            }
         }
     }
+
 
     /// <inheritdoc/>
     [StackTraceHidden]

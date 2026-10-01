@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Exceptions;
@@ -114,7 +115,8 @@ public sealed class PacketSender : IPacketSender
 
     #region Private Methods
 
-    internal static async ValueTask SEND_CORE_ASYNC(IConnection connection, IConnection.ITransport transport, IPacket packet, bool needEncrypt, CancellationToken ct)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ValueTask SEND_CORE_ASYNC(IConnection connection, IConnection.ITransport transport, IPacket packet, bool needEncrypt, CancellationToken ct)
     {
         int packetLength = packet.Length;
 
@@ -133,9 +135,10 @@ public sealed class PacketSender : IPacketSender
         // branches can reuse the same payload without reserializing the packet.
         BufferLease rawLease = PacketPipeline.Serialize(packet, zeroOnDispose: needEncrypt);
 
+        ValueTask sendVt;
         try
         {
-            await PacketPipeline.ProcessAndSendAsync(
+            sendVt = PacketPipeline.ProcessAndSendAsync(
                 connection,
                 transport,
                 rawLease,
@@ -143,12 +146,32 @@ public sealed class PacketSender : IPacketSender
                 s_options.Enabled,
                 s_options.MinSizeToCompress,
                 ct,
-                cloneLease: false).ConfigureAwait(false);
+                cloneLease: false);
         }
-        finally
+        catch
         {
-            // The raw serialization buffer is always returned.
             rawLease.Dispose();
+            throw;
+        }
+
+        if (sendVt.IsCompletedSuccessfully)
+        {
+            rawLease.Dispose();
+            return default;
+        }
+
+        return AWAIT_SEND_CORE_ASYNC(sendVt, rawLease);
+
+        static async ValueTask AWAIT_SEND_CORE_ASYNC(ValueTask vt, BufferLease lease)
+        {
+            try
+            {
+                await vt.ConfigureAwait(false);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
         }
     }
 

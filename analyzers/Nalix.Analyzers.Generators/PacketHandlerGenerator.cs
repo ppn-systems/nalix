@@ -55,6 +55,17 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
         }
     }
 
+    public enum HandlerReturnKind
+    {
+        Void,
+        NonGenericValueTask,
+        GenericValueTask,
+        NonGenericTask,
+        GenericTask,
+        AsyncEnumerable,
+        SyncValue
+    }
+
     public readonly struct HandlerMethodModel : IEquatable<HandlerMethodModel>
     {
         public string MethodName { get; }
@@ -68,13 +79,14 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
         public bool ReturnsTaskOrValueTask { get; }
         public bool ReturnsVoid { get; }
         public bool ReturnsAsyncEnumerable { get; }
+        public HandlerReturnKind ReturnKind { get; }
         public ImmutableArray<ScopeParameterModel> ScopeParameters { get; }
 
         public HandlerMethodModel(
             string methodName, bool isStatic, ushort opcodeVal, string returnTypeStr,
             string expectedPacketTypeStr, bool isGenericContext, string? packetTypeStr,
             string metadataExpr, bool returnsTaskOrValueTask, bool returnsVoid,
-            bool returnsAsyncEnumerable,
+            bool returnsAsyncEnumerable, HandlerReturnKind returnKind,
             ImmutableArray<ScopeParameterModel> scopeParameters)
         {
             this.MethodName = methodName;
@@ -88,6 +100,7 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             this.ReturnsTaskOrValueTask = returnsTaskOrValueTask;
             this.ReturnsVoid = returnsVoid;
             this.ReturnsAsyncEnumerable = returnsAsyncEnumerable;
+            this.ReturnKind = returnKind;
             this.ScopeParameters = scopeParameters;
         }
 
@@ -103,6 +116,7 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             this.ReturnsTaskOrValueTask == other.ReturnsTaskOrValueTask &&
             this.ReturnsVoid == other.ReturnsVoid &&
             this.ReturnsAsyncEnumerable == other.ReturnsAsyncEnumerable &&
+            this.ReturnKind == other.ReturnKind &&
             Internal.ModelEquality.SequenceEqual(this.ScopeParameters, other.ScopeParameters);
 
         public override bool Equals(object obj) => obj is HandlerMethodModel other && this.Equals(other);
@@ -123,6 +137,7 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 hash = (hash * 23) + this.ReturnsTaskOrValueTask.GetHashCode();
                 hash = (hash * 23) + this.ReturnsVoid.GetHashCode();
                 hash = (hash * 23) + this.ReturnsAsyncEnumerable.GetHashCode();
+                hash = (hash * 23) + this.ReturnKind.GetHashCode();
                 if (!this.ScopeParameters.IsDefaultOrEmpty)
                 {
                     foreach (ScopeParameterModel p in this.ScopeParameters)
@@ -360,27 +375,56 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 : "null";
 
             string returnTypeStr = method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            bool returnsVoid = returnTypeStr == "void";
+            bool returnsVoid = method.ReturnsVoid || returnTypeStr == "void";
             bool returnsTaskOrValueTask = false;
 
-            if (method.ReturnType.Name is "ValueTask" or "Task" && method.ReturnType is INamedTypeSymbol namedRet && !namedRet.IsGenericType)
+            HandlerReturnKind returnKind;
+            if (returnsVoid)
             {
-                returnsTaskOrValueTask = true;
+                returnKind = HandlerReturnKind.Void;
             }
-            else if (method.ReturnType.Name is "ValueTask" or "Task")
+            else if (method.ReturnType is INamedTypeSymbol nts &&
+                     (nts.ContainingNamespace?.ToDisplayString() == "System.Threading.Tasks" ||
+                      nts.ToDisplayString().StartsWith("global::System.Threading.Tasks.") ||
+                      nts.ToDisplayString().StartsWith("System.Threading.Tasks.")))
             {
-                // Returns Task<T> or ValueTask<T>, we must await and return result, handled dynamically later but NeedsAwait is true
-                // We'll just rely on the fact it isn't void.
+                if (nts.Name == "ValueTask")
+                {
+                    returnKind = nts.IsGenericType ? HandlerReturnKind.GenericValueTask : HandlerReturnKind.NonGenericValueTask;
+                    if (!nts.IsGenericType)
+                    {
+                        returnsTaskOrValueTask = true;
+                    }
+                }
+                else if (nts.Name == "Task")
+                {
+                    returnKind = nts.IsGenericType ? HandlerReturnKind.GenericTask : HandlerReturnKind.NonGenericTask;
+                    if (!nts.IsGenericType)
+                    {
+                        returnsTaskOrValueTask = true;
+                    }
+                }
+                else
+                {
+                    returnKind = HandlerReturnKind.SyncValue;
+                }
+            }
+            else if (method.ReturnType is INamedTypeSymbol namedEnumerable &&
+                     namedEnumerable.IsGenericType &&
+                     namedEnumerable.Name == "IAsyncEnumerable")
+            {
+                returnKind = HandlerReturnKind.AsyncEnumerable;
+            }
+            else
+            {
+                returnKind = HandlerReturnKind.SyncValue;
             }
 
             // #391: a handler that returns IAsyncEnumerable<T> runs its body lazily — nothing in it
             // executes until the first MoveNextAsync — so a bridge (concrete-typed) context must stay
             // rented until the whole stream is consumed or disposed, not just until this method call
             // returns the (not-yet-started) enumerable object. See PacketContextBridge.WrapStream.
-            bool returnsAsyncEnumerable =
-                method.ReturnType is INamedTypeSymbol namedEnumerable &&
-                namedEnumerable.IsGenericType &&
-                namedEnumerable.Name == "IAsyncEnumerable";
+            bool returnsAsyncEnumerable = returnKind == HandlerReturnKind.AsyncEnumerable;
 
             string metadataExpr = EmitMetadataExpression(method, opcodeVal);
 
@@ -396,6 +440,7 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 returnsTaskOrValueTask: returnsTaskOrValueTask,
                 returnsVoid: returnsVoid,
                 returnsAsyncEnumerable: returnsAsyncEnumerable,
+                returnKind: returnKind,
                 scopeParameters: scopeParams.ToImmutable()
             ));
         }
@@ -521,34 +566,21 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             _ = sb.AppendLine($"            returnType: typeof({method.ReturnTypeStr}),");
             _ = sb.AppendLine($"            expectedPacketType: {method.ExpectedPacketTypeStr},");
 
-            _ = sb.AppendLine($"            invoker: static async (instance, context) =>");
+            _ = sb.AppendLine($"            invoker: static (instance, context) =>");
             _ = sb.AppendLine($"            {{");
 
             string instanceCast = method.IsStatic ? "" : $"(({controller.FullyQualifiedName})instance!).";
             string typeCall = method.IsStatic ? $"{controller.FullyQualifiedName}." : instanceCast;
             string contextCast;
-            bool needsBridgeCleanup = false;
 
-            // #391: an IAsyncEnumerable<T>-returning handler runs its body lazily, so a synchronous
-            // try/finally around the call (the branch below) would return the bridge context to the
-            // pool before the handler has read anything from it — see PacketContextBridge.WrapStream
-            // for the full failure mode. Such handlers keep the context alive via WrapStream instead,
-            // so they get no try/finally here at all.
-            bool isBridgedStream = method.IsGenericContext && method.PacketTypeStr != null && method.ReturnsAsyncEnumerable;
+            bool isBridged = method.IsGenericContext && method.PacketTypeStr != null;
 
-            if (method.IsGenericContext && method.PacketTypeStr != null)
+            if (isBridged)
             {
                 _ = sb.AppendLine($"                var concretePacket = ({method.PacketTypeStr})(object)context.Packet;");
                 _ = sb.AppendLine($"                var concreteContext = global::Nalix.Runtime.Dispatching.PacketContextBridge.Create<{method.PacketTypeStr}, TPacket>(");
                 _ = sb.AppendLine($"                    (global::Nalix.Runtime.Dispatching.PacketContext<TPacket>)context, concretePacket);");
                 contextCast = "concreteContext";
-
-                if (!isBridgedStream)
-                {
-                    _ = sb.AppendLine($"                try");
-                    _ = sb.AppendLine($"                {{");
-                    needsBridgeCleanup = true;
-                }
             }
             else
             {
@@ -576,42 +608,390 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
 
             string invocationArgs = string.Join(", ", callArgs);
 
-            if (method.ReturnsVoid)
+            switch (method.ReturnKind)
             {
-                _ = sb.AppendLine($"                    {typeCall}{method.MethodName}({invocationArgs});");
-                _ = sb.AppendLine($"                    return null;");
-            }
-            else if (method.ReturnsTaskOrValueTask)
-            {
-                _ = sb.AppendLine($"                    await {typeCall}{method.MethodName}({invocationArgs});");
-                _ = sb.AppendLine($"                    return null;");
-            }
-            else if (isBridgedStream)
-            {
-                // #391: keep concreteContext rented for the whole enumeration instead of returning it
-                // the instant this (lazy, not-yet-started) enumerable object is constructed.
-                _ = sb.AppendLine($"                    return global::Nalix.Runtime.Dispatching.PacketContextBridge.WrapStream(");
-                _ = sb.AppendLine($"                        {typeCall}{method.MethodName}({invocationArgs}), concreteContext);");
-            }
-            else
-            {
-                if (method.ReturnTypeStr.Contains("System.Threading.Tasks.Task") || method.ReturnTypeStr.Contains("System.Threading.Tasks.ValueTask"))
-                {
-                    _ = sb.AppendLine($"                    return await {typeCall}{method.MethodName}({invocationArgs});");
-                }
-                else
-                {
-                    _ = sb.AppendLine($"                    return {typeCall}{method.MethodName}({invocationArgs});");
-                }
-            }
+                case HandlerReturnKind.Void:
+                    if (isBridged)
+                    {
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                    return default;");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                finally");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    else
+                    {
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                    return default;");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    break;
 
-            if (needsBridgeCleanup)
-            {
-                _ = sb.AppendLine($"                }}");
-                _ = sb.AppendLine($"                finally");
-                _ = sb.AppendLine($"                {{");
-                _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
-                _ = sb.AppendLine($"                }}");
+                case HandlerReturnKind.NonGenericValueTask:
+                    if (isBridged)
+                    {
+                        _ = sb.AppendLine($"                global::System.Threading.Tasks.ValueTask __vt;");
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    __vt = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                if (__vt.IsCompletedSuccessfully)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        __vt.GetAwaiter().GetResult();");
+                        _ = sb.AppendLine($"                        return default;");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    finally");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                return __AwaitAsync(__vt, concreteContext);");
+                        _ = sb.AppendLine();
+                        _ = sb.AppendLine($"                static async global::System.Threading.Tasks.ValueTask<object?> __AwaitAsync(");
+                        _ = sb.AppendLine($"                    global::System.Threading.Tasks.ValueTask vt,");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContext<{method.PacketTypeStr}> ctx)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        await vt;");
+                        _ = sb.AppendLine($"                        return null;");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    finally");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(ctx);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    else
+                    {
+                        _ = sb.AppendLine($"                global::System.Threading.Tasks.ValueTask __vt;");
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    __vt = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                if (__vt.IsCompletedSuccessfully)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        __vt.GetAwaiter().GetResult();");
+                        _ = sb.AppendLine($"                        return default;");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                return __AwaitAsync(__vt);");
+                        _ = sb.AppendLine();
+                        _ = sb.AppendLine($"                static async global::System.Threading.Tasks.ValueTask<object?> __AwaitAsync(global::System.Threading.Tasks.ValueTask vt)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    await vt;");
+                        _ = sb.AppendLine($"                    return null;");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    break;
+
+                case HandlerReturnKind.GenericValueTask:
+                    if (isBridged)
+                    {
+                        _ = sb.AppendLine($"                {method.ReturnTypeStr} __vt;");
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    __vt = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                if (__vt.IsCompletedSuccessfully)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return new global::System.Threading.Tasks.ValueTask<object?>(__vt.Result);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    finally");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                return __AwaitAsync(__vt, concreteContext);");
+                        _ = sb.AppendLine();
+                        _ = sb.AppendLine($"                static async global::System.Threading.Tasks.ValueTask<object?> __AwaitAsync(");
+                        _ = sb.AppendLine($"                    {method.ReturnTypeStr} vt,");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContext<{method.PacketTypeStr}> ctx)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return await vt;");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    finally");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(ctx);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    else
+                    {
+                        _ = sb.AppendLine($"                {method.ReturnTypeStr} __vt;");
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    __vt = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                if (__vt.IsCompletedSuccessfully)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return new global::System.Threading.Tasks.ValueTask<object?>(__vt.Result);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                return __AwaitAsync(__vt);");
+                        _ = sb.AppendLine();
+                        _ = sb.AppendLine($"                static async global::System.Threading.Tasks.ValueTask<object?> __AwaitAsync({method.ReturnTypeStr} vt)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return await vt;");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    break;
+
+                case HandlerReturnKind.NonGenericTask:
+                    if (isBridged)
+                    {
+                        _ = sb.AppendLine($"                global::System.Threading.Tasks.Task __task;");
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    __task = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                if (__task.IsCompletedSuccessfully)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    return default;");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                return __AwaitAsync(__task, concreteContext);");
+                        _ = sb.AppendLine();
+                        _ = sb.AppendLine($"                static async global::System.Threading.Tasks.ValueTask<object?> __AwaitAsync(");
+                        _ = sb.AppendLine($"                    global::System.Threading.Tasks.Task task,");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContext<{method.PacketTypeStr}> ctx)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        await task;");
+                        _ = sb.AppendLine($"                        return null;");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    finally");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(ctx);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    else
+                    {
+                        _ = sb.AppendLine($"                global::System.Threading.Tasks.Task __task;");
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    __task = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                if (__task.IsCompletedSuccessfully)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return default;");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                return __AwaitAsync(__task);");
+                        _ = sb.AppendLine();
+                        _ = sb.AppendLine($"                static async global::System.Threading.Tasks.ValueTask<object?> __AwaitAsync(global::System.Threading.Tasks.Task task)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    await task;");
+                        _ = sb.AppendLine($"                    return null;");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    break;
+
+                case HandlerReturnKind.GenericTask:
+                    if (isBridged)
+                    {
+                        _ = sb.AppendLine($"                {method.ReturnTypeStr} __task;");
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    __task = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                if (__task.IsCompletedSuccessfully)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return new global::System.Threading.Tasks.ValueTask<object?>(__task.Result);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    finally");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                return __AwaitAsync(__task, concreteContext);");
+                        _ = sb.AppendLine();
+                        _ = sb.AppendLine($"                static async global::System.Threading.Tasks.ValueTask<object?> __AwaitAsync(");
+                        _ = sb.AppendLine($"                    {method.ReturnTypeStr} task,");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContext<{method.PacketTypeStr}> ctx)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return await task;");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    finally");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(ctx);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    else
+                    {
+                        _ = sb.AppendLine($"                {method.ReturnTypeStr} __task;");
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    __task = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                if (__task.IsCompletedSuccessfully)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    try");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return new global::System.Threading.Tasks.ValueTask<object?>(__task.Result);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                    catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                    {{");
+                        _ = sb.AppendLine($"                        return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                    }}");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                return __AwaitAsync(__task);");
+                        _ = sb.AppendLine();
+                        _ = sb.AppendLine($"                static async global::System.Threading.Tasks.ValueTask<object?> __AwaitAsync({method.ReturnTypeStr} task)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return await task;");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    break;
+
+                case HandlerReturnKind.AsyncEnumerable:
+                    if (isBridged)
+                    {
+                        // #391: keep concreteContext rented for the whole enumeration instead of returning it
+                        // the instant this (lazy, not-yet-started) enumerable object is constructed.
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    var __stream = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                    var __wrapped = global::Nalix.Runtime.Dispatching.PacketContextBridge.WrapStream(__stream, concreteContext);");
+                        _ = sb.AppendLine($"                    return new global::System.Threading.Tasks.ValueTask<object?>(__wrapped);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    else
+                    {
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    var __stream = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                    return new global::System.Threading.Tasks.ValueTask<object?>(__stream);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    break;
+
+                case HandlerReturnKind.SyncValue:
+                default:
+                    if (isBridged)
+                    {
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    var __res = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                    return new global::System.Threading.Tasks.ValueTask<object?>(__res);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                finally");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    global::Nalix.Runtime.Dispatching.PacketContextBridge.Return(concreteContext);");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    else
+                    {
+                        _ = sb.AppendLine($"                try");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    var __res = {typeCall}{method.MethodName}({invocationArgs});");
+                        _ = sb.AppendLine($"                    return new global::System.Threading.Tasks.ValueTask<object?>(__res);");
+                        _ = sb.AppendLine($"                }}");
+                        _ = sb.AppendLine($"                catch (global::System.Exception ex)");
+                        _ = sb.AppendLine($"                {{");
+                        _ = sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromException<object?>(ex);");
+                        _ = sb.AppendLine($"                }}");
+                    }
+                    break;
             }
 
             _ = sb.AppendLine($"            }});");
