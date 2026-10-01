@@ -25,20 +25,17 @@ public class PacketRegistryBenchmarks
 {
     private const ushort BenchmarkOpCode = 0x7F01;
 
+    private static readonly StubPacket s_stubInstance = new();
     private byte[] _rawBytes = null!;
 
     /// <summary>Smallest packet the registry will accept, carrying nothing but its header.</summary>
-    private readonly struct StubPacket(PacketHeader header) : IPacket, IPacketStaticOpcode
+    private sealed class StubPacket : IPacket, IPacketStaticOpcode
     {
         public static ushort StaticOpCode => BenchmarkOpCode;
 
         public int Length => PacketConstants.HeaderSize;
 
-        public PacketHeader Header
-        {
-            get => header;
-            set => throw new NotSupportedException("StubPacket header is read-only.");
-        }
+        public PacketHeader Header { get; set; }
 
         public byte[] Serialize() => [];
 
@@ -52,7 +49,11 @@ public class PacketRegistryBenchmarks
         {
             PacketRegistry.RegisterGenerated<StubPacket>(
                 nameof(StubPacket),
-                static raw => new StubPacket(MemoryMarshal.Read<PacketHeader>(raw[..PacketConstants.HeaderSize])));
+                static raw =>
+                {
+                    s_stubInstance.Header = MemoryMarshal.Read<PacketHeader>(raw[..PacketConstants.HeaderSize]);
+                    return s_stubInstance;
+                });
 
             PacketRegistry.Build();
         }
