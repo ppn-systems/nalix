@@ -17,6 +17,7 @@ using Nalix.Abstractions.Security;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Extensions;
 using Nalix.Framework.Injection;
+using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Options;
 
@@ -41,6 +42,29 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
     #endregion Constants
 
     #region Fields
+
+    private static ObjectPoolManager? s_pool;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ObjectPoolManager? GetPool()
+    {
+        ObjectPoolManager? pool = Volatile.Read(ref s_pool);
+        if (pool is not null)
+        {
+            return pool;
+        }
+
+        try
+        {
+            pool = ObjectPoolManager.Shared;
+            Volatile.Write(ref s_pool, pool);
+            return pool;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
 
     private readonly DropPolicy _dropPolicy;
     private readonly DispatchOptions _options;
@@ -287,7 +311,10 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             // Claim succeeded — return an exclusive session.
             // The connection is NOT re-enqueued here; that happens when the
             // session is disposed (via Release) if packets remain.
-            session = new DispatchSession(state, this);
+            ObjectPoolManager? pool = GetPool();
+            DispatchSession sessionInstance = pool is not null ? pool.Get<DispatchSession>() : new DispatchSession();
+            sessionInstance.Initialize(state, this, pool);
+            session = sessionInstance;
             return true;
         }
 
@@ -916,23 +943,36 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
     /// Grants exclusive processing rights over a single connection's mailbox.
     /// While the session is active, only the holder may dequeue packets from
     /// the underlying connection, guaranteeing strict in-order delivery.
+    /// Instances are pooled via ObjectPoolManager to avoid per-claim heap allocations.
     /// </summary>
     [SkipLocalsInit]
-    private struct DispatchSession : IDispatchSession
+    private sealed class DispatchSession : IDispatchSession, IPoolable
     {
-        private readonly ConnectionState _state;
-        private readonly DispatchChannel<TPacket> _owner;
+        private ConnectionState? _state;
+        private DispatchChannel<TPacket>? _owner;
+        private ObjectPoolManager? _originPool;
         private int _disposed;
 
-        public DispatchSession(ConnectionState state, DispatchChannel<TPacket> owner)
+        /// <inheritdoc/>
+        public IConnection Connection => _state!.Connection;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Initialize(ConnectionState state, DispatchChannel<TPacket> owner, ObjectPoolManager? pool)
         {
             _state = state;
             _owner = owner;
+            _originPool = pool;
             _disposed = 0;
         }
 
-        /// <inheritdoc/>
-        public readonly IConnection Connection => _state.Connection;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ResetForPool()
+        {
+            _state = null;
+            _owner = null;
+            _originPool = null;
+            _disposed = 0;
+        }
 
         /// <inheritdoc/>
         [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
@@ -944,8 +984,8 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
                 return false;
             }
 
-            ConnectionState state = _state;
-            if (!state.IsActive || state.TotalCount <= 0)
+            ConnectionState? state = _state;
+            if (state is null || !state.IsActive || state.TotalCount <= 0)
             {
                 raw = null!;
                 return false;
@@ -954,7 +994,7 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             if (TryDequeueHighest(state, out raw, out int dequeuedFrom))
             {
                 _ = state.OnDequeued(dequeuedFrom);
-                DecrementNonNegative(ref _owner._packetCount.Value);
+                DecrementNonNegative(ref _owner!._packetCount.Value);
                 return true;
             }
 
@@ -975,7 +1015,16 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
                 return;
             }
 
-            _owner.Release(_state);
+            DispatchChannel<TPacket>? owner = _owner;
+            ConnectionState? state = _state;
+            ObjectPoolManager? pool = _originPool;
+
+            if (owner is not null && state is not null)
+            {
+                owner.Release(state);
+            }
+
+            pool?.Return(this);
         }
     }
 

@@ -486,6 +486,7 @@ public sealed class PacketDispatchChannel
             {
                 int processed = 0;
 
+#pragma warning disable CA2000
                 if (_dispatch.TryClaim(out IDispatchSession? session))
                 {
                     // More connections are waiting to be claimed: hand one to a parked worker
@@ -497,7 +498,6 @@ public sealed class PacketDispatchChannel
 
                     try
                     {
-#pragma warning disable CA2000
                         /*
                          * [The Hot Loop: Draining a Claimed Connection]
                          * We drain up to _maxDrainPerWake packets from a single
