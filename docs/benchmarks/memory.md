@@ -10,28 +10,28 @@ Comparison of memory acquisition strategies across various sizes (64 B, 1 KB, an
 
 | Method | Mean | Error | StdDev | P95 | Ratio | Allocated | Alloc Ratio |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **RawAllocation** | **12.621 ns** | 0.8303 ns | 0.9562 ns | 13.511 ns | 1.01 | 88 B | 1.00 |
-| **ArrayPool_Shared** | **6.651 ns** | 0.0902 ns | 0.1039 ns | 6.830 ns | 0.53 | 0 B | 0.00 |
-| **BufferPoolManager_RentReturn** | **24.164 ns** | 0.0915 ns | 0.0979 ns | 24.316 ns | 1.93 | 0 B | 0.00 |
-| **BufferLease_RentDispose** | **41.924 ns** | 0.3952 ns | 0.4551 ns | 42.584 ns | 3.34 | 0 B | 0.00 |
+| **RawAllocation** | **16.974 ns** | 1.3931 ns | 1.6043 ns | 19.503 ns | 1.01 | 88 B | 1.00 |
+| **ArrayPool_Shared** | **10.824 ns** | 0.3976 ns | 0.4579 ns | 11.244 ns | 0.64 | 0 B | 0.00 |
+| **BufferPoolManager_RentReturn** | **23.905 ns** | 0.6627 ns | 0.7632 ns | 24.545 ns | 1.42 | 0 B | 0.00 |
+| **BufferLease_RentDispose** | **54.052 ns** | 0.5018 ns | 0.5778 ns | 54.617 ns | 3.21 | 0 B | 0.00 |
 
 ### Buffer Allocation Metrics (Size = 1024)
 
 | Method | Mean | Error | StdDev | P95 | Ratio | Allocated | Alloc Ratio |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **RawAllocation** | **106.740 ns** | 4.1566 ns | 4.7868 ns | 111.626 ns | 1.00 | 1048 B | 1.00 |
-| **ArrayPool_Shared** | **6.674 ns** | 0.1748 ns | 0.2013 ns | 6.949 ns | 0.06 | 0 B | 0.00 |
-| **BufferPoolManager_RentReturn** | **24.385 ns** | 0.3877 ns | 0.4464 ns | 25.064 ns | 0.23 | 0 B | 0.00 |
-| **BufferLease_RentDispose** | **43.809 ns** | 0.8965 ns | 1.0324 ns | 45.152 ns | 0.41 | 0 B | 0.00 |
+| **RawAllocation** | **159.487 ns** | 29.9061 ns | 34.4399 ns | 194.306 ns | 1.06 | 1048 B | 1.00 |
+| **ArrayPool_Shared** | **6.406 ns** | 0.0902 ns | 0.1039 ns | 6.556 ns | 0.04 | 0 B | 0.00 |
+| **BufferPoolManager_RentReturn** | **24.173 ns** | 0.4341 ns | 0.4999 ns | 24.471 ns | 0.16 | 0 B | 0.00 |
+| **BufferLease_RentDispose** | **62.729 ns** | 1.1419 ns | 1.3150 ns | 63.688 ns | 0.42 | 0 B | 0.00 |
 
 ### Buffer Allocation Metrics (Size = 16384)
 
 | Method | Mean | Error | StdDev | P95 | Ratio | Allocated | Alloc Ratio |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **RawAllocation** | **1,502.927 ns** | 98.8369 ns | 113.8207 ns | 1,596.779 ns | 1.006 | 16408 B | 1.00 |
-| **ArrayPool_Shared** | **6.626 ns** | 0.1032 ns | 0.1147 ns | 6.859 ns | 0.004 | 0 B | 0.00 |
-| **BufferPoolManager_RentReturn** | **24.543 ns** | 0.2909 ns | 0.2987 ns | 25.069 ns | 0.016 | 0 B | 0.00 |
-| **BufferLease_RentDispose** | **106.207 ns** | 0.4275 ns | 0.4752 ns | 106.834 ns | 0.071 | 0 B | 0.00 |
+| **RawAllocation** | **2,608.051 ns** | 452.9858 ns | 521.6591 ns | 3,035.733 ns | 1.062 | 16408 B | 1.00 |
+| **ArrayPool_Shared** | **10.496 ns** | 0.8494 ns | 0.9782 ns | 11.159 ns | 0.004 | 0 B | 0.00 |
+| **BufferPoolManager_RentReturn** | **23.769 ns** | 0.6516 ns | 0.7504 ns | 24.451 ns | 0.010 | 0 B | 0.00 |
+| **BufferLease_RentDispose** | **53.938 ns** | 1.3191 ns | 1.5190 ns | 54.873 ns | 0.022 | 0 B | 0.00 |
 
 ### Why Nalix Memory?
 
@@ -49,8 +49,8 @@ Memory metrics for reusing class instances via object pools.
 
 | Method | Mean | Error | StdDev | P95 | Ratio | Allocated | Alloc Ratio |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **RawAllocation** | **5.817 ns** | 0.1946 ns | 0.2083 ns | 6.012 ns | 1.00 | 32 B | 1.00 |
-| **RentAndReturn_ObjectPool** | **22.817 ns** | 0.3043 ns | 0.3504 ns | 23.398 ns | 3.93 | 0 B | 0.00 |
+| **RawAllocation** | **8.016 ns** | 0.4384 ns | 0.5049 ns | 8.474 ns | 1.00 | 32 B | 1.00 |
+| **RentAndReturn_ObjectPool** | **157.624 ns** | 5.2398 ns | 6.0342 ns | 161.363 ns | 19.74 | 0 B | 0.00 |
 
 ### Behind the design
 

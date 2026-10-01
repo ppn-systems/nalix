@@ -28,6 +28,8 @@ public class TokenBucketLimiterBenchmarks
     [GlobalSetup]
     public void Setup()
     {
+        try { Nalix.Framework.Memory.Objects.ObjectPoolManager.Configure(new Nalix.Framework.Memory.Objects.ObjectPoolManager()); } catch (InvalidOperationException) { }
+
         var options = ConfigurationManager.Instance.Get<TokenBucketOptions>();
         options.CapacityTokens = 1000000;
         options.RefillTokensPerSecond = 1000000;

@@ -125,6 +125,8 @@ public class PolicyRateLimiterBenchmarks
     [GlobalSetup]
     public void Setup()
     {
+        try { Nalix.Framework.Memory.Objects.ObjectPoolManager.Configure(new Nalix.Framework.Memory.Objects.ObjectPoolManager()); } catch (InvalidOperationException) { }
+
         _limiter = new PolicyRateLimiter();
         _connection = new BenchmarkConnection();
         var rateLimit = new PacketRateLimitAttribute(1000000, 1000000);

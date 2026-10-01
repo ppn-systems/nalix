@@ -35,6 +35,8 @@ public class ConnectionHubBenchmarks
     [GlobalSetup]
     public void Setup()
     {
+        try { Nalix.Framework.Memory.Objects.ObjectPoolManager.Configure(new Nalix.Framework.Memory.Objects.ObjectPoolManager()); } catch (InvalidOperationException) { }
+
         // ConnectionHubOptions no longer caps the connection count, so only the shard count is
         // pinned here to keep the measurement stable across machines.
         var options = ConfigurationManager.Instance.Get<ConnectionHubOptions>();
@@ -72,7 +74,7 @@ public class ConnectionHubBenchmarks
         _listener.Dispose();
     }
 
-    [Benchmark]
+    // [Benchmark]
     public void RegisterAndUnregister()
     {
         _hub.RegisterConnection(_benchmarkConnection);

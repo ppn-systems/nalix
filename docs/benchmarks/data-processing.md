@@ -8,41 +8,41 @@ The frame pipeline handles end-to-end outbound serialization (compression + encr
 
 ### Pipeline Performance (Payload Size = 64)
 
-| Method | PayloadSize | Mean | Error | StdDev | Gen0 | Allocated |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: |
-| **ProcessOutbound_CompressOnly** | 64 | **208.4 ns** | 1.71 ns | 1.97 ns | 0.0062 | 232 B |
-| **ProcessOutbound_EncryptOnly** | 64 | **1,200.1 ns** | 10.70 ns | 11.45 ns | 0.0057 | 232 B |
-| **ProcessOutbound_Full** | 64 | **1,462.2 ns** | 14.12 ns | 15.69 ns | 0.0057 | 232 B |
-| **ProcessInbound_DecompressOnly** | 64 | **252.2 ns** | 1.47 ns | 1.63 ns | 0.0114 | 432 B |
-| **ProcessInbound_DecryptOnly** | 64 | **2,366.2 ns** | 27.10 ns | 31.21 ns | 0.0114 | 432 B |
-| **ProcessInbound_Full** | 64 | **3,142.8 ns** | 20.47 ns | 23.58 ns | 0.0153 | 592 B |
+| Method | PayloadSize | Mean | Error | StdDev | P95 | Gen0 | Allocated |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **ProcessOutbound_CompressOnly** | 64 | **172.0 ns** | 1.21 ns | 1.40 ns | 173.7 ns | - | 0 B |
+| **ProcessOutbound_EncryptOnly** | 64 | **571.1 ns** | 3.56 ns | 3.96 ns | 575.9 ns | 0.0048 | 208 B |
+| **ProcessOutbound_Full** | 64 | **698.7 ns** | 4.84 ns | 5.58 ns | 707.0 ns | 0.0048 | 208 B |
+| **ProcessInbound_DecompressOnly** | 64 | **172.0 ns** | 1.84 ns | 2.12 ns | 174.9 ns | - | 0 B |
+| **ProcessInbound_DecryptOnly** | 64 | **1,160.3 ns** | 8.00 ns | 9.21 ns | 1,173.9 ns | 0.0095 | 416 B |
+| **ProcessInbound_Full** | 64 | **1,287.7 ns** | 8.90 ns | 9.53 ns | 1,300.5 ns | 0.0134 | 544 B |
 
 ### Pipeline Performance (Payload Size = 512)
 
-| Method | PayloadSize | Mean | Error | StdDev | Gen0 | Allocated |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: |
-| **ProcessOutbound_CompressOnly** | 512 | **1,138.3 ns** | 23.68 ns | 27.27 ns | 0.0286 | 1128 B |
-| **ProcessOutbound_EncryptOnly** | 512 | **3,866.7 ns** | 20.45 ns | 23.55 ns | 0.0229 | 1128 B |
-| **ProcessOutbound_Full** | 512 | **5,067.3 ns** | 29.35 ns | 32.62 ns | 0.0229 | 1128 B |
-| **ProcessInbound_DecompressOnly** | 512 | **1,272.2 ns** | 8.71 ns | 10.03 ns | 0.0591 | 2224 B |
-| **ProcessInbound_DecryptOnly** | 512 | **7,695.9 ns** | 44.03 ns | 50.71 ns | 0.0534 | 2224 B |
-| **ProcessInbound_Full** | 512 | **9,645.8 ns** | 60.95 ns | 67.75 ns | 0.0763 | 3280 B |
+| Method | PayloadSize | Mean | Error | StdDev | P95 | Gen0 | Allocated |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **ProcessOutbound_CompressOnly** | 512 | **441.0 ns** | 3.56 ns | 4.09 ns | 447.8 ns | - | 0 B |
+| **ProcessOutbound_EncryptOnly** | 512 | **1,177.2 ns** | 7.53 ns | 8.67 ns | 1,192.2 ns | 0.0286 | 1104 B |
+| **ProcessOutbound_Full** | 512 | **1,530.4 ns** | 9.24 ns | 10.64 ns | 1,544.5 ns | 0.0286 | 1104 B |
+| **ProcessInbound_DecompressOnly** | 512 | **443.6 ns** | 4.05 ns | 4.50 ns | 450.5 ns | - | 0 B |
+| **ProcessInbound_DecryptOnly** | 512 | **2,324.8 ns** | 17.66 ns | 19.63 ns | 2,352.5 ns | 0.0572 | 2208 B |
+| **ProcessInbound_Full** | 512 | **2,858.6 ns** | 24.84 ns | 28.60 ns | 2,904.0 ns | 0.0839 | 3232 B |
 
 ### Pipeline Performance (Payload Size = 4096)
 
-| Method | PayloadSize | Mean | Error | StdDev | Gen0 | Gen1 | Allocated |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **ProcessOutbound_CompressOnly** | 4096 | **8,552.0 ns** | 51.84 ns | 59.70 ns | 0.2289 | - | 8296 B |
-| **ProcessOutbound_EncryptOnly** | 4096 | **25,985.8 ns** | 225.22 ns | 259.37 ns | 0.2136 | - | 8296 B |
-| **ProcessOutbound_Full** | 4096 | **43,367.5 ns** | 12,069.43 ns | 13,899.17 ns | 0.1831 | - | 8296 B |
-| **ProcessInbound_DecompressOnly** | 4096 | **14,000.2 ns** | 1,650.64 ns | 1,695.08 ns | 2.3651 | 0.0610 | 16560 B |
-| **ProcessInbound_DecryptOnly** | 4096 | **97,138.0 ns** | 5,849.07 ns | 6,735.79 ns | 0.4272 | - | 16560 B |
-| **ProcessInbound_Full** | 4096 | **114,865.6 ns** | 8,360.09 ns | 9,627.49 ns | 0.6104 | - | 24784 B |
+| Method | PayloadSize | Mean | Error | StdDev | P95 | Gen0 | Gen1 | Allocated |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **ProcessOutbound_CompressOnly** | 4096 | **1,182.0 ns** | 8.85 ns | 10.19 ns | 1,197.1 ns | - | - | 0 B |
+| **ProcessOutbound_EncryptOnly** | 4096 | **6,172.2 ns** | 40.13 ns | 44.60 ns | 6,228.2 ns | 0.2365 | 0.0076 | 8272 B |
+| **ProcessOutbound_Full** | 4096 | **7,304.3 ns** | 51.40 ns | 57.13 ns | 7,383.6 ns | 0.2365 | - | 8272 B |
+| **ProcessInbound_DecompressOnly** | 4096 | **1,205.0 ns** | 7.17 ns | 7.97 ns | 1,215.2 ns | - | - | 0 B |
+| **ProcessInbound_DecryptOnly** | 4096 | **12,472.2 ns** | 98.50 ns | 113.43 ns | 12,648.5 ns | 0.4730 | 0.0153 | 16544 B |
+| **ProcessInbound_Full** | 4096 | **14,019.7 ns** | 72.64 ns | 83.65 ns | 14,148.0 ns | 0.6866 | 0.0305 | 24736 B |
 
 ### Behind the design
 
 - **Linear Scaling**: Latency scales predictably relative to the payload size.
-- **Pipelined Execution**: Outbound processing streams data directly, enabling single-digit microsecond framing for common payload sizes (e.g. 5.06 μs for a 512B payload).
+- **Pipelined Execution**: Outbound processing streams data directly, enabling sub-microsecond to low-microsecond framing for common payload sizes (e.g. 1.53 μs for a 512B payload).
 
 ---
 
@@ -52,36 +52,36 @@ Individual pipeline transformers handle compression/decompression and encryption
 
 ### Transformer Performance (Payload Size = 64)
 
-| Method | PayloadSize | Mean | Error | StdDev | P95 | Gen0 | Allocated |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Encrypt_AEAD_ChaCha20Poly1305** | 64 | **2,269.9 ns** | 159.82 ns | 177.64 ns | 2,466.2 ns | - | 64 B |
-| **Decrypt_AEAD_ChaCha20Poly1305** | 64 | **4,573.8 ns** | 168.75 ns | 194.33 ns | 4,846.7 ns | 0.0038 | 96 B |
-| **Encrypt_AEAD_Salsa20Poly1305** | 64 | **1,611.5 ns** | 56.27 ns | 64.80 ns | 1,691.9 ns | - | 64 B |
-| **Decrypt_AEAD_Salsa20Poly1305** | 64 | **3,068.9 ns** | 227.32 ns | 261.79 ns | 3,291.3 ns | 0.0038 | 96 B |
-| **Encrypt_Symmetric_ChaCha20** | 64 | **1,006.9 ns** | 83.08 ns | 95.68 ns | 1,163.9 ns | 0.0010 | 64 B |
-| **Decrypt_Symmetric_ChaCha20** | 64 | **1,666.3 ns** | 119.77 ns | 137.93 ns | 1,961.5 ns | 0.0019 | 96 B |
-| **Encrypt_Symmetric_Salsa20** | 64 | **594.2 ns** | 17.52 ns | 18.74 ns | 620.0 ns | 0.0024 | 64 B |
-| **Decrypt_Symmetric_Salsa20** | 64 | **1,444.2 ns** | 302.76 ns | 348.66 ns | 2,197.5 ns | 0.0019 | 96 B |
-| **Compress_LZ4** | 64 | **420.8 ns** | 15.55 ns | 17.90 ns | 437.5 ns | 0.0014 | 64 B |
-| **Decompress_LZ4** | 64 | **546.4 ns** | 21.44 ns | 24.69 ns | 577.8 ns | 0.0024 | 96 B |
+| Method | PayloadSize | Mean | Error | StdDev | P95 | Allocated |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: |
+| **Encrypt_AEAD_ChaCha20Poly1305** | 64 | **610.8 ns** | 3.37 ns | 3.74 ns | 616.3 ns | 0 B |
+| **Decrypt_AEAD_ChaCha20Poly1305** | 64 | **1,164.5 ns** | 6.01 ns | 6.92 ns | 1,177.1 ns | 0 B |
+| **Encrypt_AEAD_Salsa20Poly1305** | 64 | **560.2 ns** | 5.67 ns | 6.30 ns | 571.0 ns | 0 B |
+| **Decrypt_AEAD_Salsa20Poly1305** | 64 | **1,062.4 ns** | 5.68 ns | 6.55 ns | 1,070.1 ns | 0 B |
+| **Encrypt_Symmetric_ChaCha20** | 64 | **338.2 ns** | 1.51 ns | 1.61 ns | 340.9 ns | 0 B |
+| **Decrypt_Symmetric_ChaCha20** | 64 | **578.4 ns** | 3.50 ns | 3.74 ns | 584.3 ns | 0 B |
+| **Encrypt_Symmetric_Salsa20** | 64 | **317.7 ns** | 1.98 ns | 2.20 ns | 320.9 ns | 0 B |
+| **Decrypt_Symmetric_Salsa20** | 64 | **537.4 ns** | 4.06 ns | 4.51 ns | 545.0 ns | 0 B |
+| **Compress_LZ4** | 64 | **175.7 ns** | 0.80 ns | 0.92 ns | 176.9 ns | 0 B |
+| **Decompress_LZ4** | 64 | **242.5 ns** | 2.03 ns | 2.34 ns | 245.3 ns | 0 B |
 
 ### Transformer Performance (Payload Size = 1024)
 
 | Method | PayloadSize | Mean | Error | StdDev | P95 | Allocated |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: |
-| **Encrypt_AEAD_ChaCha20Poly1305** | 1024 | **11,988.0 ns** | 312.14 ns | 359.46 ns | 12,406.5 ns | 64 B |
-| **Decrypt_AEAD_ChaCha20Poly1305** | 1024 | **23,855.6 ns** | 849.48 ns | 978.27 ns | 25,185.6 ns | 96 B |
-| **Encrypt_AEAD_Salsa20Poly1305** | 1024 | **9,260.9 ns** | 196.40 ns | 201.69 ns | 9,430.6 ns | 64 B |
-| **Decrypt_AEAD_Salsa20Poly1305** | 1024 | **17,336.5 ns** | 510.60 ns | 588.01 ns | 18,040.1 ns | 96 B |
-| **Encrypt_Symmetric_ChaCha20** | 1024 | **6,997.8 ns** | 585.59 ns | 674.37 ns | 8,219.4 ns | 64 B |
-| **Decrypt_Symmetric_ChaCha20** | 1024 | **14,080.3 ns** | 656.06 ns | 755.52 ns | 15,281.7 ns | 96 B |
-| **Encrypt_Symmetric_Salsa20** | 1024 | **3,575.7 ns** | 80.63 ns | 92.85 ns | 3,693.7 ns | 64 B |
-| **Decrypt_Symmetric_Salsa20** | 1024 | **6,906.9 ns** | 172.10 ns | 198.19 ns | 7,111.3 ns | 96 B |
-| **Compress_LZ4** | 1024 | **3,845.4 ns** | 159.29 ns | 183.44 ns | 4,051.2 ns | 64 B |
-| **Decompress_LZ4** | 1024 | **4,043.7 ns** | 105.77 ns | 121.81 ns | 4,202.6 ns | 96 B |
+| **Encrypt_AEAD_ChaCha20Poly1305** | 1024 | **1,652.3 ns** | 9.13 ns | 10.52 ns | 1,665.8 ns | 0 B |
+| **Decrypt_AEAD_ChaCha20Poly1305** | 1024 | **3,265.3 ns** | 17.39 ns | 19.33 ns | 3,295.6 ns | 0 B |
+| **Encrypt_AEAD_Salsa20Poly1305** | 1024 | **2,760.1 ns** | 37.46 ns | 38.47 ns | 2,830.6 ns | 0 B |
+| **Decrypt_AEAD_Salsa20Poly1305** | 1024 | **5,463.3 ns** | 51.18 ns | 58.94 ns | 5,553.4 ns | 0 B |
+| **Encrypt_Symmetric_ChaCha20** | 1024 | **907.0 ns** | 1.72 ns | 1.77 ns | 909.5 ns | 0 B |
+| **Decrypt_Symmetric_ChaCha20** | 1024 | **1,726.8 ns** | 4.48 ns | 4.97 ns | 1,735.4 ns | 0 B |
+| **Encrypt_Symmetric_Salsa20** | 1024 | **2,020.7 ns** | 8.57 ns | 9.52 ns | 2,033.1 ns | 0 B |
+| **Decrypt_Symmetric_Salsa20** | 1024 | **3,933.9 ns** | 22.79 ns | 26.24 ns | 3,980.6 ns | 0 B |
+| **Compress_LZ4** | 1024 | **608.1 ns** | 4.36 ns | 5.03 ns | 614.5 ns | 0 B |
+| **Decompress_LZ4** | 1024 | **674.4 ns** | 4.64 ns | 5.15 ns | 681.2 ns | 0 B |
 
 ### Why Nalix Data Processing?
 
-- **Zero-Allocation Transforms**: Rather than creating intermediate garbage arrays, encryption and compression operate directly on rentals from `BufferPoolManager` using `Span<byte>`, consuming only minimal tracking object references (~64 B for encryption, ~96 B for decryption).
-- **Stream Cipher Dominance**: Salsa20 performs significantly better than ChaCha20 on standard CPUs, completing symmetric encryption of 1 KB of data in ~3.5 μs compared to ~7 μs for ChaCha20.
-- **LZ4 Inline Compression**: Built-in LZ4 compression integrates seamlessly with the buffer pipeline, performing a 1 KB compression in under 3.9 μs.
+- **Zero-Allocation Transforms**: Rather than creating intermediate garbage arrays, encryption and compression operate directly on rentals from `BufferPoolManager` using `Span<byte>`, consuming 0 B of heap allocation for transformer operations.
+- **Hardware-Friendly Speeds**: Symmetric encryption of 1 KB of data executes in ~900 ns for ChaCha20 and ~2.0 μs for Salsa20.
+- **LZ4 Inline Compression**: Built-in LZ4 compression integrates seamlessly with the buffer pipeline, performing a 1 KB compression in ~608 ns and 64 B compression in under 176 ns.
