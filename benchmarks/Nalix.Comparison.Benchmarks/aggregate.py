@@ -8,7 +8,10 @@ import statistics
 import sys
 from collections import defaultdict
 
-rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+rows = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
 order = []
 for r in rows:
     if r["lib"] not in order:
