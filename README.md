@@ -71,35 +71,34 @@ How Nalix compares with the usual .NET choices for realtime traffic (competitor 
 - You have **polyglot clients** (JavaScript, Go, Python, Java). The only client SDK is .NET; gRPC and SignalR have clients for many languages.
 - You are on **.NET 8/9 or .NET Framework**. Nalix targets .NET 10 only.
 - You are building a **Unity** client. Unity does not run .NET 10, so the SDK cannot be used there today; MagicOnion supports Unity.
-- You need **large encrypted payloads at peak throughput**. For 1 KB encrypted messages gRPC over TLS is faster (see below).
 
 ---
 
 ## 📈 Benchmarks
 
 End-to-end echo over loopback, every framework with its own client, same machine, one single session:
-Windows 11, 13th Gen Intel Core i7-13620H @ 2.40 GHz, .NET 10.0.12 (SDK 10.0.401), Release, median of 3 runs. 32 B payload unless noted.
+Ubuntu 24.04 (4 vCPU Intel Xeon @ 2.10 GHz), .NET 10 (SDK 10.0.401), Release, median of 3 runs. 32 B payload unless noted.
 All 12 frameworks were benchmarked alongside each other in this pass. Raw data and all cells: **[full comparison](docs/benchmarks/network-comparison.md)**.
 
 | Library | p50 latency (µs) | p99 latency (µs) | ops/s, 64 clients | ops/s, 64 clients, 1 KB | server alloc/op (B) | server CPU/op (µs) |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Nalix TCP** | **42.4** | **56.6** | 202,408 | 181,343 | **120** | 47.1 |
-| Nalix WebSocket | 35.8 | 53.2 | 196,343 | 165,686 | 256 | 47.5 |
-| SignalR (WebSocket, MessagePack) | 52.3 | 84.3 | 190,045 | 177,099 | 672 | **33.0** |
-| gRPC bidi stream (h2c) | 49.8 | 74.2 | **206,685** | **215,702** | 264 | 34.7 |
-| gRPC unary (h2c) | 64.2 | 92.3 | 141,999 | 138,950 | 968 | 40.4 |
-| MagicOnion StreamingHub | 58.1 | 108.4 | 195,022 | 161,259 | 200 | 38.8 |
-| MagicOnion unary | 70.4 | 128.7 | 133,060 | 127,583 | 1,432 | 41.7 |
-| *Nalix TCP + X25519/ChaCha20-Poly1305* | **34.6** | **53.2** | 178,881 | 141,161 | **120** | 53.8 |
-| *gRPC bidi stream + TLS* | 58.7 | 80.8 | 196,584 | 158,412 | 525 | 38.8 |
+| **Nalix TCP** | **52.2** | 154.9 | 74,791 | 60,776 | **56** | 29.3 |
+| Nalix WebSocket | 55.5 | 159.6 | 69,135 | 61,438 | 192 | 27.1 |
+| SignalR (WebSocket, MessagePack) | 76.3 | 190.8 | 71,871 | **70,651** | 672 | **21.8** |
+| gRPC bidi stream (h2c) | 68.4 | 167.3 | **77,648** | 68,418 | 264 | 21.9 |
+| gRPC unary (h2c) | 106.4 | 353.5 | 58,059 | 56,864 | 968 | 27.9 |
+| MagicOnion StreamingHub | 74.2 | 173.8 | 67,501 | 58,182 | 200 | 26.3 |
+| MagicOnion unary | 110.2 | 379.6 | 55,721 | 54,752 | 1,432 | 28.5 |
+| *Nalix TCP + X25519/ChaCha20-Poly1305* | 57.6 | **154.3** | 63,309 | 53,345 | **56** | 34.2 |
+| *gRPC bidi stream + TLS* | 100.4 | 282.6 | 57,791 | 49,542 | 812 | 30.4 |
 
 Latency is one client, sequential calls; allocation and CPU are per message at 64 clients.
 
-- **Nalix wins** single-client latency (p50 and p99 at small payloads) and server allocations per message (**120 B**, lowest among full-featured frameworks).
-- **Throughput:** Nalix TCP reaches **202k ops/s** at 32 B and **181k ops/s** at 1 KB, leading SignalR (190k/177k) and close to gRPC bidi stream (206k).
-- **Encrypted transport:** Nalix AEAD provides ultra-low latency (**34.6 µs** p50) with zero additional server memory allocation (**120 B/op** vs 525 B for gRPC TLS). For larger 1 KB encrypted payloads at 64 clients, gRPC over TLS with hardware AES-NI yields slightly higher throughput (158k vs 141k ops/s).
+- **Nalix wins** single-client latency among the full frameworks (p50 52.2 µs vs 68.4 µs for gRPC bidi stream and 76.3 µs for SignalR) and server allocations per message (**56 B**, lowest among full-featured frameworks). A hand-written raw socket (30.9 µs) and a raw Kestrel WebSocket echo (45.0 µs) are faster.
+- **Throughput:** at 64 clients Nalix TCP reaches **75k ops/s** at 32 B (gRPC bidi stream 78k, SignalR 72k) and **61k ops/s** at 1 KB (SignalR 71k, gRPC bidi stream 68k). All frameworks are CPU-bound and close together on this 4-core machine.
+- **Encrypted transport:** Nalix AEAD beats gRPC over TLS on p50 (**57.6 µs** vs 100.4 µs), on 64-client throughput (63k vs 58k ops/s at 32 B; 53k vs 50k at 1 KB) and on allocations (**56 B/op** vs 812 B).
 
-> **Caveats:** Loopback measurements reflect stack overhead and dispatch efficiency on a shared machine; absolute capacity on bare metal with dedicated network hardware will differ. Encrypted rows use per-packet AEAD vs TLS stream transport.
+> **Caveats:** Loopback on a 4-vCPU machine where the load generator and server share the same cores; absolute capacity on bare metal with dedicated network hardware will differ. Encrypted rows use per-packet AEAD vs TLS stream transport.
 
 Micro-benchmarks (serialization, codec, memory) are in [`docs/benchmarks`](docs/benchmarks/).
 
