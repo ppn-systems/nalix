@@ -95,7 +95,7 @@ All 12 frameworks were benchmarked alongside each other in this pass. Raw data a
 Latency is one client, sequential calls; allocation and CPU are per message at 64 clients.
 
 - **Nalix wins** single-client latency among the full frameworks (p50 52.2 µs vs 68.4 µs for gRPC bidi stream and 76.3 µs for SignalR) and server allocations per message (**56 B**, lowest among full-featured frameworks). A hand-written raw socket (30.9 µs) and a raw Kestrel WebSocket echo (45.0 µs) are faster.
-- **Throughput:** at 64 clients Nalix TCP reaches **75k ops/s** at 32 B (gRPC bidi stream 78k, SignalR 72k) and **61k ops/s** at 1 KB (SignalR 71k, gRPC bidi stream 68k). All frameworks are CPU-bound and close together on this 4-core machine. Nalix with the `InlinePacketDispatcher` reaches 87k / 75k ops/s (diagnostic variant, see the full comparison).
+- **Throughput:** at 64 clients Nalix TCP reaches **75k ops/s** at 32 B (gRPC bidi stream 78k, SignalR 72k) and **61k ops/s** at 1 KB (SignalR 71k, gRPC bidi stream 68k). All frameworks are CPU-bound and close together on this 4-core machine.
 - **Encrypted transport:** Nalix AEAD beats gRPC over TLS on p50 (**57.6 µs** vs 100.4 µs), on 64-client throughput (63k vs 58k ops/s at 32 B; 53k vs 50k at 1 KB) and on allocations (**56 B/op** vs 812 B).
 
 > **Caveats:** Loopback on a 4-vCPU machine where the load generator and server share the same cores; absolute capacity on bare metal with dedicated network hardware will differ. Encrypted rows use per-packet AEAD vs TLS stream transport.
