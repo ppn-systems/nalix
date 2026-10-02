@@ -75,7 +75,7 @@ MessagePack protocol is built against v2. Both executables share the same harnes
   competitor was tuned beyond its documented default setup. The same goes for Nalix: no tuning at all (loopback is exempt from the default per-IP connection quota since #365).
 - Raw data (JSON lines, one row per run) is in
   [`data/network-comparison-results.jsonl`](data/network-comparison-results.jsonl). The tables below are produced from it by
-  `benchmarks/Nalix.Comparison.Benchmarks/aggregate.py`.
+  `benchmarks/Nalix.Comparison.Benchmarks/aggregate.py`. The file also holds two diagnostic Nalix runs (`nalix-tcp-nocomp`, `nalix-tcp-inline`) that are not part of the tables.
 
 Reproduce with:
 
