@@ -269,6 +269,30 @@ public sealed partial class NullablePacketStreamTests
         Assert.Equal(2, callbackCount);
     }
 
+    [Fact]
+    public async Task StreamAsyncWhenCallerCancelsWhileInactivityTimeoutActiveThrowsOperationCanceledExceptionPromptly()
+    {
+        NullableStreamRequest request = new();
+        request.Header = request.Header with { SequenceId = 1007 };
+
+        // Server sends nothing
+        FakeStreamSession session = new(_ => []);
+        using CancellationTokenSource cts = new();
+        cts.CancelAfter(50);
+
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (NullableStreamItem _ in session.StreamAsync<NullableStreamItem>(
+                request, ct: cts.Token, inactivityTimeoutMs: 10_000))
+            {
+            }
+        });
+
+        TimeSpan elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(start);
+        Assert.True(elapsed < TimeSpan.FromSeconds(2), $"Expected prompt cancellation, but took {elapsed.TotalMilliseconds}ms.");
+    }
+
     private static async Task<NullableStreamItem> ReadSingleStreamItemAsync(NullableStreamRequest request, NullableStreamItem response)
     {
         FakeStreamSession session = new(response);
