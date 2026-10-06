@@ -222,6 +222,45 @@ public sealed class SdkUpgradeTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task StreamAsync_WhenCallerCancelsWhileInactivityTimeoutActive_ThrowsOperationCanceledExceptionPromptly()
+    {
+        int port = TestUtils.GetFreePort();
+        TcpListener listener = new(IPAddress.Loopback, port);
+        listener.Start();
+
+        using TcpSession client = new(new TransportOptions { Address = "127.0.0.1", Port = (ushort)port });
+        try
+        {
+            Task<Socket> acceptTask = listener.AcceptSocketAsync();
+            await client.ConnectAsync();
+            using Socket serverSide = await acceptTask;
+            _ = serverSide; // Server never sends anything -> stream stalls waiting for chunks.
+
+            TimeSync request = new();
+            request.Initialize(ControlType.PING, 1, PacketFlags.NONE);
+
+            using CancellationTokenSource cts = new();
+            cts.CancelAfter(50);
+
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            {
+                await foreach (NullablePacketStreamTests.NullableStreamItem _ in client.StreamAsync<NullablePacketStreamTests.NullableStreamItem>(
+                    request, ct: cts.Token, inactivityTimeoutMs: 10_000))
+                {
+                }
+            });
+
+            TimeSpan elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(start);
+            Assert.True(elapsed < TimeSpan.FromSeconds(2), $"Expected prompt cancellation, but took {elapsed.TotalMilliseconds}ms.");
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
 #endif

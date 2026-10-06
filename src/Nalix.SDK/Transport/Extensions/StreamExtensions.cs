@@ -118,7 +118,9 @@ public static class StreamExtensions
         IDisposable msgSub = client.On<TResponse>(OnMessageReceived, disposeAfter: false);
         client.OnDisconnected += OnDisconnected;
 
-        using CancellationTokenSource? inactivityCts = inactivityTimeoutMs > 0 ? new CancellationTokenSource() : null;
+        using CancellationTokenSource? inactivityCts = inactivityTimeoutMs > 0
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct)
+            : null;
 
         try
         {
