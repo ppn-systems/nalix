@@ -2,16 +2,16 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Primitives;
+using Nalix.Codec.Security.Hashing;
+using Nalix.Codec.Security.Primitives;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
-using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Options;
 using Nalix.Environment.Sequencing;
@@ -26,6 +26,7 @@ namespace Nalix.SDK.Transport.Internal.Udp;
 /// </summary>
 internal sealed class UdpFrameReader : IDisposable
 {
+    private const int UdpMacTagSize = 16;
     private static readonly SequenceOptions s_sequenceOptions = ConfigurationManager.Instance.Get<SequenceOptions>();
 
     private readonly SessionState _state;
@@ -136,39 +137,25 @@ internal sealed class UdpFrameReader : IDisposable
 
         try
         {
-            // 1) Verify XxHash32
-            if (datagram.Length < PacketHeader.Size + 4)
+            // 1) Verify cryptographic MAC tag
+            if (_state.Secret.IsZero || datagram.Length < PacketHeader.Size + UdpMacTagSize)
             {
-                return; // Drop short or spoofed packets
+                return; // Drop unauthenticated, short, or spoofed packets
             }
 
-            uint receivedHash = BinaryPrimitives.ReadUInt32LittleEndian(datagram.Span[^4..]);
-            int dataLen = datagram.Length - 4;
+            int dataLen = datagram.Length - UdpMacTagSize;
+            ReadOnlySpan<byte> receivedTag = datagram.Span.Slice(dataLen, UdpMacTagSize);
+            Span<byte> computedMac = stackalloc byte[HmacKeccak256.HashSize];
+            HmacKeccak256.Compute(_state.Secret.AsSpan(), datagram.Span[..dataLen], computedMac);
+            bool macValid = BitwiseOperations.FixedTimeEquals(receivedTag, computedMac[..UdpMacTagSize]);
+            computedMac.Clear();
 
-            if (datagram.Capacity >= dataLen + Bytes32.Size)
+            if (!macValid)
             {
-                _state.Secret.AsSpan().CopyTo(datagram.SpanFull[dataLen..]);
-                uint computedHash = XxHash32.Compute(datagram.SpanFull[..(dataLen + Bytes32.Size)]);
-                datagram.SpanFull.Slice(dataLen, Bytes32.Size).Clear(); // [SECURITY] scrub the copied secret
-                if (computedHash != receivedHash)
-                {
-                    return; // Drop spoofed packet
-                }
-            }
-            else
-            {
-                byte[] temp = BufferLease.ByteArrayPool.Rent(dataLen + Bytes32.Size);
-                datagram.Span[..dataLen].CopyTo(temp);
-                _state.Secret.AsSpan().CopyTo(temp.AsSpan(dataLen));
-                uint computedHash = XxHash32.Compute(temp.AsSpan(0, dataLen + Bytes32.Size));
-                BufferLease.ByteArrayPool.Return(temp, clearArray: true); // [SECURITY] holds the secret
-                if (computedHash != receivedHash)
-                {
-                    return; // Drop spoofed packet
-                }
+                return; // Drop spoofed packet
             }
 
-            // Strip the 4-byte tag from the payload
+            // Strip the MAC tag from the payload
             datagram.CommitLength(dataLen);
 
             // 2) Decompress / Decrypt
@@ -188,16 +175,16 @@ internal sealed class UdpFrameReader : IDisposable
                 return; // Duplicate datagram, already processed
             }
 
-            // Dispatch
-            await this.DispatchMessageAsync(datagram, ct, socket).ConfigureAwait(false);
-        }
-        finally
-        {
             if (seq.HasValue)
             {
                 _sequence.UpdateTo(seq.Value);
             }
 
+            // Dispatch
+            await this.DispatchMessageAsync(datagram, ct, socket).ConfigureAwait(false);
+        }
+        finally
+        {
             if (!ReferenceEquals(datagram, original))
             {
                 datagram.Dispose();

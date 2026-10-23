@@ -16,6 +16,7 @@ using Xunit;
 
 namespace Nalix.Network.Tests;
 
+[Collection(AsyncCallbackSerialGroup.Name)]
 public sealed class ListenerMetricsTests
 {
     private sealed class StubTcpListener : TcpListenerBase
@@ -25,9 +26,20 @@ public sealed class ListenerMetricsTests
 
     private sealed class StubUdpListener : UdpListenerBase
     {
+        public Nalix.Network.Connections.Connection? ResolvedConnection { get; set; }
+
         public StubUdpListener(IProtocol protocol, IConnectionHub hub) : base(12346, protocol, hub) { }
 
         public override bool IsAuthenticated(IConnection connection, System.Net.EndPoint remoteEndPoint, ReadOnlySpan<byte> payload) => true;
+
+        public override bool TryResolveConnection(IConnectionHub hub, ReadOnlySpan<byte> sessionToken, out Nalix.Network.Connections.Connection? connection)
+        {
+            connection = this.ResolvedConnection;
+            return connection is not null;
+        }
+
+        public void InvokeProcessDatagram(Nalix.Environment.Memory.BufferLease lease, System.Net.EndPoint? remoteEndPoint)
+            => this.ProcessDatagram(lease, remoteEndPoint);
     }
 
     private sealed class StubWebSocketListener : WebSocketListenerBase
@@ -161,6 +173,76 @@ public sealed class ListenerMetricsTests
 
         // TotalDropped should be the sum: 1 + 1 + 1 + 1 + 1 = 5
         listener.Metrics.TotalDropped.Should().Be(5);
+    }
+
+    [Fact]
+    public void UdpProcessDatagram_WhenConnectionSecretIsZero_DropsPacketAsUnauth()
+    {
+        var protocol = Substitute.For<IProtocol>();
+        var hub = Substitute.For<IConnectionHub>();
+        using var listener = new StubUdpListener(protocol, hub);
+
+        using var tcpListener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        tcpListener.Start();
+        int port = ((System.Net.IPEndPoint)tcpListener.LocalEndpoint).Port;
+        using var clientSocket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+        clientSocket.Connect(System.Net.IPAddress.Loopback, port);
+        using var serverSocket = tcpListener.AcceptSocket();
+        tcpListener.Stop();
+
+        using var conn = new Nalix.Network.Connections.Connection(serverSocket, Substitute.For<Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor>());
+        // Connection has not completed handshake, so conn.Secret is Bytes32.Zero
+        conn.Secret.IsZero.Should().BeTrue();
+
+        listener.ResolvedConnection = conn;
+
+        // Craft a packet signed with Bytes32.Zero using XxHash32
+        int dataLen = 8 + Nalix.Abstractions.Primitives.PacketHeader.Size + 4;
+        byte[] raw = new byte[dataLen + 32];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(raw.AsSpan(0, 8), conn.ConnectionId);
+        uint zeroSecretHash = Nalix.Environment.Hashing.XxHash32.Compute(raw.AsSpan(0, dataLen + 32));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(dataLen, 4), zeroSecretHash);
+
+        var lease = Nalix.Environment.Memory.BufferLease.CopyFrom(raw.AsSpan(0, dataLen + 16));
+        listener.InvokeProcessDatagram(lease, clientSocket.LocalEndPoint);
+
+        listener.Metrics.DroppedUnauth.Should().Be(1);
+        listener.Metrics.ReceivedPackets.Should().Be(0);
+    }
+
+    [Fact]
+    public void UdpProcessDatagram_WhenAuthenticatedWithXxHash32InsteadOfHmac_DropsPacketAsUnauth()
+    {
+        var protocol = Substitute.For<IProtocol>();
+        var hub = Substitute.For<IConnectionHub>();
+        using var listener = new StubUdpListener(protocol, hub);
+
+        using var tcpListener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        tcpListener.Start();
+        int port = ((System.Net.IPEndPoint)tcpListener.LocalEndpoint).Port;
+        using var clientSocket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+        clientSocket.Connect(System.Net.IPAddress.Loopback, port);
+        using var serverSocket = tcpListener.AcceptSocket();
+        tcpListener.Stop();
+
+        using var conn = new Nalix.Network.Connections.Connection(serverSocket, Substitute.For<Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor>());
+        Span<byte> secret = stackalloc byte[32];
+        secret.Fill(0x55);
+        conn.Secret = new Nalix.Abstractions.Primitives.Bytes32(secret);
+        listener.ResolvedConnection = conn;
+
+        int dataLen = 8 + Nalix.Abstractions.Primitives.PacketHeader.Size + 4;
+        byte[] raw = new byte[dataLen + 32];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(raw.AsSpan(0, 8), conn.ConnectionId);
+        secret.CopyTo(raw.AsSpan(dataLen));
+        uint xxHash = Nalix.Environment.Hashing.XxHash32.Compute(raw.AsSpan(0, dataLen + 32));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(dataLen, 4), xxHash);
+
+        var lease = Nalix.Environment.Memory.BufferLease.CopyFrom(raw.AsSpan(0, dataLen + 16));
+        listener.InvokeProcessDatagram(lease, clientSocket.LocalEndPoint);
+
+        listener.Metrics.DroppedUnauth.Should().Be(1);
+        listener.Metrics.ReceivedPackets.Should().Be(0);
     }
 
     [Fact]

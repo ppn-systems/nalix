@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -15,8 +14,9 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Identity;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Primitives;
+using Nalix.Codec.Security.Hashing;
+using Nalix.Codec.Security.Primitives;
 using Nalix.Environment.Extensions;
-using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 using Nalix.Framework.Identifiers;
 using Nalix.Network.Connections;
@@ -40,6 +40,7 @@ public abstract partial class UdpListenerBase
     /// only non-sensitive game-state data (movement, actions, etc.).
     /// </remarks>
     private const int SessionTokenSize = Snowflake.Size;
+    private const int UdpMacTagSize = 16;
 
     #endregion Datagram Layout
 
@@ -334,9 +335,16 @@ public abstract partial class UdpListenerBase
             return;
         }
 
-        // --- 2.5. XxHash32 Integrity Check ---
-        // Verify the datagram signature: XxHash32(SessionToken + Payload + Connection.Secret)
-        if (lease.Length < SessionTokenSize + PacketHeader.Size + 4)
+        // --- 2.5. Cryptographic MAC Integrity Check ---
+        if (connection.Secret.IsZero)
+        {
+            this.Metrics.RECORD_DROP_UNAUTH();
+            this.LOG_UNAUTH_DROP(remoteEndPoint, connection.ConnectionId);
+            lease.Dispose();
+            return;
+        }
+
+        if (lease.Length < SessionTokenSize + PacketHeader.Size + UdpMacTagSize)
         {
             this.Metrics.RECORD_DROP_SHORT();
             this.LOG_SHORT_PACKET_DROP_HEADER(remoteEndPoint, lease.Length);
@@ -344,39 +352,21 @@ public abstract partial class UdpListenerBase
             return;
         }
 
-        uint receivedHash = BinaryPrimitives.ReadUInt32LittleEndian(lease.Span[^4..]);
-        int dataLen = lease.Length - 4;
+        int dataLen = lease.Length - UdpMacTagSize;
+        ReadOnlySpan<byte> receivedTag = lease.Span.Slice(dataLen, UdpMacTagSize);
+        Span<byte> computedMac = stackalloc byte[HmacKeccak256.HashSize];
+        HmacKeccak256.Compute(connection.Secret.AsSpan(), lease.Span[..dataLen], computedMac);
+        bool macValid = BitwiseOperations.FixedTimeEquals(receivedTag, computedMac[..UdpMacTagSize]);
+        computedMac.Clear();
 
-        if (lease.Capacity >= dataLen + Bytes32.Size)
+        if (!macValid)
         {
-            connection.Secret.AsSpan().CopyTo(lease.SpanFull[dataLen..]);
-            uint computedHash = XxHash32.Compute(lease.SpanFull[..(dataLen + Bytes32.Size)]);
-            lease.SpanFull.Slice(dataLen, Bytes32.Size).Clear(); // [SECURITY] scrub the copied secret
-
-            if (computedHash != receivedHash)
-            {
-                this.Metrics.RECORD_DROP_UNAUTH();
-                lease.Dispose();
-                return;
-            }
-        }
-        else
-        {
-            byte[] temp = BufferLease.ByteArrayPool.Rent(dataLen + Bytes32.Size);
-            lease.Span[..dataLen].CopyTo(temp);
-            connection.Secret.AsSpan().CopyTo(temp.AsSpan(dataLen));
-            uint computedHash = XxHash32.Compute(temp.AsSpan(0, dataLen + Bytes32.Size));
-            BufferLease.ByteArrayPool.Return(temp, clearArray: true); // [SECURITY] holds the secret
-
-            if (computedHash != receivedHash)
-            {
-                this.Metrics.RECORD_DROP_UNAUTH();
-                lease.Dispose();
-                return;
-            }
+            this.Metrics.RECORD_DROP_UNAUTH();
+            lease.Dispose();
+            return;
         }
 
-        // Strip the 4-byte MAC from the payload
+        // Strip the MAC tag from the payload
         lease.CommitLength(dataLen);
 
         // Update the payload span reference since the length changed

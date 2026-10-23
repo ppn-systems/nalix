@@ -9,9 +9,8 @@ using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Identity;
-using Nalix.Abstractions.Primitives;
+using Nalix.Codec.Security.Hashing;
 using Nalix.Codec.Transforms;
-using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Sequencing;
 using Nalix.SDK.Options;
@@ -24,6 +23,7 @@ namespace Nalix.SDK.Transport.Internal.Udp;
 /// </summary>
 internal sealed class UdpFrameSender : IDisposable
 {
+    private const int UdpMacTagSize = 16;
     private readonly SessionState _state;
     private readonly Func<Socket> _getSocket;
     private readonly SequenceCounter _sequence;
@@ -76,6 +76,11 @@ internal sealed class UdpFrameSender : IDisposable
 
             uint? seqToUse = encrypt ? _sequence.Next() : null;
 
+            if (_state.Secret.IsZero)
+            {
+                throw new CipherException("Cannot send UDP datagram before session secret is established.");
+            }
+
             // Transform outbound: Compress -> Encrypt + Sequence
             FramePipeline.ProcessOutbound(
                 ref current,
@@ -86,15 +91,15 @@ internal sealed class UdpFrameSender : IDisposable
                 seqToUse,
                 _options.Algorithm);
 
-            if (current.Length + ISnowflake.Size > _options.MaxUdpDatagramSize)
+            if (current.Length + ISnowflake.Size + UdpMacTagSize > _options.MaxUdpDatagramSize)
             {
                 throw new NetworkException(
-                    $"UDP datagram too large after transformation: {current.Length + ISnowflake.Size} bytes. Max = {_options.MaxUdpDatagramSize}");
+                    $"UDP datagram too large after transformation: {current.Length + ISnowflake.Size + UdpMacTagSize} bytes. Max = {_options.MaxUdpDatagramSize}");
             }
 
-            // Envelope: [SessionToken (8 bytes) | Transformed Payload | XxHash32 Tag (4 bytes)]
+            // Envelope: [SessionToken (8 bytes) | Transformed Payload | HMAC-Keccak256 Tag (16 bytes)]
             int dataLen = ISnowflake.Size + current.Length;
-            using BufferLease finalLease = BufferLease.Rent(dataLen + Math.Max(4, Bytes32.Size));
+            using BufferLease finalLease = BufferLease.Rent(dataLen + UdpMacTagSize);
 
             // 1. Write SessionToken
             BinaryPrimitives.WriteUInt64LittleEndian(finalLease.SpanFull[..ISnowflake.Size], _state.SessionToken);
@@ -102,21 +107,14 @@ internal sealed class UdpFrameSender : IDisposable
             // 2. Write Transformed Payload
             current.Span.CopyTo(finalLease.SpanFull[ISnowflake.Size..]);
 
-            // 3. Temporarily append Secret for hashing
-            _state.Secret.AsSpan().CopyTo(finalLease.SpanFull[dataLen..]);
+            // 3. Compute 128-bit truncated HMAC-Keccak256 tag without copying Secret into the packet buffer
+            Span<byte> computedMac = stackalloc byte[HmacKeccak256.HashSize];
+            HmacKeccak256.Compute(_state.Secret.AsSpan(), finalLease.SpanFull[..dataLen], computedMac);
+            computedMac[..UdpMacTagSize].CopyTo(finalLease.SpanFull.Slice(dataLen, UdpMacTagSize));
+            computedMac.Clear();
 
-            // 4. Compute XxHash32
-            uint hash = XxHash32.Compute(finalLease.SpanFull[..(dataLen + Bytes32.Size)]);
-
-            // 5. Overwrite the start of Secret with the 4-byte Tag
-            BinaryPrimitives.WriteUInt32LittleEndian(finalLease.SpanFull.Slice(dataLen, 4), hash);
-
-            // [SECURITY] Scrub the rest of the secret: it sits past the committed length and the
-            // pool does not clear arrays on return.
-            finalLease.SpanFull.Slice(dataLen + 4, Bytes32.Size - 4).Clear();
-
-            // 6. Commit the final datagram length (Token + Payload + Tag)
-            finalLease.CommitLength(dataLen + 4);
+            // 4. Commit the final datagram length (Token + Payload + Tag)
+            finalLease.CommitLength(dataLen + UdpMacTagSize);
 
             return await this.SendRawAsync(finalLease.Memory, ct).ConfigureAwait(false);
         }

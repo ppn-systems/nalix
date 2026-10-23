@@ -61,6 +61,26 @@ public sealed class SlidingWindowTests
         InvokeTryCheck(window, (ushort)(2000 - 1024)).Should().BeFalse("diff=1024 equals windowSize and must be rejected as too old");
     }
 
+    [Fact]
+    public void TryCheck_OldPacketReplayedAfterHalfRingAdvance_IsRejectedAndDoesNotPoisonMaxSeen()
+    {
+        object window = CreateWindow(windowSize: 1024);
+
+        // Legitimate client starts at seq = 100 and advances past half the 16-bit ring to seq = 35000.
+        InvokeTryCheck(window, 100).Should().BeTrue();
+        for (int seq = 500; seq <= 35000; seq += 500)
+        {
+            InvokeTryCheck(window, (ushort)seq).Should().BeTrue();
+        }
+
+        // Attacker replays captured packet from early in the session (seq = 100).
+        // (ushort)(100 - 35000) == 30636 < 32768, which must NOT be accepted as a forward jump!
+        InvokeTryCheck(window, 100).Should().BeFalse("an old packet replayed after >32768 legitimate packets must not be accepted as a forward jump");
+
+        // Next legitimate packet (35001) must still be accepted.
+        InvokeTryCheck(window, 35001).Should().BeTrue("legitimate traffic after a replay attempt must not be locked out");
+    }
+
     /// <summary>
     /// Area 3 (rate limiting concurrency exactness, replay-window variant): 64 threads racing to
     /// mark a disjoint set of sequence numbers within the same window concurrently must all

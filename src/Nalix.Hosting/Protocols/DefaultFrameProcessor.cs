@@ -164,6 +164,11 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
                 return;
             }
 
+            if (seq.HasValue)
+            {
+                counter.UpdateTo(seq.Value);
+            }
+
             if (!ReferenceEquals(current, lease))
             {
                 replaceable.ExchangeLease(current)?.Dispose();
@@ -188,11 +193,6 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
         }
         finally
         {
-            if (seq.HasValue)
-            {
-                counter.UpdateTo(seq.Value);
-            }
-
             if (!exchanged && !ReferenceEquals(current, lease))
             {
                 current.Dispose();

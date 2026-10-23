@@ -63,8 +63,10 @@ internal sealed class SlidingWindow
             int forward = unchecked((ushort)(seq - currentMax));
 
             // 16-bit modular comparison:
-            // forward in (0, 32768) means seq is newer than currentMax, including wrap-around (65535 -> 0).
-            if (forward != 0 && forward < SequenceHalfRange)
+            // Bound forward jump to the replay window size so that a delayed/replayed packet
+            // after >32768 newer packets cannot be misinterpreted as a forward jump.
+            int maxForwardJump = Math.Min(_windowSize, SequenceHalfRange / 2);
+            if (forward != 0 && forward <= maxForwardJump)
             {
                 // Advance window
                 long shift = forward;
