@@ -1,0 +1,34 @@
+name: "Repo: Cleanup PR caches"
+# Actions caches are scoped per ref, so every PR leaves its own NuGet cache copy (refs/pull/<n>/merge)
+# behind for up to 7 days and eats into the 10 GB repo quota. Delete them the moment the PR closes.
+# Best-effort only: never fail the close event over a missing cache.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    name: Delete caches for this PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete caches for this PR's ref
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          set +e
+          ids=$(gh cache list --repo "$REPO" --ref "$REF" --limit 100 --json id --jq '.[].id' 2>/dev/null)
+          if [ -z "$ids" ]; then
+            echo "No caches found for $REF."
+            exit 0
+          fi
+          for id in $ids; do
+            gh cache delete "$id" --repo "$REPO" || echo "Could not delete cache $id, skipping."
+          done
+          exit 0

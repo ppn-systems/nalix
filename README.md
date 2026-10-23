@@ -6,8 +6,7 @@
   <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET-10.0-blueviolet?logo=dotnet&logoColor=white" alt=".NET"></a>
   <a href="https://www.nuget.org/packages/Nalix.Network"><img src="https://img.shields.io/nuget/v/Nalix.Network?logo=nuget&label=NuGet" alt="NuGet"></a>
   <a href="https://www.nuget.org/packages/Nalix.Network"><img src="https://img.shields.io/nuget/dt/Nalix.Network?logo=nuget&label=Downloads" alt="Downloads"></a>
-  <a href="https://github.com/ppn-systems/nalix/actions/workflows/ci-linux.yml"><img src="https://github.com/ppn-systems/nalix/actions/workflows/ci-linux.yml/badge.svg?branch=master" alt="CI Linux"></a>
-  <a href="https://github.com/ppn-systems/nalix/actions/workflows/ci-windows.yml"><img src="https://github.com/ppn-systems/nalix/actions/workflows/ci-windows.yml/badge.svg?branch=master" alt="CI Windows"></a>
+  <a href="https://github.com/ppn-systems/nalix/actions/workflows/ci.yml"><img src="https://github.com/ppn-systems/nalix/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/ppn-systems/nalix" alt="License"></a>
 </p>
 

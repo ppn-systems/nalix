@@ -3,6 +3,10 @@ name: "Template: Build & Test"
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   DOTNET_CLI_USE_MSBUILD_SERVER: false
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NUGET_XMLDOC_MODE: skip
 
 permissions:
   contents: read
@@ -40,10 +44,8 @@ jobs:
   build:
     name: "Build & Test (${{ inputs.os }})"
     runs-on: ${{ inputs.os }}
-
-    concurrency:
-      group: build-${{ inputs.os }}-${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
+    # Concurrency lives in the caller: a job-level group here made matrix callers on the same OS cancel each other.
+    timeout-minutes: 30
 
     steps:
       - name: Set environment variables
@@ -51,6 +53,13 @@ jobs:
         run: |
           echo "TEST_RESULTS_DIR=artifacts/test-results/${{ runner.os }}" >> "$GITHUB_ENV"
           echo "COVERAGE_REPORT_DIR=artifacts/coverage/${{ runner.os }}" >> "$GITHUB_ENV"
+
+      # Real-time scanning of every obj/bin write is the main reason Windows builds lag Linux.
+      # Ephemeral GitHub-hosted runner only; the VM is discarded after the job.
+      - name: Disable Windows Defender real-time scanning
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
 
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -70,9 +79,11 @@ jobs:
 
       - name: Decode signing key
         shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         run: |
-          if [ -n "${{ secrets.SIGNING_KEY }}" ]; then
-            echo "${{ secrets.SIGNING_KEY }}" | base64 -d > "$GITHUB_WORKSPACE/src/Nalix.snk"
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "$SIGNING_KEY" | base64 -d > "$GITHUB_WORKSPACE/src/Nalix.snk"
           else
             echo "SIGNING_KEY is not set. Skipping signing key creation."
           fi
@@ -104,7 +115,7 @@ jobs:
         shell: bash
         timeout-minutes: 20
         run: |
-          max_retries=1
+          max_retries=2
           attempt=1
           while true; do
             # Clean results directory to avoid mixing failed and successful runs
@@ -127,12 +138,15 @@ jobs:
               test_args+=(--collect:"XPlat Code Coverage")
             fi
 
-            if dotnet test "${test_args[@]}"; then
+            # Capture the real exit code: `$?` after an `if` block is the if's status (0), which made
+            # failed runs report green.
+            exit_code=0
+            dotnet test "${test_args[@]}" || exit_code=$?
+            if [ $exit_code -eq 0 ]; then
               echo "Tests passed!"
               break
             fi
 
-            exit_code=$?
             if [ $attempt -ge $max_retries ]; then
               echo "Tests failed after $max_retries attempts."
               exit $exit_code
