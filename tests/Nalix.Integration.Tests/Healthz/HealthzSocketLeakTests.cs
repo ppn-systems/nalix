@@ -17,8 +17,9 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.Healthz;
 
 /// <summary>
 /// Directly measures OS handle count before/after repeated /healthz requests. SEND_STATIC_RESPONSE
@@ -29,6 +30,8 @@ namespace Nalix.Integration.Tests;
 [Collection(TestCollections.NetworkConfig)]
 public sealed class HealthzSocketLeakTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-healthz-leak-{Guid.NewGuid():N}.private");
 
     public HealthzSocketLeakTests()
@@ -77,7 +80,7 @@ public sealed class HealthzSocketLeakTests : IDisposable
     }
 
     [Fact]
-    public async Task RepeatedHealthzRequests_DoNotLeakServerSideSocketHandles()
+    public async Task Healthz_WhenRequestedRepeatedly_DoesNotLeakSocketHandles()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -123,7 +126,6 @@ public sealed class HealthzSocketLeakTests : IDisposable
             int after = self.HandleCount;
 
             int leaked = after - before;
-            Console.Error.WriteLine($"[HealthzSocketLeakTests] HandleCount before={before} after={after} leaked={leaked} (requests={requestCount})");
             Assert.True(leaked < requestCount / 2,
                 $"Handle count grew by {leaked} after {requestCount} /healthz requests (before={before}, after={after}) -- " +
                 "server-side sockets for the DevOps endpoints are not being closed.");
@@ -142,7 +144,7 @@ public sealed class HealthzSocketLeakTests : IDisposable
     /// against a deployed instance. This test uses that same real default to catch a regression.
     /// </summary>
     [Fact]
-    public async Task RepeatedHealthzRequests_DoNotExhaustSubnetConnectionQuota()
+    public async Task Healthz_WhenRequestedRepeatedly_DoesNotExhaustSubnetQuota()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -187,7 +189,7 @@ public sealed class HealthzSocketLeakTests : IDisposable
     /// this uses Host="*" (the real production config) to catch that regression.
     /// </summary>
     [Fact]
-    public async Task RepeatedHealthzRequests_DoNotExhaustSubnetConnectionQuota_DualStackHost()
+    public async Task Healthz_WhenRequestedRepeatedlyOnDualStackHost_DoesNotExhaustSubnetQuota()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -225,6 +227,7 @@ public sealed class HealthzSocketLeakTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

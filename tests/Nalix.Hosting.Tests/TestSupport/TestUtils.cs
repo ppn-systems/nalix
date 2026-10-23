@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System.Net;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
@@ -5,7 +8,7 @@ using Nalix.Hosting.Protocols;
 using Nalix.Network.Protocols;
 using Nalix.Runtime.Dispatching;
 
-namespace Nalix.Hosting.Tests;
+namespace Nalix.Hosting.Tests.TestSupport;
 
 internal static class TestUtils
 {

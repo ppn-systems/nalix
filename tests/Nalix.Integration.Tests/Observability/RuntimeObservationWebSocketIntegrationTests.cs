@@ -22,6 +22,7 @@ using Nalix.Observability.Contracts;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Nalix.SDK.Transport.Extensions;
+using Nalix.Integration.Tests.TestSupport;
 
 namespace Nalix.Integration.Tests.Observability;
 
@@ -32,8 +33,11 @@ namespace Nalix.Integration.Tests.Observability;
 /// ObservabilityAccess, then sends RuntimeObservation and traces every
 /// boundary from client send through server handler invocation and back.
 /// </summary>
+[Collection(TestCollections.NetworkConfig)]
 public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     #region Constants
 
     private const int TimeoutMs = 5_000;
@@ -43,13 +47,15 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
     #region Fields
 
     private readonly string _certificatePath;
+    private readonly ITestOutputHelper _output;
 
     #endregion
 
     #region Constructor
 
-    public RuntimeObservationWebSocketIntegrationTests()
+    public RuntimeObservationWebSocketIntegrationTests(ITestOutputHelper output)
     {
+        _output = output;
         _certificatePath = Path.Combine(
             Path.GetTempPath(), $"nalix-obs-ws-{Guid.NewGuid():N}.private");
         WriteCertificate();
@@ -60,7 +66,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
     #region Test
 
     [Fact]
-    public async Task RuntimeObservation_WebSocket_EndToEnd_HandlerReached()
+    public async Task RuntimeObservation_WithWebSocketEndToEnd_ReachesHandler()
     {
         // -- Boundary counters (shared between test and server middleware) --
         BoundaryCounters counters = new();
@@ -322,7 +328,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             await app.DeactivateAsync();
 
             // Always dump diagnostics to test output.
-            Console.WriteLine(diagnostics.ToString());
+            _output.WriteLine(diagnostics.ToString());
         }
     }
 
@@ -635,6 +641,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath))
@@ -650,4 +657,3 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
 
     #endregion
 }
-

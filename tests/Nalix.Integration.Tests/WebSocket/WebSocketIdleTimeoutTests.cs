@@ -18,15 +18,18 @@ using Nalix.Network.Protocols;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.WebSocket;
 
 [Collection(TestCollections.NetworkConfig)]
-public sealed class WebSocketTimeoutE2ETests : IDisposable
+public sealed class WebSocketIdleTimeoutTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-timeout-{Guid.NewGuid():N}.private");
 
-    public WebSocketTimeoutE2ETests()
+    public WebSocketIdleTimeoutTests()
     {
         EnsureCertificate();
     }
@@ -66,7 +69,7 @@ public sealed class WebSocketTimeoutE2ETests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketHosting_IdleClient_DisconnectedByServerTimeout()
+    public async Task IdleTimeout_WhenClientIsIdle_DisconnectsClient()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -151,6 +154,7 @@ public sealed class WebSocketTimeoutE2ETests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using NSubstitute;
 using Nalix.Abstractions.Concurrency;
 using System;
@@ -21,11 +24,15 @@ using Nalix.Environment.Configuration;
 using Nalix.Hosting;
 using Nalix.Network.Options;
 using Nalix.Framework.Options;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.WebSocket;
 
-public class WebSocketTransportTests : IDisposable
+[Collection(TestCollections.NetworkConfig)]
+public sealed class WebSocketTransportTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-test-{Guid.NewGuid():N}.private");
 
     /// <summary>
@@ -85,7 +92,7 @@ public class WebSocketTransportTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketSession_ConnectAndEcho_Success()
+    public async Task Session_WhenSendingMessage_EchoesMessage()
     {
         // 1. Setup Server using real ConnectionHub and Protocol
         ushort port = GetFreePort();
@@ -154,7 +161,7 @@ public class WebSocketTransportTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketHosting_ConnectAndEcho_Success()
+    public async Task Hosting_WhenSendingMessage_EchoesMessage()
     {
         // 1. Setup Server using NetworkApplicationBuilder
         ushort port = GetFreePort();
@@ -234,7 +241,7 @@ public class WebSocketTransportTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketHosting_WhenClientSendsManyMessages_DoesNotLeakConnectionEventArgs()
+    public async Task Hosting_WhenClientSendsManyMessages_DoesNotLeakConnectionEventArgs()
     {
         ObjectPoolOptions poolOptions = ConfigurationManager.Instance.Get<ObjectPoolOptions>();
         bool previousDiagnostics = poolOptions.EnableDiagnostics;
@@ -315,7 +322,7 @@ public class WebSocketTransportTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketHosting_WhenClientSendsMessagesLargerThanReceiveChunk_DoesNotLeakConnectionEventArgs()
+    public async Task Hosting_WhenClientSendsMessagesLargerThanReceiveChunk_DoesNotLeakConnectionEventArgs()
     {
         ObjectPoolOptions poolOptions = ConfigurationManager.Instance.Get<ObjectPoolOptions>();
         bool previousDiagnostics = poolOptions.EnableDiagnostics;
@@ -396,7 +403,7 @@ public class WebSocketTransportTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketSession_WhenInboundMessageExceedsClientLimit_RaisesError()
+    public async Task Session_WhenInboundMessageExceedsClientLimit_RaisesError()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -442,7 +449,7 @@ public class WebSocketTransportTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketServer_WhenInboundMessageExceedsServerLimit_DisconnectsWithoutEcho()
+    public async Task Server_WhenInboundMessageExceedsServerLimit_DisconnectsWithoutEcho()
     {
         ushort port = GetFreePort();
         NetworkWebSocketOptions serverOptions = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
@@ -498,6 +505,7 @@ public class WebSocketTransportTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath))
@@ -516,6 +524,3 @@ public class WebSocketTransportTests : IDisposable
     private void EnsureCertificate()
         => File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
 }
-
-
-

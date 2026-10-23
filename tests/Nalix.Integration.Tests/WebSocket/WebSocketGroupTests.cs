@@ -21,14 +21,18 @@ using Nalix.Runtime.Groups;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.WebSocket;
 
-public sealed class WebSocketGroupIntegrationTests : IDisposable
+[Collection(TestCollections.NetworkConfig)]
+public sealed class WebSocketGroupTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-group-{Guid.NewGuid():N}.private");
 
-    public WebSocketGroupIntegrationTests()
+    public WebSocketGroupTests()
     {
         EnsureCertificate();
     }
@@ -95,7 +99,7 @@ public sealed class WebSocketGroupIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketHosting_MultipleClients_BroadcastReachesAll()
+    public async Task Broadcast_WithMultipleClients_ReachesAllClients()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -160,7 +164,7 @@ public sealed class WebSocketGroupIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketHosting_GroupMulticast_OnlyGroupReceives()
+    public async Task Multicast_ToGroup_ReachesOnlyGroupMembers()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -245,6 +249,7 @@ public sealed class WebSocketGroupIntegrationTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

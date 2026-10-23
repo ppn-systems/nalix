@@ -17,8 +17,9 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.Healthz;
 
 /// <summary>
 /// Reproduces a blocking-Send-without-timeout on the plain HTTP DevOps endpoints
@@ -32,6 +33,8 @@ namespace Nalix.Integration.Tests;
 [Collection(TestCollections.NetworkConfig)]
 public sealed class HealthzSendTimeoutTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-healthz-timeout-{Guid.NewGuid():N}.private");
 
     public HealthzSendTimeoutTests()
@@ -100,7 +103,7 @@ public sealed class HealthzSendTimeoutTests : IDisposable
     }
 
     [Fact]
-    public async Task AbandonedHealthzPeers_DoNotBlockListener()
+    public async Task Healthz_WhenPeersAbandonResponses_DoesNotBlockListener()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -154,6 +157,7 @@ public sealed class HealthzSendTimeoutTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

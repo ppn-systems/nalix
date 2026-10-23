@@ -19,15 +19,18 @@ using Nalix.Network.Protocols;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.WebSocket;
 
 [Collection(TestCollections.NetworkConfig)]
-public sealed class WebSocketAdvancedEdgeCasesTests : IDisposable
+public sealed class WebSocketEdgeCaseTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-adv-{Guid.NewGuid():N}.private");
 
-    public WebSocketAdvancedEdgeCasesTests()
+    public WebSocketEdgeCaseTests()
     {
         File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
     }
@@ -64,7 +67,7 @@ public sealed class WebSocketAdvancedEdgeCasesTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocket_SlowHandshakeTimeout_ClosesIncompleteUpgradeSocket()
+    public async Task Handshake_WhenUpgradeIsSlow_ClosesIncompleteSocket()
     {
         ushort port = GetFreePort();
         var wsOptions = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
@@ -113,7 +116,7 @@ public sealed class WebSocketAdvancedEdgeCasesTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocket_MaxConnectionsThreshold_RejectsExcessConnections()
+    public async Task Connect_WhenMaxConnectionsExceeded_RejectsExcessConnections()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -166,7 +169,7 @@ public sealed class WebSocketAdvancedEdgeCasesTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocket_PacketOverflowPolicy_DisconnectsAbusiveClient()
+    public async Task Send_WhenPacketOverflowPolicyTriggers_DisconnectsAbusiveClient()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -222,6 +225,7 @@ public sealed class WebSocketAdvancedEdgeCasesTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

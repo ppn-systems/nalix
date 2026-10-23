@@ -21,15 +21,18 @@ using Nalix.Runtime.Groups;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.WebSocket;
 
 [Collection(TestCollections.NetworkConfig)]
-public sealed class WebSocketDeepVerificationTests : IDisposable
+public sealed class WebSocketEchoAndGroupTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-deep-{Guid.NewGuid():N}.private");
 
-    public WebSocketDeepVerificationTests()
+    public WebSocketEchoAndGroupTests()
     {
         File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
     }
@@ -84,7 +87,7 @@ public sealed class WebSocketDeepVerificationTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocket_LargePayloadEcho_SucceedsWithoutCorruption()
+    public async Task Echo_WithLargePayload_ReturnsPayloadWithoutCorruption()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -144,7 +147,7 @@ public sealed class WebSocketDeepVerificationTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocket_MultiRoomGroupMulticast_IsolateMessagesByRoom()
+    public async Task Multicast_WithMultipleRooms_IsolatesMessagesByRoom()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -252,7 +255,7 @@ public sealed class WebSocketDeepVerificationTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocket_GroupCleanup_OnDisconnectRemovesAllGroupEntries()
+    public async Task Disconnect_WhenClientInGroups_RemovesAllGroupEntries()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -311,6 +314,7 @@ public sealed class WebSocketDeepVerificationTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

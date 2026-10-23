@@ -17,8 +17,9 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.Tcp;
 
 /// <summary>
 /// Verifies the dispatch-loop consumer's heartbeat semantics using the actual, unmodified
@@ -32,6 +33,8 @@ namespace Nalix.Integration.Tests;
 [Collection(TestCollections.NetworkConfig)]
 public sealed class TcpDispatchLoopStallTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-tcp-stall-{Guid.NewGuid():N}.private");
 
     public TcpDispatchLoopStallTests()
@@ -97,7 +100,7 @@ public sealed class TcpDispatchLoopStallTests : IDisposable
     /// dispatched and processed promptly, proving quiet-heartbeat-during-idle is benign.
     /// </summary>
     [Fact]
-    public async Task DefaultProtocol_IdleHeartbeatIsBenign_ConnectionAfterIdleStillProcessed()
+    public async Task Tcp_AfterIdleHeartbeat_StillProcessesConnection()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 200);
@@ -161,7 +164,7 @@ public sealed class TcpDispatchLoopStallTests : IDisposable
     /// but through the WebSocket path, using a fully default protocol (no OnAccept override).
     /// </summary>
     [Fact]
-    public async Task DefaultProtocol_WebSocket_IdleHeartbeatIsBenign_ConnectionAfterIdleStillProcessed()
+    public async Task WebSocket_AfterIdleHeartbeat_StillProcessesConnection()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 200);
@@ -223,6 +226,7 @@ public sealed class TcpDispatchLoopStallTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

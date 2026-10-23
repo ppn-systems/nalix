@@ -1,5 +1,6 @@
-// Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -12,10 +13,10 @@ using Xunit;
 
 namespace Nalix.Abstractions.Tests.Identity;
 
-public class IdentifierTests
+public sealed class SnowflakeTests
 {
     [Fact]
-    public void CreateEmptyIsEmptyTrueAndSerializesTo8ZeroBytes()
+    public void Ctor_WithZeroValue_IsEmptyAndWritesEightZeroBytes()
     {
         Snowflake id = new(0UL); // all zero
         Assert.True(id.IsEmpty); // not empty => false
@@ -27,7 +28,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void NewIdWithFixedComponentsSerializesLittleEndianAndRoundTrips()
+    public void NewId_WithFixedComponents_WritesLittleEndianAndRoundTrips()
     {
         const uint value = 0x11223344;
         const ushort machine = 0x166; // 10 bits max
@@ -59,7 +60,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void TrySerializeToByteSpanTooSmallReturnsFalse()
+    public void TryWriteBytes_WhenDestinationTooSmall_ReturnsFalse()
     {
         Snowflake id = Snowflake.NewId(0xAABBCCDD, 0xEEFF, (SnowflakeType)0x12);
         Span<byte> small = stackalloc byte[7];
@@ -68,7 +69,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void SerializeReturnsNew8ByteArray()
+    public void ToByteArray_WithFixedComponents_ReturnsEightLittleEndianBytes()
     {
         Snowflake id = Snowflake.NewId(0x01020304, 0x0106, (SnowflakeType)0x07);
         byte[] arr = id.ToByteArray();
@@ -77,7 +78,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void DeserializeFromByteArrayInvalidLengthThrows()
+    public void FromBytes_WhenLengthIsNotEight_ThrowsSerializationFailureException()
     {
         _ = Assert.Throws<SerializationFailureException>(() => Snowflake.FromBytes([]));
         _ = Assert.Throws<SerializationFailureException>(() => Snowflake.FromBytes(new byte[7]));
@@ -85,7 +86,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void HexStringMatchesSerializedBytesLength16()
+    public void ToString_WithAnyId_ReturnsSixteenHexCharsOfSerializedBytes()
     {
         Snowflake id = Snowflake.NewId(0x00112233, 0x4455, (SnowflakeType)0x66);
         Span<byte> buf = stackalloc byte[8];
@@ -96,7 +97,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void EqualityAndHashCodeUseAllComponents()
+    public void Equals_WithSameAndDifferentComponents_ComparesAllComponents()
     {
         Snowflake id1 = Snowflake.NewId(0xAAAAAAAA, 0xBBBB, (SnowflakeType)0xCC);
         Snowflake id2 = Snowflake.NewId(0xAAAAAAAA, 0xBBBB, (SnowflakeType)0xCC);
@@ -119,7 +120,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void RandomNewIdByTypeAndMachineRoundTripsFromBytes()
+    public void NewId_WithTypeAndMachineId_RoundTripsThroughBytes()
     {
         // NewId(type, machineId) uses SecureRandom for Value; we just check round-trip
         Snowflake id = Snowflake.NewId((SnowflakeType)0x11, machineId: 0x2222);
@@ -130,14 +131,14 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void UnsafeSizeOfIs8ForExplicitLayout()
+    public void SizeOf_WithExplicitLayout_IsEightBytes()
     {
         int size = Unsafe.SizeOf<Snowflake>();
         Assert.Equal(8, size);
     }
 
     [Fact]
-    public void TryParseWhenHexIsValidReturnsTrueAndParsedValue()
+    public void TryParse_WhenHexIsValid_ReturnsTrueAndParsedValue()
     {
         Snowflake source = Snowflake.NewId(0x12345678, 0x99AA, (SnowflakeType)0x11);
         string hex = source.ToString();
@@ -154,7 +155,7 @@ public class IdentifierTests
     [InlineData(" ")]
     [InlineData("ABC")]
     [InlineData("00112233445566ZZ")]
-    public void TryParseWhenInputIsInvalidReturnsFalseAndEmpty(string? input)
+    public void TryParse_WhenInputIsInvalid_ReturnsFalseAndEmpty(string? input)
     {
         bool ok = Snowflake.TryParse(input, out Snowflake parsed);
 
@@ -163,7 +164,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void FromBytesWhenArrayIsNullThrowsSerializationFailureException()
+    public void FromBytes_WhenArrayIsNull_ThrowsSerializationFailureException()
     {
         byte[]? bytes = null;
 
@@ -171,7 +172,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void FromUInt64RoundTripsToSameIdentifier()
+    public void FromUInt64_WithToUInt64Output_ReturnsSameId()
     {
         Snowflake source = Snowflake.NewId(0xDEADBEEF, 0xABCD, (SnowflakeType)0x22);
         Snowflake roundTripped = Snowflake.FromUInt64(source.ToUInt64());
@@ -180,7 +181,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void CompareAndOperatorsFollowUnderlyingOrder()
+    public void Compare_WithOrderedIds_FollowsUnderlyingOrder()
     {
         Snowflake smaller = Snowflake.NewId(1, 1, SnowflakeType.System);
         Snowflake bigger = Snowflake.NewId(2, 1, SnowflakeType.System);
@@ -195,7 +196,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void EqualsWithISnowflakeDifferentImplementationReturnsFalse()
+    public void Equals_WithOtherISnowflakeImplementation_ReturnsFalse()
     {
         Snowflake id = Snowflake.NewId(123, 4, SnowflakeType.System);
         ISnowflake other = new StubSnowflake();
@@ -204,7 +205,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void NewIdExceedingSequenceCapacityProducesUniqueIds()
+    public void NewId_WhenSequenceCapacityExceeded_ProducesUniqueIds()
     {
         int count = 16384 + 5;
         HashSet<ulong> ids = new(count);
@@ -217,7 +218,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void NewIdWhenClockMovesBackwardKeepsLogicalTimestamp()
+    public void NewId_WhenClockMovesBackward_KeepsLogicalTimestamp()
     {
         (FieldInfo lastTimestampField, FieldInfo sequenceField) = GetSnowflakeGeneratorFields();
         uint oldLastTimestamp = (uint)lastTimestampField.GetValue(null)!;
@@ -242,7 +243,7 @@ public class IdentifierTests
     }
 
     [Fact]
-    public void NewIdWhenSequenceCapacityIsExceededAdvancesLogicalTimestamp()
+    public void NewId_WhenSequenceCapacityIsExceeded_AdvancesLogicalTimestamp()
     {
         (FieldInfo lastTimestampField, FieldInfo sequenceField) = GetSnowflakeGeneratorFields();
         uint oldLastTimestamp = (uint)lastTimestampField.GetValue(null)!;
@@ -291,18 +292,3 @@ public class IdentifierTests
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

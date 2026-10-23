@@ -2,9 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -18,21 +16,25 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.Healthz;
 
 /// <summary>
-/// Many concurrent threads/connections hammering /healthz at once on one listener --
-/// distinct from the sequential-cumulative repro: here N callers hit the same listener
-/// AT THE SAME TIME, matching a real burst of health-check traffic instead of one-at-a-time
-/// probing. Listener must stay up and answer every request.
+/// Reproduces the reported production repro exactly: plain HTTP GET /healthz requests,
+/// each on its own short-lived TCP connection (connect, send, receive, close -- no WS
+/// handshake, no stalled sockets), repeated sequentially many times against the SAME
+/// listener instance. Reported thresholds: ~20 cumulative survives, ~40+ cumulative kills
+/// the listener permanently (no self-recovery).
 /// </summary>
 [Collection(TestCollections.NetworkConfig)]
-public sealed class HealthzConcurrentSpamTests : IDisposable
+public sealed class HealthzSequentialSpamTests : IDisposable
 {
-    private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-healthz-concurrent-{Guid.NewGuid():N}.private");
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
 
-    public HealthzConcurrentSpamTests()
+    private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-healthz-spam-{Guid.NewGuid():N}.private");
+
+    public HealthzSequentialSpamTests()
         => File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
 
     private static ushort GetFreePort()
@@ -66,8 +68,8 @@ public sealed class HealthzConcurrentSpamTests : IDisposable
     private static async Task<bool> ProbeHealthzAsync(ushort port)
     {
         using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.ReceiveTimeout = 5000;
-        socket.SendTimeout = 5000;
+        socket.ReceiveTimeout = 3000;
+        socket.SendTimeout = 3000;
         try
         {
             await socket.ConnectAsync(IPAddress.Loopback, port);
@@ -85,13 +87,11 @@ public sealed class HealthzConcurrentSpamTests : IDisposable
     }
 
     /// <summary>
-    /// N threads fire /healthz at the same instant, repeated in waves, on the SAME listener
-    /// instance (no restart). The listener must survive every wave and keep answering
-    /// afterward -- if concurrent access to shared state (upgrade list / lock / socket pool)
-    /// has a race, this is where it would show up.
+    /// Sequential (1-at-a-time, no concurrency) cumulative /healthz spam on one listener --
+    /// matches the reported repro exactly (x20 cumulative survives, x40 cumulative kills it).
     /// </summary>
     [Fact]
-    public async Task ConcurrentHealthzBursts_ListenerStaysAlive()
+    public async Task Healthz_WhenRequestedSequentially100Times_ListenerStaysAlive()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -119,18 +119,16 @@ public sealed class HealthzConcurrentSpamTests : IDisposable
 
         try
         {
-            int[] waveSizes = [1, 5, 10, 20, 30, 50, 100];
-            foreach (int n in waveSizes)
+            int[] checkpoints = [1, 5, 10, 20, 30, 40, 50, 70, 100];
+            int done = 0;
+            foreach (int target in checkpoints)
             {
-                IEnumerable<Task<bool>> wave = Enumerable.Range(0, n).Select(_ => ProbeHealthzAsync(port));
-                Task<bool[]> all = Task.WhenAll(wave);
-                Task completed = await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(15)));
-
-                Assert.True(ReferenceEquals(completed, all),
-                    $"Concurrent /healthz wave of size {n} did not complete within 15s -- listener appears hung.");
-
-                bool[] results = await all;
-                Assert.True(results.All(ok => ok), $"Some /healthz probes failed in a concurrent wave of size {n}.");
+                while (done < target)
+                {
+                    bool ok = await ProbeHealthzAsync(port);
+                    Assert.True(ok, $"/healthz failed at cumulative request #{done + 1}");
+                    done++;
+                }
             }
         }
         finally
@@ -141,6 +139,7 @@ public sealed class HealthzConcurrentSpamTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

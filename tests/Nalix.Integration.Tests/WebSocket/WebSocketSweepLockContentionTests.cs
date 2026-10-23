@@ -18,8 +18,9 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.WebSocket;
 
 /// <summary>
 /// Real (non-mocked) reproduction of the <c>_wsUpgradeLock</c> contention hang: a burst of
@@ -32,6 +33,8 @@ namespace Nalix.Integration.Tests;
 [Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketSweepLockContentionTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-sweep-{Guid.NewGuid():N}.private");
 
     public WebSocketSweepLockContentionTests()
@@ -115,7 +118,7 @@ public sealed class WebSocketSweepLockContentionTests : IDisposable
     /// own read timeout. All real handshakes must complete with a 101 response.
     /// </summary>
     [Fact]
-    public async Task StalledHandshakeBurst_DoesNotDelayConcurrentRealHandshakes()
+    public async Task Handshake_WithConcurrentStalledBurst_IsNotDelayed()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -184,7 +187,7 @@ public sealed class WebSocketSweepLockContentionTests : IDisposable
     /// the live upgrade list).
     /// </summary>
     [Fact]
-    public async Task RepeatedSweepCycles_LeaveUpgradeListConsistent()
+    public async Task Sweep_WhenCyclesRepeat_LeavesUpgradeListConsistent()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -249,7 +252,7 @@ public sealed class WebSocketSweepLockContentionTests : IDisposable
     /// the sweep path in isolation.
     /// </summary>
     [Fact]
-    public async Task AbruptResetPeers_RaceWithSweep_DoNotCorruptUpgradeList()
+    public async Task Sweep_WhenAbruptResetPeersRace_DoesNotCorruptUpgradeList()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -386,6 +389,7 @@ public sealed class WebSocketSweepLockContentionTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);
