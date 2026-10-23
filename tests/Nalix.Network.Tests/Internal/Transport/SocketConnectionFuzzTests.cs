@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
@@ -12,7 +15,7 @@ using Nalix.Network.Internal.Transport;
 using Xunit;
 using TransportAsyncCallback = Nalix.Network.Internal.Transport.AsyncCallback;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 /// <summary>
 /// Area 2 (malformed packet/header fuzz) coverage: seeded-random blobs through the real receive
@@ -23,7 +26,7 @@ namespace Nalix.Network.Tests;
 /// </summary>
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 [Collection(TestCollections.AsyncCallback)]
-public sealed class SocketConnectionMalformedPacketFuzzTests
+public sealed class SocketConnectionFuzzTests
 {
     private const int Seed = 20260704;
     private const int Iterations = 500;
@@ -62,7 +65,7 @@ public sealed class SocketConnectionMalformedPacketFuzzTests
     /// either silently dropped or dispatched, and the connection must remain disposable afterward.
     /// </summary>
     [Fact]
-    public async Task RandomBlobs_NeverCrashOrHangConnection()
+    public async Task BeginReceive_WithRandomBlobs_DoesNotCrashOrHang()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -109,7 +112,7 @@ public sealed class SocketConnectionMalformedPacketFuzzTests
     /// connection must still process a subsequent well-formed frame with a different opcode.
     /// </summary>
     [Fact]
-    public async Task UnknownOpCode_DoesNotCrashDispatch_ConnectionSurvives()
+    public async Task BeginReceive_WithUnknownOpCode_StillDispatchesNextFrame()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -160,7 +163,7 @@ public sealed class SocketConnectionMalformedPacketFuzzTests
     [InlineData(0xFF, 0xFF)]
     [InlineData(0x00, 0xFF)]
     [InlineData(0xAA, 0x55)]
-    public async Task ArbitraryFlagsAndPriority_DoesNotCrashDispatch(byte flags, byte priority)
+    public async Task BeginReceive_WithArbitraryFlagsAndPriority_DispatchesFrame(byte flags, byte priority)
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -188,7 +191,7 @@ public sealed class SocketConnectionMalformedPacketFuzzTests
     /// wait, never a crash — closing the client leaves the connection to observe EOF/disconnect.
     /// </summary>
     [Fact]
-    public async Task DeclaredLengthExceedsActualBytesSent_ThenHalfClose_ConnectionClosesCleanly()
+    public async Task BeginReceive_WithDeclaredLengthBeyondSentBytesThenHalfClose_ClosesCleanly()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -219,7 +222,7 @@ public sealed class SocketConnectionMalformedPacketFuzzTests
     /// — it must not crash the process, and the connection must remain usable for the next frame.
     /// </summary>
     [Fact]
-    public async Task HandlerException_IsContained_ConnectionSurvivesForNextFrame()
+    public async Task BeginReceive_WhenHandlerThrows_ProcessesNextFrame()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);

@@ -22,9 +22,10 @@ using Nalix.Network.Connections;
 using Nalix.Network.Internal.Transport;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class TransportSendLockTests : IDisposable
 {
     private readonly Socket _socket;
@@ -52,7 +53,7 @@ public sealed class TransportSendLockTests : IDisposable
     }
 
     [Fact]
-    public async Task SocketTcpTransport_AcquireSendLockAsync_FastPath_CompletesSynchronouslyAndReturnsCachedScope()
+    public async Task AcquireSendLockAsync_OnTcpTransportWhenUncontended_ReturnsCachedScopeSynchronously()
     {
         IConnection.ITransport transport = _connection.TCP;
 
@@ -75,7 +76,7 @@ public sealed class TransportSendLockTests : IDisposable
     }
 
     [Fact]
-    public async Task SocketTcpTransport_AcquireSendLockAsync_WhenContended_AwaitsUntilFirstScopeDisposed()
+    public async Task AcquireSendLockAsync_OnTcpTransportWhenContended_WaitsUntilFirstScopeDisposed()
     {
         IConnection.ITransport transport = _connection.TCP;
 
@@ -102,7 +103,7 @@ public sealed class TransportSendLockTests : IDisposable
     }
 
     [Fact]
-    public async Task SocketTcpTransport_AcquireSendLockAsync_CancelledToken_ThrowsOperationCanceledException()
+    public async Task AcquireSendLockAsync_OnTcpTransportWithCancelledToken_ThrowsOperationCanceledException()
     {
         IConnection.ITransport transport = _connection.TCP;
 
@@ -124,7 +125,7 @@ public sealed class TransportSendLockTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketTransport_AcquireSendLockAsync_FastPath_CompletesSynchronouslyAndReturnsCachedScope()
+    public async Task AcquireSendLockAsync_OnWebSocketTransportWhenUncontended_ReturnsCachedScopeSynchronously()
     {
         IConnection.ITransport transport = _webSocketConnection.TCP;
 
@@ -147,7 +148,7 @@ public sealed class TransportSendLockTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketTransport_AcquireSendLockAsync_WhenContended_AwaitsUntilFirstScopeDisposed()
+    public async Task AcquireSendLockAsync_OnWebSocketTransportWhenContended_WaitsUntilFirstScopeDisposed()
     {
         IConnection.ITransport transport = _webSocketConnection.TCP;
 
@@ -174,7 +175,7 @@ public sealed class TransportSendLockTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketTransport_AcquireSendLockAsync_CancelledToken_ThrowsOperationCanceledException()
+    public async Task AcquireSendLockAsync_OnWebSocketTransportWithCancelledToken_ThrowsOperationCanceledException()
     {
         IConnection.ITransport transport = _webSocketConnection.TCP;
 
@@ -196,7 +197,7 @@ public sealed class TransportSendLockTests : IDisposable
     }
 
     [Fact]
-    public async Task SocketTcpTransport_ResetForPool_ReinitializesCachedScopeCleanly()
+    public async Task ResetForPool_OnTcpTransport_ReinitializesCachedScope()
     {
         SocketTcpTransport transport = new();
         SocketConnection socketConn = ObjectPoolManager.Shared.Get<SocketConnection>();
@@ -229,7 +230,7 @@ public sealed class TransportSendLockTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketTransport_ResetForPool_ReinitializesCachedScopeCleanly()
+    public async Task ResetForPool_OnWebSocketTransport_ReinitializesCachedScope()
     {
         WebSocketTransport transport = new();
         transport.Initialize(_webSocketConnection, _webSocket);

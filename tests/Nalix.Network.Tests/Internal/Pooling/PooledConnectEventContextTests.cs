@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
@@ -10,7 +13,7 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Internal.Pooling;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Pooling;
 
 /// <summary>
 /// Regression tests for <see cref="PooledConnectEventContext"/> pool reset behavior.
@@ -24,7 +27,7 @@ namespace Nalix.Network.Tests;
 public sealed class PooledConnectEventContextTests
 {
     [Fact]
-    public void ResetForPool_ClearsLocalOwner()
+    public void ResetForPool_AfterInitialize_ClearsLocalOwner()
     {
         // Arrange
         PooledConnectEventContext context = new();
@@ -52,7 +55,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void ResetForPool_ClearsAllFields_AfterFullLifecycle()
+    public void ResetForPool_AfterFullLifecycle_ClearsAllFields()
     {
         // Arrange
         PooledConnectEventContext context = new();
@@ -79,7 +82,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void Dispose_ReturnsToOwnerPool_WhenLocalOwnerSet()
+    public void Dispose_WhenLocalOwnerSet_ReturnsContextToOwnerPool()
     {
         // Arrange
         PooledConnectEventContext context = new();
@@ -100,7 +103,7 @@ public sealed class PooledConnectEventContextTests
     // ─── Phase 3A: IThreadPoolWorkItem tests ────────────────────────────────
 
     [Fact]
-    public void PooledConnectEventContext_ImplementsIThreadPoolWorkItem()
+    public void Type_WhenInspected_ImplementsIThreadPoolWorkItem()
     {
         // Verify the interface is implemented (compile-time guarantee + runtime check).
         PooledConnectEventContext context = new();
@@ -109,7 +112,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void Execute_InvokesStoredInvokerExactlyOnce()
+    public void Execute_WithStoredInvoker_InvokesInvokerExactlyOnce()
     {
         // Arrange
         PooledConnectEventContext context = new();
@@ -134,7 +137,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void Execute_NullInvoker_DisposesDefensively()
+    public void Execute_WithoutInvoker_DisposesContextWithoutThrowing()
     {
         // Arrange: do NOT set an invoker.
         PooledConnectEventContext context = new();
@@ -163,7 +166,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void ResetForPool_ClearsStoredInvoker()
+    public void ResetForPool_AfterSetThreadPoolInvoker_ClearsStoredInvoker()
     {
         // Arrange
         PooledConnectEventContext context = new();
@@ -197,7 +200,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void SetThreadPoolInvoker_StoresInvoker_ForExecuteToCall()
+    public void SetThreadPoolInvoker_WhenExecuted_CallsStoredInvoker()
     {
         // Arrange
         bool invoked = false;
@@ -218,7 +221,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public async Task HighConcurrency_DispatchStressTest_NoContextLeak()
+    public async Task Execute_WhenQueuedToThreadPoolInBulk_CompletesEveryContext()
     {
         // Stress test: queue many contexts through IThreadPoolWorkItem path
         // and verify they all complete without leaks or crashes.
@@ -265,7 +268,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void Execute_ProcessInvoker_IsCalledViaExecute()
+    public void Execute_WithProcessLaneInvoker_RunsInvoker()
     {
         // Verify that when a process-lane invoker is stored and Execute() is called,
         // the invoker runs (simulating AsyncCallback.s_invokeProcess behavior).
@@ -298,7 +301,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void Execute_PostInvoker_IsCalledViaExecute()
+    public void Execute_WithPostLaneInvoker_RunsInvoker()
     {
         // Verify that when a post-lane invoker is stored and Execute() is called,
         // the invoker runs (simulating AsyncCallback.s_invokePost behavior).
@@ -331,7 +334,7 @@ public sealed class PooledConnectEventContextTests
     }
 
     [Fact]
-    public void QueueFailure_StillReturnsContextExactlyOnce()
+    public void Dispose_AfterQueueFailure_ReturnsContextToOwnerPool()
     {
         // Verify that when ThreadPool.UnsafeQueueUserWorkItem fails (throws),
         // the context is still returned to the pool exactly once.

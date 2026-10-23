@@ -9,7 +9,7 @@ using Nalix.Abstractions.Networking;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Transport;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 /// <summary>
 /// Regression tests for the WebSocket sequence-reservation/wire-write race fixed via
@@ -59,7 +59,7 @@ public sealed class WebSocketTransportSendOrderingTests
     }
 
     [Fact]
-    public async Task ConcurrentSends_PreserveMonotonicWireOrder_WithSendLockHeldAcrossReservation()
+    public async Task SendAsync_WithConcurrentSends_PreservesMonotonicWireOrder()
     {
         // Arrange
         DelayingStubWebSocket socket = new DelayingStubWebSocket();

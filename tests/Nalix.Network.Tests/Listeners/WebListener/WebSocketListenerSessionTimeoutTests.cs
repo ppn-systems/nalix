@@ -1,5 +1,3 @@
-using NSubstitute;
-using Nalix.Abstractions.Concurrency;
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
@@ -10,6 +8,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using NSubstitute;
+using Nalix.Abstractions.Concurrency;
 using Xunit;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
@@ -23,12 +23,12 @@ using Nalix.SDK.Transport;
 using Nalix.Network.Protocols;
 using FluentAssertions;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Listeners.WebListener;
 
 [Collection(TestCollections.NetworkConfig)]
-public class WebSocketConnectionTimeoutTests : IDisposable
+public sealed class WebSocketListenerSessionTimeoutTests : IDisposable
 {
-    public WebSocketConnectionTimeoutTests()
+    public WebSocketListenerSessionTimeoutTests()
     {
     }
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-test-{Guid.NewGuid():N}.private");
@@ -85,12 +85,19 @@ public class WebSocketConnectionTimeoutTests : IDisposable
             port = GetFreePort();
             var server = new TestWebSocketListener(port, "/ws/", protocol, hub, guard);
             server.Activate();
-            System.Threading.Thread.Sleep(500); // Give it a moment to fail if port is busy
-            lastReport = server.GenerateReport();
-            if (lastReport.Contains("RUNNING"))
+            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+            do
             {
-                return server;
+                lastReport = server.GenerateReport();
+                if (lastReport.Contains("RUNNING"))
+                {
+                    return server;
+                }
+
+                Thread.Sleep(20);
             }
+            while (DateTime.UtcNow < deadline);
+
             server.Deactivate();
             server.Dispose();
         }
@@ -98,7 +105,7 @@ public class WebSocketConnectionTimeoutTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketSession_DisconnectBeforeTimeout_RemovesTimeoutTask()
+    public async Task Session_WhenDisconnectedBeforeTimeout_RemovesTimeoutTask()
     {
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxErrorThreshold", 50);
@@ -110,7 +117,6 @@ public class WebSocketConnectionTimeoutTests : IDisposable
         var hub = new ConnectionHub();
 
         using var server = StartTestServerRobustly(protocol, hub, out ushort port);
-        await Task.Delay(3500); // Remaining delay for slow CI
 
         try
         {
@@ -193,8 +199,8 @@ public class WebSocketConnectionTimeoutTests : IDisposable
         }
     }
 
-    [Fact(Skip = "Flaky under full Network.Tests run: shared TimingWheel/TaskManager state prevents deterministic idle tick.")]
-    public async Task WebSocketSession_IdleTimeout_DisconnectsClient()
+    [Fact]
+    public async Task Session_WhenIdleTimeoutElapses_DisconnectsClient()
     {
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxErrorThreshold", 50);
@@ -216,7 +222,6 @@ public class WebSocketConnectionTimeoutTests : IDisposable
             var hub = new ConnectionHub();
 
             using var server = StartTestServerRobustly(protocol, hub, out ushort port);
-            await Task.Delay(3500); // Remaining delay for slow CI
 
             try
             {

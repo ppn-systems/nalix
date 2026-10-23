@@ -4,16 +4,16 @@
 using Nalix.Network.Options;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Options;
 
 /// <summary>
 /// Verifies CSWSH Origin-header validation on <see cref="NetworkWebSocketOptions.IsOriginAllowed"/>.
 /// Covers issue #298 acceptance criteria: authorized, unauthorized, missing, and empty-allowlist cases.
 /// </summary>
-public class WebSocketOriginValidationTests
+public sealed class NetworkWebSocketOptionsOriginTests
 {
     [Fact]
-    public void EmptyAllowlist_AllowsAnyOrigin_LegacyBehavior()
+    public void IsOriginAllowed_WithEmptyAllowlist_AllowsAnyOrigin()
     {
         NetworkWebSocketOptions opt = new() { AllowedOrigins = string.Empty };
 
@@ -23,7 +23,7 @@ public class WebSocketOriginValidationTests
     }
 
     [Fact]
-    public void AuthorizedOrigin_IsAllowed()
+    public void IsOriginAllowed_WithAuthorizedOrigin_ReturnsTrue()
     {
         NetworkWebSocketOptions opt = new() { AllowedOrigins = "https://schools.eyc.education,https://app.example.com" };
 
@@ -32,7 +32,7 @@ public class WebSocketOriginValidationTests
     }
 
     [Fact]
-    public void UnauthorizedOrigin_IsRejected()
+    public void IsOriginAllowed_WithUnauthorizedOrigin_ReturnsFalse()
     {
         NetworkWebSocketOptions opt = new() { AllowedOrigins = "https://schools.eyc.education" };
 
@@ -43,7 +43,7 @@ public class WebSocketOriginValidationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void MissingOrigin_FollowsAllowMissingOriginSetting(bool allowMissing)
+    public void IsOriginAllowed_WithMissingOrigin_FollowsAllowMissingOriginSetting(bool allowMissing)
     {
         NetworkWebSocketOptions opt = new()
         {
@@ -56,7 +56,7 @@ public class WebSocketOriginValidationTests
     }
 
     [Fact]
-    public void OriginMatch_IsCaseInsensitive_AndIgnoresTrailingSlash()
+    public void IsOriginAllowed_WithDifferentCaseOrTrailingSlash_MatchesOrigin()
     {
         NetworkWebSocketOptions opt = new() { AllowedOrigins = "https://schools.eyc.education" };
 
@@ -66,7 +66,7 @@ public class WebSocketOriginValidationTests
     }
 
     [Fact]
-    public void Allowlist_TrimsEntriesAndTrailingSlashes()
+    public void IsOriginAllowed_WithPaddedAllowlistEntries_TrimsEntries()
     {
         NetworkWebSocketOptions opt = new() { AllowedOrigins = " https://a.com/ , https://b.com " };
 
@@ -75,7 +75,7 @@ public class WebSocketOriginValidationTests
     }
 
     [Fact]
-    public void CacheRebuilds_WhenAllowedOriginsChanges()
+    public void IsOriginAllowed_AfterAllowedOriginsChanged_RebuildsCache()
     {
         NetworkWebSocketOptions opt = new() { AllowedOrigins = "https://a.com" };
         Assert.True(opt.IsOriginAllowed("https://a.com"));
@@ -87,7 +87,7 @@ public class WebSocketOriginValidationTests
     }
 
     [Fact]
-    public void PortMismatch_IsRejected()
+    public void IsOriginAllowed_WithPortMismatch_ReturnsFalse()
     {
         NetworkWebSocketOptions opt = new() { AllowedOrigins = "https://app.example.com:8443" };
 
@@ -97,7 +97,7 @@ public class WebSocketOriginValidationTests
     }
 
     [Fact]
-    public void SubdomainOrSuffix_IsNotAPrefixMatch()
+    public void IsOriginAllowed_WithSubdomainOrSuffix_ReturnsFalse()
     {
         NetworkWebSocketOptions opt = new() { AllowedOrigins = "https://example.com" };
 

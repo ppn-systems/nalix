@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
@@ -6,13 +9,13 @@ using FluentAssertions;
 using Nalix.Network.Internal.Pooling;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Pooling;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 public sealed class PooledSocketReceiveContextTests
 {
     [Fact]
-    public async Task ReceiveAsync_AsyncCompletion_ReusesManualResetValueTaskSourceAcrossOperations()
+    public async Task ReceiveAsync_WhenCompletedAsynchronouslyTwice_ReusesValueTaskSource()
     {
         using Socket listener = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));

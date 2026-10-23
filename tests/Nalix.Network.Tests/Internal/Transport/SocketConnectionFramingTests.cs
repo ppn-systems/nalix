@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -8,9 +11,9 @@ using Xunit;
 using Nalix.Abstractions.Networking;
 using Nalix.Network.Internal.Transport;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
-public class SocketConnectionFramingTests
+public sealed class SocketConnectionFramingTests
 {
     private SocketConnection CreateConnection()
     {
@@ -25,7 +28,7 @@ public class SocketConnectionFramingTests
     }
 
     [Fact]
-    public void SetFraming_WhenNotStarted_Succeeds()
+    public void SetFraming_WhenNotStarted_DoesNotThrow()
     {
         using var conn = CreateConnection();
 

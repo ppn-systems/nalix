@@ -13,8 +13,9 @@ using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Network.Connections;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Connections;
 
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketConnectionHubTests : IDisposable
 {
     private sealed class StubOpCodeExtractor : IOpCodeExtractor
@@ -45,7 +46,7 @@ public sealed class WebSocketConnectionHubTests : IDisposable
     }
 
     [Fact]
-    public void RegisterWebSocketConnection_IncrementsCount_AndAllowsLookup()
+    public void RegisterWebSocketConnection_WhenCalled_IncrementsCountAndAllowsLookup()
     {
         using ConnectionHub hub = new();
         using TestStubWebSocket socket = new();
@@ -58,7 +59,7 @@ public sealed class WebSocketConnectionHubTests : IDisposable
     }
 
     [Fact]
-    public void UnregisterWebSocketConnection_DecrementsCount_AndRaisesEvent()
+    public void UnregisterWebSocketConnection_WhenRegistered_DecrementsCountAndRaisesEvent()
     {
         using ConnectionHub hub = new();
         using TestStubWebSocket socket = new();
@@ -77,7 +78,7 @@ public sealed class WebSocketConnectionHubTests : IDisposable
     }
 
     [Fact]
-    public void ListConnections_ByEndpoint_WithWebSocketConnections()
+    public void ListConnections_WithWebSocketConnections_ReturnsThemByEndpoint()
     {
         using ConnectionHub hub = new();
         using TestStubWebSocket socket1 = new();
@@ -104,7 +105,7 @@ public sealed class WebSocketConnectionHubTests : IDisposable
     }
 
     [Fact]
-    public void UnregisterWebSocketConnection_CalledTwice_IsIdempotent()
+    public void UnregisterWebSocketConnection_WhenCalledTwice_IsIdempotent()
     {
         using ConnectionHub hub = new();
         using TestStubWebSocket socket = new();

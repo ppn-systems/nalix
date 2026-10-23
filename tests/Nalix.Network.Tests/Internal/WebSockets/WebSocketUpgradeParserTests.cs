@@ -7,12 +7,12 @@ using Nalix.Environment.Hashing;
 using Nalix.Network.Internal.WebSockets;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.WebSockets;
 
-public class WebSocketUpgradeParserTests
+public sealed class WebSocketUpgradeParserTests
 {
     [Fact]
-    public void Parse_ExtractsForwardedClientIpHeaders()
+    public void Parse_WithForwardedHeaders_ExtractsClientIpHeaders()
     {
         byte[] request = Encoding.ASCII.GetBytes(
             "GET /ws/ HTTP/1.1\r\n" +
@@ -37,7 +37,7 @@ public class WebSocketUpgradeParserTests
     }
 
     [Fact]
-    public void Parse_SplitsPathAndQuery_AndExtractsContentLengthAndType()
+    public void Parse_WithQueryAndContentHeaders_SplitsPathAndExtractsContentMetadata()
     {
         byte[] request = Encoding.ASCII.GetBytes(
             "POST /admin/kick?reason=spam HTTP/1.1\r\n" +
@@ -60,7 +60,7 @@ public class WebSocketUpgradeParserTests
     }
 
     [Fact]
-    public void Parse_RejectsTransferEncodingChunkedAsMalformed()
+    public void Parse_WithChunkedTransferEncoding_ReturnsMalformed()
     {
         byte[] request = Encoding.ASCII.GetBytes(
             "POST /webhook HTTP/1.1\r\n" +
@@ -80,7 +80,7 @@ public class WebSocketUpgradeParserTests
     [InlineData("Content-Length: 14\r\nContent-Length: 14\r\n")]
     [InlineData("Content-Length: +14\r\n")]
     [InlineData("Content-Length: -0\r\n")]
-    public void Parse_RejectsDuplicateOrSignedContentLength_AsMalformed(string clHeaders)
+    public void Parse_WithDuplicateOrSignedContentLength_ReturnsMalformed(string clHeaders)
     {
         byte[] request = Encoding.ASCII.GetBytes(
             "POST /webhook HTTP/1.1\r\n" +
@@ -102,7 +102,7 @@ public class WebSocketUpgradeParserTests
     [InlineData(" Content-Length: 10\r\n")]
     [InlineData("\tContent-Length: 10\r\n")]
     [InlineData("InvalidHeaderLineWithoutColon\r\n")]
-    public void Parse_RejectsWhitespaceBeforeColon_ObsFold_AndMissingColon_AsMalformed(string headerLine)
+    public void Parse_WithWhitespaceBeforeColonObsFoldOrMissingColon_ReturnsMalformed(string headerLine)
     {
         byte[] request = Encoding.ASCII.GetBytes(
             "POST /webhook HTTP/1.1\r\n" +
@@ -124,7 +124,7 @@ public class WebSocketUpgradeParserTests
     [InlineData("GET /healthz \r\nHost: example.com\r\n\r\n")]
     [InlineData("GET /healthz HTTP/1.1 SMUGGLED\r\nHost: example.com\r\n\r\n")]
     [InlineData("GET /healthz HTTP/2.0\r\nHost: example.com\r\n\r\n")]
-    public void Parse_RejectsBareCrLf_AndMalformedRequestLine_AsMalformed(string rawRequest)
+    public void Parse_WithBareCrLfOrMalformedRequestLine_ReturnsMalformed(string rawRequest)
     {
         byte[] request = Encoding.ASCII.GetBytes(rawRequest);
 
@@ -136,7 +136,7 @@ public class WebSocketUpgradeParserTests
     }
 
     [Fact]
-    public void Parse_RejectsOversizedHeaderKey_AsMalformed()
+    public void Parse_WithOversizedHeaderKey_ReturnsMalformed()
     {
         string longKey = new('X', 129);
         byte[] request = Encoding.ASCII.GetBytes(
@@ -152,7 +152,7 @@ public class WebSocketUpgradeParserTests
     }
 
     [Fact]
-    public void Parse_RejectsNonZeroContentLengthOnGetOrWebSocketUpgrade_AsMalformed()
+    public void Parse_WithNonZeroContentLengthOnGetOrUpgrade_ReturnsMalformed()
     {
         byte[] getWithBody = Encoding.ASCII.GetBytes(
             "GET /healthz HTTP/1.1\r\n" +
@@ -186,7 +186,7 @@ public class WebSocketUpgradeParserTests
     [InlineData("X-Real-IP: 1.1.1.1\r\nX-Real-IP: 2.2.2.2\r\n")]
     [InlineData("Origin: https://evil.com\r\nOrigin: https://allowed.com\r\n")]
     [InlineData("Host: a.com\r\nHost: b.com\r\n")]
-    public void Parse_RejectsDuplicateSingletonAndForwardedHeaders_AsMalformed(string duplicateHeaders)
+    public void Parse_WithDuplicateSingletonOrForwardedHeaders_ReturnsMalformed(string duplicateHeaders)
     {
         byte[] request = Encoding.ASCII.GetBytes(
             "GET /ws/ HTTP/1.1\r\n" +
@@ -206,7 +206,7 @@ public class WebSocketUpgradeParserTests
     }
 
     [Fact]
-    public void FormatHttpResponseHeader_SanitizesCrlfInContentType_PreventsResponseSplitting()
+    public void FormatHttpResponseHeader_WithCrlfInContentType_SanitizesToPreventResponseSplitting()
     {
         System.Span<byte> dest = stackalloc byte[512];
         System.ReadOnlySpan<byte> maliciousContentType = "text/plain\r\nX-Injected-Header: pwned\r\n\r\n<script>"u8;
@@ -224,7 +224,7 @@ public class WebSocketUpgradeParserTests
     }
 
     [Fact]
-    public void ComputeAcceptKey_Rfc6455Section1_3Vector_ReturnsExpectedBase64AcceptKey()
+    public void ComputeAcceptKey_WithRfc6455SampleKey_ReturnsExpectedAcceptKey()
     {
         ReadOnlySpan<byte> clientKey = "dGhlIHNhbXBsZSBub25jZQ=="u8;
         ReadOnlySpan<byte> expectedAccept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="u8;
@@ -242,7 +242,7 @@ public class WebSocketUpgradeParserTests
     [InlineData("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", "84983E441C3BD26EBAAE4AA1F95129E5E54670F1")]
     [InlineData("dGhlIHNhbXBsZSBub25jZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11", "B37A4F2CC0624F1690F64606CF385945B2BEC4EA")]
     [InlineData("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu", "A49B2446A02C645BF419F995B67091253A04A259")]
-    public void Sha1_HashData_MatchesFips180AndRfc3174Vectors(string input, string expectedHex)
+    public void Sha1HashData_WithKnownVectors_MatchesExpectedHex(string input, string expectedHex)
     {
         byte[] inputBytes = Encoding.ASCII.GetBytes(input);
         byte[] hash = Sha1.HashData(inputBytes);

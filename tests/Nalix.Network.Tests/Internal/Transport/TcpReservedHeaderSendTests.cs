@@ -17,19 +17,20 @@ using Nalix.Framework.Memory.Buffers;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Connections;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 /// <summary>
 /// The TCP transport writes the 2-byte length prefix into headroom reserved by the lease and sends
 /// in place; leases without headroom still go through the copying path. Both must produce the same wire bytes.
 /// </summary>
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class TcpReservedHeaderSendTests
 {
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task SendAsyncCore_Lease_ProducesLengthPrefixedFrame(bool withHeadroom)
+    public async Task SendAsyncCore_WithLease_ProducesLengthPrefixedFrame(bool withHeadroom)
     {
         EnsureRegistered();
 

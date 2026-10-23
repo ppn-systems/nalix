@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Reflection;
 using System.Threading;
@@ -5,7 +8,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Security;
 
 public sealed class SlidingWindowTests
 {
@@ -15,7 +18,7 @@ public sealed class SlidingWindowTests
         ?? throw new InvalidOperationException("Unable to resolve SlidingWindow.TryCheck(ushort).");
 
     [Fact]
-    public void TryCheck_WrapAround_65535To0_AcceptsNewPackets()
+    public void TryCheck_WhenSequenceWrapsAround_AcceptsNewPackets()
     {
         object window = CreateWindow(windowSize: 1024);
 
@@ -26,7 +29,7 @@ public sealed class SlidingWindowTests
     }
 
     [Fact]
-    public void TryCheck_WrapAround_ReplayedPackets_AreRejected()
+    public void TryCheck_WhenWrappedSequenceReplayed_ReturnsFalse()
     {
         object window = CreateWindow(windowSize: 1024);
 
@@ -38,7 +41,7 @@ public sealed class SlidingWindowTests
     }
 
     [Fact]
-    public void TryCheck_WrapAround_OutOfOrderWithinWindow_AcceptsPacket()
+    public void TryCheck_WhenWrappedSequenceArrivesOutOfOrder_ReturnsTrue()
     {
         object window = CreateWindow(windowSize: 1024);
 
@@ -48,7 +51,7 @@ public sealed class SlidingWindowTests
     }
 
     [Fact]
-    public void TryCheck_ExactlyAtWindowBoundary_IsAccepted_OneBeyond_IsRejectedAsTooOld()
+    public void TryCheck_AtWindowBoundary_AcceptsOldestSlotAndRejectsOneBeyond()
     {
         object window = CreateWindow(windowSize: 1024);
 
@@ -62,7 +65,7 @@ public sealed class SlidingWindowTests
     }
 
     [Fact]
-    public void TryCheck_OldPacketReplayedAfterHalfRingAdvance_IsRejectedAndDoesNotPoisonMaxSeen()
+    public void TryCheck_WhenOldPacketReplayedAfterHalfRingAdvance_RejectsWithoutPoisoningMaxSeen()
     {
         object window = CreateWindow(windowSize: 1024);
 
@@ -89,7 +92,7 @@ public sealed class SlidingWindowTests
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
-    public void TryCheck_ConcurrentDisjointSequenceNumbers_AllMarkedExactlyOnce()
+    public void TryCheck_WithConcurrentDisjointSequences_AcceptsEachExactlyOnce()
     {
         const int seed = 20260704;
         const int threadCount = 64;

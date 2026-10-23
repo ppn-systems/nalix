@@ -14,7 +14,7 @@ using Nalix.Network.Internal.Transport;
 using NSubstitute;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 public sealed class TransportSequenceBoxingTests : IDisposable
 {
@@ -30,7 +30,7 @@ public sealed class TransportSequenceBoxingTests : IDisposable
     }
 
     [Fact]
-    public void TcpTransport_SequenceCounter_ReturnsSameReferenceAndPersistsState()
+    public void SequenceCounter_OnTcpTransport_ReturnsSameReferenceAndPersistsState()
     {
         // Arrange
         IConnection.ITransport transport = _connection.TCP;
@@ -64,7 +64,7 @@ public sealed class TransportSequenceBoxingTests : IDisposable
     }
 
     [Fact]
-    public void UdpTransport_SequenceCounter_ReturnsSameReferenceAndPersistsState()
+    public void SequenceCounter_OnUdpTransport_ReturnsSameReferenceAndPersistsState()
     {
         // Arrange
         using var transport = new SocketUdpTransport();
@@ -98,7 +98,7 @@ public sealed class TransportSequenceBoxingTests : IDisposable
     }
 
     [Fact]
-    public void UdpTransport_SequenceCounter_ResetsCorrectlyOnPooling()
+    public void SequenceCounter_OnUdpTransportAfterPoolReset_StartsFromZero()
     {
         // Arrange
         using var transport = new SocketUdpTransport();
