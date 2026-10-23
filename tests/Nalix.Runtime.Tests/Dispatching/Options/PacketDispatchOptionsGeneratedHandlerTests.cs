@@ -19,9 +19,10 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Internal.Compilation;
 using Nalix.Runtime.Routing;
+using Nalix.Runtime.Tests.TestSupport;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Dispatching.Options;
 
 /// <summary>
 /// End-to-end tests that dispatch real packets through source-generated
@@ -36,7 +37,8 @@ namespace Nalix.Runtime.Tests;
 /// instead of <c>return await handler(...)</c> — silently never sending a response.
 /// </para>
 /// </summary>
-public sealed class PacketHandlerGeneratorBehaviorTests
+[Collection(TestCollections.ProcessWideServices)]
+public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
 {
     private static PacketDispatchOptions<EchoPacket> BuildDispatcher(EchoController controller)
         => new PacketDispatchOptions<EchoPacket>().WithHandler(controller);
@@ -44,7 +46,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     private static EchoPacket MakePacket(ushort opCode) => new() { Header = new PacketHeader { OpCode = opCode, SequenceId = 1 } };
 
     [Fact]
-    public async Task VoidHandler_DoesNotSendResponse()
+    public async Task ExecuteResolvedHandlerAsync_WithVoidHandler_SendsNoResponse()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -58,7 +60,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task ValueTaskHandler_AwaitsButSendsNoResponse()
+    public async Task ExecuteResolvedHandlerAsync_WithValueTaskHandler_AwaitsButSendsNoResponse()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -72,7 +74,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task TaskHandler_AwaitsButSendsNoResponse()
+    public async Task ExecuteResolvedHandlerAsync_WithTaskHandler_AwaitsButSendsNoResponse()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -95,7 +97,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     /// This test fails under that regression and passes with the Contains-based fix.
     /// </summary>
     [Fact]
-    public async Task ValueTaskOfTHandler_AwaitsResultAndSendsResponse()
+    public async Task ExecuteResolvedHandlerAsync_WithValueTaskOfTHandler_AwaitsResultAndSendsResponse()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -109,7 +111,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task TaskOfTHandler_AwaitsResultAndSendsResponse()
+    public async Task ExecuteResolvedHandlerAsync_WithTaskOfTHandler_AwaitsResultAndSendsResponse()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -123,7 +125,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task GenericContextHandler_ReceivesConcretePacketAndAwaitsValueTaskOfT()
+    public async Task ExecuteResolvedHandlerAsync_WithContextHandlerReturningValueTaskOfT_AwaitsResultAndSendsResponse()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -138,7 +140,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task ThrowingHandler_ExceptionSurfacesAsFailDirective_NotSwallowed()
+    public async Task ExecuteResolvedHandlerAsync_WithAsyncThrowingHandler_SendsFailDirectiveInsteadOfSwallowing()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -152,7 +154,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task SyncValueTaskOfTHandler_FastPathSendsResponse()
+    public async Task ExecuteResolvedHandlerAsync_WithSyncValueTaskOfTHandler_SendsResponseViaFastPath()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -166,7 +168,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task SyncTaskOfTHandler_FastPathSendsResponse()
+    public async Task ExecuteResolvedHandlerAsync_WithSyncTaskOfTHandler_SendsResponseViaFastPath()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -180,7 +182,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task SyncDirectValueHandler_FastPathSendsResponse()
+    public async Task ExecuteResolvedHandlerAsync_WithSyncDirectValueHandler_SendsResponseViaFastPath()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -194,7 +196,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task SyncThrowingHandler_ExceptionSurfacesAsFailDirective_NotSwallowed()
+    public async Task ExecuteResolvedHandlerAsync_WithSyncThrowingHandler_SendsFailDirectiveInsteadOfSwallowing()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -216,7 +218,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     /// is surfaced during the build, not just an unresolved handler at dispatch time.
     /// </summary>
     [Fact]
-    public void TwoParameterHandler_IsSkippedAtGeneration_ButFlaggedByAnalyzer()
+    public void TryResolveHandler_WithTwoParameterHandler_ReturnsFalse()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -240,7 +242,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     /// round-trips correctly.
     /// </summary>
     [Fact]
-    public async Task StreamHandlerWithBridgeContext_ContextStaysValidAfterFirstAwait()
+    public async Task ExecuteResolvedHandlerAsync_WithStreamHandlerAndBridgeContext_KeepsContextValidAfterFirstAwait()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -262,7 +264,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task FromScopeHandler_ResolvesServiceAndExecutesSuccessfully()
+    public async Task ExecuteResolvedHandlerAsync_WithFromScopeParameter_ResolvesServiceAndExecutes()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -280,7 +282,7 @@ public sealed class PacketHandlerGeneratorBehaviorTests
     }
 
     [Fact]
-    public async Task MultipleFromScopeHandler_ResolvesAllServicesInOrder()
+    public async Task ExecuteResolvedHandlerAsync_WithMultipleFromScopeParameters_ResolvesAllServicesInOrder()
     {
         EchoController controller = new();
         PacketDispatchOptions<EchoPacket> options = BuildDispatcher(controller);
@@ -299,259 +301,5 @@ public sealed class PacketHandlerGeneratorBehaviorTests
         controller.InjectedService2.Should().BeSameAs(service2);
     }
 
-    private sealed class FakeSequenceCounter : ISequenceCounter
-    {
-        private uint _value;
-        public uint Next() => ++_value;
-        public uint Current() => _value;
-        public void Reset(uint newValue = 0) => _value = newValue;
-        public bool IsValid(uint? receivedSeq, uint window = 0) => true;
-        public void UpdateTo(uint receivedSeq) => _value = receivedSeq;
-        public void ResumeFrom(uint lastKnownSeq, uint safetyGap = 1000) => _value = lastKnownSeq;
-        public bool IsApproachingOverflow(uint margin = 1_000_000) => false;
-    }
-
-    private sealed class FakeTransport : IConnection.ITransport
-    {
-        public System.Collections.Generic.List<byte[]> SentMessages { get; } = [];
-
-        public TransportFraming Framing => TransportFraming.UInt16LengthPrefixed;
-
-        public ISequenceCounter SendSequence { get; } = new FakeSequenceCounter();
-        public ISequenceCounter ReceiveSequence { get; } = new FakeSequenceCounter();
-        public uint NextSendSequence() => SendSequence.Next();
-        public uint NextReceiveSequence() => ReceiveSequence.Next();
-        public uint CurrentSendSequence => SendSequence.Current();
-        public uint CurrentReceiveSequence => ReceiveSequence.Current();
-
-        public void Send(ReadOnlySpan<byte> message) => SentMessages.Add(message.ToArray());
-
-        public ValueTask SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default)
-        {
-            SentMessages.Add(message.ToArray());
-            return ValueTask.CompletedTask;
-        }
-
-        public void BeginReceive(CancellationToken cancellationToken = default) { }
-        public void UseFraming(TransportFraming framing) { }
-    }
-
-    private sealed class FakeConnection : IConnection
-    {
-        public FakeTransport FakeTcp { get; } = new();
-
-        public bool IsDisposed { get; private set; }
-        public bool IsUdpCreated => false;
-        public ulong ConnectionId => 1;
-        public string? UserId { get; set; }
-        public long UpTime => 0;
-        public long LastPingTime => 0;
-        public bool ExcludeFromIdleTimeout { get; set; }
-        public IOpCodeExtractor PacketClassifier => null!;
-        public INetworkEndpoint NetworkEndpoint => null!;
-        public IObjectMap<AttributeKey, object> Attributes { get; } = ObjectMap<AttributeKey, object>.Rent();
-        public ConcurrentDictionary<ushort, object> RateLimitCache { get; } = new();
-        public Bytes32 Secret { get; set; }
-        public PermissionLevel Level { get; set; }
-        public CipherSuiteType Algorithm { get; set; }
-
-        public IConnection.ITransport TCP => FakeTcp;
-        public IConnection.ITransport? UDP => null;
-
-        public event EventHandler<IConnectionEventArgs>? ConnectionClosed;
-        public event EventHandler<IConnectionEventArgs>? MessageProcessing;
-        public event EventHandler<IConnectionEventArgs>? MessageProcessed;
-
-        public void Disconnect(string? reason = null) { }
-        public void Dispose() => IsDisposed = true;
-        public int ErrorCount => 0;
-        public void IncrementErrorCount() { }
-
-        public int IdleTimeoutMs { get; set; } = 60000;
-        public void UpdateIdleTimeout(int newTimeoutMs) => IdleTimeoutMs = newTimeoutMs;
-    }
-}
-
-/// <summary>
-/// Test-only packet handled by <see cref="EchoController"/>, real generator output flows through it.
-/// </summary>
-public sealed partial class EchoPacket : PacketBase<EchoPacket>, IPacketStaticOpcode
-{
-    public static ushort StaticOpCode => 9998;
-
-    public static new EchoPacket Deserialize(ReadOnlySpan<byte> buffer) => PacketBase<EchoPacket>.Deserialize(buffer);
-}
-
-/// <summary>
-/// Test-only controller scanned by the real <c>PacketHandlerGenerator</c>. Every return-type
-/// shape the generator supports is represented here so the generated invoker code is exercised
-/// end-to-end (not merely compiled).
-/// </summary>
-[PacketHandler]
-public sealed class EchoController
-{
-    public const ushort VoidOpCode = 0x2101;
-    public const ushort ValueTaskOpCode = 0x2102;
-    public const ushort TaskOpCode = 0x2103;
-    public const ushort ValueTaskOfTOpCode = 0x2104;
-    public const ushort TaskOfTOpCode = 0x2105;
-    public const ushort ContextOpCode = 0x2106;
-    public const ushort ThrowingOpCode = 0x2107;
-    public const ushort StreamOpCode = 0x210B;
-    public const ushort SyncValueTaskOfTOpCode = 0x210C;
-    public const ushort SyncTaskOfTOpCode = 0x210D;
-    public const ushort SyncDirectValueOpCode = 0x210E;
-    public const ushort SyncThrowingOpCode = 0x210F;
-
-    public bool VoidInvoked { get; private set; }
-    public bool ValueTaskInvoked { get; private set; }
-    public bool TaskInvoked { get; private set; }
-    public bool ContextInvoked { get; private set; }
-
-    // Note: the generator only recognizes single-parameter handlers whose parameter
-    // is a generic IPacketContext<TPacket> (see PacketHandlerGenerator.cs
-    // GET_CONTROLLER_MODEL: `if (method.Parameters.Length != 1) continue;`). A
-    // two-parameter (packet, connection) shape is silently skipped — no diagnostic,
-    // no handler registered — so every handler here uses the context-style shape.
-
-    [PacketOpcode(VoidOpCode)]
-    public void HandleVoid(IPacketContext<EchoPacket> context) => VoidInvoked = true;
-
-    [PacketOpcode(ValueTaskOpCode)]
-    public ValueTask HandleValueTask(IPacketContext<EchoPacket> context)
-    {
-        ValueTaskInvoked = true;
-        return ValueTask.CompletedTask;
-    }
-
-    [PacketOpcode(TaskOpCode)]
-    public Task HandleTask(IPacketContext<EchoPacket> context)
-    {
-        TaskInvoked = true;
-        return Task.CompletedTask;
-    }
-
-    [PacketOpcode(ValueTaskOfTOpCode)]
-    public async ValueTask<EchoPacket> HandleValueTaskOfT(IPacketContext<EchoPacket> context)
-    {
-        await Task.Yield();
-        return new EchoPacket { Header = new PacketHeader { OpCode = ValueTaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } };
-    }
-
-    [PacketOpcode(TaskOfTOpCode)]
-    public async Task<EchoPacket> HandleTaskOfT(IPacketContext<EchoPacket> context)
-    {
-        await Task.Yield();
-        return new EchoPacket { Header = new PacketHeader { OpCode = TaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } };
-    }
-
-    [PacketOpcode(ContextOpCode)]
-    public async ValueTask<EchoPacket> HandleContext(IPacketContext<EchoPacket> context)
-    {
-        ContextInvoked = true;
-        await Task.Yield();
-        return new EchoPacket { Header = new PacketHeader { OpCode = ContextOpCode, SequenceId = context.Packet.Header.SequenceId } };
-    }
-
-    [PacketOpcode(ThrowingOpCode)]
-    public async ValueTask HandleThrowing(IPacketContext<EchoPacket> context)
-    {
-        await Task.Yield();
-        throw new InvalidOperationException("intentional test failure");
-    }
-
-    // #391 regression coverage: an IAsyncEnumerable<T>-returning handler with a bridge (generic)
-    // context runs its body lazily — nothing in it executes until the first MoveNextAsync — so this
-    // handler deliberately reads context.Packet.Header.SequenceId AFTER an `await Task.Yield()`
-    // inside the iterator, exactly the shape that observed a cleared or reused pooled context before
-    // the fix (the bridge context was returned to the pool the instant this method was CALLED, long
-    // before the first yield ran).
-    [PacketOpcode(StreamOpCode)]
-    public static async IAsyncEnumerable<EchoPacket> HandleStream(IPacketContext<EchoPacket> context)
-    {
-        ushort requestSeq = context.Packet.Header.SequenceId;
-        await Task.Yield();
-        yield return new EchoPacket { Header = new PacketHeader { OpCode = StreamOpCode, SequenceId = requestSeq } };
-    }
-
-    [PacketOpcode(SyncValueTaskOfTOpCode)]
-    public ValueTask<EchoPacket> HandleSyncValueTaskOfT(IPacketContext<EchoPacket> context)
-    {
-        return new ValueTask<EchoPacket>(new EchoPacket { Header = new PacketHeader { OpCode = SyncValueTaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } });
-    }
-
-    [PacketOpcode(SyncTaskOfTOpCode)]
-    public Task<EchoPacket> HandleSyncTaskOfT(IPacketContext<EchoPacket> context)
-    {
-        return Task.FromResult(new EchoPacket { Header = new PacketHeader { OpCode = SyncTaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } });
-    }
-
-    [PacketOpcode(SyncDirectValueOpCode)]
-    public EchoPacket HandleSyncDirectValue(IPacketContext<EchoPacket> context)
-    {
-        return new EchoPacket { Header = new PacketHeader { OpCode = SyncDirectValueOpCode, SequenceId = context.Packet.Header.SequenceId } };
-    }
-
-    [PacketOpcode(SyncThrowingOpCode)]
-    public ValueTask HandleSyncThrowing(IPacketContext<EchoPacket> context)
-    {
-        throw new InvalidOperationException("intentional synchronous test failure");
-    }
-
-    public const ushort TwoParamOpCode = 0x2108;
-
-    // Legacy (packet, connection) two-parameter shape. See the comment above: the generator
-    // silently skips this — no diagnostic, no registration — per PacketHandlerGenerator.cs:243.
-    [PacketOpcode(TwoParamOpCode)]
-    public void HandleTwoParam(EchoPacket packet, IConnection connection) => VoidInvoked = true;
-
-    public const ushort FromScopeOpCode = 0x2109;
-    public const ushort MultipleFromScopeOpCode = 0x210A;
-
-    public bool FromScopeInvoked { get; private set; }
-    public IScopedEchoService? InjectedService { get; private set; }
-    public IScopedEchoService2? InjectedService2 { get; private set; }
-
-    [PacketOpcode(FromScopeOpCode)]
-    public async ValueTask<EchoPacket> HandleFromScope(
-        IPacketContext<EchoPacket> context,
-        [FromScope] IScopedEchoService service)
-    {
-        FromScopeInvoked = true;
-        InjectedService = service;
-        await Task.Yield();
-        return new EchoPacket { Header = new PacketHeader { OpCode = FromScopeOpCode, SequenceId = context.Packet.Header.SequenceId } };
-    }
-
-    [PacketOpcode(MultipleFromScopeOpCode)]
-    public async ValueTask HandleMultipleFromScope(
-        IPacketContext<EchoPacket> context,
-        [FromScope] IScopedEchoService service1,
-        [FromScope] IScopedEchoService2 service2)
-    {
-        FromScopeInvoked = true;
-        InjectedService = service1;
-        InjectedService2 = service2;
-        await Task.Yield();
-    }
-}
-
-public interface IScopedEchoService
-{
-    Guid Id { get; }
-}
-
-public sealed class TestScopedEchoService : IScopedEchoService
-{
-    public Guid Id { get; } = Guid.NewGuid();
-}
-
-public interface IScopedEchoService2
-{
-    Guid Id { get; }
-}
-
-public sealed class TestScopedEchoService2 : IScopedEchoService2
-{
-    public Guid Id { get; } = Guid.NewGuid();
+    public void Dispose() => ScopedServiceRegistry.Instance.Clear();
 }

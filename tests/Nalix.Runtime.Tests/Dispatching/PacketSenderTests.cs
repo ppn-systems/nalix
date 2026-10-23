@@ -16,12 +16,12 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Dispatching;
 
 public sealed class PacketSenderTests
 {
     [Fact]
-    public async Task ReplyAsync_EchoesRequestSequenceIdOntoResponse()
+    public async Task ReplyAsync_WithRequestSequenceId_EchoesItOntoResponse()
     {
         FakeConnection connection = new();
         TestPacket request = new() { Header = new PacketHeader { SequenceId = 42 } };

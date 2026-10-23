@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Nalix.Runtime.Tests.Security;
 
-public class FileCertificateStoreTests : IDisposable
+public sealed class FileCertificateStoreTests : IDisposable
 {
     private readonly string _tempDirectory;
 
@@ -35,7 +35,7 @@ public class FileCertificateStoreTests : IDisposable
     }
 
     [Fact]
-    public void SaveAndLoadRoundTripWorksAndSetsSecurePermissionsOnUnix()
+    public void SaveAndLoad_WithKeyPair_RoundTripsAndSetsSecureUnixPermissions()
     {
         FileCertificateStore store = new();
         string path = Path.Combine(_tempDirectory, "test_identity.key");

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Buffers.Binary;
 using System.Diagnostics;
@@ -15,7 +18,7 @@ using Nalix.Runtime.Options;
 using Nalix.Runtime.Throttling;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Throttling;
 
 public sealed class PolicyRateLimiterTests : IDisposable
 {
@@ -47,7 +50,7 @@ public sealed class PolicyRateLimiterTests : IDisposable
     }
 
     [Fact]
-    public async Task Evaluate_SeparatePolicies_ShouldUseSeparateBuckets()
+    public async Task Evaluate_WithSeparatePolicies_UsesSeparateBuckets()
     {
         using var scope = await ConnectedSocketScope.CreateAsync(NextIp());
         using var connection = new Connection(scope.ServerSocket, s_testOpCodeExtractor);
@@ -69,7 +72,7 @@ public sealed class PolicyRateLimiterTests : IDisposable
     }
 
     [Fact]
-    public async Task Evaluate_SameIPDifferentOpCode_ShouldUseSeparateBuckets()
+    public async Task Evaluate_WithSameIpAndDifferentOpCodes_UsesSeparateBuckets()
     {
         using var scope = await ConnectedSocketScope.CreateAsync(NextIp());
         using var connection = new Connection(scope.ServerSocket, s_testOpCodeExtractor);
@@ -89,7 +92,7 @@ public sealed class PolicyRateLimiterTests : IDisposable
     }
 
     [Fact]
-    public async Task Evaluate_InvalidBurst_ShouldDenyRequest()
+    public async Task Evaluate_WithInvalidBurst_DeniesWithHardLockout()
     {
         using var scope = await ConnectedSocketScope.CreateAsync(NextIp());
         using var connection = new Connection(scope.ServerSocket, s_testOpCodeExtractor);
@@ -104,7 +107,7 @@ public sealed class PolicyRateLimiterTests : IDisposable
     }
 
     [Fact]
-    public async Task Evaluate_NoRateLimitAttribute_ShouldAllowRequest()
+    public async Task Evaluate_WithoutRateLimitAttribute_AllowsRequest()
     {
         using var scope = await ConnectedSocketScope.CreateAsync(NextIp());
         using var connection = new Connection(scope.ServerSocket, s_testOpCodeExtractor);
@@ -118,7 +121,21 @@ public sealed class PolicyRateLimiterTests : IDisposable
     }
 
     [Fact]
-    public void GenerateReport_ShouldContainSharedEngineInfo()
+    public async Task Evaluate_WithSamePolicyIdAcrossDifferentOpCodes_SharesSingleRateLimitBucket()
+    {
+        using var scope = await ConnectedSocketScope.CreateAsync(NextIp());
+        using var connection = new Connection(scope.ServerSocket, s_testOpCodeExtractor);
+
+        var sharedPolicy = new PacketRateLimitAttribute(1, 1) { PolicyId = "SharedAuthPolicy" };
+        var contextA = new TestPacketContext(connection, 0x2001, sharedPolicy);
+        var contextB = new TestPacketContext(connection, 0x2002, sharedPolicy);
+
+        _limiter.Evaluate(contextA).Allowed.Should().BeTrue("first request under SharedAuthPolicy should be allowed");
+        _limiter.Evaluate(contextB).Allowed.Should().BeFalse("second request with a different OpCode but the same PolicyId must share the same rate-limit bucket");
+    }
+
+    [Fact]
+    public void GenerateReport_WhenCalled_ContainsSharedEngineSections()
     {
         string report = _limiter.GenerateReport();
         report.Should().Contain("PolicyRateLimiter Status");

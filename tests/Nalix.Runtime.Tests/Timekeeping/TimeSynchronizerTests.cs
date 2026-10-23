@@ -1,10 +1,13 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Runtime.Timekeeping;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Timekeeping;
 
 public sealed class TimeSynchronizerTests : IDisposable
 {
@@ -22,7 +25,7 @@ public sealed class TimeSynchronizerTests : IDisposable
     }
 
     [Fact]
-    public void Activate_StartsTheLoop()
+    public void Activate_WhenCalled_StartsLoop()
     {
         _synchronizer.Activate();
         Assert.True(_synchronizer.IsRunning);
@@ -30,7 +33,7 @@ public sealed class TimeSynchronizerTests : IDisposable
     }
 
     [Fact]
-    public void Deactivate_StopsTheLoop()
+    public void Deactivate_AfterActivate_StopsLoop()
     {
         _synchronizer.Activate();
         _synchronizer.Deactivate();
@@ -39,24 +42,31 @@ public sealed class TimeSynchronizerTests : IDisposable
     }
 
     [Fact]
-    public async Task TimeSynchronized_RaisedPeriodically()
+    public async Task Activate_WithShortPeriod_RaisesTimeSynchronizedPeriodically()
     {
         _synchronizer.Period = TimeSpan.FromMilliseconds(50);
         int tickCount = 0;
-        _synchronizer.TimeSynchronized += _ => Interlocked.Increment(ref tickCount);
+        TaskCompletionSource threeTicks = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        _synchronizer.TimeSynchronized += tick =>
+        {
+            if (Interlocked.Increment(ref tickCount) >= 3)
+            {
+                _ = threeTicks.TrySetResult();
+            }
+        };
 
         _synchronizer.Activate();
-        
-        // Wait for a few ticks
-        await Task.Delay(250);
-        
+
+        // Wait (bounded) for a few ticks
+        _ = await Task.WhenAny(threeTicks.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+
         _synchronizer.Deactivate();
 
         Assert.True(tickCount >= 3, $"Expected at least 3 ticks, got {tickCount}");
     }
 
     [Fact]
-    public void Period_ChangeWhileRunning_RestartsLoop()
+    public void Period_WhenChangedWhileRunning_KeepsLoopRunningWithNewPeriod()
     {
         _synchronizer.Activate();
         _synchronizer.Period = TimeSpan.FromMilliseconds(100);
@@ -66,7 +76,7 @@ public sealed class TimeSynchronizerTests : IDisposable
     }
 
     [Fact]
-    public void Dispose_DisposesCorrectly()
+    public void Dispose_AfterActivate_StopsLoop()
     {
         _synchronizer.Activate();
         _synchronizer.Dispose();
@@ -79,18 +89,3 @@ public sealed class TimeSynchronizerTests : IDisposable
         _synchronizer.Dispose();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -21,7 +21,7 @@ using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Internal.Routing;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Internal.Routing;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 public sealed class DispatchChannelTests
@@ -29,11 +29,11 @@ public sealed class DispatchChannelTests
     #region Test Case 1: Strict In-Order Delivery
 
     /// <summary>
-    /// Chứng minh lỗi race condition: khi nhiều consumer cùng TryClaim trên cùng 1 connection,
-    /// packet bị dequeue ra không đúng thứ tự (out-of-order).
+    /// Guards against a race condition: when several consumers call TryClaim on the same connection,
+    /// packets must never be dequeued out of order.
     /// </summary>
     [Fact]
-    public void Should_Process_Packets_Strictly_In_Order_Under_High_Concurrency()
+    public void TryClaim_WithConcurrentConsumers_DequeuesPacketsInOrder()
     {
         // Arrange
         const int packetCount = 2000;
@@ -46,8 +46,8 @@ public sealed class DispatchChannelTests
         object lockObj = new();
         int consumedCount = 0;
 
-        // Act: Producer push tuần tự, Consumers chạy đa luồng
-        // Kịch bản: push 1 packet -> yield -> consumer khác có cơ hội claim cùng lúc
+        // Act: the producer pushes sequentially while the consumers run concurrently.
+        // Scenario: push one packet, yield, and give another consumer a chance to claim at the same time.
         Task producer = Task.Run(() =>
         {
             for (int seq = 1; seq <= packetCount; seq++)
@@ -55,7 +55,7 @@ public sealed class DispatchChannelTests
                 FakeBufferLease lease = CreatePacketLease(seq, PacketPriority.NONE);
                 channel.Push(connection, lease);
 
-                // Nhường CPU định kỳ để tăng window cho race condition
+                // Yield periodically to widen the race window
                 if (seq % 50 == 0)
                 {
                     Thread.Yield();
@@ -95,8 +95,8 @@ public sealed class DispatchChannelTests
 
         Task.WaitAll([producer, .. consumers]);
 
-        // Assert: Thứ tự PHẢI tăng dần đều (1, 2, 3, ...)
-        // Nếu bug tồn tại, test sẽ FAIL tại đây vì packet bị out-of-order.
+        // Assert: the order must be strictly increasing (1, 2, 3, ...).
+        // If the bug exists, the test fails here because packets arrive out of order.
         Assert.Equal(packetCount, dequeuedSequences.Count);
 
         for (int i = 0; i < dequeuedSequences.Count; i++)
@@ -117,10 +117,10 @@ public sealed class DispatchChannelTests
     #region Test Case 2: WDRR Load Balance
 
     /// <summary>
-    /// Kiểm tra DispatchChannel phân phối load công bằng giữa nhiều connection (WDRR).
+    /// Verifies that DispatchChannel distributes load fairly between connections (WDRR).
     /// </summary>
     [Fact]
-    public void Should_Distribute_Load_Fairly_Between_Connections()
+    public void TryClaim_WithMultipleConnections_DeliversEveryPacketToItsConnection()
     {
         // Arrange
         const int connectionCount = 4;
@@ -134,7 +134,7 @@ public sealed class DispatchChannelTests
             connections[i] = new FakeConnection();
         }
 
-        // Push packets cho từng connection
+        // Push packets for each connection
         for (int c = 0; c < connectionCount; c++)
         {
             for (int seq = 1; seq <= packetsPerConnection; seq++)
@@ -148,7 +148,7 @@ public sealed class DispatchChannelTests
         int consumedTotal = 0;
         ConcurrentDictionary<IConnection, int> perConnection = new();
 
-        // Act: Claim và dequeue tất cả
+        // Act: claim and dequeue everything
         while (Volatile.Read(ref consumedTotal) < totalExpected)
         {
             if (!channel.TryClaim(out IDispatchSession? session))
@@ -171,7 +171,7 @@ public sealed class DispatchChannelTests
             }
         }
 
-        // Assert: Mỗi connection phải nhận đúng số packet đã push
+        // Assert: each connection must receive exactly the number of packets pushed
         Assert.Equal(totalExpected, consumedTotal);
         Assert.Equal(connectionCount, perConnection.Count);
 
@@ -188,7 +188,7 @@ public sealed class DispatchChannelTests
     #region Test Case 3: RemoveConnection clears node Connection reference
 
     [Fact]
-    public void DispatchChannel_RemoveConnection_ClearsNodeConnectionReference()
+    public void RemoveConnection_AfterPush_ClearsNodeConnectionReference()
     {
         // Arrange
         using DispatchChannel<FakePacket> channel = new();
@@ -230,7 +230,7 @@ public sealed class DispatchChannelTests
     #region Test Case 4: RemoveConnection clears node State reference
 
     [Fact]
-    public void DispatchChannel_RemoveConnection_ClearsNodeStateReference()
+    public void RemoveConnection_AfterPush_ClearsNodeStateReference()
     {
         // Arrange
         using DispatchChannel<FakePacket> channel = new();
@@ -271,7 +271,7 @@ public sealed class DispatchChannelTests
     #region Test Case 5: RemoveConnection is idempotent
 
     [Fact]
-    public void DispatchChannel_RemoveConnection_IsIdempotent()
+    public void RemoveConnection_WhenCalledRepeatedly_IsIdempotent()
     {
         // Arrange
         using DispatchChannel<FakePacket> channel = new();
@@ -306,7 +306,7 @@ public sealed class DispatchChannelTests
     #region Test Case 6: Removed node is skipped by traversal
 
     [Fact]
-    public void DispatchChannel_RemovedNode_IsSkippedByTraversal()
+    public void TryClaim_AfterConnectionRemoved_SkipsRemovedNode()
     {
         // Arrange
         using DispatchChannel<FakePacket> channel = new();
@@ -338,7 +338,7 @@ public sealed class DispatchChannelTests
     #region Test Case 7: RemoveConnection drains pending packets
 
     [Fact]
-    public void DispatchChannel_RemoveConnection_DrainsPendingPackets()
+    public void RemoveConnection_WithPendingPackets_DrainsThem()
     {
         // Arrange
         using DispatchChannel<FakePacket> channel = new();
@@ -371,7 +371,7 @@ public sealed class DispatchChannelTests
     /// HasClaimableConnection stayed true forever, keeping dispatch workers from parking.
     /// </summary>
     [Fact]
-    public void TryClaim_StaleEntryWithExhaustedBudget_PurgesEntrySoWorkersCanPark()
+    public void TryClaim_WithStaleEntryAndExhaustedBudget_PurgesEntry()
     {
         using DispatchChannel<FakePacket> channel = new();
         FakeConnection[] live = [new(), new()];
@@ -416,7 +416,7 @@ public sealed class DispatchChannelTests
     /// After a concurrent push/claim/remove storm fully drains, nothing may look claimable.
     /// </summary>
     [Fact]
-    public async Task ConcurrentPushClaimRemove_AfterDrain_NoPhantomClaimableEntries()
+    public async Task PushClaimRemove_WithConcurrentStormAfterDrain_LeavesNoPhantomClaimableEntries()
     {
         using DispatchChannel<FakePacket> channel = new();
         FakeConnection[] conns = new FakeConnection[16];
@@ -493,7 +493,7 @@ public sealed class DispatchChannelTests
     #region Test Case 8: Weak reference — removed connection is GC-collectible
 
     [Fact]
-    public void DispatchChannel_RemoveConnection_ConnectionIsGcCollectible()
+    public void RemoveConnection_AfterPush_ReleasesConnectionForGc()
     {
         // Arrange: Create channel and connection in a helper to avoid root on stack
         WeakReference weakRef = RegisterPushRemoveAndDropReference();
@@ -535,7 +535,7 @@ public sealed class DispatchChannelTests
     #region Test Case 9: Pending priority copy avoids caller allocation
 
     [Fact]
-    public void DispatchChannel_CopyPendingPerPriority_CopiesSnapshotIntoCallerBuffer()
+    public void CopyPendingPerPriority_WithCallerBuffer_CopiesSnapshotAndRejectsSmallBuffer()
     {
         using DispatchChannel<FakePacket> channel = new();
         FakeConnection lowConnection = new();
@@ -555,6 +555,24 @@ public sealed class DispatchChannelTests
 
         int[] tooSmall = new int[(int)PacketPriority.URGENT];
         Assert.Throws<ArgumentException>(() => channel.CopyPendingPerPriority(tooSmall));
+    }
+
+    #endregion
+
+    #region Test Case 10: Unauthenticated priority clamping
+
+    [Fact]
+    public void Push_WithUnauthenticatedConnectionAndUrgentPriority_ClampsToStandardPriority()
+    {
+        using DispatchChannel<FakePacket> channel = new();
+        FakeConnection unauthenticated = new() { Level = PermissionLevel.NONE };
+        FakeBufferLease urgentLease = CreatePacketLease(1, PacketPriority.URGENT);
+
+        channel.Push(unauthenticated, urgentLease);
+
+        int[] pending = channel.PendingPerPriority;
+        Assert.Equal(0, pending[(int)PacketPriority.URGENT]);
+        Assert.Equal(1, pending[(int)PacketPriority.NONE]);
     }
 
     #endregion

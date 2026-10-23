@@ -19,13 +19,13 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Dispatching;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 public sealed class PacketContextScopePoolingTests
 {
     [Fact]
-    public async Task PacketContext_DefaultInitialize_UsesEmbeddedDefaultScope()
+    public async Task Initialize_WithoutExplicitScope_UsesEmbeddedDefaultScope()
     {
         // Arrange
         PacketContext<TestPacket> context = new();
@@ -59,7 +59,7 @@ public sealed class PacketContextScopePoolingTests
     }
 
     [Fact]
-    public void PacketContext_ResetForPool_ResetsEmbeddedDefaultScopeDirectly()
+    public void Initialize_AfterDispose_ReusesEmbeddedDefaultScope()
     {
         // Arrange
         PacketContext<TestPacket> context = new();
@@ -98,7 +98,7 @@ public sealed class PacketContextScopePoolingTests
     }
 
     [Fact]
-    public async Task PacketContext_CustomPassedInScope_IsNotDefaultScope_AndDisposesCorrectly()
+    public async Task Initialize_WithCustomScope_UsesCustomScopeAndDisposesIt()
     {
         // Arrange
         PacketContext<TestPacket> context = new();
@@ -132,7 +132,7 @@ public sealed class PacketContextScopePoolingTests
     }
 
     [Fact]
-    public async Task PacketContext_DefaultScope_PreservesLifoDisposalOrder()
+    public async Task DisposeAsync_WithDefaultScope_DisposesInLifoOrder()
     {
         // Arrange
         PacketContext<TestPacket> context = new();

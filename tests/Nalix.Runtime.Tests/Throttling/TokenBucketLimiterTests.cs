@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,12 +10,13 @@ using Nalix.Runtime.Options;
 using Nalix.Runtime.Throttling;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Throttling;
 
+[Collection(TestCollections.ProcessWideServices)]
 public sealed class TokenBucketLimiterTests
 {
     [Fact]
-    public void Evaluate_WithNullEndpoint_ShouldThrowArgumentNullException()
+    public void Evaluate_WithNullEndpoint_ThrowsArgumentNullException()
     {
         using var limiter = new TokenBucketLimiter(CreateOptions());
         Action act = () => limiter.Evaluate(null!);
@@ -20,7 +24,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void Evaluate_WithEmptyAddress_ShouldThrowArgumentException()
+    public void Evaluate_WithEmptyAddress_ThrowsArgumentException()
     {
         using var limiter = new TokenBucketLimiter(CreateOptions());
         Action act = () => limiter.Evaluate(new TestEndpoint(""));
@@ -28,7 +32,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void Evaluate_WithinBurstCapacity_ShouldAllowRequests()
+    public void Evaluate_WithinBurstCapacity_AllowsRequestsThenDenies()
     {
         var options = CreateOptions();
         options.CapacityTokens = 5;
@@ -48,7 +52,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public async Task Evaluate_AfterRefillTime_ShouldAllowNewRequests()
+    public async Task Evaluate_AfterRefillTime_AllowsNewRequests()
     {
         var options = CreateOptions();
         options.CapacityTokens = 1;
@@ -72,7 +76,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void Evaluate_RepeatedViolations_ShouldEscalateToHardLockout()
+    public void Evaluate_WithRepeatedViolations_EscalatesToHardLockout()
     {
         var options = CreateOptions();
         options.CapacityTokens = 1;
@@ -101,7 +105,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void Evaluate_DynamicPolicy_ShouldUseProvidedPolicy()
+    public void Evaluate_WithDynamicPolicy_UsesProvidedPolicy()
     {
         using var limiter = new TokenBucketLimiter(CreateOptions());
         var endpoint = new TestEndpoint("4.4.4.4");
@@ -123,7 +127,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void Evaluate_MaxTrackedEndpoints_ShouldRejectNewEndpoints()
+    public void Evaluate_WhenMaxTrackedEndpointsReached_RejectsNewEndpoints()
     {
         var options = CreateOptions();
         options.MaxTrackedEndpoints = 2;
@@ -139,7 +143,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void GenerateReport_ShouldReturnFormattedString()
+    public void GenerateReport_AfterEvaluate_ReturnsFormattedString()
     {
         using var limiter = new TokenBucketLimiter(CreateOptions());
         limiter.Evaluate(new TestEndpoint("report-ip"));
@@ -150,7 +154,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void Dispose_AfterDisposed_ShouldReturnHardLockout()
+    public void Evaluate_AfterDispose_ReturnsHardLockout()
     {
         var limiter = new TokenBucketLimiter(CreateOptions());
         limiter.Dispose();
@@ -170,7 +174,7 @@ public sealed class TokenBucketLimiterTests
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
-    public void Evaluate_ConcurrentRaceOnSameEndpoint_AllowsExactlyCapacityCount()
+    public void Evaluate_WithConcurrentRaceOnSameEndpoint_AllowsExactlyCapacityCount()
     {
         const int seed = 20260704;
         const int capacity = 50;
@@ -243,7 +247,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void Evaluate_AdaptiveThrottling_ShouldScaleRetryAfter()
+    public void Evaluate_WithAdaptiveThrottling_ScalesRetryAfter()
     {
         var stub = new StubTaskManager { ConcurrencyLimitRatio = 0.5 };
         Nalix.Framework.Injection.InstanceManager.Instance.Register<Nalix.Abstractions.Concurrency.ITaskManager>(stub);
@@ -271,7 +275,7 @@ public sealed class TokenBucketLimiterTests
     }
 
     [Fact]
-    public void Evaluate_AdaptiveThrottlingDisabled_ShouldNotScaleRetryAfter()
+    public void Evaluate_WithAdaptiveThrottlingDisabled_DoesNotScaleRetryAfter()
     {
         var stub = new StubTaskManager { ConcurrencyLimitRatio = 0.5 };
         Nalix.Framework.Injection.InstanceManager.Instance.Register<Nalix.Abstractions.Concurrency.ITaskManager>(stub);

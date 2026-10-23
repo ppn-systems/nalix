@@ -11,8 +11,9 @@ using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Routing;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Dispatching;
 
+[Collection(TestCollections.ProcessWideServices)]
 public sealed class PacketScopeTests
 {
     private interface ITestScopedService
@@ -60,7 +61,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void Resolve_RegisteredScopedService_ReturnsSameInstanceWithinSameScope()
+    public void GetRequiredService_WithScopedServiceInSameScope_ReturnsSameInstance()
     {
         ScopedServiceRegistry registry = new();
         registry.RegisterScoped<ITestScopedService>(scope => new TestScopedService());
@@ -77,7 +78,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void Resolve_DifferentScopes_ReturnsDifferentInstances()
+    public void GetRequiredService_WithDifferentScopes_ReturnsDifferentInstances()
     {
         ScopedServiceRegistry registry = new();
         registry.RegisterScoped<ITestScopedService>(scope => new TestScopedService());
@@ -93,7 +94,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void Resolve_FallbackToSingleton_WhenNotRegisteredInScope()
+    public void GetRequiredService_WhenNotRegisteredInScope_FallsBackToSingleton()
     {
         ScopedServiceRegistry registry = new();
         SingletonService singleton = new() { Name = "GlobalSingleton" };
@@ -114,7 +115,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void Resolve_UnregisteredService_ThrowsInvalidOperationException()
+    public void GetRequiredService_WithUnregisteredService_ThrowsInvalidOperationException()
     {
         ScopedServiceRegistry registry = new();
         using PacketScope scope = new(registry);
@@ -126,7 +127,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void GetService_UnregisteredService_ReturnsNull()
+    public void GetService_WithUnregisteredService_ReturnsNull()
     {
         ScopedServiceRegistry registry = new();
         using PacketScope scope = new(registry);
@@ -137,7 +138,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public async Task DisposeAsync_DisposesDisposablesInLifoOrder()
+    public async Task DisposeAsync_WithAsyncDisposables_DisposesInLifoOrder()
     {
         ScopedServiceRegistry registry = new();
         List<string> disposalLog = [];
@@ -159,7 +160,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void Dispose_DisposesDisposablesInLifoOrder_AndPrefersSyncDispose()
+    public void Dispose_WithAsyncDisposables_DisposesInLifoOrderViaSyncPath()
     {
         ScopedServiceRegistry registry = new();
         List<string> disposalLog = [];
@@ -181,7 +182,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public async Task DisposeAsync_MixedSyncAndAsync_PreservesStrictLifoOrder()
+    public async Task DisposeAsync_WithMixedSyncAndAsync_PreservesStrictLifoOrder()
     {
         ScopedServiceRegistry registry = new();
         List<string> disposalLog = [];
@@ -205,7 +206,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void Connection_NotAttached_Throws()
+    public void Connection_WhenNotAttached_ThrowsInvalidOperationException()
     {
         ScopedServiceRegistry registry = new();
         using PacketScope scope = new(registry);
@@ -216,7 +217,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void GetOrAdd_SameKey_ReturnsSameInstanceWithinScope()
+    public void GetOrAdd_WithSameFactory_ReturnsSameInstanceWithinScope()
     {
         ScopedServiceRegistry registry = new();
         using PacketScope scope = new(registry);
@@ -232,7 +233,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void GetOrAdd_DifferentScopes_ReturnsDifferentInstances()
+    public void GetOrAdd_WithDifferentScopes_ReturnsDifferentInstances()
     {
         ScopedServiceRegistry registry = new();
         using PacketScope scope1 = new(registry);
@@ -245,7 +246,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void GetOrAdd_DisposableInstance_DisposedWhenScopeDisposes()
+    public void GetOrAdd_WithDisposableInstance_DisposesItWhenScopeDisposes()
     {
         ScopedServiceRegistry registry = new();
         PacketScope scope = new(registry);
@@ -257,7 +258,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void GetRequiredService_StrictScopes_ThrowsInsteadOfFallingBackToSingleton()
+    public void GetRequiredService_WithStrictScopes_ThrowsInsteadOfFallingBack()
     {
         ScopedServiceRegistry registry = new() { StrictScopes = true };
         SingletonService singleton = new();
@@ -278,7 +279,7 @@ public sealed class PacketScopeTests
     }
 
     [Fact]
-    public void ResetForPool_ClearsResolvedServicesAndAllowsReUse()
+    public void ResetForPool_AfterResolvingService_ClearsServicesAndAllowsReuse()
     {
         ScopedServiceRegistry registry = new();
         registry.RegisterScoped<ITestScopedService>(scope => new TestScopedService());

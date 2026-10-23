@@ -16,7 +16,7 @@ using Nalix.Runtime.Middleware;
 using Nalix.Runtime.Routing;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Middleware;
 
 public sealed class MiddlewarePipelineTests
 {
@@ -35,7 +35,7 @@ public sealed class MiddlewarePipelineTests
     private static PacketHandler<IPacket> CreateNoopHandler() => CreateHandler(_ => default);
 
     [Fact]
-    public void Middleware_Order_Is_Preserved()
+    public void ExecuteAsync_WithMiddlewareRegisteredOutOfOrder_RunsInDeclaredOrder()
     {
         List<string> order = [];
         var pipeline = CreatePipeline();
@@ -49,7 +49,7 @@ public sealed class MiddlewarePipelineTests
     }
 
     [Fact]
-    public void ShortCircuit_Middleware_Stops_Chain()
+    public void ExecuteAsync_WhenMiddlewareShortCircuits_SkipsRemainingChainAndHandler()
     {
         List<string> order = [];
         var pipeline = CreatePipeline();
@@ -67,7 +67,7 @@ public sealed class MiddlewarePipelineTests
     }
 
     [Fact]
-    public void Middleware_Exception_Propagates()
+    public void ExecuteAsync_WhenMiddlewareThrows_PropagatesException()
     {
         var pipeline = CreatePipeline();
         var dispatch = CreateDispatch();
@@ -78,7 +78,7 @@ public sealed class MiddlewarePipelineTests
     }
 
     [Fact]
-    public void Pipeline_Executes_Handler_With_Token()
+    public void ExecuteAsync_WithCancellationToken_InvokesHandler()
     {
         using var cts = new CancellationTokenSource();
         var pipeline = CreatePipeline();
@@ -91,7 +91,7 @@ public sealed class MiddlewarePipelineTests
     }
 
     [Fact]
-    public async Task Async_Middleware_That_Yields_Still_Works()
+    public async Task ExecuteAsync_WithYieldingAsyncMiddleware_CompletesChainAndHandler()
     {
         List<string> order = [];
         var pipeline = CreatePipeline();
@@ -107,7 +107,7 @@ public sealed class MiddlewarePipelineTests
     }
 
     [Fact]
-    public void Empty_Pipeline_Calls_Handler_Directly()
+    public void ExecuteAsync_WithNoMiddleware_InvokesHandlerDirectly()
     {
         var pipeline = CreatePipeline();
         var dispatch = CreateDispatch();
@@ -119,7 +119,7 @@ public sealed class MiddlewarePipelineTests
     }
 
     [Fact]
-    public void Multiple_Middleware_All_Executed_In_Order()
+    public void ExecuteAsync_WithMultipleMiddleware_RunsAllThenHandlerInOrder()
     {
         List<string> order = [];
         var pipeline = CreatePipeline();
@@ -137,7 +137,7 @@ public sealed class MiddlewarePipelineTests
     }
 
     [Fact]
-    public void Pipeline_Does_Not_Allocate_PerPacket_Delegate()
+    public void ExecuteAsync_WhenRepeated_DoesNotAllocatePerPacketDelegate()
     {
         // This test verifies the primary optimization: the pipeline no longer creates
         // a Func<CancellationToken, ValueTask> delegate + closure per packet.

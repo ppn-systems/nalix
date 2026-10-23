@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Nalix.Runtime.Internal.Routing;
 using Xunit;
 
-namespace Nalix.Runtime.Tests;
+namespace Nalix.Runtime.Tests.Internal.Routing;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 public sealed class WorkerWakeSignalTests
@@ -28,7 +28,7 @@ public sealed class WorkerWakeSignalTests
     }
 
     [Fact]
-    public void Set_IsCoalesced_OnlyOnePendingWake()
+    public void Set_WhenCalledRepeatedly_CoalescesToOnePendingWake()
     {
         WorkerWakeSignal signal = new();
         _ = signal.Set();
@@ -52,7 +52,7 @@ public sealed class WorkerWakeSignalTests
     }
 
     [Fact]
-    public void Clear_DropsPendingSignal()
+    public void Clear_WithPendingSignal_DropsIt()
     {
         WorkerWakeSignal signal = new();
         _ = signal.Set();
@@ -64,7 +64,7 @@ public sealed class WorkerWakeSignalTests
     }
 
     [Fact]
-    public async Task WaitAsync_IsReusable_AcrossManyCycles_WithoutLosingWakes()
+    public async Task WaitAsync_AcrossManyCycles_ReusesSignalWithoutLosingWakes()
     {
         const int cycles = 20_000;
         WorkerWakeSignal signal = new();
@@ -96,7 +96,7 @@ public sealed class WorkerWakeSignalTests
     }
 
     [Fact]
-    public void SetAndSynchronousWait_DoNotAllocate()
+    public void Set_WithSynchronousWait_DoesNotAllocate()
     {
         WorkerWakeSignal signal = new();
 
@@ -120,7 +120,7 @@ public sealed class WorkerWakeSignalTests
     }
 
     [Fact]
-    public void PendingWait_ThenSet_DoesNotAllocate()
+    public void Set_WithPendingWait_DoesNotAllocate()
     {
         WorkerWakeSignal signal = new();
 
@@ -142,13 +142,14 @@ public sealed class WorkerWakeSignalTests
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal(0, allocated);
     }
+
     /// <summary>
     /// Many concurrent setters racing one waiter that also calls Clear(): every wait must still
     /// complete once a later Set() arrives, and the core must never be reset under a pending
     /// SetResult (which would throw or hang).
     /// </summary>
     [Fact]
-    public async Task ConcurrentSetClearWait_Stress_NeverHangsOrThrows()
+    public async Task WaitAsync_WithConcurrentSetAndClear_NeverHangsOrThrows()
     {
         WorkerWakeSignal signal = new();
         using CancellationTokenSource stop = new();
@@ -195,7 +196,7 @@ public sealed class WorkerWakeSignalTests
     /// number of loop turns, i.e. no busy spin).
     /// </summary>
     [Fact]
-    public async Task ParkHandshake_Stress_NoLostWakeAndNoSpin()
+    public async Task WaitAsync_WithParkHandshakeStress_LosesNoWakeAndDoesNotSpin()
     {
         WorkerWakeSignal signal = new();
         int parked = 0;
