@@ -18,7 +18,7 @@ using Nalix.Environment.Memory;
 using Nalix.Environment.Random;
 using System.Text;
 
-namespace Nalix.Codec.Tests.DataFrames;
+namespace Nalix.Codec.Tests.Security.Hashing;
 
 public sealed class Keccak256TranscriptHashTests
 {
