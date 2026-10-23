@@ -4,9 +4,7 @@
 using System;
 using System.Buffers.Text;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-
-#pragma warning disable CA5350 // SHA1 is required by RFC 6455
+using Nalix.Environment.Hashing;
 
 namespace Nalix.Network.Internal.WebSockets;
 
@@ -343,8 +341,8 @@ internal static class WebSocketUpgradeParser
         clientKey.CopyTo(combined);
         MagicString.CopyTo(combined[24..]);
 
-        Span<byte> hash = stackalloc byte[20]; // SHA-1 is 20 bytes
-        _ = SHA1.HashData(combined, hash);
+        Span<byte> hash = stackalloc byte[Sha1.HashSize];
+        Sha1.HashData(combined, hash);
 
         _ = Base64.EncodeToUtf8(hash, destination, out _, out int bytesWritten);
         return bytesWritten;
