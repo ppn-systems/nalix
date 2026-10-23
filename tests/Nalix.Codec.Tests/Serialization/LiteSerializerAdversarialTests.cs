@@ -108,7 +108,7 @@ public sealed class LiteSerializerAdversarialTests
         byte[] blob = System.BitConverter.GetBytes(hostileLength);
         int[]? output = null;
 
-        _ = LiteSerializer.Deserialize(blob, ref output);
+        _ = Assert.ThrowsAny<SerializationFailureException>(() => LiteSerializer.Deserialize(blob, ref output));
 
         Assert.Null(output);
     }
@@ -124,7 +124,7 @@ public sealed class LiteSerializerAdversarialTests
         System.BitConverter.GetBytes(input.Length + 1).CopyTo(mutated, 0);
 
         int[]? output = null;
-        _ = LiteSerializer.Deserialize(mutated, ref output);
+        _ = Assert.ThrowsAny<SerializationFailureException>(() => LiteSerializer.Deserialize(mutated, ref output));
 
         Assert.Null(output);
     }
@@ -137,7 +137,7 @@ public sealed class LiteSerializerAdversarialTests
         byte[] blob = System.BitConverter.GetBytes(hostileLength);
         string? output = null;
 
-        _ = LiteSerializer.Deserialize(blob, ref output);
+        _ = Assert.ThrowsAny<SerializationFailureException>(() => LiteSerializer.Deserialize(blob, ref output));
 
         Assert.Null(output);
     }
@@ -153,7 +153,7 @@ public sealed class LiteSerializerAdversarialTests
         blob[6] = (byte)'c';
 
         string? output = null;
-        _ = LiteSerializer.Deserialize(blob, ref output);
+        _ = Assert.ThrowsAny<SerializationFailureException>(() => LiteSerializer.Deserialize(blob, ref output));
 
         Assert.Null(output);
     }

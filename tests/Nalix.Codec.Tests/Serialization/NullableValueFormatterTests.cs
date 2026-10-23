@@ -64,7 +64,12 @@ public sealed class NullableValueFormatterTests
         byte[] corrupt = [2];
         IFormatter<int?> formatter = FormatterProvider.Get<int?>();
 
-        _ = Assert.Throws<SerializationFailureException>(() => DeserializeNullable(formatter, corrupt));
+        DataReader reader = new(corrupt);
+        int? direct = formatter.Deserialize(ref reader);
+        Assert.Null(direct);
+        Assert.True(reader.IsFailed);
+
+        _ = Assert.ThrowsAny<SerializationFailureException>(() => LiteSerializer.Deserialize<int?>(corrupt, out _));
     }
 
     [Fact]

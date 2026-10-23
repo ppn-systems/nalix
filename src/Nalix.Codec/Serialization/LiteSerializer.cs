@@ -294,6 +294,11 @@ public static class LiteSerializer
         IFormatter<T> formatter = ResolveRootFormatterForRead<T>();
         DataReader reader = new(buffer);
         T result = formatter.Deserialize(ref reader);
+        if (reader.IsFailed)
+        {
+            Throw.SerializationFailed(typeof(T), "Deserialization failed due to truncated or malformed payload.");
+        }
+
         value = reader.BytesRead;
         return result;
     }
@@ -334,6 +339,11 @@ public static class LiteSerializer
             value = formatter.Deserialize(ref reader);
         }
 
+        if (reader.IsFailed)
+        {
+            Throw.SerializationFailed(typeof(T), "Deserialization failed due to truncated or malformed payload.");
+        }
+
         return reader.BytesRead;
     }
 
@@ -364,6 +374,11 @@ public static class LiteSerializer
         IFormatter<T> formatter = ResolveRootFormatterForRead<T>();
         DataReader reader = new(buffer);
         T result = formatter.Deserialize(ref reader);
+        if (reader.IsFailed)
+        {
+            Throw.SerializationFailed(typeof(T), "Deserialization failed due to truncated or malformed payload.");
+        }
+
         value = reader.BytesRead;
         return result;
     }
@@ -411,6 +426,11 @@ public static class LiteSerializer
             value = formatter.Deserialize(ref reader);
         }
 
+        if (reader.IsFailed)
+        {
+            Throw.SerializationFailed(typeof(T), "Deserialization failed due to truncated or malformed payload.");
+        }
+
         return reader.BytesRead;
     }
 
@@ -455,6 +475,11 @@ public static class LiteSerializer
         IFormatter<T> formatter = ResolveRootFormatterForRead<T>();
         DataReader reader = new(buffer);
         T result = formatter.Deserialize(ref reader);
+        if (reader.IsFailed)
+        {
+            Throw.SerializationFailed(typeof(T), "Deserialization failed due to truncated or malformed payload.");
+        }
+
         value = reader.BytesRead;
         return result;
     }
@@ -506,6 +531,11 @@ public static class LiteSerializer
 
         DataReader reader = new(buffer);
         fillable.Fill(ref reader, value);
+        if (reader.IsFailed)
+        {
+            Throw.SerializationFailed(typeof(T), "Deserialization failed due to truncated or malformed payload.");
+        }
+
         return reader.BytesRead;
     }
 
@@ -533,6 +563,11 @@ public static class LiteSerializer
 
         DataReader reader = new(buffer);
         fillable.Fill(ref reader, value);
+        if (reader.IsFailed)
+        {
+            Throw.SerializationFailed(typeof(T), "Deserialization failed due to truncated or malformed payload.");
+        }
+
         return reader.BytesRead;
     }
 
@@ -614,6 +649,11 @@ public static class LiteSerializer
         else
         {
             value = formatter.Deserialize(ref reader);
+        }
+
+        if (reader.IsFailed)
+        {
+            Throw.SerializationFailed(typeof(T), "Deserialization failed due to truncated or malformed payload.");
         }
     }
 

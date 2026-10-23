@@ -759,7 +759,22 @@ public sealed class PacketSchemaGenerator : IIncrementalGenerator
 
     private static int COMPUTE_STRUCT_FIELD_SUM(INamedTypeSymbol type)
     {
-        int sum = 0;
+        if (type.AllInterfaces.Any(i => i.Name == KnownNames.IFixedSizeSerializableName))
+        {
+            IFieldSymbol? sizeConst = type.GetMembers("Size").OfType<IFieldSymbol>().FirstOrDefault(f => f.IsConst && f.ConstantValue is int);
+            if (sizeConst?.ConstantValue is int constSize && constSize > 0)
+            {
+                return constSize;
+            }
+        }
+
+        GET_STRUCT_LAYOUT_INFO(type, out int layoutKind, out int pack, out int explicitSize);
+        int effectivePack = pack > 0 ? pack : 8;
+
+        int offset = 0;
+        int maxAlign = 1;
+        bool hasExplicitFieldOffset = layoutKind == 2;
+
         foreach (IFieldSymbol field in type.GetMembers().OfType<IFieldSymbol>())
         {
             if (field.IsStatic)
@@ -773,9 +788,158 @@ public sealed class PacketSchemaGenerator : IIncrementalGenerator
                 return 0; // safety: unknown field → cannot determine size
             }
 
-            sum += s;
+            int align = Math.Min(effectivePack, GET_STRUCT_ALIGNMENT(field.Type));
+            if (align > maxAlign)
+            {
+                maxAlign = align;
+            }
+
+            if (TRY_GET_FIELD_OFFSET(field, out int fieldOffset) || hasExplicitFieldOffset)
+            {
+                int end = fieldOffset + s;
+                if (end > offset)
+                {
+                    offset = end;
+                }
+            }
+            else
+            {
+                offset = (offset + align - 1) & ~(align - 1);
+                offset += s;
+            }
         }
-        return sum;
+
+        if (offset == 0)
+        {
+            return explicitSize > 0 ? explicitSize : 1;
+        }
+
+        int total = (offset + maxAlign - 1) & ~(maxAlign - 1);
+        return explicitSize > total ? explicitSize : total;
+    }
+
+    private static int GET_STRUCT_ALIGNMENT(ITypeSymbol type)
+    {
+        if (type.TypeKind == TypeKind.Enum)
+        {
+            return GET_STRUCT_ALIGNMENT(((INamedTypeSymbol)type).EnumUnderlyingType!);
+        }
+
+#pragma warning disable IDE0010 // Add missing cases
+        switch (type.SpecialType)
+        {
+            case SpecialType.System_Boolean:
+            case SpecialType.System_Byte:
+            case SpecialType.System_SByte:
+                return 1;
+            case SpecialType.System_Int16:
+            case SpecialType.System_UInt16:
+            case SpecialType.System_Char:
+                return 2;
+            case SpecialType.System_Int32:
+            case SpecialType.System_UInt32:
+            case SpecialType.System_Single:
+                return 4;
+            case SpecialType.System_Int64:
+            case SpecialType.System_UInt64:
+            case SpecialType.System_Double:
+            case SpecialType.System_DateTime:
+            case SpecialType.System_Decimal:
+                return 8;
+            default:
+                break;
+        }
+#pragma warning restore IDE0010 // Add missing cases
+
+        if (type is not INamedTypeSymbol named)
+        {
+            return 1;
+        }
+
+        switch (named.Name)
+        {
+            case KnownNames.GuidName:
+            case KnownNames.DateOnlyName:
+                return 4;
+            case KnownNames.TimeSpanName:
+            case KnownNames.TimeOnlyName:
+            case KnownNames.DateTimeOffsetName:
+                return 8;
+            default:
+                break;
+        }
+
+        if (named.TypeKind == TypeKind.Struct)
+        {
+            GET_STRUCT_LAYOUT_INFO(named, out _, out int pack, out _);
+            int effectivePack = pack > 0 ? pack : 8;
+            int maxAlign = 1;
+            foreach (IFieldSymbol field in named.GetMembers().OfType<IFieldSymbol>())
+            {
+                if (field.IsStatic)
+                {
+                    continue;
+                }
+
+                int align = Math.Min(effectivePack, GET_STRUCT_ALIGNMENT(field.Type));
+                if (align > maxAlign)
+                {
+                    maxAlign = align;
+                }
+            }
+            return maxAlign;
+        }
+
+        return 1;
+    }
+
+    private static void GET_STRUCT_LAYOUT_INFO(INamedTypeSymbol type, out int layoutKind, out int pack, out int explicitSize)
+    {
+        layoutKind = 0; // Sequential
+        pack = 0;
+        explicitSize = 0;
+
+        foreach (AttributeData attr in type.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is "StructLayoutAttribute" or "StructLayout")
+            {
+                if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is not null)
+                {
+                    layoutKind = Convert.ToInt32(attr.ConstructorArguments[0].Value);
+                }
+
+                foreach (KeyValuePair<string, TypedConstant> namedArg in attr.NamedArguments)
+                {
+                    if (namedArg.Key == "Pack" && namedArg.Value.Value is int p)
+                    {
+                        pack = p;
+                    }
+                    else if (namedArg.Key == "Size" && namedArg.Value.Value is int sz)
+                    {
+                        explicitSize = sz;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    private static bool TRY_GET_FIELD_OFFSET(IFieldSymbol field, out int offset)
+    {
+        foreach (AttributeData attr in field.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is "FieldOffsetAttribute" or "FieldOffset")
+            {
+                if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is int off)
+                {
+                    offset = off;
+                    return true;
+                }
+            }
+        }
+
+        offset = 0;
+        return false;
     }
 
     private static int GET_FIXED_SIZE_FROM_ATTRIBUTE(INamedTypeSymbol type)

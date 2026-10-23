@@ -140,16 +140,25 @@ public abstract class PacketBase<[DynamicallyAccessedMembers(DynamicallyAccessed
         }
 
         TSelf packet = Create();
-        if (!LiteSerializer.TryDeserialize(buffer, ref packet, out int bytesRead))
+        int bytesRead;
+        try
+        {
+            if (!LiteSerializer.TryDeserialize(buffer, ref packet, out bytesRead))
+            {
+                packet.Dispose();
+
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Packet.Malformed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Packet.Malformed, typeof(TSelf).FullName);
+                }
+
+                return null!;
+            }
+        }
+        catch
         {
             packet.Dispose();
-
-            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Packet.Malformed))
-            {
-                DiagnosticsEvents.Write(DiagnosticsEvents.Packet.Malformed, typeof(TSelf).FullName);
-            }
-
-            return null!;
+            throw;
         }
 
         if (bytesRead < buffer.Length)

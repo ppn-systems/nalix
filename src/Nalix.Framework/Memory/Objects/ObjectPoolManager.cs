@@ -242,6 +242,9 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void InitializePoolAndMetricsFast<T>(int id, out ObjectPool pool, out PoolMetrics metrics) where T : IPoolable
     {
+        pool = this.GetOrCreatePool<T>();
+        metrics = _metricsDict.GetOrAdd(typeof(T), _ => new PoolMetrics());
+
         lock (_poolDict)
         {
             if (id >= _pools.Length)
@@ -250,13 +253,10 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
                 Array.Resize(ref _pools, newSize);
                 Array.Resize(ref _metrics, newSize);
             }
+
+            _pools[id] = pool;
+            _metrics[id] = metrics;
         }
-
-        pool = this.GetOrCreatePool<T>();
-        metrics = _metricsDict.GetOrAdd(typeof(T), _ => new PoolMetrics());
-
-        _pools[id] = pool;
-        _metrics[id] = metrics;
     }
 
     /// <summary>Gets or creates and returns an instance of <typeparamref name="T"/>.</summary>

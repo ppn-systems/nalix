@@ -92,22 +92,12 @@ internal sealed class MemoryFormatter<T> : IFormatter<System.Memory<T>>
             return System.Memory<T>.Empty;
         }
 
-        if (length > SerializationStaticOptions.Instance.MaxArrayLength)
+        if (!CollectionGuard.TryEnsureRead(ref reader, length, s_elementSize))
         {
-            Throw.LengthOutOfRange();
-            return System.Memory<T>.Empty;
+            return default;
         }
 
-        int byteCount;
-        try
-        {
-            byteCount = checked(length * s_elementSize);
-        }
-        catch (System.OverflowException)
-        {
-            Throw.LengthOutOfRange();
-            return System.Memory<T>.Empty;
-        }
+        int byteCount = length * s_elementSize;
 
         // Allocate once and copy the raw payload block directly into the array.
         T[] array = System.GC.AllocateUninitializedArray<T>(length);

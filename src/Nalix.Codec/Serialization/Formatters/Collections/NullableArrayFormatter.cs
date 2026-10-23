@@ -86,7 +86,16 @@ internal sealed class NullableArrayFormatter<
 
         for (int i = 0; i < length; i++)
         {
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
             array[i] = GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
         }
 
         return array;

@@ -181,7 +181,18 @@ internal sealed class QueueFormatter<
 
         for (int i = 0; i < count; i++)
         {
-            queue.Enqueue(GetElementFormatter().Deserialize(ref reader));
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
+            T item = GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
+            queue.Enqueue(item);
         }
 
         return queue;
@@ -211,7 +222,18 @@ internal sealed class QueueFormatter<
 
         for (int i = 0; i < count; i++)
         {
-            value.Enqueue(GetElementFormatter().Deserialize(ref reader));
+            if (reader.IsFailed)
+            {
+                break;
+            }
+
+            T item = GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                break;
+            }
+
+            value.Enqueue(item);
         }
     }
 }

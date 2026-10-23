@@ -124,7 +124,7 @@ public sealed class LiteSerializerCollectionTests
         byte[] buffer = BitConverter.GetBytes(1_048_576);
         List<string>? output = null;
 
-        LiteSerializer.Deserialize(buffer, ref output);
+        _ = Assert.ThrowsAny<Abstractions.Exceptions.SerializationFailureException>(() => LiteSerializer.Deserialize(buffer, ref output));
         Assert.Null(output);
     }
 
@@ -134,7 +134,7 @@ public sealed class LiteSerializerCollectionTests
         byte[] buffer = BitConverter.GetBytes(1_048_576);
         Dictionary<string, int>? output = null;
 
-        LiteSerializer.Deserialize(buffer, ref output);
+        _ = Assert.ThrowsAny<Abstractions.Exceptions.SerializationFailureException>(() => LiteSerializer.Deserialize(buffer, ref output));
         Assert.Null(output);
     }
 

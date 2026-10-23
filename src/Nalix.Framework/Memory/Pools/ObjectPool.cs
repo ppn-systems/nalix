@@ -234,6 +234,8 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
         System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private TypePool InitializeTypePoolFast<T>(int id) where T : IPoolable
     {
+        TypePool typePool = _typePools.GetOrAdd(typeof(T), _ => new TypePool(_defaultMaxItemsPerType));
+
         lock (_typePools)
         {
             if (id >= _typePoolsArray.Length)
@@ -241,10 +243,10 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
                 int newSize = Math.Max(id + 1, _typePoolsArray.Length * 2);
                 Array.Resize(ref _typePoolsArray, newSize);
             }
+
+            _typePoolsArray[id] = typePool;
         }
 
-        TypePool typePool = _typePools.GetOrAdd(typeof(T), _ => new TypePool(_defaultMaxItemsPerType));
-        _typePoolsArray[id] = typePool;
         return typePool;
     }
 

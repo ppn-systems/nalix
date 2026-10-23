@@ -3,6 +3,7 @@
 
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Extensions;
+using Nalix.Codec.Serialization.Internal;
 using Nalix.Environment.Memory;
 
 namespace Nalix.Codec.Serialization.Formatters.Primitives;
@@ -94,7 +95,8 @@ internal sealed class NullableFormatter<
         }
         else if (hasValue != HasValueFlag)
         {
-            throw new SerializationFailureException("Invalid nullable data!");
+            SerializationDiagnostics.Poison(ref reader, "Invalid nullable data!");
+            return null;
         }
         else
         {

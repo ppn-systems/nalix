@@ -115,8 +115,17 @@ internal sealed class StringArrayFormatter : IFormatter<string[]>
 
         for (int i = 0; i < length; i++)
         {
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
             // Each element is decoded using the same rules as standalone strings.
             result[i] = GetStringFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
         }
 
         return result;

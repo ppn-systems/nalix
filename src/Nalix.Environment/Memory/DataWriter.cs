@@ -193,13 +193,14 @@ public ref struct DataWriter
         int limit = ConfigurationManager.Instance.Get<MemoryOptions>().MaxWriterCapacity;
 
         int current = _owner?.Length ?? 0;
-        int needed = this.WrittenCount + minimumSize;
+        int needed = 0;
         int newSize;
 
         try
         {
             checked
             {
+                needed = this.WrittenCount + minimumSize;
                 newSize = current <= 0 ? needed : Math.Max(current * 2, needed);
             }
 
