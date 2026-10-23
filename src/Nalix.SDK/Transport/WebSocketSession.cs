@@ -48,6 +48,9 @@ public class WebSocketSession : TransportSession
     /// <inheritdoc/>
     public override bool IsConnected => _socket?.State == WebSocketState.Open && Volatile.Read(ref _disposed) == 0;
 
+    /// <inheritdoc/>
+    internal override bool HasDirectPendingDispatch => true;
+
     #endregion Properties
 
     #region Events
@@ -262,7 +265,9 @@ public class WebSocketSession : TransportSession
             // OnDisconnected per real transport close" not a guarantee callers can build on.
             if (raiseDisconnected)
             {
-                this.OnDisconnected?.Invoke(this, new NetworkException("The WebSocket session was disconnected."));
+                NetworkException disconnectEx = new("The WebSocket session was disconnected.");
+                this.DispatchPendingDisconnect(disconnectEx);
+                this.OnDisconnected?.Invoke(this, disconnectEx);
             }
         }
 
@@ -365,10 +370,11 @@ public class WebSocketSession : TransportSession
         _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket);
     }
 
-    private void HandleReceiveMessage(IBufferLease lease)
+    private void HandleReceiveMessage([Borrowed] IBufferLease lease)
     {
         try
         {
+            this.DispatchPendingMessage(lease);
             this.OnMessageReceived?.Invoke(this, lease);
 
             if (this.OnMessageAsync is { } asyncHandler)

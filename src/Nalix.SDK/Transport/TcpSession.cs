@@ -48,6 +48,9 @@ public class TcpSession : TransportSession
     /// <inheritdoc/>
     public override bool IsConnected => _socket?.Connected == true && Volatile.Read(ref _disposed) == 0;
 
+    /// <inheritdoc/>
+    internal override bool HasDirectPendingDispatch => true;
+
     #endregion Properties
 
     #region Events
@@ -314,7 +317,9 @@ public class TcpSession : TransportSession
             }
 
             socket.Dispose();
-            this.OnDisconnected?.Invoke(this, new NetworkException("The TCP session was disconnected."));
+            NetworkException disconnectEx = new("The TCP session was disconnected.");
+            this.DispatchPendingDisconnect(disconnectEx);
+            this.OnDisconnected?.Invoke(this, disconnectEx);
         }
 
         if (waitForLoop && loopTask is { IsCompleted: false })
@@ -410,11 +415,12 @@ public class TcpSession : TransportSession
     /// <summary>
     /// Handles messages received by <see cref="TcpFrameReader"/>.
     /// </summary>
-    private void HandleReceiveMessage(IBufferLease lease)
+    private void HandleReceiveMessage([Borrowed] IBufferLease lease)
     {
         try
         {
             // Direct synchronous dispatch (hot path for benchmarks)
+            this.DispatchPendingMessage(lease);
             this.OnMessageReceived?.Invoke(this, lease);
 
             // Concurrent asynchronous dispatch

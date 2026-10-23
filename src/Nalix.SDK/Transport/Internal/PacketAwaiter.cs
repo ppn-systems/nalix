@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
-using Nalix.SDK.Transport.Extensions;
 
 #if DEBUG
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.SDK.Tests")]
@@ -83,8 +82,7 @@ internal static class PacketAwaiter
             throw new ArgumentOutOfRangeException(nameof(timeoutMs), "timeoutMs must be >= 0 (0 = infinite)");
         }
 
-        // Rented, not allocated: PendingRequest<TPkt> and its two event-handler delegates come from a
-        // small per-type pool instead of the heap on every call (see PendingRequest<TPkt> remarks).
+        bool wasAwaited = false;
         PendingRequest<TPkt> pending = PendingRequest<TPkt>.Rent(client, predicate);
         pending.Subscribe();
 
@@ -119,30 +117,12 @@ internal static class PacketAwaiter
                 throw;
             }
 
-            try
-            {
-                // Task.WaitAsync arms the timer and the cancellation hook itself, which is why this
-                // path builds no linked CancellationTokenSource, CancelAfter timer or registration.
-                return timeoutMs > 0
-                    ? await pending.Task.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs), ct).ConfigureAwait(false)
-                    : await pending.Task.WaitAsync(ct).ConfigureAwait(false);
-            }
-            catch (TimeoutException)
-            {
-                throw new TimeoutException($"No {typeof(TPkt).Name} received within {timeoutMs} ms.");
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw new OperationCanceledException(ct);
-            }
+            wasAwaited = true;
+            return await pending.WaitAsync(timeoutMs, ct).ConfigureAwait(false);
         }
         finally
         {
-            pending.Unsubscribe();
-
-            // Safe here: the Task has already been fully awaited (or thrown) above, so nothing
-            // still holds a reference to this instance's in-flight state.
-            pending.Return();
+            pending.Return(wasAwaited);
         }
     }
 

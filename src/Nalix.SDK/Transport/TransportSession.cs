@@ -2,11 +2,13 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
+using Nalix.Environment.Extensions;
 using Nalix.SDK.Options;
 
 namespace Nalix.SDK.Transport;
@@ -54,6 +56,250 @@ public abstract class TransportSession : IDisposable, ITransportSession
     private Internal.ReconnectSupervisor? _reconnectSupervisor;
     private int _intentionalDisconnect;
     private int _outboundSeq;
+
+    private readonly Lock _pendingRequestsLock = new();
+    private Internal.IPendingRequestObserver?[] _pendingRequests = new Internal.IPendingRequestObserver?[8];
+    private int _pendingRequestsCount;
+
+    /// <summary>
+    /// Gets a value indicating whether this session dispatches inbound frames and disconnect
+    /// notifications directly to the internal pending-request table without allocating multicast
+    /// event delegates.
+    /// </summary>
+    internal virtual bool HasDirectPendingDispatch => false;
+
+    internal void RegisterPendingRequest(Internal.IPendingRequestObserver observer)
+    {
+        lock (_pendingRequestsLock)
+        {
+            Internal.IPendingRequestObserver?[] slots = _pendingRequests;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] is null)
+                {
+                    slots[i] = observer;
+                    _ = Interlocked.Increment(ref _pendingRequestsCount);
+                    return;
+                }
+            }
+
+            int oldLen = slots.Length;
+            Internal.IPendingRequestObserver?[] expanded = new Internal.IPendingRequestObserver?[oldLen * 2];
+            Array.Copy(slots, expanded, oldLen);
+            expanded[oldLen] = observer;
+            _pendingRequests = expanded;
+            _ = Interlocked.Increment(ref _pendingRequestsCount);
+        }
+    }
+
+    internal void UnregisterPendingRequest(Internal.IPendingRequestObserver observer)
+    {
+        if (Volatile.Read(ref _pendingRequestsCount) == 0)
+        {
+            return;
+        }
+
+        lock (_pendingRequestsLock)
+        {
+            Internal.IPendingRequestObserver?[] slots = _pendingRequests;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (ReferenceEquals(slots[i], observer))
+                {
+                    slots[i] = null;
+                    _ = Interlocked.Decrement(ref _pendingRequestsCount);
+                    return;
+                }
+            }
+        }
+    }
+
+    internal void DispatchPendingMessage([Borrowed] IBufferLease lease)
+    {
+        if (Volatile.Read(ref _pendingRequestsCount) == 0 || lease.Length < PacketConstants.HeaderSize)
+        {
+            return;
+        }
+
+        ushort opCode = lease.Span.AsHeaderRef().OpCode;
+
+        Internal.IPendingRequestObserver? obs0 = null;
+        Internal.IPendingRequestObserver? obs1 = null;
+        Internal.IPendingRequestObserver? obs2 = null;
+        Internal.IPendingRequestObserver? obs3 = null;
+        Internal.IPendingRequestObserver[]? overflow = null;
+        int matchCount = 0;
+
+        lock (_pendingRequestsLock)
+        {
+            if (_pendingRequestsCount == 0)
+            {
+                return;
+            }
+
+            Internal.IPendingRequestObserver?[] slots = _pendingRequests;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                Internal.IPendingRequestObserver? obs = slots[i];
+                if (obs is null || obs.OpCode != opCode)
+                {
+                    continue;
+                }
+
+                switch (matchCount)
+                {
+                    case 0:
+                        obs0 = obs;
+                        break;
+                    case 1:
+                        obs1 = obs;
+                        break;
+                    case 2:
+                        obs2 = obs;
+                        break;
+                    case 3:
+                        obs3 = obs;
+                        break;
+                    default:
+                        overflow ??= ArrayPool<Internal.IPendingRequestObserver>.Shared.Rent(slots.Length);
+                        overflow[matchCount - 4] = obs;
+                        break;
+                }
+
+                matchCount++;
+            }
+        }
+
+        if (matchCount == 0)
+        {
+            return;
+        }
+
+        obs0!.OnMessageReceived(lease);
+        if (matchCount > 1)
+        {
+            obs1!.OnMessageReceived(lease);
+        }
+        if (matchCount > 2)
+        {
+            obs2!.OnMessageReceived(lease);
+        }
+        if (matchCount > 3)
+        {
+            obs3!.OnMessageReceived(lease);
+        }
+
+        if (overflow is not null)
+        {
+            int extraCount = matchCount - 4;
+            try
+            {
+                for (int i = 0; i < extraCount; i++)
+                {
+                    overflow[i].OnMessageReceived(lease);
+                }
+            }
+            finally
+            {
+                Array.Clear(overflow, 0, extraCount);
+                ArrayPool<Internal.IPendingRequestObserver>.Shared.Return(overflow);
+            }
+        }
+    }
+
+    internal void DispatchPendingDisconnect(Exception error)
+    {
+        if (Volatile.Read(ref _pendingRequestsCount) == 0)
+        {
+            return;
+        }
+
+        Internal.IPendingRequestObserver? obs0 = null;
+        Internal.IPendingRequestObserver? obs1 = null;
+        Internal.IPendingRequestObserver? obs2 = null;
+        Internal.IPendingRequestObserver? obs3 = null;
+        Internal.IPendingRequestObserver[]? overflow = null;
+        int count = 0;
+
+        lock (_pendingRequestsLock)
+        {
+            if (_pendingRequestsCount == 0)
+            {
+                return;
+            }
+
+            Internal.IPendingRequestObserver?[] slots = _pendingRequests;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                Internal.IPendingRequestObserver? obs = slots[i];
+                if (obs is null)
+                {
+                    continue;
+                }
+
+                slots[i] = null;
+                switch (count)
+                {
+                    case 0:
+                        obs0 = obs;
+                        break;
+                    case 1:
+                        obs1 = obs;
+                        break;
+                    case 2:
+                        obs2 = obs;
+                        break;
+                    case 3:
+                        obs3 = obs;
+                        break;
+                    default:
+                        overflow ??= ArrayPool<Internal.IPendingRequestObserver>.Shared.Rent(slots.Length);
+                        overflow[count - 4] = obs;
+                        break;
+                }
+
+                count++;
+            }
+
+            _ = Interlocked.Exchange(ref _pendingRequestsCount, 0);
+        }
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        obs0!.OnDisconnected(error);
+        if (count > 1)
+        {
+            obs1!.OnDisconnected(error);
+        }
+        if (count > 2)
+        {
+            obs2!.OnDisconnected(error);
+        }
+        if (count > 3)
+        {
+            obs3!.OnDisconnected(error);
+        }
+
+        if (overflow is not null)
+        {
+            int extraCount = count - 4;
+            try
+            {
+                for (int i = 0; i < extraCount; i++)
+                {
+                    overflow[i].OnDisconnected(error);
+                }
+            }
+            finally
+            {
+                Array.Clear(overflow, 0, extraCount);
+                ArrayPool<Internal.IPendingRequestObserver>.Shared.Return(overflow);
+            }
+        }
+    }
 
     /// <summary>
     /// Gets the reconnect supervisor for this session, creating it lazily when

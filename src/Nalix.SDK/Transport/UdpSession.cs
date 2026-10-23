@@ -69,6 +69,9 @@ public class UdpSession : TransportSession
     /// <inheritdoc/>
     public override bool IsConnected => _socket != null && Volatile.Read(ref _disposed) == 0;
 
+    /// <inheritdoc/>
+    internal override bool HasDirectPendingDispatch => true;
+
     /// <summary>Occurs when a complete frame is received and decoded asynchronously.</summary>
     public event Func<ReadOnlyMemory<byte>, Task>? OnMessageAsync;
 
@@ -262,7 +265,9 @@ public class UdpSession : TransportSession
             }
             catch (ObjectDisposedException) { /* ignored */ }
 
-            this.OnDisconnected?.Invoke(this, new NetworkException("The UDP session was disconnected."));
+            NetworkException disconnectEx = new("The UDP session was disconnected.");
+            this.DispatchPendingDisconnect(disconnectEx);
+            this.OnDisconnected?.Invoke(this, disconnectEx);
         }
 
         cts?.Dispose();
@@ -361,6 +366,7 @@ public class UdpSession : TransportSession
         try
         {
             // Direct synchronous dispatch (hot path)
+            this.DispatchPendingMessage(lease);
             this.OnMessageReceived?.Invoke(this, lease);
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))

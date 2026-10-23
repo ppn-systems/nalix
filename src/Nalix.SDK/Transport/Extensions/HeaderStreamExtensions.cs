@@ -76,8 +76,8 @@ public static class HeaderStreamExtensions
         (TaskCompletionSource<List<T1>> tcs1, List<T1> buf1) = NewStreamTcs<T1>();
 
         using CompositeSubscription subs = client.Subscribe(
-            client.On(MakeHeaderHandler(headerTcs, seq)),
-            client.On(MakeItemHandler(buf1, tcs1, seq, isItem1Valid)));
+            client.On(MakeHeaderHandler(headerTcs, seq), disposeAfter: false),
+            client.On(MakeItemHandler(buf1, tcs1, seq, isItem1Valid), disposeAfter: false));
 
         await SendOrFailAsync(client, request, encrypt, ct, headerTcs, tcs1).ConfigureAwait(false);
 
@@ -115,9 +115,9 @@ public static class HeaderStreamExtensions
         (TaskCompletionSource<List<T2>> tcs2, List<T2> buf2) = NewStreamTcs<T2>();
 
         using CompositeSubscription subs = client.Subscribe(
-            client.On(MakeHeaderHandler(headerTcs, seq)),
-            client.On(MakeItemHandler(buf1, tcs1, seq, isItem1Valid)),
-            client.On(MakeItemHandler(buf2, tcs2, seq, isItem2Valid)));
+            client.On(MakeHeaderHandler(headerTcs, seq), disposeAfter: false),
+            client.On(MakeItemHandler(buf1, tcs1, seq, isItem1Valid), disposeAfter: false),
+            client.On(MakeItemHandler(buf2, tcs2, seq, isItem2Valid), disposeAfter: false));
 
         await SendOrFailAsync(client, request, encrypt, ct, headerTcs, tcs1, tcs2).ConfigureAwait(false);
 
@@ -160,10 +160,10 @@ public static class HeaderStreamExtensions
         (TaskCompletionSource<List<T3>> tcs3, List<T3> buf3) = NewStreamTcs<T3>();
 
         using CompositeSubscription subs = client.Subscribe(
-            client.On(MakeHeaderHandler(headerTcs, seq)),
-            client.On(MakeItemHandler(buf1, tcs1, seq, isItem1Valid)),
-            client.On(MakeItemHandler(buf2, tcs2, seq, isItem2Valid)),
-            client.On(MakeItemHandler(buf3, tcs3, seq, isItem3Valid)));
+            client.On(MakeHeaderHandler(headerTcs, seq), disposeAfter: false),
+            client.On(MakeItemHandler(buf1, tcs1, seq, isItem1Valid), disposeAfter: false),
+            client.On(MakeItemHandler(buf2, tcs2, seq, isItem2Valid), disposeAfter: false),
+            client.On(MakeItemHandler(buf3, tcs3, seq, isItem3Valid), disposeAfter: false));
 
         await SendOrFailAsync(client, request, encrypt, ct, headerTcs, tcs1, tcs2, tcs3).ConfigureAwait(false);
 
@@ -213,9 +213,14 @@ public static class HeaderStreamExtensions
         where THeader : class, IPacket
         => header =>
         {
-            if (header.Header.SequenceId == seq)
+            if (header.Header.SequenceId == seq && tcs.TrySetResult(header))
             {
-                _ = tcs.TrySetResult(header);
+                return;
+            }
+
+            if (header is IDisposable disposable)
+            {
+                disposable.Dispose();
             }
         };
 
@@ -226,15 +231,25 @@ public static class HeaderStreamExtensions
         {
             if (item.Header.SequenceId != seq)
             {
+                if (item is IDisposable mismatched)
+                {
+                    mismatched.Dispose();
+                }
+
                 return;
             }
 
+            bool endOfStream = item.IsEndOfStream;
             if (isValid(item))
             {
                 buffer.Add(item);
             }
+            else if (item is IDisposable filtered)
+            {
+                filtered.Dispose();
+            }
 
-            if (item.IsEndOfStream)
+            if (endOfStream)
             {
                 _ = tcs.TrySetResult(buffer);
             }
