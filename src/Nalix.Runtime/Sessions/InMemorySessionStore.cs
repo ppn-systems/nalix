@@ -31,6 +31,11 @@ public sealed class InMemorySessionStore : ISessionStore, IWorker, IReportable
     // actually due instead of scanning every live session every pass.
     private const long BucketSpanMilliseconds = 60_000;
 
+    /// <summary>
+    /// Default upper bound on active sessions retained in memory.
+    /// </summary>
+    public const int DefaultMaxSessions = 65_536;
+
     private readonly ConcurrentDictionary<ulong, SessionEntry> _store = new();
 
     // expiryBucket (ExpiresAtUnixMilliseconds / BucketSpanMilliseconds) -> session tokens due in that bucket.
@@ -38,9 +43,19 @@ public sealed class InMemorySessionStore : ISessionStore, IWorker, IReportable
     // is only ever a hint, the real expiry is re-checked against _store before anything is removed.
     private readonly ConcurrentDictionary<long, ConcurrentDictionary<ulong, byte>> _expiryBuckets = new();
 
+    private int _maxSessions = DefaultMaxSessions;
     private long _totalStored;
     private long _totalConsumed;
     private long _totalExpired;
+
+    /// <summary>
+    /// Gets or sets the maximum number of active sessions retained in memory before capacity eviction occurs.
+    /// </summary>
+    public int MaxSessions
+    {
+        get => Volatile.Read(ref _maxSessions);
+        set => Volatile.Write(ref _maxSessions, Math.Max(1, value));
+    }
 
     private static long BucketOf(long expiresAtUnixMilliseconds) => expiresAtUnixMilliseconds / BucketSpanMilliseconds;
 
@@ -126,6 +141,12 @@ public sealed class InMemorySessionStore : ISessionStore, IWorker, IReportable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            int maxSessions = this.MaxSessions;
+            if (_store.Count >= maxSessions && !_store.ContainsKey(token))
+            {
+                this.EvictForCapacity(maxSessions);
+            }
+
             if (_store.TryAdd(token, entry))
             {
                 _ = Interlocked.Increment(ref _totalStored);
@@ -150,6 +171,39 @@ public sealed class InMemorySessionStore : ISessionStore, IWorker, IReportable
                 this.IndexExpiry(token, entry.Snapshot.ExpiresAtUnixMilliseconds);
                 current.Return();
                 return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    private void EvictForCapacity(int maxSessions)
+    {
+        long now = Clock.UnixMillisecondsNow();
+
+        foreach (KeyValuePair<ulong, SessionEntry> kvp in _store)
+        {
+            if (kvp.Value.Snapshot.ExpiresAtUnixMilliseconds <= now &&
+                ((ICollection<KeyValuePair<ulong, SessionEntry>>)_store).Remove(kvp))
+            {
+                _ = Interlocked.Increment(ref _totalExpired);
+                kvp.Value.Return();
+                if (_store.Count < maxSessions)
+                {
+                    return;
+                }
+            }
+        }
+
+        foreach (KeyValuePair<ulong, SessionEntry> kvp in _store)
+        {
+            if (_store.Count < maxSessions)
+            {
+                return;
+            }
+
+            if (((ICollection<KeyValuePair<ulong, SessionEntry>>)_store).Remove(kvp))
+            {
+                _ = Interlocked.Increment(ref _totalExpired);
+                kvp.Value.Return();
             }
         }
     }

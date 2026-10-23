@@ -79,8 +79,9 @@ public sealed class PolicyRateLimiter : IReportable, IDisposable
 
         public ScopedEndpoint(ushort op, string? policyId, INetworkEndpoint inner)
         {
-            _op = op;
-            _policyId = policyId;
+            bool hasPolicy = !string.IsNullOrEmpty(policyId);
+            _op = hasPolicy ? (ushort)0 : op;
+            _policyId = hasPolicy ? policyId : null;
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         }
 

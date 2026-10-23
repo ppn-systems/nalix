@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Security;
 using Nalix.Runtime.Dispatching;
 
 #if DEBUG
@@ -124,9 +125,9 @@ internal readonly struct PacketHandler<TPacket>(
         // Middleware is still recommended for logging and more complex policies,
         // but this provides a fail-closed baseline in the dispatcher itself.
         if (Metadata.Permission is { } permission &&
-            permission.Level > context.Connection.Level)
+            !IsAuthorized(context.Connection.Level, permission))
         {
-            denyReason = ProtocolReason.RATE_LIMITED;
+            denyReason = ProtocolReason.UNAUTHORIZED;
             return false;
         }
 
@@ -147,6 +148,15 @@ internal readonly struct PacketHandler<TPacket>(
         denyReason = ProtocolReason.NONE;
         return true;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsAuthorized(PermissionLevel actorLevel, PacketPermissionAttribute policy) =>
+        policy.Evaluation switch
+        {
+            PermissionEvaluation.StrictMatch => actorLevel == policy.Level,
+            PermissionEvaluation.MinimumLevel => actorLevel >= policy.Level,
+            _ => false
+        };
 
     #endregion Methods
 }

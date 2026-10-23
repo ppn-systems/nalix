@@ -80,19 +80,13 @@ public static partial class SessionHandlers
         // SEC-33: Atomically consume the token only after SEC-16 proof validation succeeds.
         // Two parallel valid requests with the same token: only one predicate-accepted remove wins.
         // Invalid proofs must not remove the entry, otherwise an observer could burn a resume token.
-        bool tokenRejected = false;
         using SessionScope scope = await s_sessionService.ConsumeAsync(
             packet.SessionToken,
-            session =>
-            {
-                bool valid = IsResumeProofValid(session, packet.SessionToken, packet.Proof);
-                tokenRejected = !valid;
-                return valid;
-            }).ConfigureAwait(false);
+            session => IsResumeProofValid(session, packet.SessionToken, packet.Proof)).ConfigureAwait(false);
         SessionEntry? session = scope.Value;
         if (session == null)
         {
-            await HandleFailureAsync(context, tokenRejected ? ProtocolReason.TOKEN_REVOKED : ProtocolReason.SESSION_EXPIRED).ConfigureAwait(false);
+            await HandleFailureAsync(context, ProtocolReason.SESSION_EXPIRED).ConfigureAwait(false);
             return;
         }
 
@@ -102,23 +96,19 @@ public static partial class SessionHandlers
 
         ConnectionSequenceState seqState = connection.GetSequenceState();
 
-        // Restore sequence number
-        if (session.Snapshot.Attributes?.TryGetValue(ConnectionAttributes.SequenceState, out object? seqObj) == true && seqObj is ConnectionSequenceState snapshotSeq)
+        // Reset sequence counters for the newly established transport connection so both client
+        // and server start from sequence 0 on the resumed transport.
+        seqState.TcpSendSequence = 0;
+        seqState.TcpReceiveSequence = 0;
+        connection.TCP.SendSequence.Reset();
+        connection.TCP.ReceiveSequence.Reset();
+
+        if (connection.IsUdpCreated && connection.UDP is not null)
         {
-            seqState.TcpSendSequence = snapshotSeq.TcpSendSequence;
-            connection.TCP.SendSequence.ResumeFrom(snapshotSeq.TcpSendSequence);
-
-            seqState.TcpReceiveSequence = snapshotSeq.TcpReceiveSequence;
-            connection.TCP.ReceiveSequence.ResumeFrom(snapshotSeq.TcpReceiveSequence);
-
-            if (connection.IsUdpCreated)
-            {
-                seqState.UdpSendSequence = snapshotSeq.UdpSendSequence;
-                connection.UDP!.SendSequence.ResumeFrom(snapshotSeq.UdpSendSequence);
-
-                seqState.UdpReceiveSequence = snapshotSeq.UdpReceiveSequence;
-                connection.UDP!.ReceiveSequence.ResumeFrom(snapshotSeq.UdpReceiveSequence);
-            }
+            seqState.UdpSendSequence = 0;
+            seqState.UdpReceiveSequence = 0;
+            connection.UDP.SendSequence.Reset();
+            connection.UDP.ReceiveSequence.Reset();
         }
 
         await s_sessionService.SaveSessionAsync(connection).ConfigureAwait(false);

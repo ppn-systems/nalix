@@ -20,7 +20,6 @@ using Nalix.Abstractions.Primitives;
 using Nalix.Codec.DataFrames;
 using Nalix.Environment.Extensions;
 using Nalix.Framework.Injection;
-using Nalix.Framework.Memory.Objects;
 using Nalix.Framework.Options;
 using Nalix.Framework.Tasks;
 using Nalix.Runtime.Internal.Compilation;
@@ -722,15 +721,9 @@ public sealed class PacketDispatchChannel
             }
 
             // Slow-path: async completion
-            // The handler returned an incomplete task (e.g. awaited I/O).
-            // To prevent blocking the DispatchWorkerLoop, we offload the continuation to the ThreadPool.
-            // Using a pooled IThreadPoolWorkItem ensures 0-byte allocation.
-            DispatchContinuation workItem = ObjectPoolManager.Shared.Get<DispatchContinuation>();
-            workItem.Initialize(connection, lease, packet, pending.AsTask(), ct);
-
-            _ = ThreadPool.UnsafeQueueUserWorkItem(workItem, preferLocal: false);
-
-            return ValueTask.CompletedTask;
+            // Await the incomplete handler ValueTask before dequeuing the next packet for this
+            // connection so that per-connection execution ordering is strictly preserved.
+            return AwaitPendingPacketAsync(pending, connection, lease, packet, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -765,6 +758,53 @@ public sealed class PacketDispatchChannel
 
         lease.Dispose();
         return ValueTask.CompletedTask;
+
+        static async ValueTask AwaitPendingPacketAsync(
+            ValueTask pendingTask,
+            IConnection conn,
+            IBufferLease bufferLease,
+            IPacket pkt,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await pendingTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // External cancellation
+            }
+            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+            {
+                try
+                {
+                    if (!conn.IsDisposed)
+                    {
+                        conn.IncrementErrorCount();
+
+                        conn.ThrottledDiagnosticError(
+                            DiagnosticsEvents.Internal.Error,
+                            s_keyExecute,
+                            "RT.PacketDispatchChannel:ExecutePacketAsync",
+                            $"handler-error ep={conn.NetworkEndpoint}",
+                            ex);
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Ignore ObjectDisposedException since the connection is going away
+                }
+            }
+            finally
+            {
+                if (pkt is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+
+                bufferLease.Dispose();
+            }
+        }
     }
 
 
