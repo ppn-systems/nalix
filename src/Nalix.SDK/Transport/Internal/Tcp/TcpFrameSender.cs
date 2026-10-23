@@ -24,7 +24,9 @@ internal sealed class TcpFrameSender : IDisposable
     private const int HeaderSize = TcpSession.HeaderSize;
 
     private readonly Func<Socket> _getSocket;
+#pragma warning disable CA2213 // _sendLock never allocates an OS WaitHandle and must stay undisposed so in-flight WaitAsync waiters can drain on teardown.
     private readonly SemaphoreSlim _sendLock;
+#pragma warning restore CA2213
     private readonly SequenceCounter _sequence;
     internal SequenceCounter Sequence => _sequence;
     private readonly Action<Exception, Socket?> _onError;
@@ -199,9 +201,11 @@ internal sealed class TcpFrameSender : IDisposable
 
     private bool SEND_RAW(byte[] frame, int length)
     {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         _sendLock.Wait();
         try
         {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
             return SEND_LOOP(_getSocket(), frame, length);
         }
         finally { _ = _sendLock.Release(); }
@@ -209,9 +213,11 @@ internal sealed class TcpFrameSender : IDisposable
 
     private async Task<bool> SEND_RAW_ASYNC(byte[] frame, int length, CancellationToken ct)
     {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         await _sendLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
             return await SEND_LOOP_ASYNC(_getSocket(), frame, length, ct).ConfigureAwait(false);
         }
         finally { _ = _sendLock.Release(); }
@@ -252,13 +258,5 @@ internal sealed class TcpFrameSender : IDisposable
 
     #endregion
 
-    public void Dispose()
-    {
-        if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
-        {
-            return;
-        }
-
-        _sendLock.Dispose();
-    }
+    public void Dispose() => _ = Interlocked.CompareExchange(ref _disposed, 1, 0);
 }

@@ -74,8 +74,10 @@ internal sealed class TcpFrameReader : IDisposable
         try
         {
             s = _getSocket();
-            byte[] headerBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(TcpSession.HeaderSize);
-            Memory<byte> headerMemory = new(headerBuffer, 0, TcpSession.HeaderSize);
+            int readBufferSize = Math.Max(_options.BufferSize, 64 * 1024);
+            byte[] readBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(readBufferSize);
+            int bufferedOffset = 0;
+            int bufferedCount = 0;
 
             try
             {
@@ -83,46 +85,71 @@ internal sealed class TcpFrameReader : IDisposable
                 {
                     try
                     {
-                        await RECEIVE_EXACTLY_ASYNC(s, headerMemory, token).ConfigureAwait(false);
-
-                        ushort totalLen = BinaryPrimitives.ReadUInt16LittleEndian(headerMemory.Span);
-                        if ((uint)totalLen < TcpSession.HeaderSize || totalLen > _options.BufferSize)
+                        while (bufferedCount >= TcpSession.HeaderSize)
                         {
-                            throw s_frameSizeExceeded;
-                        }
-
-                        int payloadLen = totalLen - TcpSession.HeaderSize;
-                        byte[]? rented = BufferLease.ByteArrayPool.Rent(totalLen);
-                        try
-                        {
-                            BinaryPrimitives.WriteUInt16LittleEndian(rented.AsSpan(0, TcpSession.HeaderSize), totalLen);
-
-                            if (payloadLen > 0)
+                            ushort totalLen = BinaryPrimitives.ReadUInt16LittleEndian(
+                                readBuffer.AsSpan(bufferedOffset, TcpSession.HeaderSize));
+                            if ((uint)totalLen < TcpSession.HeaderSize || totalLen > _options.BufferSize)
                             {
-                                await RECEIVE_EXACTLY_ASYNC(s, rented.AsMemory(TcpSession.HeaderSize, payloadLen), token).ConfigureAwait(false);
+                                throw s_frameSizeExceeded;
                             }
 
-                            // Ownership of 'rented' is taken by BufferLease.
-                            BufferLease lease = BufferLease.TakeOwnership(rented, TcpSession.HeaderSize, payloadLen);
-                            rented = null; // Transferred
-
-                            if (FragmentAssembler.IsFragmentedFrame(lease.Span, out FragmentHeader header))
+                            if (bufferedCount < totalLen)
                             {
-                                this.PROCESS_FRAGMENTED_FRAME(lease, header);
-                                continue;
+                                break;
                             }
 
-                            this.PROCESS_NORMAL_FRAME(lease);
+                            int payloadLen = totalLen - TcpSession.HeaderSize;
+                            byte[]? rented = BufferLease.ByteArrayPool.Rent(totalLen);
+                            try
+                            {
+                                readBuffer.AsSpan(bufferedOffset, totalLen).CopyTo(rented.AsSpan(0, totalLen));
+                                bufferedOffset += totalLen;
+                                bufferedCount -= totalLen;
+
+                                // Ownership of 'rented' is taken by BufferLease.
+                                BufferLease lease = BufferLease.TakeOwnership(rented, TcpSession.HeaderSize, payloadLen);
+                                rented = null; // Transferred
+
+                                if (FragmentAssembler.IsFragmentedFrame(lease.Span, out FragmentHeader header))
+                                {
+                                    this.PROCESS_FRAGMENTED_FRAME(lease, header);
+                                    continue;
+                                }
+
+                                this.PROCESS_NORMAL_FRAME(lease);
+                            }
+                            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+                            {
+                                if (rented != null)
+                                {
+                                    BufferLease.ByteArrayPool.Return(rented);
+                                }
+
+                                throw;
+                            }
                         }
-                        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+
+                        if (bufferedCount == 0)
                         {
-                            if (rented != null)
-                            {
-                                BufferLease.ByteArrayPool.Return(rented);
-                            }
-
-                            throw;
+                            bufferedOffset = 0;
                         }
+                        else if (bufferedOffset > 0)
+                        {
+                            Buffer.BlockCopy(readBuffer, bufferedOffset, readBuffer, 0, bufferedCount);
+                            bufferedOffset = 0;
+                        }
+
+                        int n = await s.ReceiveAsync(
+                            readBuffer.AsMemory(bufferedCount),
+                            SocketFlags.None,
+                            token).ConfigureAwait(false);
+                        if (n == 0)
+                        {
+                            throw new SocketException((int)SocketError.ConnectionReset);
+                        }
+
+                        bufferedCount += n;
                     }
                     catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex) && ex is not OperationCanceledException)
                     {
@@ -133,7 +160,7 @@ internal sealed class TcpFrameReader : IDisposable
             }
             finally
             {
-                System.Buffers.ArrayPool<byte>.Shared.Return(headerBuffer);
+                System.Buffers.ArrayPool<byte>.Shared.Return(readBuffer);
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -203,21 +230,6 @@ internal sealed class TcpFrameReader : IDisposable
             }
 
             original.Dispose();
-        }
-    }
-
-    private static async Task RECEIVE_EXACTLY_ASYNC(Socket s, Memory<byte> dst, CancellationToken token)
-    {
-        int read = 0;
-        while (read < dst.Length)
-        {
-            int n = await s.ReceiveAsync(dst[read..], SocketFlags.None, token).ConfigureAwait(false);
-            if (n == 0)
-            {
-                throw new SocketException((int)SocketError.ConnectionReset);
-            }
-
-            read += n;
         }
     }
 

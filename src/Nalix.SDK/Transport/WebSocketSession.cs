@@ -26,6 +26,7 @@ public class WebSocketSession : TransportSession
     private readonly WsFrameSender _sender;
     private readonly WsFrameReader _reader;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
+    private readonly Lock _connectCoalesceLock = new();
 
 #pragma warning disable CA2213
     private ClientWebSocket? _socket;
@@ -33,6 +34,9 @@ public class WebSocketSession : TransportSession
     private Task? _loopTask;
 #pragma warning restore CA2213
 
+    private Task? _connectingTask;
+    private string? _connectingHost;
+    private ushort _connectingPort;
     private int _disposed;
 
     #endregion Fields
@@ -47,6 +51,9 @@ public class WebSocketSession : TransportSession
 
     /// <inheritdoc/>
     public override bool IsConnected => _socket?.State == WebSocketState.Open && Volatile.Read(ref _disposed) == 0;
+
+    /// <inheritdoc/>
+    internal override bool HasDirectPendingDispatch => true;
 
     #endregion Properties
 
@@ -95,15 +102,57 @@ public class WebSocketSession : TransportSession
     #region APIs
 
     /// <inheritdoc/>
-    public override async Task ConnectAsync(string? host = null, ushort? port = null, CancellationToken ct = default)
+    public override Task ConnectAsync(string? host = null, ushort? port = null, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) == 1, nameof(WebSocketSession));
+        ct.ThrowIfCancellationRequested();
 
         if (!PacketRegistry.IsBuilt)
         {
             PacketRegistry.Build();
         }
 
+        string effectiveHost = string.IsNullOrWhiteSpace(host) ? this.Options.Address : host;
+        ushort effectivePort = port ?? this.Options.Port;
+
+        Task connectTask;
+        lock (_connectCoalesceLock)
+        {
+            if (_connectingTask is { IsCompleted: false } inFlight &&
+                string.Equals(_connectingHost, effectiveHost, StringComparison.OrdinalIgnoreCase) &&
+                _connectingPort == effectivePort)
+            {
+                connectTask = inFlight;
+            }
+            else
+            {
+                connectTask = this.ConnectCoreAsync(effectiveHost, effectivePort, raiseConnected: true, ct);
+                if (!connectTask.IsCompleted)
+                {
+                    _connectingHost = effectiveHost;
+                    _connectingPort = effectivePort;
+                    _connectingTask = connectTask;
+                }
+            }
+        }
+
+        return connectTask.WaitAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    internal override Task ReconnectForResumeFallbackAsync(string? host = null, ushort? port = null, CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) == 1, nameof(WebSocketSession));
+        ct.ThrowIfCancellationRequested();
+
+        string effectiveHost = string.IsNullOrWhiteSpace(host) ? this.Options.Address : host;
+        ushort effectivePort = port ?? this.Options.Port;
+
+        return this.ConnectCoreAsync(effectiveHost, effectivePort, raiseConnected: false, ct);
+    }
+
+    private async Task ConnectCoreAsync(string effectiveHost, ushort effectivePort, bool raiseConnected, CancellationToken ct)
+    {
         await _connectionLock.WaitAsync(ct).ConfigureAwait(false);
 
         // #393: tracks whether THIS attempt's socket ever reached OnConnected, so the catch below
@@ -112,12 +161,9 @@ public class WebSocketSession : TransportSession
 
         try
         {
-            string effectiveHost = string.IsNullOrWhiteSpace(host) ? this.Options.Address : host;
-            ushort effectivePort = port ?? this.Options.Port;
-
             if (_socket is not null || _loopCts is not null || _loopTask is not null)
             {
-                await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+                await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
             this.ResetSequenceCounters();
@@ -141,7 +187,10 @@ public class WebSocketSession : TransportSession
 
             await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
             connected = true;
-            this.OnConnected?.Invoke(this, EventArgs.Empty);
+            if (raiseConnected)
+            {
+                this.OnConnected?.Invoke(this, EventArgs.Empty);
+            }
 
             _loopCts = new CancellationTokenSource();
 
@@ -150,6 +199,7 @@ public class WebSocketSession : TransportSession
             // runtimes (Blazor WASM). The async loop yields correctly via
             // ConfigureAwait(false) on both desktop and WASM.
             _loopTask = _reader.ReceiveLoopAsync(_loopCts.Token);
+            this.StartKeepAliveIfEnabled();
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
@@ -157,12 +207,17 @@ public class WebSocketSession : TransportSession
             // OnDisconnected to pair with — suppress it and let the NetworkException thrown below be
             // the one signal. During an outage every failed retry would otherwise raise one, making
             // "one OnDisconnected per real transport close" not a guarantee callers can build on.
-            await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected).ConfigureAwait(false);
+            await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"WebSocket Connection failed: {ex.Message}", ex);
         }
         finally
         {
+            lock (_connectCoalesceLock)
+            {
+                _connectingTask = null;
+            }
+
             _ = _connectionLock.Release();
         }
     }
@@ -255,6 +310,10 @@ public class WebSocketSession : TransportSession
             }
 
             socket.Dispose();
+            this.StopKeepAlive();
+
+            NetworkException disconnectEx = new("The WebSocket session was disconnected.");
+            this.DispatchPendingDisconnect(disconnectEx);
 
             // #393: a socket that never reached OnConnected (a failed/timed-out/refused connect
             // attempt) must not raise OnDisconnected — an app has no matching OnConnected to pair it
@@ -262,7 +321,7 @@ public class WebSocketSession : TransportSession
             // OnDisconnected per real transport close" not a guarantee callers can build on.
             if (raiseDisconnected)
             {
-                this.OnDisconnected?.Invoke(this, new NetworkException("The WebSocket session was disconnected."));
+                this.OnDisconnected?.Invoke(this, disconnectEx);
             }
         }
 
@@ -330,10 +389,18 @@ public class WebSocketSession : TransportSession
         // Disposal is an application decision: the OnDisconnected raised below must not
         // start an auto-reconnect loop against a disposed session.
         this.MarkIntentionalDisconnect();
+        this.StopKeepAlive();
         _ = this.DisconnectInternalAsync();
         _sender.Dispose();
         _reader.Dispose();
         _connectionLock.Dispose();
+    }
+
+    /// <inheritdoc/>
+    private protected override async Task FaultFromKeepAliveAsync(Exception ex)
+    {
+        this.OnError?.Invoke(this, ex);
+        await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: true).ConfigureAwait(false);
     }
 
     #endregion APIs
@@ -362,13 +429,14 @@ public class WebSocketSession : TransportSession
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually
         // an unexpected fault.
-        _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket);
+        _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket, raiseDisconnected: !this.IsDisconnectSuppressed);
     }
 
-    private void HandleReceiveMessage(IBufferLease lease)
+    private void HandleReceiveMessage([Borrowed] IBufferLease lease)
     {
         try
         {
+            this.DispatchPendingMessage(lease);
             this.OnMessageReceived?.Invoke(this, lease);
 
             if (this.OnMessageAsync is { } asyncHandler)

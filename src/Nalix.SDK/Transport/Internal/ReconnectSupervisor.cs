@@ -31,6 +31,11 @@ internal sealed class ReconnectSupervisor
     }
 
     /// <summary>
+    /// Gets a value indicating whether an automatic reconnect loop is currently in flight.
+    /// </summary>
+    public bool IsReconnecting => _readyTcs is not null;
+
+    /// <summary>
     /// Awaits until the session is connected and (if a fresh handshake occurred) re-authenticated.
     /// Completes immediately if the session is already connected and no reconnect is in flight.
     /// </summary>
@@ -94,15 +99,32 @@ internal sealed class ReconnectSupervisor
                     break;
                 }
 
-                ProtocolReason reason = await _session.ConnectWithResumeDetailedAsync().ConfigureAwait(false);
-
-                if (reason != ProtocolReason.NONE && _session.OnReauthenticateAsync is { } reauth)
+                ProtocolReason reason;
+                _session.EnterDeferReady();
+                try
                 {
-                    await reauth(CancellationToken.None).ConfigureAwait(false);
+                    reason = await _session.ConnectWithResumeDetailedAsync().ConfigureAwait(false);
+
+                    if (reason == ProtocolReason.NONE)
+                    {
+                        if (_session.OnResumedAsync is { } onResumed)
+                        {
+                            await onResumed(CancellationToken.None).ConfigureAwait(false);
+                        }
+                    }
+                    else if (_session.OnReauthenticateAsync is { } reauth)
+                    {
+                        await reauth(CancellationToken.None).ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    _session.ExitDeferReady();
                 }
 
                 _readyTcs = null;
                 _ = tcs.TrySetResult(true);
+                _session.NotifyReady();
                 return;
             }
             catch (ObjectDisposedException ex)

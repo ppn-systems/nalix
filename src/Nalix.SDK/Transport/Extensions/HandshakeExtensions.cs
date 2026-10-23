@@ -67,6 +67,9 @@ public static class HandshakeExtensions
         Bytes32 masterSecret = default;
         Bytes32 sessionKey = default;
 
+        TransportSession? transportSession = session as TransportSession;
+        transportSession?.EnterNegotiation();
+
         try
         {
             using SessionInit clientHello = new();
@@ -121,7 +124,7 @@ public static class HandshakeExtensions
                 proof.Initialize(challenge.Nonce, challenge.Difficulty, challenge.TimestampTicks, challenge.Mac, solution, flags: PacketFlags.SYSTEM);
 
                 // Pipeline the ProofOfWorkProof. We do not wait for a response; SessionInit will immediately follow.
-                await session.SendAsync(proof, ct: ct).ConfigureAwait(false);
+                await session.SendAsync(proof, encrypt: false, ct: ct).ConfigureAwait(false);
 
                 // Re-send SessionInit and wait for SessionChallenge
                 serverHello = await session.RequestAsync<SessionChallenge>(
@@ -210,6 +213,7 @@ public static class HandshakeExtensions
             // The server applies encryption immediately after receiving CLIENT_FINISH, 
             // meaning SERVER_FINISH will be ENCRYPTED. 
             // If we don't set the secret/algorithm here, the background reader will fail to decrypt it.
+            CipherSuiteType previousAlgorithm = session.Options.Algorithm;
             session.State.Secret = sessionKey;
             session.Options.Algorithm = CipherSuiteType.Chacha20Poly1305;
 
@@ -240,17 +244,19 @@ public static class HandshakeExtensions
                 // Finalize state
                 session.State.EncryptionEnabled = true;
                 session.State.SessionToken = serverFinish.SessionToken;
+                transportSession?.NotifyReady();
             }
             catch
             {
                 session.State.Secret = Bytes32.Zero;
                 session.State.EncryptionEnabled = false;
-                session.Options.Algorithm = CipherSuiteType.Chacha20Poly1305;
+                session.Options.Algorithm = previousAlgorithm;
                 throw;
             }
         }
         finally
         {
+            transportSession?.ExitNegotiation();
             clientKey.Wipe();
             Bytes32.Wipe(ref sharedSecretEE);
             Bytes32.Wipe(ref sharedSecretSE);

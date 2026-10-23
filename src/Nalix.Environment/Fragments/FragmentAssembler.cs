@@ -40,6 +40,13 @@ public sealed class FragmentAssembler : IDisposable
     /// </summary>
     public const int EvictInterval = 64;
 
+    /// <summary>
+    /// Default cap for initial stream buffer pre-allocation when <c>ChunkIndex == 0</c> is small.
+    /// Prevents untrusted <see cref="FragmentHeader.TotalChunks"/> from amplifying a small first chunk
+    /// into a multi-megabyte allocation before real data arrives.
+    /// </summary>
+    private const int DefaultInitialStreamCapacity = 4096;
+
     #endregion Constants
 
     #region Inner state per stream
@@ -161,14 +168,24 @@ public sealed class FragmentAssembler : IDisposable
             }
 
             // SEC-34: Reject new streams when at capacity to prevent memory exhaustion.
-            if (_streams.Count >= this.MaxOpenStreams)
+            if (_streams.Count >= this.MaxOpenStreams && this.EvictExpired() == 0)
             {
                 streamEvicted = true;
                 return null;
             }
 
-            // Estimate buffer size: firstChunk * totalChunks, capped at MaxStreamBytes
-            int estimate = (int)Math.Min((long)chunkBody.Length * header.TotalChunks, this.MaxStreamBytes);
+            if (chunkBody.Length > this.MaxStreamBytes)
+            {
+                streamEvicted = true;
+                return null;
+            }
+
+            // Estimate buffer size: firstChunk * totalChunks, capped at MaxStreamBytes.
+            // Bound initial pre-allocation to at most max(chunkBody.Length * 2, 4096) so a small
+            // first chunk with a large TotalChunks cannot trigger a 16 MB upfront allocation (CWE-789).
+            long fullEstimate = Math.Min((long)chunkBody.Length * header.TotalChunks, this.MaxStreamBytes);
+            long boundedInitial = Math.Min(fullEstimate, Math.Max((long)chunkBody.Length * 2, DefaultInitialStreamCapacity));
+            int estimate = (int)Math.Min(boundedInitial, this.MaxStreamBytes);
 
             state = new StreamState(header.TotalChunks, Math.Max(estimate, 256));
             _streams[header.StreamId] = state;
@@ -181,8 +198,6 @@ public sealed class FragmentAssembler : IDisposable
             this.EVICT(header.StreamId, state);
             return null;
         }
-
-        state.LastActivityMs = now;
 
         // ── Check TotalChunks consistency ────────────────────────────────
         // Prevent forgery: TotalChunks must be the same across all chunks of a stream
@@ -197,23 +212,28 @@ public sealed class FragmentAssembler : IDisposable
         // ── Enforce ordered delivery ─────────────────────────────────────
         if (header.ChunkIndex != state.ReceivedCount)
         {
+            streamEvicted = true;
+            this.EVICT(header.StreamId, state);
             throw new InvalidDataException(
                 $"Fragment stream {header.StreamId} received out-of-order chunk. Expected index {state.ReceivedCount}, got {header.ChunkIndex}.");
         }
 
         // ── Check overflow ───────────────────────────────────────────────
-        if (state.WrittenBytes + chunkBody.Length > this.MaxStreamBytes)
+        if ((long)state.WrittenBytes + chunkBody.Length > this.MaxStreamBytes)
         {
             streamEvicted = true;
             this.EVICT(header.StreamId, state);
             return null;
         }
 
+        state.LastActivityMs = now;
+
         // ── Grow buffer if needed ────────────────────────────────────────
         if (state.WrittenBytes + chunkBody.Length > state.AccumLease.Capacity)
         {
+            int doubled = (int)Math.Min((long)state.AccumLease.Capacity * 2, this.MaxStreamBytes);
             int newCap = Math.Max(
-                state.AccumLease.Capacity * 2,
+                doubled,
                 state.WrittenBytes + chunkBody.Length);
 
             BufferLease newLease = BufferLease.Rent(newCap);

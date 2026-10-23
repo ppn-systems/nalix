@@ -17,7 +17,9 @@ namespace Nalix.SDK.Transport.Internal.Ws;
 internal sealed class WsFrameSender : IDisposable
 {
     private readonly SessionState _state;
+#pragma warning disable CA2213 // _sendLock never allocates an OS WaitHandle and must stay undisposed so in-flight WaitAsync waiters can drain on teardown.
     private readonly SemaphoreSlim _sendLock;
+#pragma warning restore CA2213
     private readonly SequenceCounter _sequence;
     internal SequenceCounter Sequence => _sequence;
     private readonly TransportOptions _options;
@@ -113,7 +115,7 @@ internal sealed class WsFrameSender : IDisposable
 
     private bool SEND_RAW(ReadOnlyMemory<byte> frame, ClientWebSocket socket)
     {
-        if (socket.State != WebSocketState.Open)
+        if (Volatile.Read(ref _disposed) != 0 || socket.State != WebSocketState.Open)
         {
             return false;
         }
@@ -121,6 +123,11 @@ internal sealed class WsFrameSender : IDisposable
         _sendLock.Wait();
         try
         {
+            if (Volatile.Read(ref _disposed) != 0 || socket.State != WebSocketState.Open)
+            {
+                return false;
+            }
+
             socket.SendAsync(frame, WebSocketMessageType.Binary, true, CancellationToken.None).AsTask().GetAwaiter().GetResult();
             return true;
         }
@@ -137,7 +144,7 @@ internal sealed class WsFrameSender : IDisposable
 
     private async Task<bool> SEND_RAW_ASYNC(ReadOnlyMemory<byte> frame, ClientWebSocket socket, CancellationToken ct)
     {
-        if (socket.State != WebSocketState.Open)
+        if (Volatile.Read(ref _disposed) != 0 || socket.State != WebSocketState.Open)
         {
             return false;
         }
@@ -145,6 +152,11 @@ internal sealed class WsFrameSender : IDisposable
         await _sendLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            if (Volatile.Read(ref _disposed) != 0 || socket.State != WebSocketState.Open)
+            {
+                return false;
+            }
+
             await socket.SendAsync(frame, WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
             return true;
         }
@@ -161,13 +173,5 @@ internal sealed class WsFrameSender : IDisposable
 
     #endregion
 
-    public void Dispose()
-    {
-        if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
-        {
-            return;
-        }
-
-        _sendLock.Dispose();
-    }
+    public void Dispose() => _ = Interlocked.CompareExchange(ref _disposed, 1, 0);
 }

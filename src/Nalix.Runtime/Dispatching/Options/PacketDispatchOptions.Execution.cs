@@ -153,7 +153,10 @@ public sealed partial class PacketDispatchOptions<TPacket>
             if (result is IPacket packetResult)
             {
                 responsePacket = packetResult;
-                await AwaitReturnAsync(context.Sender.SendAsync(packetResult, ct), ct).ConfigureAwait(false);
+                ValueTask sendTask = packetResult.Header.SequenceId == 0
+                    ? context.Sender.ReplyAsync(packetResult, ct)
+                    : context.Sender.SendAsync(packetResult, ct);
+                await AwaitReturnAsync(sendTask, ct).ConfigureAwait(false);
             }
             else if (result is ReadOnlyMemory<byte> rom)
             {
@@ -266,7 +269,10 @@ public sealed partial class PacketDispatchOptions<TPacket>
                 if (result is IPacket packetResult)
                 {
                     responsePacket = packetResult;
-                    await AwaitReturnAsync(context.Sender.SendAsync(packetResult, ct), ct).ConfigureAwait(false);
+                    ValueTask sendTask = packetResult.Header.SequenceId == 0
+                        ? context.Sender.ReplyAsync(packetResult, ct)
+                        : context.Sender.SendAsync(packetResult, ct);
+                    await AwaitReturnAsync(sendTask, ct).ConfigureAwait(false);
                 }
                 else if (result is ReadOnlyMemory<byte> rom)
                 {

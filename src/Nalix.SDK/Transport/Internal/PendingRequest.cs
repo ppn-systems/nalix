@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Sources;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
@@ -16,63 +17,66 @@ using Nalix.Environment.Extensions;
 namespace Nalix.SDK.Transport.Internal;
 
 /// <summary>
+/// Non-generic observer contract used by <see cref="TransportSession"/>'s internal pending-request
+/// dispatch table to avoid multicast event delegate allocations on the request-response hot path.
+/// </summary>
+internal interface IPendingRequestObserver
+{
+    /// <summary>Gets the expected wire opcode for this pending request.</summary>
+    ushort OpCode { get; }
+
+    /// <summary>Invoked synchronously by the session when an inbound frame with matching opcode arrives.</summary>
+    void OnMessageReceived([Borrowed] IBufferLease buffer);
+
+    /// <summary>Invoked synchronously by the session when the underlying transport disconnects.</summary>
+    void OnDisconnected(Exception error);
+}
+
+/// <summary>
 /// One in-flight request-response exchange: it watches the session's inbound stream for the first
 /// packet of <typeparamref name="TPkt"/> that satisfies a predicate, and completes when that packet
 /// arrives, when the session drops, or when the caller's timeout expires.
 /// </summary>
 /// <typeparam name="TPkt">The response packet type.</typeparam>
-/// <remarks>
-/// <para>
-/// This exists to keep the request path free of per-request closures. The previous implementation
-/// built a lambda for the predicate, another for the handler, another for the disconnect handler,
-/// one more for each unsubscribe, a display class for each of them, a <c>CompositeSubscription</c>
-/// with its parameter array, a linked <see cref="CancellationTokenSource"/> and its timer
-/// registration — for every single request. Here the state lives in fields and the two event
-/// handlers are method groups bound once per instance.
-/// </para>
-/// <para>
-/// <b>Instance pooling:</b> instances are rented from a small per-<typeparamref name="TPkt"/> pool
-/// (<see cref="Rent"/>/<see cref="Return"/>) instead of allocated fresh per request, so the two event
-/// handler delegates and the <see cref="TaskCompletionSource{TPkt}"/> are the only things a live
-/// request still needs from the heap — the wrapper object and its delegates are reused across
-/// requests. A request is only returned to the pool once its <see cref="Task"/> has been fully
-/// observed (see <see cref="PacketAwaiter"/>), never while still in flight.
-/// </para>
-/// <para>
-/// Completion is single-shot and races are resolved by <see cref="Interlocked"/>: whichever of the
-/// three outcomes gets there first wins, and the rest are no-ops.
-/// </para>
-/// </remarks>
-internal sealed class PendingRequest<TPkt>
+#pragma warning disable CA1001 // PendingRequest<TPkt> is a process-lifetime pooled object whose Timer is reused across requests.
+internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingRequestObserver
     where TPkt : class, IPacket, IPacketStaticOpcode
 {
-    // Bounded so a burst of concurrent requests does not grow the pool without limit; beyond this,
-    // Rent() falls back to allocating a fresh instance exactly as before pooling existed.
     private const int MaxPooled = 64;
 
     private static readonly ConcurrentQueue<PendingRequest<TPkt>> s_pool = new();
+    private static readonly TimerCallback s_timeoutCallback = static state => ((PendingRequest<TPkt>)state!).OnTimeout();
+    private static readonly Action<object?> s_cancelCallback = static state => ((PendingRequest<TPkt>)state!).OnCanceled();
 
-    private TaskCompletionSource<TPkt> _completion =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private ManualResetValueTaskSourceCore<TPkt> _core;
+    private readonly Timer _timeoutTimer;
+    private CancellationTokenRegistration _ctRegistration;
+    private CancellationToken _ct;
+    private int _timeoutMs;
 
     private ITransportSession? _session;
+    private TransportSession? _directSession;
     private Func<TPkt, bool>? _predicate;
     private ushort _opcode;
 
-    // Bound once per pooled instance (not once per request). A method group in a += or -= builds a
-    // fresh delegate every time, so subscribing and unsubscribing around one request would otherwise
-    // cost four delegate allocations; pooling the instance means these are created at most
-    // MaxPooled times total across the process, not once per request.
+    // Fallback delegates used only when the session is a custom/mock ITransportSession that does not
+    // participate in TransportSession's direct pending-request table.
     private readonly EventHandler<IBufferLease> _onMessage;
     private readonly EventHandler<Exception> _onDisconnected;
 
     private int _completed;
+    private int _subscribed;
 
     private PendingRequest()
     {
-        _onMessage = this.OnMessageReceived;
-        _onDisconnected = this.OnDisconnected;
+        _core.RunContinuationsAsynchronously = true;
+        _timeoutTimer = new Timer(s_timeoutCallback, this, Timeout.Infinite, Timeout.Infinite);
+        _onMessage = this.OnMessageReceivedEvent;
+        _onDisconnected = this.OnDisconnectedEvent;
     }
+
+    /// <inheritdoc/>
+    public ushort OpCode => _opcode;
 
     /// <summary>
     /// Rents a pooled instance (or allocates one if the pool is empty) and binds it to
@@ -86,27 +90,60 @@ internal sealed class PendingRequest<TPkt>
         }
 
         pending._session = session;
+        pending._directSession = session is TransportSession { HasDirectPendingDispatch: true } direct ? direct : null;
         pending._predicate = predicate;
         pending._opcode = TPkt.StaticOpCode;
         pending._completed = 0;
-
-        // A completed TaskCompletionSource cannot be reused for a new await, so each rental gets a
-        // fresh one. This — plus the Task<TPkt> it wraps — is the one per-request heap allocation
-        // pooling cannot remove: the awaited result has to live in a real async completion object.
-        pending._completion = new TaskCompletionSource<TPkt>(TaskCreationOptions.RunContinuationsAsynchronously);
+        pending._subscribed = 0;
+        pending._timeoutMs = 0;
+        pending._ct = default;
 
         return pending;
     }
 
     /// <summary>
-    /// Clears per-request state and returns the instance to the pool for reuse. Only call this once
-    /// <see cref="Task"/> has been fully awaited (or faulted) — never while a caller might still be
-    /// observing it.
+    /// Clears per-request state, resets the <see cref="ManualResetValueTaskSourceCore{TResult}"/>,
+    /// and returns the instance to the pool for reuse.
     /// </summary>
-    internal void Return()
+    internal void Return(bool wasAwaited)
     {
+        this.Unsubscribe();
+        _ = _timeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        _ctRegistration.Dispose();
+        _ctRegistration = default;
+
+        if (!wasAwaited)
+        {
+            if (Interlocked.Exchange(ref _completed, 1) == 0)
+            {
+                _session = null;
+                _directSession = null;
+                _predicate = null;
+                _ct = default;
+
+                if (s_pool.Count < MaxPooled)
+                {
+                    s_pool.Enqueue(this);
+                }
+
+                return;
+            }
+
+            if (_core.GetStatus(_core.Version) == ValueTaskSourceStatus.Succeeded)
+            {
+                TPkt unclaimed = _core.GetResult(_core.Version);
+                if (unclaimed is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            }
+        }
+
+        _core.Reset();
         _session = null;
+        _directSession = null;
         _predicate = null;
+        _ct = default;
 
         if (s_pool.Count < MaxPooled)
         {
@@ -114,21 +151,71 @@ internal sealed class PendingRequest<TPkt>
         }
     }
 
-    /// <summary>The task that completes with the matching packet, or faults.</summary>
-    internal Task<TPkt> Task => _completion.Task;
-
     /// <summary>Starts watching the session's inbound stream.</summary>
     internal void Subscribe()
     {
-        _session!.OnMessageReceived += _onMessage;
-        _session.OnDisconnected += _onDisconnected;
+        _subscribed = 1;
+        if (_directSession is not null)
+        {
+            _directSession.RegisterPendingRequest(this);
+        }
+        else
+        {
+            _session!.OnMessageReceived += _onMessage;
+            _session.OnDisconnected += _onDisconnected;
+        }
     }
 
     /// <summary>Stops watching. Safe to call more than once.</summary>
     internal void Unsubscribe()
     {
-        _session!.OnMessageReceived -= _onMessage;
-        _session.OnDisconnected -= _onDisconnected;
+        if (Interlocked.Exchange(ref _subscribed, 0) == 0)
+        {
+            return;
+        }
+
+        if (_directSession is not null)
+        {
+            _directSession.UnregisterPendingRequest(this);
+        }
+        else if (_session is not null)
+        {
+            _session.OnMessageReceived -= _onMessage;
+            _session.OnDisconnected -= _onDisconnected;
+        }
+    }
+
+    /// <summary>
+    /// Arms timeout and cancellation (when not already settled) and returns a zero-allocation
+    /// <see cref="ValueTask{TPkt}"/> backed directly by this pooled instance.
+    /// </summary>
+    internal ValueTask<TPkt> WaitAsync(int timeoutMs, CancellationToken ct)
+    {
+        if (Volatile.Read(ref _completed) != 0)
+        {
+            return new ValueTask<TPkt>(this, _core.Version);
+        }
+
+        _timeoutMs = timeoutMs;
+        _ct = ct;
+
+        if (ct.CanBeCanceled)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                this.OnCanceled();
+                return new ValueTask<TPkt>(this, _core.Version);
+            }
+
+            _ctRegistration = ct.UnsafeRegister(s_cancelCallback, this);
+        }
+
+        if (timeoutMs > 0 && Volatile.Read(ref _completed) == 0)
+        {
+            _ = _timeoutTimer.Change(timeoutMs, Timeout.Infinite);
+        }
+
+        return new ValueTask<TPkt>(this, _core.Version);
     }
 
     /// <summary>Faults the exchange, unless it has already settled.</summary>
@@ -136,11 +223,35 @@ internal sealed class PendingRequest<TPkt>
     {
         if (Interlocked.Exchange(ref _completed, 1) == 0)
         {
-            _ = _completion.TrySetException(error);
+            _ = _timeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
+            this.Unsubscribe();
+            _core.SetException(error);
         }
     }
 
-    private void OnMessageReceived(Object? sender, IBufferLease buffer)
+    private void OnTimeout()
+    {
+        if (Interlocked.Exchange(ref _completed, 1) == 0)
+        {
+            int timeoutMs = _timeoutMs;
+            this.Unsubscribe();
+            _core.SetException(new TimeoutException($"No {typeof(TPkt).Name} received within {timeoutMs} ms."));
+        }
+    }
+
+    private void OnCanceled()
+    {
+        if (Interlocked.Exchange(ref _completed, 1) == 0)
+        {
+            CancellationToken ct = _ct;
+            _ = _timeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
+            this.Unsubscribe();
+            _core.SetException(new OperationCanceledException(ct));
+        }
+    }
+
+    /// <inheritdoc/>
+    public void OnMessageReceived([Borrowed] IBufferLease buffer)
     {
         // The session owns the lease and disposes it after this returns; never dispose it here.
         if (buffer.Length < PacketConstants.HeaderSize)
@@ -159,7 +270,7 @@ internal sealed class PendingRequest<TPkt>
             IPacket packet = PacketRegistry.Deserialize(buffer.Span);
             packet.Header = header;
 
-            Boolean delivered = false;
+            bool delivered = false;
 
             try
             {
@@ -168,7 +279,7 @@ internal sealed class PendingRequest<TPkt>
                     return;
                 }
 
-                Boolean matches;
+                bool matches;
 
                 try
                 {
@@ -193,9 +304,10 @@ internal sealed class PendingRequest<TPkt>
                 }
 
                 delivered = true;
-                _session!.OnMessageReceived -= _onMessage;
+                _ = _timeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                this.Unsubscribe();
 
-                _ = _completion.TrySetResult(typed);
+                _core.SetResult(typed);
             }
             finally
             {
@@ -214,8 +326,30 @@ internal sealed class PendingRequest<TPkt>
         }
     }
 
-    private void OnDisconnected(Object? sender, Exception error)
+    /// <inheritdoc/>
+    public void OnDisconnected(Exception error)
         => this.TrySetException(new NetworkException(
             $"Disconnected while waiting for {typeof(TPkt).Name}.",
             error ?? new InvalidOperationException("The transport session was disconnected.")));
+
+    private void OnMessageReceivedEvent(object? sender, [Borrowed] IBufferLease buffer)
+        => this.OnMessageReceived(buffer);
+
+    private void OnDisconnectedEvent(object? sender, Exception error)
+        => this.OnDisconnected(error);
+
+    /// <inheritdoc/>
+    TPkt IValueTaskSource<TPkt>.GetResult(short token) => _core.GetResult(token);
+
+    /// <inheritdoc/>
+    ValueTaskSourceStatus IValueTaskSource<TPkt>.GetStatus(short token) => _core.GetStatus(token);
+
+    /// <inheritdoc/>
+    void IValueTaskSource<TPkt>.OnCompleted(
+        Action<object?> continuation,
+        object? state,
+        short token,
+        ValueTaskSourceOnCompletedFlags flags)
+        => _core.OnCompleted(continuation, state, token, flags);
 }
+#pragma warning restore CA1001
