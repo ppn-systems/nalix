@@ -33,9 +33,27 @@ public interface ITransportSession
     bool IsConnected { get; }
 
     /// <summary>
+    /// Gets or sets a hook invoked after an automatic reconnect performs a fresh handshake
+    /// (i.e. session resume was not used), before the session is signalled as ready.
+    /// </summary>
+    Func<CancellationToken, Task>? OnReauthenticateAsync { get; set; }
+
+    /// <summary>
+    /// Gets or sets a hook invoked after an automatic reconnect successfully resumes an existing
+    /// session, before the session is signalled as ready.
+    /// </summary>
+    Func<CancellationToken, Task>? OnResumedAsync { get; set; }
+
+    /// <summary>
     /// Occurs when the session establishes a connection.
     /// </summary>
     event EventHandler? OnConnected;
+
+    /// <summary>
+    /// Occurs when the session has completed its handshake or session resume and is ready for
+    /// application-level traffic. Fired on all connection paths, including automatic reconnects.
+    /// </summary>
+    event EventHandler? OnReady;
 
     /// <summary>
     /// Occurs when the session disconnects.

@@ -261,6 +261,163 @@ public sealed class SdkUpgradeTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task ConnectAsync_ReconnectingAlreadyConnectedSession_DoesNotRaiseOnDisconnected()
+    {
+        int port = TestUtils.GetFreePort();
+        TcpListener listener = new(IPAddress.Loopback, port);
+        listener.Start();
+
+        try
+        {
+            using TcpSession session = new(new TransportOptions { Address = "127.0.0.1", Port = (ushort)port });
+
+            int connectedCount = 0;
+            int disconnectedCount = 0;
+            session.OnConnected += (_, _) => Interlocked.Increment(ref connectedCount);
+            session.OnDisconnected += (_, _) => Interlocked.Increment(ref disconnectedCount);
+
+            Task<Socket> accept1 = listener.AcceptSocketAsync();
+            await session.ConnectAsync();
+            using Socket s1 = await accept1;
+
+            Task<Socket> accept2 = listener.AcceptSocketAsync();
+            await session.ConnectAsync();
+            using Socket s2 = await accept2;
+
+            Assert.Equal(2, connectedCount);
+            Assert.Equal(0, disconnectedCount);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task ConnectWithResumeDetailedAsync_WhenResumeFails_FallsBackWithoutOnDisconnectedOrDuplicateOnConnected()
+    {
+        int port = TestUtils.GetFreePort();
+        var builder = NetworkApplication.CreateBuilder();
+        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.UseSecureConnections();
+        builder.UseSystemControl();
+        builder.UseSessions();
+
+        using NetworkApplication app = builder.Build();
+        await app.ActivateAsync();
+
+        try
+        {
+            using TcpSession session = new(new TransportOptions
+            {
+                Address = "127.0.0.1",
+                Port = (ushort)port,
+                ServerPublicKey = TestUtils.GetServerPublicKey(),
+                ResumeEnabled = true,
+                ResumeFallbackToHandshake = true
+            });
+
+            // Populate an unknown/expired session token so ResumeSessionAsync is attempted and rejected.
+            byte[] secretBytes = new byte[32];
+            secretBytes[0] = 0x5A;
+            session.State.Secret = new Nalix.Abstractions.Primitives.Bytes32(secretBytes);
+            session.State.SessionToken = 999999UL;
+            session.State.EncryptionEnabled = true;
+
+            int connectedCount = 0;
+            int disconnectedCount = 0;
+            int readyCount = 0;
+            session.OnConnected += (_, _) => Interlocked.Increment(ref connectedCount);
+            session.OnDisconnected += (_, _) => Interlocked.Increment(ref disconnectedCount);
+            session.OnReady += (_, _) => Interlocked.Increment(ref readyCount);
+
+            ProtocolReason reason = await session.ConnectWithResumeDetailedAsync();
+
+            Assert.NotEqual(ProtocolReason.NONE, reason);
+            Assert.True(session.IsConnected);
+            Assert.True(session.State.EncryptionEnabled);
+            Assert.Equal(1, connectedCount);
+            Assert.Equal(0, disconnectedCount);
+            Assert.Equal(1, readyCount);
+        }
+        finally
+        {
+            await app.DeactivateAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RequestAsync_WithoutPredicate_CorrelatesBySequenceId()
+    {
+        int port = TestUtils.GetFreePort();
+        var builder = NetworkApplication.CreateBuilder();
+        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.UseSystemControl();
+        builder.UseTimeSync();
+
+        using NetworkApplication app = builder.Build();
+        await app.ActivateAsync();
+
+        try
+        {
+            using TcpSession session = new(new TransportOptions { Address = "127.0.0.1", Port = (ushort)port });
+            await session.ConnectAsync();
+
+            TimeSync ping = new();
+            ping.Initialize(ControlType.PING, 0, PacketFlags.NONE);
+
+            // predicate is null: RequestAsync must stamp SequenceId and correlate the response by SequenceId.
+            TimeSync pong = await session.RequestAsync<TimeSync>(
+                ping,
+                options: RequestOptions.Default.WithTimeout(5000),
+                predicate: null);
+
+            Assert.NotEqual((ushort)0, ping.Header.SequenceId);
+            Assert.Equal(ping.Header.SequenceId, pong.Header.SequenceId);
+        }
+        finally
+        {
+            await app.DeactivateAsync();
+        }
+    }
+
+    [Fact]
+    public async Task KeepAlive_WhenServerBlackholed_FaultsAndRaisesOnDisconnected()
+    {
+        int port = TestUtils.GetFreePort();
+        TcpListener listener = new(IPAddress.Loopback, port);
+        listener.Start();
+
+        try
+        {
+            using TcpSession session = new(new TransportOptions
+            {
+                Address = "127.0.0.1",
+                Port = (ushort)port,
+                KeepAliveIntervalMillis = 100,
+                KeepAliveTimeoutMillis = 100,
+                KeepAliveMissThreshold = 2
+            });
+
+            TaskCompletionSource<Exception> disconnectedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.OnDisconnected += (_, ex) => disconnectedTcs.TrySetResult(ex);
+
+            Task<Socket> acceptTask = listener.AcceptSocketAsync();
+            await session.ConnectAsync();
+            using Socket blackholeServer = await acceptTask;
+            _ = blackholeServer; // Accepts TCP connection and reads/sends nothing (black-hole).
+
+            Exception ex = await disconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.NotNull(ex);
+            Assert.False(session.IsConnected);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
 #endif

@@ -55,6 +55,9 @@ public static class ResumeExtensions
         HmacKeccak256.Compute(session.State.Secret.AsSpan(), messageBytes, proofBytes);
         request.Proof = new Bytes32(proofBytes);
 
+        TransportSession? transportSession = session as TransportSession;
+        transportSession?.EnterNegotiation();
+
         try
         {
             SessionResume response = await PacketAwaiter.AwaitAsync<SessionResume>(
@@ -87,6 +90,7 @@ public static class ResumeExtensions
 
             session.State.SessionToken = response.SessionToken;
             session.State.EncryptionEnabled = true;
+            transportSession?.NotifyReady();
             return ProtocolReason.NONE;
         }
         catch (OperationCanceledException)
@@ -104,6 +108,10 @@ public static class ResumeExtensions
         catch (InvalidOperationException)
         {
             return ProtocolReason.STATE_VIOLATION;
+        }
+        finally
+        {
+            transportSession?.ExitNegotiation();
         }
     }
 
@@ -153,51 +161,58 @@ public static class ResumeExtensions
         }
         else
         {
-            reason = await session.ResumeSessionAsync(ct).ConfigureAwait(false);
-            if (reason == ProtocolReason.NONE)
+            TransportSession? transportSession = session as TransportSession;
+            bool suppressDisconnect = session.Options.ResumeFallbackToHandshake && transportSession is not null;
+            if (suppressDisconnect)
             {
-                return ProtocolReason.NONE;
+                transportSession!.EnterSuppressDisconnect();
             }
 
-            if (!session.Options.ResumeFallbackToHandshake)
+            try
             {
-                throw new NetworkException($"Session resume failed: {reason}");
-            }
+                reason = await session.ResumeSessionAsync(ct).ConfigureAwait(false);
+                if (reason == ProtocolReason.NONE)
+                {
+                    return ProtocolReason.NONE;
+                }
 
-            if (session.IsConnected)
+                if (!session.Options.ResumeFallbackToHandshake)
+                {
+                    throw new NetworkException($"Session resume failed: {reason}");
+                }
+
+                if (transportSession is not null)
+                {
+                    await transportSession.ReconnectForResumeFallbackAsync(host, port, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    if (session.IsConnected)
+                    {
+                        await session.DisconnectAsync().ConfigureAwait(false);
+                    }
+
+                    await session.ConnectAsync(host, port, ct).ConfigureAwait(false);
+                }
+            }
+            finally
             {
-                await session.DisconnectAsync().ConfigureAwait(false);
+                if (suppressDisconnect)
+                {
+                    transportSession!.ExitSuppressDisconnect();
+                }
             }
-
-            await session.ConnectAsync(host, port, ct).ConfigureAwait(false);
         }
 
         await HandshakeAfterResumeFallbackAsync(session, ct).ConfigureAwait(false);
         return reason;
     }
 
-    private static async ValueTask HandshakeAfterResumeFallbackAsync(ITransportSession session, CancellationToken ct)
-    {
-        // Use explicit encrypt=false for the handshake send without mutating the shared
-        // EncryptionEnabled flag — this avoids a race condition where concurrent SendAsync
-        // calls could see a temporarily-disabled encryption state (SEC-06).
-        bool previousEncryption = session.State.EncryptionEnabled;
-        session.State.EncryptionEnabled = false;
-
-        try
-        {
-            await session.HandshakeAsync(ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            // Ensure encryption is restored/enabled after handshake completes.
-            // HandshakeAsync itself may enable encryption; only restore if it didn't.
-            if (!session.State.EncryptionEnabled)
-            {
-                session.State.EncryptionEnabled = previousEncryption && !session.State.Secret.IsZero;
-            }
-        }
-    }
+    // HandshakeAsync sends all handshake frames with explicit encrypt=false and only flips
+    // EncryptionEnabled=true once SessionEstablished is verified, so we must NOT mutate
+    // the shared session.State.EncryptionEnabled flag here (SEC-06).
+    private static ValueTask HandshakeAfterResumeFallbackAsync(ITransportSession session, CancellationToken ct)
+        => session.HandshakeAsync(ct);
 
     /// <summary>
     /// Checks whether the session has enough state to attempt resume.

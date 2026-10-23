@@ -27,11 +27,15 @@ public class TcpSession : TransportSession
     private readonly TcpFrameReader _reader;
 
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
+    private readonly Lock _connectCoalesceLock = new();
 #pragma warning disable CA2213 // Disposed through Interlocked.Exchange locals inside DisconnectInternalAsync/Dispose(bool).
     private Socket? _socket;
     private CancellationTokenSource? _loopCts;
     private Task? _loopTask;
 #pragma warning restore CA2213
+    private Task? _connectingTask;
+    private string? _connectingHost;
+    private ushort _connectingPort;
     private int _disposed;
 
     #endregion Fields
@@ -96,25 +100,68 @@ public class TcpSession : TransportSession
     #region APIs
 
     /// <inheritdoc/>
-    public override async Task ConnectAsync(string? host = null, ushort? port = null, CancellationToken ct = default)
+    public override Task ConnectAsync(string? host = null, ushort? port = null, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) == 1, nameof(TcpSession));
+        ct.ThrowIfCancellationRequested();
 
         if (!PacketRegistry.IsBuilt)
         {
             PacketRegistry.Build();
         }
 
+        string effectiveHost = string.IsNullOrWhiteSpace(host) ? this.Options.Address : host;
+        ushort effectivePort = port ?? this.Options.Port;
+
+        Task connectTask;
+        lock (_connectCoalesceLock)
+        {
+            if (_connectingTask is { IsCompleted: false } inFlight &&
+                string.Equals(_connectingHost, effectiveHost, StringComparison.OrdinalIgnoreCase) &&
+                _connectingPort == effectivePort)
+            {
+                connectTask = inFlight;
+            }
+            else
+            {
+                connectTask = this.ConnectCoreAsync(effectiveHost, effectivePort, raiseConnected: true, ct);
+                if (!connectTask.IsCompleted)
+                {
+                    _connectingHost = effectiveHost;
+                    _connectingPort = effectivePort;
+                    _connectingTask = connectTask;
+                }
+            }
+        }
+
+        return connectTask.WaitAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    internal override Task ReconnectForResumeFallbackAsync(string? host = null, ushort? port = null, CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) == 1, nameof(TcpSession));
+        ct.ThrowIfCancellationRequested();
+
+        string effectiveHost = string.IsNullOrWhiteSpace(host) ? this.Options.Address : host;
+        ushort effectivePort = port ?? this.Options.Port;
+
+        return this.ConnectCoreAsync(effectiveHost, effectivePort, raiseConnected: false, ct);
+    }
+
+    private async Task ConnectCoreAsync(string effectiveHost, ushort effectivePort, bool raiseConnected, CancellationToken ct)
+    {
         await _connectionLock.WaitAsync(ct).ConfigureAwait(false);
+
+        // #393: tracks whether THIS attempt's socket ever reached OnConnected, so the catch below
+        // knows whether a raised OnDisconnected would have a matching "connected" event to pair with.
+        bool connected = false;
 
         try
         {
-            string effectiveHost = string.IsNullOrWhiteSpace(host) ? this.Options.Address : host;
-            ushort effectivePort = port ?? this.Options.Port;
-
             if (_socket is not null || _loopCts is not null || _loopTask is not null)
             {
-                await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+                await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
             this.ResetSequenceCounters();
@@ -135,22 +182,32 @@ public class TcpSession : TransportSession
                 this.State.LocalPort = localEp.Port;
             }
 
-            this.OnConnected?.Invoke(this, EventArgs.Empty);
+            connected = true;
+            if (raiseConnected)
+            {
+                this.OnConnected?.Invoke(this, EventArgs.Empty);
+            }
 
             // Start background worker for reading frames
             _loopCts = new CancellationTokenSource();
 
             _loopTask = Task.Factory.StartNew(() => _reader.ReceiveLoopAsync(_loopCts.Token),
                 _loopCts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+            this.StartKeepAliveIfEnabled();
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            await this.DisconnectInternalAsync().ConfigureAwait(false);
+            await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"Connection failed: {ex.Message}", ex);
         }
         finally
         {
+            lock (_connectCoalesceLock)
+            {
+                _connectingTask = null;
+            }
+
             _ = _connectionLock.Release();
         }
     }
@@ -172,6 +229,8 @@ public class TcpSession : TransportSession
 
         await _connectionLock.WaitAsync(ct).ConfigureAwait(false);
 
+        bool connected = false;
+
         try
         {
             string effectiveHost = string.IsNullOrWhiteSpace(host) ? this.Options.Address : host;
@@ -179,7 +238,7 @@ public class TcpSession : TransportSession
 
             if (_socket is not null || _loopCts is not null || _loopTask is not null)
             {
-                await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+                await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
             this.ResetSequenceCounters();
@@ -203,6 +262,7 @@ public class TcpSession : TransportSession
             // Inject Proxy Protocol V2 header if configured before triggering connected events
             _ = await _socket.SendAsync(proxyProtocolV2, SocketFlags.None, connectCts.Token).ConfigureAwait(false);
 
+            connected = true;
             this.OnConnected?.Invoke(this, EventArgs.Empty);
 
             // Start background worker for reading frames
@@ -210,10 +270,11 @@ public class TcpSession : TransportSession
 
             _loopTask = Task.Factory.StartNew(() => _reader.ReceiveLoopAsync(_loopCts.Token),
                 _loopCts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+            this.StartKeepAliveIfEnabled();
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+            await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected).ConfigureAwait(false);
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"Connection failed: {ex.Message}", ex);
         }
@@ -248,7 +309,7 @@ public class TcpSession : TransportSession
         }
     }
 
-    private async Task DisconnectInternalAsync(Socket? expectedSocket = null, bool waitForLoop = false)
+    private async Task DisconnectInternalAsync(Socket? expectedSocket = null, bool waitForLoop = false, bool raiseDisconnected = true)
     {
         Socket? socket;
         CancellationTokenSource? loopCts;
@@ -317,9 +378,15 @@ public class TcpSession : TransportSession
             }
 
             socket.Dispose();
+            this.StopKeepAlive();
+
             NetworkException disconnectEx = new("The TCP session was disconnected.");
             this.DispatchPendingDisconnect(disconnectEx);
-            this.OnDisconnected?.Invoke(this, disconnectEx);
+
+            if (raiseDisconnected)
+            {
+                this.OnDisconnected?.Invoke(this, disconnectEx);
+            }
         }
 
         if (waitForLoop && loopTask is { IsCompleted: false })
@@ -388,10 +455,18 @@ public class TcpSession : TransportSession
         // Disposal is an application decision: the OnDisconnected raised below must not
         // start an auto-reconnect loop against a disposed session.
         this.MarkIntentionalDisconnect();
+        this.StopKeepAlive();
         _ = this.DisconnectInternalAsync();
         _sender.Dispose();
         _reader.Dispose();
         _connectionLock.Dispose();
+    }
+
+    /// <inheritdoc/>
+    private protected override async Task FaultFromKeepAliveAsync(Exception ex)
+    {
+        this.OnError?.Invoke(this, ex);
+        await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: true).ConfigureAwait(false);
     }
 
     #endregion APIs
@@ -409,7 +484,7 @@ public class TcpSession : TransportSession
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually
         // an unexpected fault.
-        _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket);
+        _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket, raiseDisconnected: !this.IsDisconnectSuppressed);
     }
 
     /// <summary>
