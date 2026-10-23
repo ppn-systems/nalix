@@ -193,7 +193,7 @@ public sealed class UdpPassthroughListener : UdpListenerBase
             return null;
         }
 
-        PassthroughConnection newConnection = new(this.Protocol.OpCodeExtractor, ipEndPoint);
+        PassthroughConnection newConnection = new(this.Protocol.OpCodeExtractor, ipEndPoint, _timing);
 
         PassthroughConnection connection = _connections.AddOrUpdate(
             ipEndPoint,

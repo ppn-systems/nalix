@@ -185,7 +185,7 @@ public abstract partial class TcpListenerBase
             // This pool slot will be reused for the next accept without waiting.
             _pool.Return(context);
 
-            connection = new(socket, _protocol.OpCodeExtractor);
+            connection = new(socket, _protocol.OpCodeExtractor, _timing);
 
             // Subscribe lifecycle events.
             // WHY subscribe to _limiter.OnConnectionClosed:
@@ -276,7 +276,7 @@ public abstract partial class TcpListenerBase
                 this.Metrics.RECORD_ERROR();
                 return null;
             }
-            connection = new(socket, _protocol.OpCodeExtractor, endpoint);
+            connection = new(socket, _protocol.OpCodeExtractor, endpoint, _timing);
 
             connection.ConnectionClosed += this.HandleConnectionClose;
             connection.ConnectionClosed += _limiter.OnConnectionClosed;

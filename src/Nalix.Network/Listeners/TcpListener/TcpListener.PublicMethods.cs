@@ -131,6 +131,8 @@ public abstract partial class TcpListenerBase
                 _timing.Activate(linkedToken);
             }
 
+            this.START_PROCESS_CHANNEL(linkedToken);
+
             // Spawn N accept-worker async tasks, where N = MaxParallel.
             // Multiple workers let the listener accept several connections in
             // parallel instead of serializing every accept behind one loop.
@@ -152,8 +154,8 @@ public abstract partial class TcpListenerBase
             }
             _acceptWorkers = acceptWorkers;
 
-            // Wait until at least one accept worker is actually running before returning.
-            // Without this, Activate() returns before any accept loop has started, creating
+            // Wait until at least one accept worker and the process-channel worker are actually running before returning.
+            // Without this, Activate() returns before any accept/dispatch loop has started, creating
             // a race between client connections and server readiness.
             {
                 SpinWait spin = new();
@@ -169,7 +171,7 @@ public abstract partial class TcpListenerBase
                             break;
                         }
                     }
-                    if (anyRunning)
+                    if (anyRunning && (_processWorker?.IsRunning ?? true))
                     {
                         break;
                     }
@@ -177,8 +179,6 @@ public abstract partial class TcpListenerBase
                     spin.SpinOnce();
                 }
             }
-
-            this.START_PROCESS_CHANNEL(linkedToken);
         }
         catch (OperationCanceledException)
         {

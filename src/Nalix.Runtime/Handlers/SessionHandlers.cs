@@ -50,9 +50,8 @@ public static partial class SessionHandlers
         }
 
         IConnection connection = context.Connection;
-        IConnectionHub? hub = connection.GetHub();
 
-        if (hub is null)
+        if (s_sessionService is null)
         {
             await HandleFailureAsync(context, ProtocolReason.SERVICE_UNAVAILABLE).ConfigureAwait(false);
             return;

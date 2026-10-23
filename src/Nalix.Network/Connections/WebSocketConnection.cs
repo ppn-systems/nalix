@@ -44,12 +44,12 @@ public sealed class WebSocketConnection :
     #region Fields
 
     private static readonly ObjectPoolManager s_pool;
-    private static readonly TimingWheel s_timingWheel;
     private static readonly TimingWheelOptions s_timingWheelOptions;
     private static readonly ConnectionGuardOptions s_limitOptions;
     private static readonly NetworkCallbackOptions s_callbackOptions;
 
     private ConnectionBacking? _backing;
+    private readonly TimingWheel _timingWheel;
     private volatile bool _disposed;
 
     #endregion Fields
@@ -59,7 +59,6 @@ public sealed class WebSocketConnection :
     static WebSocketConnection()
     {
         s_pool = ObjectPoolManager.Shared;
-        s_timingWheel = InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
 
         s_limitOptions = ConfigurationManager.Instance.Get<ConnectionGuardOptions>();
         s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
@@ -76,12 +75,18 @@ public sealed class WebSocketConnection :
     /// <param name="packetClassifier">The opcode extractor for classifying incoming packets.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="webSocket"/> is null.</exception>
     public WebSocketConnection(WebSocket webSocket, IOpCodeExtractor packetClassifier, EndPoint remoteEndPoint)
+        : this(webSocket, packetClassifier, remoteEndPoint, timingWheel: null)
+    {
+    }
+
+    internal WebSocketConnection(WebSocket webSocket, IOpCodeExtractor packetClassifier, EndPoint remoteEndPoint, TimingWheel? timingWheel)
     {
         ArgumentNullException.ThrowIfNull(webSocket);
         ArgumentNullException.ThrowIfNull(remoteEndPoint);
         ArgumentNullException.ThrowIfNull(packetClassifier);
 
         _disposed = false;
+        _timingWheel = timingWheel ?? InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
 
         _backing = s_pool.Get<ConnectionBacking>();
         _backing.Initialize();
@@ -502,8 +507,8 @@ public sealed class WebSocketConnection :
 
         this.IdleTimeoutMs = newTimeoutMs;
 
-        s_timingWheel.Unregister(this);
-        s_timingWheel.Register(this);
+        _timingWheel.Unregister(this);
+        _timingWheel.Register(this);
     }
 
     #endregion Methods
