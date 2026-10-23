@@ -1,10 +1,11 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using Nalix.Codec.Serialization;
 
-namespace Nalix.Codec.Tests.Serialization;
+namespace Nalix.Codec.Tests.TestSupport;
 
-internal static class LiteSerializerTestHelper
+public static class LiteSerializerRoundTrip
 {
     public static T RoundTrip<T>(T value)
     {

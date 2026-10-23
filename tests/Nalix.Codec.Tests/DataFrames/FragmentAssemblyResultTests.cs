@@ -10,7 +10,7 @@ namespace Nalix.Codec.Tests.DataFrames;
 public sealed class FragmentAssemblyResultTests
 {
     [Fact]
-    public void ConstructorExposesSameLeaseAndMetadataViews()
+    public void Ctor_WhenLeaseProvided_ExposesSameLeaseAndMetadataViews()
     {
         byte[] payload = Encoding.UTF8.GetBytes("fragment-result");
         using BufferLease lease = BufferLease.CopyFrom(payload);
@@ -23,7 +23,7 @@ public sealed class FragmentAssemblyResultTests
     }
 
     [Fact]
-    public void ResultReflectsUpdatedLeaseLengthAndContent()
+    public void Length_WhenLeaseIsUpdated_ReflectsNewLengthAndContent()
     {
         using BufferLease lease = BufferLease.Rent(32);
         Encoding.UTF8.GetBytes("abc").AsSpan().CopyTo(lease.SpanFull);

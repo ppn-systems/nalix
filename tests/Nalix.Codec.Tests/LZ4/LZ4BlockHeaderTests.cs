@@ -9,7 +9,7 @@ namespace Nalix.Codec.Tests.LZ4;
 public sealed class LZ4BlockHeaderTests
 {
     [Fact]
-    public void SizeConstantMatchesMarshalAndUnsafeSize()
+    public void Size_WhenComparedWithMarshalSize_MatchesStructLayout()
     {
         Assert.Equal(8, LZ4BlockHeader.Size);
         Assert.Equal(LZ4BlockHeader.Size, Marshal.SizeOf<LZ4BlockHeader>());
@@ -22,7 +22,7 @@ public sealed class LZ4BlockHeaderTests
     [InlineData(123, 64)]
     [InlineData(int.MaxValue, int.MaxValue)]
     [InlineData(-1, -2)]
-    public void ConstructorStoresOriginalAndCompressedLengths(int originalLength, int compressedLength)
+    public void Ctor_WhenLengthsAreProvided_StoresOriginalAndCompressedLengths(int originalLength, int compressedLength)
     {
         LZ4BlockHeader header = new(originalLength, compressedLength);
 

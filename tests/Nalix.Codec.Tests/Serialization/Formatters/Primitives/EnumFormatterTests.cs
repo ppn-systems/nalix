@@ -4,7 +4,7 @@
 using Nalix.Codec.Serialization.Formatters.Primitives;
 using Nalix.Environment.Memory;
 
-namespace Nalix.Codec.Tests.Serialization;
+namespace Nalix.Codec.Tests.Serialization.Formatters.Primitives;
 
 public sealed class EnumFormatterTests
 {
@@ -16,7 +16,7 @@ public sealed class EnumFormatterTests
     [Theory]
     [InlineData(ByteKind.A)]
     [InlineData(ByteKind.B)]
-    public void SerializeThenDeserializeByteEnumRoundTrips(ByteKind value)
+    public void SerializeDeserialize_WhenByteEnum_RoundTripsValue(ByteKind value)
     {
         ByteKind actual = RoundTrip(value, new EnumFormatter<ByteKind>());
         Assert.Equal(value, actual);
@@ -26,7 +26,7 @@ public sealed class EnumFormatterTests
     [InlineData(IntKind.Min)]
     [InlineData(IntKind.Zero)]
     [InlineData(IntKind.Max)]
-    public void SerializeThenDeserializeIntEnumRoundTrips(IntKind value)
+    public void SerializeDeserialize_WhenIntEnum_RoundTripsValue(IntKind value)
     {
         IntKind actual = RoundTrip(value, new EnumFormatter<IntKind>());
         Assert.Equal(value, actual);
@@ -35,7 +35,7 @@ public sealed class EnumFormatterTests
     [Theory]
     [InlineData(LongKind.Neg)]
     [InlineData(LongKind.Pos)]
-    public void SerializeThenDeserializeLongEnumRoundTrips(LongKind value)
+    public void SerializeDeserialize_WhenLongEnum_RoundTripsValue(LongKind value)
     {
         LongKind actual = RoundTrip(value, new EnumFormatter<LongKind>());
         Assert.Equal(value, actual);
@@ -44,14 +44,14 @@ public sealed class EnumFormatterTests
     [Theory]
     [InlineData(ULongKind.Low)]
     [InlineData(ULongKind.High)]
-    public void SerializeThenDeserializeULongEnumRoundTrips(ULongKind value)
+    public void SerializeDeserialize_WhenULongEnum_RoundTripsValue(ULongKind value)
     {
         ULongKind actual = RoundTrip(value, new EnumFormatter<ULongKind>());
         Assert.Equal(value, actual);
     }
 
     [Fact]
-    public void CreatingFormatterWithNonEnumTypeThrowsTypeInitializationException() => _ = Assert.Throws<TypeInitializationException>(() => new EnumFormatter<int>());
+    public void Ctor_WhenTypeIsNotEnum_ThrowsTypeInitializationException() => _ = Assert.Throws<TypeInitializationException>(() => new EnumFormatter<int>());
 
     private static TEnum RoundTrip<TEnum>(TEnum value, EnumFormatter<TEnum> formatter)
     {

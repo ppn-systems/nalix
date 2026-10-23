@@ -1,7 +1,9 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Serialization;
+using Nalix.Codec.Tests.TestSupport;
 
 namespace Nalix.Codec.Tests.Serialization;
 
@@ -36,7 +38,7 @@ public sealed class LiteSerializerUnmanagedTests
     }
 
     [Fact]
-    public void SerializeToProvidedBuffer_UnmanagedStruct_ExactBuffer_WritesSuccessfully()
+    public void Serialize_WhenBufferHasExactSize_WritesUnmanagedStruct()
     {
         ComplexStruct value = new() { I32 = 42, I16 = 7, B = 1 };
         byte[] exact = LiteSerializer.Serialize(in value);
@@ -54,7 +56,7 @@ public sealed class LiteSerializerUnmanagedTests
     }
 
     [Fact]
-    public void SerializeToProvidedBuffer_UnmanagedStruct_ShortBuffer_ThrowsSerializationFailureException()
+    public void Serialize_WhenBufferIsTooShort_ThrowsSerializationFailureException()
     {
         ComplexStruct value = new() { I32 = 1, I16 = 2, B = 3 };
         byte[] exact = LiteSerializer.Serialize(in value);
@@ -64,7 +66,7 @@ public sealed class LiteSerializerUnmanagedTests
     }
 
     [Fact]
-    public void Deserialize_UnmanagedStruct_ShortBuffer_ThrowsSerializationFailureException()
+    public void Deserialize_WhenUnmanagedBufferIsTooShort_ThrowsSerializationFailureException()
     {
         ComplexStruct value = new() { I32 = 1, I16 = 2, B = 3 };
         byte[] full = LiteSerializer.Serialize(in value);

@@ -11,7 +11,7 @@ using Nalix.Codec.Transforms;
 using Nalix.Environment.Memory;
 using Xunit;
 
-namespace Nalix.Codec.Tests.Scrubbing;
+namespace Nalix.Codec.Tests.Transforms;
 
 /// <summary>
 /// Since #370 the byte-array pool no longer clears arrays on return, so every owner of a buffer
@@ -19,13 +19,13 @@ namespace Nalix.Codec.Tests.Scrubbing;
 /// it is returned and records any array that still contains a known plaintext marker.
 /// </summary>
 [Collection(TestCollections.PooledBufferScrub)]
-public sealed class PooledBufferScrubTests : IDisposable
+public sealed class FramePipelineScrubTests : IDisposable
 {
     private static readonly byte[] Marker = Encoding.ASCII.GetBytes("TOP-SECRET-PLAINTEXT-MARKER-7f3a");
 
     private readonly ScanningPool _pool = new(Marker);
 
-    public PooledBufferScrubTests() => BufferLease.ByteArrayPool.Configure(_pool);
+    public FramePipelineScrubTests() => BufferLease.ByteArrayPool.Configure(_pool);
 
     public void Dispose() => BufferLease.ByteArrayPool.Configure(new SharedPool());
 

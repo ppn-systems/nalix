@@ -19,7 +19,7 @@ public sealed partial class PacketNullableValueTypeTests
     }
 
     [Fact]
-    public void NullablePacketWithTerminalNullFieldsRoundTrips()
+    public void RoundTrip_WhenTerminalNullableFieldsAreNull_PreservesNulls()
     {
         NullableValuePacket packet = new()
         {
@@ -36,7 +36,7 @@ public sealed partial class PacketNullableValueTypeTests
     }
 
     [Fact]
-    public void NullablePacketWithPopulatedFieldsRoundTrips()
+    public void RoundTrip_WhenNullableFieldsArePopulated_PreservesValues()
     {
         NullableValuePacket packet = new()
         {
@@ -53,7 +53,7 @@ public sealed partial class PacketNullableValueTypeTests
     }
 
     [Fact]
-    public void NullablePacketWithMixedNullAndPopulatedFieldsRoundTrips()
+    public void RoundTrip_WhenNullableFieldsAreMixed_PreservesNullsAndValues()
     {
         NullableValuePacket packet = new()
         {
@@ -70,7 +70,7 @@ public sealed partial class PacketNullableValueTypeTests
     }
 
     [Fact]
-    public void TuplePacketWithNullableNullElementsRoundTrips()
+    public void RoundTrip_WhenTupleElementsAreNull_PreservesNulls()
     {
         TupleNullableValuePacket packet = new()
         {

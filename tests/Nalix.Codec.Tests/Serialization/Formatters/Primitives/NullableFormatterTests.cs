@@ -5,23 +5,23 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Serialization;
 using Nalix.Environment.Memory;
 
-namespace Nalix.Codec.Tests.Serialization;
+namespace Nalix.Codec.Tests.Serialization.Formatters.Primitives;
 
-public sealed class NullableValueFormatterTests
+public sealed class NullableFormatterTests
 {
     [Theory]
     [InlineData(null)]
     [InlineData(42)]
-    public void NullableIntRoundTrips(int? value) => RoundTrip(value);
+    public void RoundTrip_WhenNullableInt_PreservesValue(int? value) => RoundTrip(value);
 
     [Theory]
     [InlineData(null)]
     [InlineData(true)]
     [InlineData(false)]
-    public void NullableBoolRoundTrips(bool? value) => RoundTrip(value);
+    public void RoundTrip_WhenNullableBool_PreservesValue(bool? value) => RoundTrip(value);
 
     [Fact]
-    public void NullableTimeSpanRoundTripsNull()
+    public void RoundTrip_WhenNullableTimeSpanIsNull_PreservesNull()
     {
         TimeSpan? value = null;
 
@@ -29,7 +29,7 @@ public sealed class NullableValueFormatterTests
     }
 
     [Fact]
-    public void NullableTimeSpanRoundTripsValue()
+    public void RoundTrip_WhenNullableTimeSpanHasValue_PreservesValue()
     {
         TimeSpan? value = TimeSpan.FromMilliseconds(12345);
 
@@ -37,7 +37,7 @@ public sealed class NullableValueFormatterTests
     }
 
     [Fact]
-    public void NullableGuidRoundTripsNull()
+    public void RoundTrip_WhenNullableGuidIsNull_PreservesNull()
     {
         Guid? value = null;
 
@@ -45,7 +45,7 @@ public sealed class NullableValueFormatterTests
     }
 
     [Fact]
-    public void NullableGuidRoundTripsValue()
+    public void RoundTrip_WhenNullableGuidHasValue_PreservesValue()
     {
         Guid? value = Guid.Parse("d3a2f52c-8f6b-4f4e-9b30-5d2b2d87a72d");
 
@@ -56,10 +56,10 @@ public sealed class NullableValueFormatterTests
     [InlineData(null)]
     [InlineData(NullableTestStatus.Active)]
     [InlineData(NullableTestStatus.Archived)]
-    public void NullableEnumRoundTrips(NullableTestStatus? value) => RoundTrip(value);
+    public void RoundTrip_WhenNullableEnum_PreservesValue(NullableTestStatus? value) => RoundTrip(value);
 
     [Fact]
-    public void DeserializeWhenNullablePresenceFlagIsInvalidThrowsSerializationFailureException()
+    public void Deserialize_WhenPresenceFlagIsInvalid_ThrowsSerializationFailureException()
     {
         byte[] corrupt = [2];
         IFormatter<int?> formatter = FormatterProvider.Get<int?>();
@@ -73,7 +73,7 @@ public sealed class NullableValueFormatterTests
     }
 
     [Fact]
-    public void FormatterProviderResolvesNullableValueTypesWithoutManualRegistration()
+    public void Get_WhenNullableValueTypes_ResolvesWithoutManualRegistration()
     {
         IFormatter<int?> intFormatter = FormatterProvider.Get<int?>();
         IFormatter<TimeSpan?> timeSpanFormatter = FormatterProvider.Get<TimeSpan?>();

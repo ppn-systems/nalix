@@ -8,13 +8,13 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Serialization;
 
-namespace Nalix.Codec.Tests.DataFrames;
+namespace Nalix.Codec.Tests.Pooling;
 
 [Collection(TestCollections.PooledBufferScrub)]
-public sealed partial class PacketPoolLeaseTests
+public sealed partial class PacketFactoryTests
 {
     [Fact]
-    public void RentReturnsLeaseAndDisposeIsIdempotent()
+    public void Acquire_WhenScopeIsDisposedTwice_ReturnsValueAndIgnoresSecondDispose()
     {
         using PacketScope<Control> lease = PacketFactory<Control>.Acquire();
 
@@ -26,22 +26,27 @@ public sealed partial class PacketPoolLeaseTests
     }
 
     [Fact]
-    public void PreallocAndClearDoNotThrowAndReturnNonNegativeCounts()
+    public void Prealloc_WhenFollowedByClearPool_ReturnsNonNegativeCounts()
     {
         ObjectPoolManager manager = new();
         PacketRegistry.Configure(manager);
 
-        int preallocated = manager.Prealloc<Control>(3);
-        int cleared = manager.ClearPool<Control>();
+        try
+        {
+            int preallocated = manager.Prealloc<Control>(3);
+            int cleared = manager.ClearPool<Control>();
 
-        Assert.True(preallocated >= 0);
-        Assert.True(cleared >= 0);
-
-        PacketRegistry.Configure(null!);
+            Assert.True(preallocated >= 0);
+            Assert.True(cleared >= 0);
+        }
+        finally
+        {
+            PacketRegistry.Configure(null!);
+        }
     }
 
     [Fact]
-    public void AcquireAfterReturnClearsNestedCollections()
+    public void Acquire_WhenPreviousScopeWasDisposed_ReturnsPacketWithClearedCollections()
     {
         ObjectPoolManager manager = new();
         PacketRegistry.Configure(manager);

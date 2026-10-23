@@ -1,5 +1,6 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.LZ4;
 
@@ -9,7 +10,7 @@ namespace Nalix.Codec.Tests.LZ4;
 /// Adversarial tests feeding hostile/malformed compressed input into the LZ4 decoder.
 /// Goal: catch DoS (unbounded allocation, hangs) and memory-safety bugs (OOB read/write).
 /// </summary>
-public sealed class LZ4AdversarialTests
+public sealed class LZ4CodecAdversarialTests
 {
     private static byte[] CreateSamplePayload(int length, System.Random rng)
     {
@@ -246,7 +247,7 @@ public sealed class LZ4AdversarialTests
     }
 
     [Fact]
-    public void Decode_ValidBlock_MutateOriginalLengthField_RejectsCleanly()
+    public void Decode_WhenOriginalLengthFieldIsMutated_RejectsCleanly()
     {
         System.Random rng = new(777);
         byte[] original = CreateSamplePayload(200, rng);
@@ -261,7 +262,7 @@ public sealed class LZ4AdversarialTests
     }
 
     [Fact]
-    public void Decode_ValidBlock_MutateCompressedLengthField_RejectsCleanly()
+    public void Decode_WhenCompressedLengthFieldIsMutated_RejectsCleanly()
     {
         System.Random rng = new(778);
         byte[] original = CreateSamplePayload(200, rng);

@@ -24,14 +24,14 @@ using Nalix.Framework.Options;
 namespace Nalix.Codec.Tests.Serialization;
 
 [Collection(TestCollections.PooledBufferScrub)]
-public sealed partial class CodecSerializationSecurityReproductionTests
+public sealed partial class CodecSerializationSecurityRegressionTests
 {
     // =========================================================================
     // 1. [CRIT-04] Silent Deserialization Failure in LiteSerializer
     // =========================================================================
 
     [Fact]
-    public void Crit04_LiteSerializer_Deserialize_TruncatedPayload_ThrowsOnAllOverloads()
+    public void Deserialize_WhenStringPayloadIsTruncated_ThrowsOnAllOverloads()
     {
         // A string claiming 50 UTF-8 bytes but only 2 bytes follow.
         byte[] truncated = new byte[6];
@@ -63,7 +63,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     }
 
     [Fact]
-    public void Crit04_LiteSerializer_Fill_TruncatedPayload_ThrowsOnAllOverloads()
+    public void Fill_WhenListPayloadIsTruncated_ThrowsOnAllOverloads()
     {
         // Truncated List<int>: claims 10 elements (40 bytes) but only has 4 bytes after count.
         byte[] truncated = new byte[8];
@@ -88,7 +88,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     // =========================================================================
 
     [Fact]
-    public void High10_MemoryFormatter_HostileLength_DoesNotAllocateBeforeCheckingRemainingBytes()
+    public void Deserialize_WhenMemoryLengthIsHostile_DoesNotAllocateBeforeCheckingRemainingBytes()
     {
         // 4-byte payload declaring 1,000,000 long elements (8 MB) with 0 element bytes remaining.
         byte[] hostile = BitConverter.GetBytes(1_000_000);
@@ -109,7 +109,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     }
 
     [Fact]
-    public void High10_ReadOnlyMemoryFormatter_HostileLength_DoesNotAllocateBeforeCheckingRemainingBytes()
+    public void Deserialize_WhenReadOnlyMemoryLengthIsHostile_DoesNotAllocateBeforeCheckingRemainingBytes()
     {
         byte[] hostile = BitConverter.GetBytes(1_000_000);
         IFormatter<ReadOnlyMemory<long>> formatter = FormatterProvider.Get<ReadOnlyMemory<long>>();
@@ -132,7 +132,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     // =========================================================================
 
     [Fact]
-    public void High11_DictionaryFormatter_TruncatedStringKey_FailsCleanlyWithoutArgumentNullException()
+    public void Deserialize_WhenDictionaryStringKeyIsTruncated_ThrowsSerializationFailureException()
     {
         // Count = 2, followed by only 2 bytes (enough for CollectionGuard count=2*1, but not enough for ReadInt32 string length).
         // Previously, StringFormatter returned null! on poisoned reader, and dict[null!] threw ArgumentNullException!
@@ -145,7 +145,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     }
 
     [Fact]
-    public void High11_GeneratedClassFormatter_DoesNotCreateInstancesWhenReaderIsAlreadyPoisoned()
+    public void Deserialize_WhenReaderIsAlreadyPoisoned_DoesNotCreateFurtherInstances()
     {
         CountingDto.ResetCount();
 
@@ -166,7 +166,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     // =========================================================================
 
     [Fact]
-    public void High12_Leb128_Write_And_WriteUnrolled_ThrowWhenBufferTooSmall()
+    public void Write_WhenBufferIsTooSmall_ThrowsWithoutTouchingNeighbouringBytes()
     {
         byte[] destination = new byte[5];
         destination[1] = 0xAA;
@@ -184,7 +184,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     }
 
     [Fact]
-    public void High12_BufferLease_RetainAfterDispose_ThrowsWithoutCorruptingRefCount()
+    public void Retain_WhenLeaseIsUninitialized_ThrowsWithoutCorruptingRefCount()
     {
         BufferLease lease = new();
 
@@ -198,7 +198,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     }
 
     [Fact]
-    public void High12_BufferLease_RentWithHeadroom_IntegerOverflow_ThrowsOverflowException()
+    public void Rent_WhenHeadroomOverflowsInt32_ThrowsOverflowException()
     {
         _ = Assert.Throws<OverflowException>(() => BufferLease.Rent(int.MaxValue, zeroOnDispose: false, headroom: 2));
     }
@@ -208,7 +208,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     // =========================================================================
 
     [Fact]
-    public void Med08_PacketBase_Deserialize_InvalidNullableMarker_ReturnsNullAndDisposesPooledPacket()
+    public void Deserialize_WhenNullableMarkerIsInvalid_ReturnsNullAndReleasesPooledPacket()
     {
         using ObjectPoolManager poolMgr = new(new ObjectPoolOptions { EnableMetrics = true });
         PacketRegistry.Configure(poolMgr);
@@ -232,7 +232,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     }
 
     [Fact]
-    public void Med08_PacketSchemaGenerator_PaddedUnmanagedStruct_LengthMatchesSerializedBytes()
+    public void Length_WhenUnmanagedStructHasPadding_MatchesSerializedBytes()
     {
         PaddedStructPacket packet = new()
         {
@@ -247,7 +247,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     }
 
     [Fact]
-    public void Med09_AeadEngine_LargeAad_ZeroesRentedAadBeforeReturningToPool()
+    public void Encrypt_WhenAadIsLarge_ZeroesRentedAadBeforeReturningToPool()
     {
         byte[] secretAad = new byte[300];
         Array.Fill(secretAad, (byte)0x5A);
@@ -275,7 +275,7 @@ public sealed partial class CodecSerializationSecurityReproductionTests
     }
 
     [Fact]
-    public void Med09_FrameTransformer_GetPlaintextLength_EnvelopeShorterThanOffset_ThrowsInternalErrorException()
+    public void GetPlaintextLength_WhenEnvelopeIsShorterThanOffset_ThrowsInternalErrorException()
     {
         byte[] tooShort = new byte[FrameTransformer.Offset - 1];
         _ = Assert.ThrowsAny<InternalErrorException>(() => FrameTransformer.GetPlaintextLength(tooShort));

@@ -6,12 +6,12 @@ using Nalix.Abstractions.Serialization;
 using Nalix.Codec.Serialization.Formatters.Primitives;
 using Nalix.Environment.Memory;
 
-namespace Nalix.Codec.Tests.Serialization;
+namespace Nalix.Codec.Tests.Serialization.Formatters.Primitives;
 
 public sealed class StringFormatterTests
 {
     [Fact]
-    public void SerializeThenDeserializeNullRoundTrips()
+    public void SerializeDeserialize_WhenValueIsNull_RoundTripsNull()
     {
         StringFormatter formatter = new();
         DataWriter writer = new(8);
@@ -35,7 +35,7 @@ public sealed class StringFormatterTests
     [InlineData("")]
     [InlineData("hello")]
     [InlineData("xin chao 👋 nalix")]
-    public void SerializeThenDeserializeRoundTripsString(string input)
+    public void SerializeDeserialize_WhenValueVaries_RoundTripsString(string input)
     {
         StringFormatter formatter = new();
         DataWriter writer = new(4); // small buffer to also exercise Expand
@@ -57,7 +57,7 @@ public sealed class StringFormatterTests
     }
 
     [Fact]
-    public void SerializeWhenUtf8LengthExceedsMaxThrowsSerializationFailureException()
+    public void Serialize_WhenUtf8LengthExceedsMax_ThrowsSerializationFailureException()
     {
         StringFormatter formatter = new();
         DataWriter writer = new(16);
@@ -85,7 +85,7 @@ public sealed class StringFormatterTests
     }
 
     [Fact]
-    public void DeserializeWhenLengthIsNegativeAndNotNullSentinelReturnsNullAndPoisonsReader()
+    public void Deserialize_WhenLengthIsNegativeAndNotNullSentinel_ReturnsNullAndPoisonsReader()
     {
         StringFormatter formatter = new();
         byte[] invalid = BitConverter.GetBytes(-2);

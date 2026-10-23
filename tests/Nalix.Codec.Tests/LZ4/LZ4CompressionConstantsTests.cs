@@ -8,7 +8,7 @@ namespace Nalix.Codec.Tests.LZ4;
 public sealed class LZ4CompressionConstantsTests
 {
     [Fact]
-    public void ConstantsMatchExpectedLz4Values()
+    public void Constants_WhenRead_MatchExpectedLz4Values()
     {
         Assert.Equal(4, LZ4CompressionConstants.MinMatchLength);
         Assert.Equal(0xFFFF, LZ4CompressionConstants.MaxOffset);

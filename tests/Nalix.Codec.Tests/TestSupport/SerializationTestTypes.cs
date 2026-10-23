@@ -3,7 +3,7 @@
 
 using Nalix.Abstractions.Serialization;
 
-namespace Nalix.Codec.Tests.Serialization;
+namespace Nalix.Codec.Tests.TestSupport;
 
 [GenerateFormatter]
 internal partial struct SmallStruct
