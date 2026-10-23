@@ -33,7 +33,8 @@ public sealed class ConstantTimeSmokeTests
     [Fact]
     public void EnvelopeDecryptTagMismatchTimingIsNotGrosslyPositionDependent()
     {
-        const int iterations = 100_000;
+        const int batchCount = 51;
+        const int iterationsPerBatch = 2_000;
         const CipherSuiteType suite = CipherSuiteType.Chacha20Poly1305;
 
         byte[] key = SequentialBytes(32, 1);
@@ -51,36 +52,61 @@ public sealed class ConstantTimeSmokeTests
 
         byte[] decrypted = new byte[plaintext.Length];
 
-        // Warmup (JIT).
-        for (int i = 0; i < 1000; i++)
+        // Warmup (JIT + tiered compilation).
+        for (int i = 0; i < 2_000; i++)
         {
             _ = EnvelopeCipher.TryDecrypt(key, tamperedFirstByte.AsSpan(0, written), decrypted, suite, out _, out _);
             _ = EnvelopeCipher.TryDecrypt(key, tamperedLastByte.AsSpan(0, written), decrypted, suite, out _, out _);
         }
 
-        long firstTicks = 0;
-        long lastTicks = 0;
-        for (int i = 0; i < iterations; i++)
+        long[] firstBatchTicks = new long[batchCount];
+        long[] lastBatchTicks = new long[batchCount];
+
+        for (int batch = 0; batch < batchCount; batch++)
         {
-            long beforeFirst = Stopwatch.GetTimestamp();
-            _ = EnvelopeCipher.TryDecrypt(key, tamperedFirstByte.AsSpan(0, written), decrypted, suite, out _, out _);
-            long afterFirst = Stopwatch.GetTimestamp();
-
-            long beforeLast = Stopwatch.GetTimestamp();
-            _ = EnvelopeCipher.TryDecrypt(key, tamperedLastByte.AsSpan(0, written), decrypted, suite, out _, out _);
-            long afterLast = Stopwatch.GetTimestamp();
-
-            firstTicks += afterFirst - beforeFirst;
-            lastTicks += afterLast - beforeLast;
+            if ((batch & 1) == 0)
+            {
+                firstBatchTicks[batch] = MeasureBatchTicks(key, tamperedFirstByte, written, decrypted, suite, iterationsPerBatch);
+                lastBatchTicks[batch] = MeasureBatchTicks(key, tamperedLastByte, written, decrypted, suite, iterationsPerBatch);
+            }
+            else
+            {
+                lastBatchTicks[batch] = MeasureBatchTicks(key, tamperedLastByte, written, decrypted, suite, iterationsPerBatch);
+                firstBatchTicks[batch] = MeasureBatchTicks(key, tamperedFirstByte, written, decrypted, suite, iterationsPerBatch);
+            }
         }
 
-        double firstMs = firstTicks * 1000.0 / Stopwatch.Frequency;
-        double lastMs = lastTicks * 1000.0 / Stopwatch.Frequency;
-        double ratio = Math.Max(firstMs, lastMs) / Math.Max(1, Math.Min(firstMs, lastMs));
+        Array.Sort(firstBatchTicks);
+        Array.Sort(lastBatchTicks);
+
+        long medianFirstTicks = firstBatchTicks[batchCount / 2];
+        long medianLastTicks = lastBatchTicks[batchCount / 2];
+
+        double firstUs = medianFirstTicks * 1_000_000.0 / Stopwatch.Frequency;
+        double lastUs = medianLastTicks * 1_000_000.0 / Stopwatch.Frequency;
+        double ratio = Math.Max(firstUs, lastUs) / Math.Max(1.0, Math.Min(firstUs, lastUs));
 
         Assert.True(ratio < 2.0,
-            $"Smoke test only, not a timing-attack proof: first-byte-mismatch took {firstMs:F0}ms, " +
-            $"last-byte-mismatch took {lastMs:F0}ms over {iterations} iterations (ratio {ratio:F2}). " +
+            $"Smoke test only, not a timing-attack proof: median first-byte-mismatch batch took {firstUs:F1}us, " +
+            $"median last-byte-mismatch batch took {lastUs:F1}us across {batchCount}x{iterationsPerBatch} iterations (ratio {ratio:F2}). " +
             "A >2x gap could indicate an early-exit (non-fixed-time) comparison, but could also be measurement noise.");
+    }
+
+    private static long MeasureBatchTicks(
+        byte[] key,
+        byte[] tamperedEnvelope,
+        int written,
+        byte[] decrypted,
+        CipherSuiteType suite,
+        int iterations)
+    {
+        ReadOnlySpan<byte> envelopeSpan = tamperedEnvelope.AsSpan(0, written);
+        long start = Stopwatch.GetTimestamp();
+        for (int i = 0; i < iterations; i++)
+        {
+            _ = EnvelopeCipher.TryDecrypt(key, envelopeSpan, decrypted, suite, out _, out _);
+        }
+
+        return Stopwatch.GetTimestamp() - start;
     }
 }
