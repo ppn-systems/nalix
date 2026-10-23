@@ -472,7 +472,7 @@ public sealed partial class TaskManagerTests : IDisposable
     {
         using TaskManager manager = this.CreateManager();
 
-        manager.CancelWorker(Identifiers.Snowflake.NewId(SnowflakeType.Unknown));
+        manager.CancelWorker(Nalix.Framework.Identifiers.Snowflake.NewId(SnowflakeType.Unknown));
     }
 
     [Fact]
