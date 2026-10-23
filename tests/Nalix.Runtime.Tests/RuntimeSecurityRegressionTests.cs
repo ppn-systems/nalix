@@ -42,18 +42,7 @@ namespace Nalix.Runtime.Tests;
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 public sealed class RuntimeSecurityRegressionTests
 {
-    static RuntimeSecurityRegressionTests()
-    {
-        string tempFolderName = "NalixSecRegTests_" + Guid.NewGuid().ToString("N");
-        string tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), tempFolderName);
-        Nalix.Environment.IO.Directories.SetBasePathOverride(tempPath);
-
-        string configDir = Nalix.Environment.IO.Directories.ConfigurationDirectory;
-        System.IO.Directory.CreateDirectory(configDir);
-
-        string certPath = System.IO.Path.Combine(configDir, "certificate.private");
-        System.IO.File.WriteAllText(certPath, "0000000000000000000000000000000000000000000000000000000000000000");
-    }
+    static RuntimeSecurityRegressionTests() => System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(RuntimeDispatchAndHandlersTests).TypeHandle);
 
     // =========================================================================
     // Group 1: [CRIT-02 & HIGH-01 & MED-07] SystemControlHandlers
@@ -351,9 +340,10 @@ public sealed class RuntimeSecurityRegressionTests
     }
 
     [Fact]
-    public async Task PacketDispatchChannel_ExecutePacketAsync_WhenHandlerIsAsynchronous_ReturnsIncompleteTaskUntilHandlerCompletes()
+    public async Task PacketDispatchChannel_ExecutePacketAsync_WhenHandlerIsAsynchronous_RemainsNonBlockingAndContinuationReleasesResources()
     {
         TaskCompletionSource handlerGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int secondPacketExecuted = 0;
 
         PacketDispatchChannel channel = new(options =>
         {
@@ -361,6 +351,12 @@ public sealed class RuntimeSecurityRegressionTests
             {
                 await handlerGate.Task;
                 return null;
+            });
+
+            RegisterAsyncMemoryPacketHandler(options, opcode: 0x0102, () =>
+            {
+                Interlocked.Exchange(ref secondPacketExecuted, 1);
+                return Task.FromResult<object?>(null);
             });
         });
 
@@ -370,15 +366,58 @@ public sealed class RuntimeSecurityRegressionTests
         executePacketMethod.Should().NotBeNull();
 
         using FakeConnection connection = new();
-        FakeBufferLease lease = CreateRawPacketLease(opcode: 0x0101, sequence: 1, priority: PacketPriority.NONE);
+        FakeBufferLease lease1 = CreateRawPacketLease(opcode: 0x0101, sequence: 1, priority: PacketPriority.NONE);
+        FakeBufferLease lease2 = CreateRawPacketLease(opcode: 0x0102, sequence: 2, priority: PacketPriority.NONE);
 
-        ValueTask executionTask = (ValueTask)executePacketMethod!.Invoke(channel, [connection, lease, CancellationToken.None])!;
+        // 1. First packet is async and incomplete: ExecutePacketAsync must return immediately (non-blocking)
+        ValueTask executionTask1 = (ValueTask)executePacketMethod!.Invoke(channel, [connection, lease1, CancellationToken.None])!;
+        executionTask1.IsCompleted.Should().BeTrue(
+            "ExecutePacketAsync must return immediately via DispatchContinuation without blocking the worker loop");
+        lease1.IsDisposed.Should().BeFalse("lease1 must remain alive while the async handler is still pending");
 
-        executionTask.IsCompleted.Should().BeFalse(
-            "ExecutePacketAsync must await asynchronous handlers so the session drain loop preserves per-connection ordering");
+        // 2. Worker can immediately execute the next packet while the first packet is still awaiting handlerGate
+        ValueTask executionTask2 = (ValueTask)executePacketMethod.Invoke(channel, [connection, lease2, CancellationToken.None])!;
+        await executionTask2;
+        Volatile.Read(ref secondPacketExecuted).Should().Be(1);
+        lease2.IsDisposed.Should().BeTrue();
 
+        // 3. Complete the first handler and verify DispatchContinuation.UnsafeOnCompleted disposes lease1
         handlerGate.SetResult();
-        await executionTask;
+
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        while (!lease1.IsDisposed && sw.ElapsedMilliseconds < 2000)
+        {
+            await Task.Delay(5);
+        }
+
+        lease1.IsDisposed.Should().BeTrue("DispatchContinuation must dispose the buffer lease once the async task completes");
+
+        // 4. Verify DispatchContinuation directly records IncrementErrorCount() and disposes packet/lease on faulted task
+        Type continuationType = typeof(PacketDispatchChannel).Assembly
+            .GetType("Nalix.Runtime.Internal.Routing.DispatchContinuation")!;
+        MethodInfo getContinuation = typeof(ObjectPoolManager)
+            .GetMethod(nameof(ObjectPoolManager.Get), BindingFlags.Public | BindingFlags.Instance)!
+            .MakeGenericMethod(continuationType);
+        MethodInfo initContinuation = continuationType.GetMethod("Initialize", BindingFlags.Instance | BindingFlags.Public)!;
+
+        TaskCompletionSource faultedGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeBufferLease faultLease = CreateRawPacketLease(opcode: 0x0101, sequence: 3, priority: PacketPriority.NONE);
+        DisposableDummyPacket disposablePacket = new();
+
+        object workItem = getContinuation.Invoke(ObjectPoolManager.Shared, null)!;
+        initContinuation.Invoke(workItem, [connection, faultLease, disposablePacket, faultedGate.Task, CancellationToken.None]);
+
+        faultedGate.SetException(new InvalidOperationException("simulated async failure"));
+
+        sw.Restart();
+        while (!faultLease.IsDisposed && sw.ElapsedMilliseconds < 2000)
+        {
+            await Task.Delay(5);
+        }
+
+        faultLease.IsDisposed.Should().BeTrue();
+        disposablePacket.Disposed.Should().BeTrue();
+        connection.ErrorCount.Should().BeGreaterThan(0, "DispatchContinuation must increment connection error count when the awaited task faults");
     }
 
     // =========================================================================
@@ -619,9 +658,20 @@ public sealed class RuntimeSecurityRegressionTests
         public int Serialize(Span<byte> buffer) => PacketHeader.Size;
     }
 
+    private sealed class DisposableDummyPacket : IPacket, IDisposable
+    {
+        public bool Disposed { get; private set; }
+        public int Length => PacketHeader.Size;
+        public PacketHeader Header { get; set; }
+        public byte[] Serialize() => new byte[PacketHeader.Size];
+        public int Serialize(Span<byte> buffer) => PacketHeader.Size;
+        public void Dispose() => Disposed = true;
+    }
+
     private sealed class FakeBufferLease(byte[] buffer) : IBufferLease
     {
         private int _disposed;
+        public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
         public int Length => buffer.Length;
         public bool IsReliable { get; set; }
         public bool EncryptedOnWire { get; set; }
