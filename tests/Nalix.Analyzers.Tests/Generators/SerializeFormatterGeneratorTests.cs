@@ -3,14 +3,15 @@
 
 using System.Linq;
 using Nalix.Analyzers.Generators;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.Generators;
 
 /// <summary>
 /// Layer 1 (generator-output) tests for <see cref="SerializeFormatterGenerator"/>.
 /// </summary>
-public sealed class SerializeFormatterGeneratorOutputTests
+public sealed class SerializeFormatterGeneratorTests
 {
     private const string StructSource = """
         using Nalix.Abstractions.Serialization;
@@ -42,7 +43,7 @@ public sealed class SerializeFormatterGeneratorOutputTests
         """;
 
     [Fact]
-    public void Generator_EmitsFormatter_ForStruct_WithNoDiagnostics()
+    public void Generate_SerializableStruct_EmitsFormatter()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new SerializeFormatterGenerator(), StructSource);
 
@@ -56,11 +57,11 @@ public sealed class SerializeFormatterGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_IsDeterministic_AcrossTwoRuns() =>
+    public void Generate_SameSourceTwice_EmitsIdenticalOutput() =>
         GeneratorDriverHarness.AssertDeterministic(new SerializeFormatterGenerator(), StructSource);
 
     [Fact]
-    public void Generator_ReportsNALIX059_ForClassMissingStaticCreate_NotSilentSkip()
+    public void Generate_ClassWithoutStaticCreate_ReportsNalix059()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new SerializeFormatterGenerator(), ClassMissingCreateSource);
 

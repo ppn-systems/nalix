@@ -1,6 +1,5 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
-
 using System;
 using System.Collections.Immutable;
 using System.IO;
@@ -8,7 +7,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.TestSupport;
 
 /// <summary>
 /// Layer 1 test harness: compiles a source snippet against the real Nalix assemblies and

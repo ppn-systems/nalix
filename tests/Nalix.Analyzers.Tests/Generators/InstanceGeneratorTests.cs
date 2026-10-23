@@ -3,14 +3,15 @@
 
 using System.Linq;
 using Nalix.Analyzers.Generators;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.Generators;
 
 /// <summary>
 /// Layer 1 (generator-output) tests for <see cref="InstanceGenerator"/>.
 /// </summary>
-public sealed class InstanceGeneratorOutputTests
+public sealed class InstanceGeneratorTests
 {
     private const string InjectableSource = """
         using Nalix.Abstractions.Injection;
@@ -60,7 +61,7 @@ public sealed class InstanceGeneratorOutputTests
         """;
 
     [Fact]
-    public void Generator_EmitsActivator_ForInjectable_WithNoDiagnostics()
+    public void Generate_InjectableService_EmitsActivator()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new InstanceGenerator(), InjectableSource);
 
@@ -74,7 +75,7 @@ public sealed class InstanceGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_EmitsFactory_ForSingletonBaseSubclass_WithNoDiagnostics()
+    public void Generate_SingletonBaseSubclass_EmitsFactory()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new InstanceGenerator(), SingletonSource);
 
@@ -88,7 +89,7 @@ public sealed class InstanceGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_ReportsNALIX065_ForSingletonMissingParameterlessCtor_NotSilentSkip()
+    public void Generate_SingletonWithoutParameterlessCtor_ReportsNalix065()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new InstanceGenerator(), SingletonMissingParameterlessCtorSource);
 
@@ -98,7 +99,7 @@ public sealed class InstanceGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_ReportsNALIX064_ForAmbiguousConstructors_NotSilentSkip()
+    public void Generate_AmbiguousConstructors_ReportsNalix064()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new InstanceGenerator(), AmbiguousCtorSource);
 
@@ -108,6 +109,6 @@ public sealed class InstanceGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_IsDeterministic_AcrossTwoRuns() =>
+    public void Generate_SameSourceTwice_EmitsIdenticalOutput() =>
         GeneratorDriverHarness.AssertDeterministic(new InstanceGenerator(), InjectableSource);
 }

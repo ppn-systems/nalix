@@ -3,14 +3,15 @@
 
 using System.Linq;
 using Nalix.Analyzers.Generators;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.Generators;
 
 /// <summary>
 /// Layer 1 (generator-output) tests for <see cref="ConfigurationGenerator"/>.
 /// </summary>
-public sealed class ConfigurationGeneratorOutputTests
+public sealed class ConfigurationGeneratorTests
 {
     private const string ConfigSource = """
         using Nalix.Abstractions;
@@ -31,7 +32,7 @@ public sealed class ConfigurationGeneratorOutputTests
         """;
 
     [Fact]
-    public void Generator_EmitsBindingMembers_WithNoDiagnostics()
+    public void Generate_ConfigurationLoaderSubclass_EmitsBindingMembers()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new ConfigurationGenerator(), ConfigSource);
 
@@ -47,7 +48,7 @@ public sealed class ConfigurationGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_ProducesNothing_ForClassNotDerivedFromConfigurationLoader()
+    public void Generate_ClassNotDerivedFromConfigurationLoader_EmitsNothing()
     {
         const string source = """
             namespace GenHarness.Config.Empty;
@@ -65,6 +66,6 @@ public sealed class ConfigurationGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_IsDeterministic_AcrossTwoRuns() =>
+    public void Generate_SameSourceTwice_EmitsIdenticalOutput() =>
         GeneratorDriverHarness.AssertDeterministic(new ConfigurationGenerator(), ConfigSource);
 }
