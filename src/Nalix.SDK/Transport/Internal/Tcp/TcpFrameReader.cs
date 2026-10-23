@@ -215,15 +215,15 @@ internal sealed class TcpFrameReader : IDisposable
                 return;
             }
 
-            _onMessage(lease);
-        }
-        finally
-        {
             if (seq.HasValue)
             {
                 _sequence.UpdateTo(seq.Value);
             }
 
+            _onMessage(lease);
+        }
+        finally
+        {
             if (!ReferenceEquals(lease, original))
             {
                 lease.Dispose();

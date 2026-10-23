@@ -2,13 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
-using Nalix.Abstractions.Primitives;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
@@ -21,6 +22,7 @@ namespace Nalix.Runtime.Internal.Pipelines;
 /// </summary>
 internal static class PacketPipeline
 {
+    private const int UdpMacTagSize = sizeof(uint);
     /// <summary>
     /// Serializes a packet into a pooled BufferLease.
     /// The caller owns the returned lease and must dispose it.
@@ -202,19 +204,22 @@ internal static class PacketPipeline
 
     private static async ValueTask SEND_UDP_ASYNC(IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease current, CancellationToken ct)
     {
+        if (connection.Secret.IsZero)
+        {
+            throw new CipherException("Cannot send UDP packet before session secret is established.");
+        }
+
         int dataLen = current.Length;
-        BufferLease signedLease = BufferLease.Rent(dataLen + Math.Max(4, Bytes32.Size));
+        BufferLease signedLease = BufferLease.Rent(dataLen + UdpMacTagSize);
         try
         {
             current.Span.CopyTo(signedLease.SpanFull);
-            connection.Secret.AsSpan().CopyTo(signedLease.SpanFull[dataLen..]);
-            uint hash = XxHash32.Compute(signedLease.SpanFull[..(dataLen + Bytes32.Size)]);
-            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(signedLease.SpanFull.Slice(dataLen, 4), hash);
 
-            // [SECURITY] Scrub the rest of the secret: it sits past the committed length and
-            // the pool does not clear arrays on return.
-            signedLease.SpanFull.Slice(dataLen + 4, Bytes32.Size - 4).Clear();
-            signedLease.CommitLength(dataLen + 4);
+            uint payloadHash = XxHash32.Compute(signedLease.SpanFull[..dataLen]);
+            uint computedTag = XxHash32.Compute(connection.Secret.AsSpan(), seed: payloadHash);
+            BinaryPrimitives.WriteUInt32LittleEndian(signedLease.SpanFull.Slice(dataLen, UdpMacTagSize), computedTag);
+
+            signedLease.CommitLength(dataLen + UdpMacTagSize);
 
             await transport.SendAsyncCore(signedLease.Memory, ct).ConfigureAwait(false);
         }

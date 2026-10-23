@@ -89,6 +89,8 @@ public static class FramePipeline
             return true;
         }
 
+        uint? decryptedSeq = null;
+
         if (isEncrypted)
         {
             if (algorithm == CipherSuiteType.None)
@@ -107,7 +109,7 @@ public static class FramePipeline
             }
 
             current = decrypted;
-            seq = _seq;
+            decryptedSeq = _seq;
 
             // Re-read flags after decryption since the inner payload might have other flags (e.g., COMPRESSED).
             flags = current.Span.AsHeaderRef().Flags;
@@ -137,6 +139,7 @@ public static class FramePipeline
             }
         }
 
+        seq = decryptedSeq;
         return true;
     }
 

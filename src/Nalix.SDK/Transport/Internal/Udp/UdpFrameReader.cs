@@ -26,6 +26,7 @@ namespace Nalix.SDK.Transport.Internal.Udp;
 /// </summary>
 internal sealed class UdpFrameReader : IDisposable
 {
+    private const int UdpMacTagSize = sizeof(uint);
     private static readonly SequenceOptions s_sequenceOptions = ConfigurationManager.Instance.Get<SequenceOptions>();
 
     private readonly SessionState _state;
@@ -136,39 +137,22 @@ internal sealed class UdpFrameReader : IDisposable
 
         try
         {
-            // 1) Verify XxHash32
-            if (datagram.Length < PacketHeader.Size + 4)
+            // 1) Verify cryptographic MAC tag
+            if (_state.Secret.IsZero || datagram.Length < PacketHeader.Size + UdpMacTagSize)
             {
-                return; // Drop short or spoofed packets
+                return; // Drop unauthenticated, short, or spoofed packets
             }
 
-            uint receivedHash = BinaryPrimitives.ReadUInt32LittleEndian(datagram.Span[^4..]);
-            int dataLen = datagram.Length - 4;
-
-            if (datagram.Capacity >= dataLen + Bytes32.Size)
+            int dataLen = datagram.Length - UdpMacTagSize;
+            uint receivedTag = BinaryPrimitives.ReadUInt32LittleEndian(datagram.Span.Slice(dataLen, UdpMacTagSize));
+            uint payloadHash = XxHash32.Compute(datagram.Span[..dataLen]);
+            uint computedTag = XxHash32.Compute(_state.Secret.AsSpan(), seed: payloadHash);
+            if (receivedTag != computedTag)
             {
-                _state.Secret.AsSpan().CopyTo(datagram.SpanFull[dataLen..]);
-                uint computedHash = XxHash32.Compute(datagram.SpanFull[..(dataLen + Bytes32.Size)]);
-                datagram.SpanFull.Slice(dataLen, Bytes32.Size).Clear(); // [SECURITY] scrub the copied secret
-                if (computedHash != receivedHash)
-                {
-                    return; // Drop spoofed packet
-                }
-            }
-            else
-            {
-                byte[] temp = BufferLease.ByteArrayPool.Rent(dataLen + Bytes32.Size);
-                datagram.Span[..dataLen].CopyTo(temp);
-                _state.Secret.AsSpan().CopyTo(temp.AsSpan(dataLen));
-                uint computedHash = XxHash32.Compute(temp.AsSpan(0, dataLen + Bytes32.Size));
-                BufferLease.ByteArrayPool.Return(temp, clearArray: true); // [SECURITY] holds the secret
-                if (computedHash != receivedHash)
-                {
-                    return; // Drop spoofed packet
-                }
+                return; // Drop spoofed packet
             }
 
-            // Strip the 4-byte tag from the payload
+            // Strip the MAC tag from the payload
             datagram.CommitLength(dataLen);
 
             // 2) Decompress / Decrypt
@@ -188,16 +172,16 @@ internal sealed class UdpFrameReader : IDisposable
                 return; // Duplicate datagram, already processed
             }
 
-            // Dispatch
-            await this.DispatchMessageAsync(datagram, ct, socket).ConfigureAwait(false);
-        }
-        finally
-        {
             if (seq.HasValue)
             {
                 _sequence.UpdateTo(seq.Value);
             }
 
+            // Dispatch
+            await this.DispatchMessageAsync(datagram, ct, socket).ConfigureAwait(false);
+        }
+        finally
+        {
             if (!ReferenceEquals(datagram, original))
             {
                 datagram.Dispose();

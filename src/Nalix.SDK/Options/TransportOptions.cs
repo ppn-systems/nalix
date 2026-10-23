@@ -94,6 +94,18 @@ public sealed partial class TransportOptions : ConfigurationLoader
     public string? ServerPublicKey { get; set; }
 
     /// <summary>
+    /// Gets or sets whether Trust-On-First-Use (TOFU) public key fetching is allowed when <see cref="ServerPublicKey"/> is not set.
+    /// </summary>
+    [IniComment("Allow Trust-On-First-Use (TOFU) public key discovery when ServerPublicKey is not configured")]
+    public bool AllowTofu { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether a TOFU-fetched server public key should be persisted to disk after handshake verification succeeds.
+    /// </summary>
+    [IniComment("Persist TOFU-discovered ServerPublicKey to configuration storage after a verified handshake")]
+    public bool PersistTofuKey { get; set; } = false;
+
+    /// <summary>
     /// Gets or sets whether the SDK should attempt a session resume before performing a new handshake.
     /// </summary>
     [IniComment("Attempt session resume before doing a fresh handshake")]

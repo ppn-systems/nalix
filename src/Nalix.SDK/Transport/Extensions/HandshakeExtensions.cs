@@ -52,6 +52,11 @@ public static class HandshakeExtensions
             throw new InvalidOperationException("Session must be connected to perform handshake.");
         }
 
+        if (string.IsNullOrEmpty(session.Options.ServerPublicKey) && !session.Options.AllowTofu)
+        {
+            throw new NetworkException("ServerPublicKey is required when AllowTofu is disabled.");
+        }
+
         X25519.X25519KeyPair clientKey = X25519.GenerateKeyPair();
 
         Span<byte> clientNonceBytes = stackalloc byte[Bytes32.Size];
@@ -150,8 +155,16 @@ public static class HandshakeExtensions
                 throw new NetworkException("Handshake key agreement failed: Ephemeral shared secret is all zero.");
             }
 
+            Bytes32 pinnedServerKey;
+            string? tofuFetchedKeyHex = null;
+
             if (string.IsNullOrEmpty(session.Options.ServerPublicKey))
             {
+                if (!session.Options.AllowTofu)
+                {
+                    throw new NetworkException("ServerPublicKey is required when AllowTofu is disabled.");
+                }
+
                 using Control request = new();
                 request.Initialize(ControlType.PUBLIC_KEY_REQUEST, flags: PacketFlags.SYSTEM);
 
@@ -166,25 +179,13 @@ public static class HandshakeExtensions
                     throw new NetworkException($"Malformed SessionTofu response: {keyReason}");
                 }
 
-                string fetchedKeyHex = keyResponse.PublicKey.ToString();
-
-                session.Options.ServerPublicKey = fetchedKeyHex;
-
-                if (!OperatingSystem.IsBrowser())
-                {
-                    try
-                    {
-                        ConfigurationManager.Instance.UpdateValue<TransportOptions>(nameof(TransportOptions.ServerPublicKey), fetchedKeyHex);
-                        ConfigurationManager.Instance.Flush();
-                    }
-                    catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
-                    {
-                        // Ignore persistence failure on unsupported platforms
-                    }
-                }
+                pinnedServerKey = keyResponse.PublicKey;
+                tofuFetchedKeyHex = pinnedServerKey.ToString();
             }
-
-            Bytes32 pinnedServerKey = Bytes32.Parse(session.Options.ServerPublicKey);
+            else
+            {
+                pinnedServerKey = Bytes32.Parse(session.Options.ServerPublicKey);
+            }
 
             sharedSecretSE = X25519.Agreement(clientKey.PrivateKey, pinnedServerKey);
 
@@ -242,6 +243,24 @@ public static class HandshakeExtensions
                 }
 
                 // Finalize state
+                if (tofuFetchedKeyHex is not null)
+                {
+                    session.Options.ServerPublicKey = tofuFetchedKeyHex;
+
+                    if (session.Options.PersistTofuKey && !OperatingSystem.IsBrowser())
+                    {
+                        try
+                        {
+                            ConfigurationManager.Instance.UpdateValue<TransportOptions>(nameof(TransportOptions.ServerPublicKey), tofuFetchedKeyHex);
+                            ConfigurationManager.Instance.Flush();
+                        }
+                        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+                        {
+                            // Ignore persistence failure on unsupported platforms
+                        }
+                    }
+                }
+
                 session.State.EncryptionEnabled = true;
                 session.State.SessionToken = serverFinish.SessionToken;
                 transportSession?.NotifyReady();
