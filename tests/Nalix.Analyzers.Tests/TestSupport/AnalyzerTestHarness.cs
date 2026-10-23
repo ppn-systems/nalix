@@ -1,8 +1,10 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
 using Microsoft.CodeAnalysis.CodeFixes;
 using Nalix.Analyzers.CodeFixes;
 using System.Threading.Tasks;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.TestSupport;
 
 internal static class AnalyzerTestHarness
 {

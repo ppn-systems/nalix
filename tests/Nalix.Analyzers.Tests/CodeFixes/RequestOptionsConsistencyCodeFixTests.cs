@@ -1,16 +1,17 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System.Threading.Tasks;
 using Nalix.Analyzers.CodeFixes;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
+using System.Threading.Tasks;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.CodeFixes;
 
-public sealed class RequestOptionsCodeFixTests
+public sealed class RequestOptionsConsistencyCodeFixTests
 {
     [Fact]
-    public async Task InfiniteTimeoutWithRetry_ObjectInitializer_SetsRetryCountToZero()
+    public async Task Fix_InfiniteTimeoutWithObjectInitializerRetry_SetsRetryCountToZero()
     {
         const string source = """
 namespace Demo;
@@ -78,7 +79,7 @@ public sealed class Example
     }
 
     [Fact]
-    public async Task InfiniteTimeoutWithRetry_FluentChain_SetsWithRetryArgumentToZero()
+    public async Task Fix_InfiniteTimeoutWithFluentRetry_SetsWithRetryArgumentToZero()
     {
         const string source = """
 namespace Demo;
@@ -145,19 +146,3 @@ public sealed class Example
             expectedEquivalenceKey: "Nalix.RequestOptions.Retry.SetZero");
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

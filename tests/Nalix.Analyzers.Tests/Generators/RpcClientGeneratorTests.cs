@@ -3,14 +3,15 @@
 
 using System.Linq;
 using Nalix.Analyzers.Generators;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.Generators;
 
 /// <summary>
 /// Layer 1 (generator-output) tests for <see cref="RpcClientGenerator"/>.
 /// </summary>
-public sealed class RpcClientGeneratorOutputTests
+public sealed class RpcClientGeneratorTests
 {
     private const string Source = """
         using System.Threading.Tasks;
@@ -47,7 +48,7 @@ public sealed class RpcClientGeneratorOutputTests
         """;
 
     [Fact]
-    public void Generator_EmitsProxyClass_WithNoDiagnostics()
+    public void Generate_RpcServiceInterface_EmitsProxyClass()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new RpcClientGenerator(), Source);
 
@@ -62,11 +63,11 @@ public sealed class RpcClientGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_IsDeterministic_AcrossTwoRuns() =>
+    public void Generate_SameSourceTwice_EmitsIdenticalOutput() =>
         GeneratorDriverHarness.AssertDeterministic(new RpcClientGenerator(), Source);
 
     [Fact]
-    public void Generator_ForTaskOfTReturnType_EmitsWorkingMethodBody()
+    public void Generate_TaskOfTReturnType_EmitsMethodBody()
     {
         const string source = """
             using System.Threading.Tasks;
@@ -115,7 +116,7 @@ public sealed class RpcClientGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_ForUnsupportedReturnType_ReportsDiagnosticAndThrowsAtRuntime()
+    public void Generate_UnsupportedReturnType_ReportsNalix066()
     {
         const string source = """
             using Nalix.Abstractions.Networking.Rpc;
@@ -151,7 +152,7 @@ public sealed class RpcClientGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_ProducesNothing_WhenNoRpcServiceAttributePresent()
+    public void Generate_InterfaceWithoutRpcServiceAttribute_EmitsNothing()
     {
         const string source = """
             namespace GenHarness.Rpc.Empty;

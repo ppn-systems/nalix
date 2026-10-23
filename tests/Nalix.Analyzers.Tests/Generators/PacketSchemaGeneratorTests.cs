@@ -3,14 +3,15 @@
 
 using System.Linq;
 using Nalix.Analyzers.Generators;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.Generators;
 
 /// <summary>
 /// Layer 1 (generator-output) tests for <see cref="PacketSchemaGenerator"/>.
 /// </summary>
-public sealed class PacketSchemaGeneratorOutputTests
+public sealed class PacketSchemaGeneratorTests
 {
     private const string PartialPacketSource = """
         using Nalix.Abstractions.Networking.Packets;
@@ -39,7 +40,7 @@ public sealed class PacketSchemaGeneratorOutputTests
         """;
 
     [Fact]
-    public void Generator_EmitsLengthAndResetForPool_ForPartialPacket()
+    public void Generate_PartialPacket_EmitsLengthAndResetForPool()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new PacketSchemaGenerator(), PartialPacketSource);
 
@@ -52,11 +53,11 @@ public sealed class PacketSchemaGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_IsDeterministic_AcrossTwoRuns() =>
+    public void Generate_SameSourceTwice_EmitsIdenticalOutput() =>
         GeneratorDriverHarness.AssertDeterministic(new PacketSchemaGenerator(), PartialPacketSource);
 
     [Fact]
-    public void Generator_ReportsNALIX060_ForNonPartialPacketClass_NotSilentSkip()
+    public void Generate_NonPartialPacketClass_ReportsNalix060()
     {
         GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new PacketSchemaGenerator(), NonPartialPacketSource);
 
@@ -69,7 +70,7 @@ public sealed class PacketSchemaGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_ResetForPool_ResetsSerializeIgnoreMembers_AndPreservesSkipCleanMembers()
+    public void Generate_IgnoredAndSkipCleanMembers_EmitsSelectiveResetForPool()
     {
         const string source = """
             using Nalix.Abstractions.Networking.Packets;

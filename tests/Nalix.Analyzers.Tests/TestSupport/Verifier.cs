@@ -1,6 +1,6 @@
-using Nalix.Abstractions.Serialization;
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+using Nalix.Abstractions.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -18,7 +18,7 @@ using Microsoft.CodeAnalysis.Text;
 using Nalix.Analyzers.Analyzers;
 using Xunit;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.TestSupport;
 
 internal static class Verifier<TCodeFix>
     where TCodeFix : CodeFixProvider, new()

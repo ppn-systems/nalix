@@ -1,16 +1,18 @@
-using Nalix.Abstractions.Serialization;
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System.Threading.Tasks;
+using Nalix.Abstractions.Serialization;
+using Nalix.Analyzers.CodeFixes;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
+using System.Threading.Tasks;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.CodeFixes;
 
-public sealed class AdvancedSerializationAnalyzerTests
+public sealed class SerializeOrderMissingCodeFixTests
 {
     [Fact]
-    public async Task MissingSerializeOrder_CanUseSecondCodeFixToAddNextOrder()
+    public async Task Fix_MissingSerializeOrderWithSecondAction_AssignsNextOrder()
     {
         const string source = """
 namespace Demo;
@@ -40,7 +42,7 @@ public sealed class Example
 }
 """;
 
-        await Verifier<CodeFixes.SerializeOrderMissingCodeFixProvider>.VerifyCodeFixAsync(
+        await Verifier<SerializeOrderMissingCodeFixProvider>.VerifyCodeFixAsync(
             source,
             fixedSource,
             "NALIX013",
@@ -48,7 +50,7 @@ public sealed class Example
     }
 
     [Fact]
-    public async Task NegativeSerializeOrder_ProducesDiagnostic()
+    public async Task Fix_MissingSerializeOrder_AddsSerializeIgnore()
     {
         const string source = """
 namespace Demo;
@@ -57,30 +59,25 @@ using Nalix.Abstractions.Serialization;
 [SerializePackable(SerializeLayout.Explicit)]
 public sealed class Example
 {
-    [SerializeOrder(-1)]
     public int Value { get; set; }
 }
 """;
 
-        await Verifier<CodeFixes.SerializeOrderMissingCodeFixProvider>.VerifyAnalyzerAsync(
-            source,
-            "NALIX021");
-    }
+        const string fixedSource = """
+namespace Demo;
+using Nalix.Abstractions.Serialization;
 
+[SerializePackable(SerializeLayout.Explicit)]
+public sealed class Example
+{
+    [SerializeIgnore]
+    public int Value { get; set; }
 }
+""";
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        await Verifier<SerializeOrderMissingCodeFixProvider>.VerifyCodeFixAsync(
+            source,
+            fixedSource,
+            "NALIX013");
+    }
+}

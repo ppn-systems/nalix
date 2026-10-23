@@ -1,16 +1,17 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System.Threading.Tasks;
 using Nalix.Analyzers.CodeFixes;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
+using System.Threading.Tasks;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.CodeFixes;
 
-public sealed class ConfigurationAnalyzerTests
+public sealed class ConfigurationIgnoreCodeFixTests
 {
     [Fact]
-    public async Task UnsupportedConfigurationProperty_ProducesDiagnosticAndFix()
+    public async Task Fix_UnsupportedConfigurationProperty_AddsConfigurationIgnore()
     {
         const string source = """
 namespace Demo;
@@ -45,74 +46,7 @@ public sealed class DemoOptions : ConfigurationLoader
     }
 
     [Fact]
-    public async Task SupportedConfigurationProperties_DoNotProduceDiagnostic()
-    {
-        const string source = """
-namespace Demo;
-using System;
-using Nalix.Environment.Configuration.Binding;
-
-public enum Mode
-{
-    Off,
-    On
-}
-
-public sealed class DemoOptions : ConfigurationLoader
-{
-    public int Port { get; set; }
-    public string Host { get; set; } = string.Empty;
-    public Guid ClientId { get; set; }
-    public TimeSpan Timeout { get; set; }
-    public DateTime LastUpdated { get; set; }
-    public Mode CurrentMode { get; set; }
-}
-""";
-
-        await Verifier<ConfigurationIgnoreCodeFixProvider>.VerifyAnalyzerAsync(source);
-    }
-
-    [Fact]
-    public async Task UnsupportedConfigurationProperty_WithConfigurationIgnore_IsSilent()
-    {
-        const string source = """
-namespace Demo;
-using System.Collections.Generic;
-using Nalix.Abstractions;
-using Nalix.Environment.Configuration.Binding;
-
-public sealed class DemoOptions : ConfigurationLoader
-{
-    [ConfiguredIgnore]
-    public List<int> Values { get; set; } = [];
-}
-""";
-
-        await Verifier<ConfigurationIgnoreCodeFixProvider>.VerifyAnalyzerAsync(source);
-    }
-
-    [Fact]
-    public async Task GetterOnlyOrNonPublicSetter_ProduceBindableInfoDiagnostic()
-    {
-        const string source = """
-namespace Demo;
-using Nalix.Environment.Configuration.Binding;
-
-public sealed class DemoOptions : ConfigurationLoader
-{
-    public int ReadOnlyPort { get; }
-    public int SecretPort { get; private set; }
-}
-""";
-
-        await Verifier<ConfigurationIgnoreCodeFixProvider>.VerifyAnalyzerAsync(
-            source,
-            "NALIX024",
-            "NALIX024");
-    }
-
-    [Fact]
-    public async Task GetterOnlyProperty_CanAddConfigurationIgnoreFix()
+    public async Task Fix_GetterOnlyProperty_AddsConfigurationIgnore()
     {
         const string source = """
 namespace Demo;
@@ -145,7 +79,7 @@ public sealed class DemoOptions : ConfigurationLoader
     }
 
     [Fact]
-    public async Task GetterOnlyProperty_CanMakeSetterPublicFix()
+    public async Task Fix_GetterOnlyProperty_AddsPublicSetter()
     {
         const string source = """
 namespace Demo;
@@ -177,7 +111,7 @@ public sealed class DemoOptions : ConfigurationLoader
     }
 
     [Fact]
-    public async Task PrivateSetterProperty_CanMakeSetterPublicFix()
+    public async Task Fix_PrivateSetterProperty_MakesSetterPublic()
     {
         const string source = """
 namespace Demo;
@@ -208,18 +142,3 @@ public sealed class DemoOptions : ConfigurationLoader
             expectedEquivalenceKey: "Nalix.Configuration.Setter.MakePublic");
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

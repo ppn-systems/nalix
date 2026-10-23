@@ -3,16 +3,17 @@
 
 using System.Linq;
 using Nalix.Analyzers.Generators;
+using Nalix.Analyzers.Tests.TestSupport;
 using Xunit;
 
-namespace Nalix.Analyzers.Tests;
+namespace Nalix.Analyzers.Tests.Generators;
 
 /// <summary>
 /// Layer 1 (generator-output) tests for <see cref="PacketRegistryGenerator"/>: runs the real
 /// generator via <see cref="Microsoft.CodeAnalysis.CSharpGeneratorDriver"/> and asserts the
 /// resulting compilation is clean and generation is deterministic.
 /// </summary>
-public sealed class PacketRegistryGeneratorOutputTests
+public sealed class PacketRegistryGeneratorTests
 {
     private const string Source = """
         using Nalix.Abstractions.Networking.Packets;
@@ -34,7 +35,7 @@ public sealed class PacketRegistryGeneratorOutputTests
         """;
 
     [Fact]
-    public void Generator_ProducesOneFile_AndCompilesCleanly()
+    public void Generate_PacketsWithStaticOpcode_EmitsSingleCompilableFile()
     {
         // PacketSchemaGenerator supplies the Length/ResetForPool overrides that PacketBase<T>
         // requires; it must run alongside PacketRegistryGenerator for the resulting compilation
@@ -54,12 +55,12 @@ public sealed class PacketRegistryGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_IsDeterministic_AcrossTwoRuns() =>
+    public void Generate_SameSourceTwice_EmitsIdenticalOutput() =>
         GeneratorDriverHarness.AssertDeterministic(
             [new PacketRegistryGenerator(), new PacketSchemaGenerator()], Source);
 
     [Fact]
-    public void Generator_ProducesNothing_WhenNoPacketAttributePresent()
+    public void Generate_SourceWithoutPackets_EmitsNothing()
     {
         const string source = """
             namespace GenHarness.Registry.Empty;
@@ -76,7 +77,7 @@ public sealed class PacketRegistryGeneratorOutputTests
     }
 
     [Fact]
-    public void Generator_ReportsNALIX068_WhenTwoPacketsShareSameStaticOpCode()
+    public void Generate_TwoPacketsWithSameStaticOpCode_ReportsNalix068()
     {
         const string duplicateOpCodeSource = """
             using Nalix.Abstractions.Networking.Packets;
