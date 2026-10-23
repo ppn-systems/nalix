@@ -54,6 +54,13 @@ jobs:
           echo "TEST_RESULTS_DIR=artifacts/test-results/${{ runner.os }}" >> "$GITHUB_ENV"
           echo "COVERAGE_REPORT_DIR=artifacts/coverage/${{ runner.os }}" >> "$GITHUB_ENV"
 
+      # Real-time scanning of every obj/bin write is the main reason Windows builds lag Linux.
+      # Ephemeral GitHub-hosted runner only; the VM is discarded after the job.
+      - name: Disable Windows Defender real-time scanning
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       - name: Checkout repository
         uses: actions/checkout@v7
 
