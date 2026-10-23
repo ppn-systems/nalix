@@ -1,0 +1,167 @@
+name: "CI"
+# Single entry point for build & test. Replaces ci-linux.yml, ci-windows.yml and ci-extensions.yml.
+# `changes` maps the diff to tiers with plain git; any ambiguity (new branch, force-push, diff failure)
+# flips every tier on -- over-running is safer than silently skipping a real change.
+# Only `CI OK` should be marked as a required status check.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    branches: ["master"]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "site/**"
+      - "mkdocs.yml"
+      - "LICENSE"
+      - ".github/ISSUE_TEMPLATE/**"
+  pull_request:
+    branches: ["master"]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "site/**"
+      - "mkdocs.yml"
+      - "LICENSE"
+      - ".github/ISSUE_TEMPLATE/**"
+  workflow_dispatch:
+
+# PR runs are superseded by the next push; master runs verify a merged commit and must finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write # required for test result comments
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      core: ${{ steps.map.outputs.core }}
+      extensions: ${{ steps.map.outputs.extensions }}
+      workflows: ${{ steps.map.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Map changed files to tiers
+        id: map
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -uo pipefail
+          all() {
+            echo "Running every tier: $1"
+            { echo "core=true"; echo "extensions=true"; echo "workflows=true"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          case "$EVENT" in
+            pull_request) base="$PR_BASE" ;;
+            push) base="$PUSH_BEFORE" ;;
+            *) all "event '$EVENT'" ;;
+          esac
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            all "no base commit"
+          fi
+
+          changed="$RUNNER_TEMP/changed.txt"
+          git diff --name-only "$base" HEAD > "$changed" || all "git diff failed"
+          echo "Changed files:"; cat "$changed"
+
+          core=false; extensions=false; workflows=false
+          # Anything outside extensions/ can affect the core solution (src, tests, analyzers, root props, ...).
+          if grep -qvE '^extensions/' "$changed"; then core=true; fi
+          # Extensions reference src/ and inherit root build props.
+          if grep -qE '^(extensions/|src/|analyzers/|[^/]+\.(props|targets)$|global\.json$|NuGet\.config$)' "$changed"; then extensions=true; fi
+          if grep -qE '^\.github/(workflows|actions)/' "$changed"; then workflows=true; core=true; extensions=true; fi
+
+          echo "core=$core extensions=$extensions workflows=$workflows"
+          { echo "core=$core"; echo "extensions=$extensions"; echo "workflows=$workflows"; } >> "$GITHUB_OUTPUT"
+
+  core:
+    name: Core (${{ matrix.os }})
+    needs: [changes]
+    if: needs.changes.outputs.core == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      os: ${{ matrix.os }}
+      project: src/Nalix.sln
+      test: tests/Nalix.Tests.sln
+      deploy: false
+      coverage: false
+
+  extensions:
+    name: Extension (${{ matrix.name }})
+    needs: [changes]
+    if: needs.changes.outputs.extensions == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Observability
+            project: extensions/Nalix.Observability.sln
+          - name: Traversal
+            project: extensions/Nalix.Traversal.sln
+          - name: SDK.Traversal
+            project: extensions/Nalix.SDK.Traversal.sln
+          - name: Tunneling
+            project: extensions/Nalix.Tunneling.sln
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      os: ubuntu-latest
+      project: ${{ matrix.project }}
+      test: ""
+      deploy: false
+
+  lint-workflows:
+    name: Lint workflows
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run actionlint
+        shell: bash
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color -shellcheck=
+
+  ci-ok:
+    name: CI OK
+    needs: [changes, core, extensions, lint-workflows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check all jobs succeeded or were skipped
+        shell: bash
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
+              echo "::error::A required job did not succeed ($r)."
+              exit 1
+            fi
+          done
+          echo "All jobs succeeded or were skipped."

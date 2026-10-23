@@ -3,6 +3,10 @@ name: "Template: Build & Test"
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   DOTNET_CLI_USE_MSBUILD_SERVER: false
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NUGET_XMLDOC_MODE: skip
 
 permissions:
   contents: read
@@ -40,10 +44,8 @@ jobs:
   build:
     name: "Build & Test (${{ inputs.os }})"
     runs-on: ${{ inputs.os }}
-
-    concurrency:
-      group: build-${{ inputs.os }}-${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
+    # Concurrency lives in the caller: a job-level group here made matrix callers on the same OS cancel each other.
+    timeout-minutes: 30
 
     steps:
       - name: Set environment variables
@@ -70,9 +72,11 @@ jobs:
 
       - name: Decode signing key
         shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         run: |
-          if [ -n "${{ secrets.SIGNING_KEY }}" ]; then
-            echo "${{ secrets.SIGNING_KEY }}" | base64 -d > "$GITHUB_WORKSPACE/src/Nalix.snk"
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "$SIGNING_KEY" | base64 -d > "$GITHUB_WORKSPACE/src/Nalix.snk"
           else
             echo "SIGNING_KEY is not set. Skipping signing key creation."
           fi
@@ -104,7 +108,7 @@ jobs:
         shell: bash
         timeout-minutes: 20
         run: |
-          max_retries=1
+          max_retries=2
           attempt=1
           while true; do
             # Clean results directory to avoid mixing failed and successful runs

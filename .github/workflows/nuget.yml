@@ -18,6 +18,7 @@ jobs:
   publish:
     name: "Publish NuGet (tag only)"
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -30,12 +31,19 @@ jobs:
 
       - name: Extract version
         shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_ENV"
+          if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
+            version="$INPUT_VERSION"
           else
-            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"
+            version="${GITHUB_REF#refs/tags/v}"
           fi
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid version '$version' (expected SemVer, e.g. 1.2.3 or 1.2.3-rc.1)"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -47,13 +55,20 @@ jobs:
 
       - name: Decode signing key
         shell: bash
-        run: echo "${{ secrets.SIGNING_KEY }}" | base64 -d > ./src/Nalix.snk
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: echo "$SIGNING_KEY" | base64 -d > ./src/Nalix.snk
 
       - name: Restore dependencies
         run: dotnet restore ./src/Nalix.sln
 
       - name: Build
         run: dotnet build ./src/Nalix.sln --configuration Release --no-restore /p:Version=${{ env.VERSION }}
+
+      # Never ship a package whose tests are red.
+      - name: Test
+        timeout-minutes: 20
+        run: dotnet test ./tests/Nalix.Tests.sln --configuration Release --blame-hang --blame-hang-timeout 120000
 
       - name: Pack
         run: dotnet pack ./src/Nalix.sln --configuration Release --no-build --output ./out /p:Version=${{ env.VERSION }}
