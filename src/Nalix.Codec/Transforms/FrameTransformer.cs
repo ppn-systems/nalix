@@ -75,6 +75,11 @@ public static class FrameTransformer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetPlaintextLength(ReadOnlySpan<byte> envelope)
     {
+        if (envelope.Length < Offset)
+        {
+            Throw.SourceTooSmall();
+        }
+
         EnvelopeFormat.Envelope parsed = EnvelopeFormat.ParseEnvelope(envelope[Offset..]);
 
         return parsed.Ciphertext.Length;

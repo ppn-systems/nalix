@@ -176,6 +176,12 @@ internal static class Throw
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void DataMismatch() => throw s_serializationDataMismatch;
 
+    [DoesNotReturn]
+    [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void SerializationFailed(Type type, string message) =>
+        throw new SerializationFailureException($"Serialization failed for type '{type.FullName}': {message}");
+
     #endregion Throw Helpers — Serialization
 
     #region Throw Helpers — Security

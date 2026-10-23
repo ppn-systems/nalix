@@ -45,7 +45,7 @@ public sealed class LiteSerializerArrayTests
         byte[] buffer = BitConverter.GetBytes(length);
         object[]? output = null;
 
-        LiteSerializer.Deserialize(buffer, ref output);
+        _ = Assert.ThrowsAny<SerializationFailureException>(() => LiteSerializer.Deserialize(buffer, ref output));
         Assert.Null(output);
     }
 }

@@ -96,7 +96,16 @@ internal sealed class ReferenceArrayFormatter<
         IFormatter<T> elem = GetElementFormatter();
         for (int i = 0; i < length; i++)
         {
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
             array[i] = elem.Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
         }
 
         return array;

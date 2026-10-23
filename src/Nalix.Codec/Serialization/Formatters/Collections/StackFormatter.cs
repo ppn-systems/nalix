@@ -184,7 +184,16 @@ internal sealed class StackFormatter<
         T[] buffer = new T[count];
         for (int i = 0; i < count; i++)
         {
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
             buffer[i] = GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
         }
 
         // Push từ bottom -> top để khôi phục đúng thứ tự LIFO ban đầu
@@ -222,7 +231,16 @@ internal sealed class StackFormatter<
         T[] buffer = new T[count];
         for (int i = 0; i < count; i++)
         {
+            if (reader.IsFailed)
+            {
+                return;
+            }
+
             buffer[i] = GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return;
+            }
         }
 
         for (int i = count - 1; i >= 0; i--)

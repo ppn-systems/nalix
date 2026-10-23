@@ -7,6 +7,7 @@ using Nalix.Abstractions.Security;
 using Nalix.Codec.Internal;
 using Nalix.Codec.Security.Aead;
 using Nalix.Codec.Security.Internal;
+using Nalix.Codec.Security.Primitives;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Random;
 
@@ -144,6 +145,7 @@ public static class AeadEngine
         {
             if (rentedAad is not null)
             {
+                MemorySecurity.ZeroMemory(rentedAad.AsSpan(0, authenticatedDataLength));
                 BufferLease.ByteArrayPool.Return(rentedAad);
             }
         }
@@ -257,6 +259,7 @@ public static class AeadEngine
         {
             if (rentedAad is not null)
             {
+                MemorySecurity.ZeroMemory(rentedAad.AsSpan(0, authenticatedDataLength));
                 BufferLease.ByteArrayPool.Return(rentedAad);
             }
         }

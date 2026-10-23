@@ -400,6 +400,7 @@ public sealed class SerializeFormatterGenerator : IIncrementalGenerator
         _ = sb.AppendLine("    {");
         if (isClass)
         {
+            _ = sb.AppendLine("        if (reader.IsFailed) return null!;");
             _ = sb.AppendLine($"        {typeName} instance = {typeName}.Create();");
             _ = sb.AppendLine("        this.Fill(ref reader, instance);");
             _ = sb.AppendLine("        return instance;");

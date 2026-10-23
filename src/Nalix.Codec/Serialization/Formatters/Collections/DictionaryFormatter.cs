@@ -201,8 +201,19 @@ internal sealed class DictionaryFormatter<
         IFormatter<TValue> vf = GetValueFormatter();
         for (int i = 0; i < count; i++)
         {
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
             TKey key = kf.Deserialize(ref reader);
-            dict[key] = vf.Deserialize(ref reader);
+            TValue val = vf.Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
+            dict[key] = val;
         }
 
         return dict;
@@ -235,8 +246,18 @@ internal sealed class DictionaryFormatter<
         IFormatter<TValue> vf = GetValueFormatter();
         for (int i = 0; i < count; i++)
         {
+            if (reader.IsFailed)
+            {
+                break;
+            }
+
             TKey key = kf.Deserialize(ref reader);
             TValue val = vf.Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                break;
+            }
+
             value[key] = val;
         }
     }

@@ -179,7 +179,18 @@ internal sealed class HashSetFormatter<
 
         for (int i = 0; i < count; i++)
         {
-            _ = set.Add(GetElementFormatter().Deserialize(ref reader));
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
+            T item = GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
+            _ = set.Add(item);
         }
 
         return set;
@@ -210,7 +221,18 @@ internal sealed class HashSetFormatter<
 
         for (int i = 0; i < count; i++)
         {
-            _ = value.Add(GetElementFormatter().Deserialize(ref reader));
+            if (reader.IsFailed)
+            {
+                break;
+            }
+
+            T item = GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                break;
+            }
+
+            _ = value.Add(item);
         }
     }
 }

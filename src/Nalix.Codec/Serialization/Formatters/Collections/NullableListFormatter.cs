@@ -92,7 +92,30 @@ internal sealed class NullableValueListFormatter<
 
         for (int i = 0; i < span.Length; i++)
         {
-            span[i] = reader.ReadByte() == 0 ? null : GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
+            byte flag = reader.ReadByte();
+            if (flag == 0)
+            {
+                span[i] = null;
+            }
+            else if (flag == 1)
+            {
+                span[i] = GetElementFormatter().Deserialize(ref reader);
+            }
+            else
+            {
+                SerializationDiagnostics.Poison(ref reader, "Invalid nullable data!");
+                return null!;
+            }
+
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
         }
 
         return list;
@@ -123,7 +146,30 @@ internal sealed class NullableValueListFormatter<
 
         for (int i = 0; i < length; i++)
         {
-            span[i] = reader.ReadByte() == 0 ? null : GetElementFormatter().Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                break;
+            }
+
+            byte flag = reader.ReadByte();
+            if (flag == 0)
+            {
+                span[i] = null;
+            }
+            else if (flag == 1)
+            {
+                span[i] = GetElementFormatter().Deserialize(ref reader);
+            }
+            else
+            {
+                SerializationDiagnostics.Poison(ref reader, "Invalid nullable data!");
+                break;
+            }
+
+            if (reader.IsFailed)
+            {
+                break;
+            }
         }
     }
 }

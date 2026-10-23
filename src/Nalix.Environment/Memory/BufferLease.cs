@@ -251,7 +251,6 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
             throw new ArgumentOutOfRangeException(nameof(length));
         }
 
-        _refCount = 1;
         _detached = 0;
         _start = start;
         _headroom = 0;
@@ -259,6 +258,7 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
 
         this.Length = length;
         this.ZeroOnDispose = zeroOnDispose;
+        Volatile.Write(ref _refCount, 1);
     }
 
     /// <summary>
@@ -416,17 +416,25 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     {
         /*
          * [Reference Counting]
-         * Increment the ref-count atomically. If multiple consumers need 
-         * to hold the same buffer (e.g. broadcast), they call Retain().
+         * Increment the ref-count atomically via CAS only when active (current >= 1).
+         * If multiple consumers need to hold the same buffer (e.g. broadcast), they call Retain().
          * The buffer is only returned to the pool when the last owner calls Dispose().
          */
-        ObjectDisposedException.ThrowIf(_buffer is null, nameof(BufferLease));
-
-        int newValue = Interlocked.Increment(ref _refCount);
-
-        if (newValue <= 1)
+        while (true)
         {
-            THROW_RETAIN_ERROR(newValue);
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _buffer) is null, nameof(BufferLease));
+
+            int current = Volatile.Read(ref _refCount);
+            if (current <= 0)
+            {
+                ObjectDisposedException.ThrowIf(Volatile.Read(ref _buffer) is null, nameof(BufferLease));
+                THROW_RETAIN_ERROR(current);
+            }
+
+            if (Interlocked.CompareExchange(ref _refCount, current + 1, current) == current)
+            {
+                return;
+            }
         }
     }
 
@@ -468,18 +476,28 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Dispose()
     {
-        int newValue = Interlocked.Decrement(ref _refCount);
+        int current;
+        int newValue;
+        while (true)
+        {
+            current = Volatile.Read(ref _refCount);
+            if (current <= 0)
+            {
+#if DEBUG
+                Debug.Fail($"BufferLease double dispose detected. RefCount was {current}");
+#endif
+                return;
+            }
+
+            newValue = current - 1;
+            if (Interlocked.CompareExchange(ref _refCount, newValue, current) == current)
+            {
+                break;
+            }
+        }
 
         if (newValue > 0)
         {
-            return;
-        }
-
-        if (newValue < 0)
-        {
-#if DEBUG
-            Debug.Fail($"BufferLease double dispose detected. RefCount went to {newValue}");
-#endif
             return;
         }
 
@@ -639,7 +657,7 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
         ArgumentOutOfRangeException.ThrowIfNegative(capacity);
         ArgumentOutOfRangeException.ThrowIfNegative(headroom);
 
-        byte[] arr = ByteArrayPool.Rent(capacity + headroom);
+        byte[] arr = ByteArrayPool.Rent(checked(capacity + headroom));
         BufferLease lease = RENT_LEASE_SHELL();
         lease.Initialize(arr, start: headroom, length: 0, zeroOnDispose);
         lease._headroom = headroom;

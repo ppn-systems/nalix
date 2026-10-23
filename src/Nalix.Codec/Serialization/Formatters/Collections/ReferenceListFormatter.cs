@@ -104,7 +104,16 @@ internal sealed class ReferenceListFormatter<
         IFormatter<T> elem = GetElementFormatter();
         for (int i = 0; i < span.Length; i++)
         {
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
+
             span[i] = elem.Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                return null!;
+            }
         }
 
         return list;
@@ -135,7 +144,16 @@ internal sealed class ReferenceListFormatter<
         IFormatter<T> fillElem = GetElementFormatter();
         for (int i = 0; i < length; i++)
         {
+            if (reader.IsFailed)
+            {
+                break;
+            }
+
             span[i] = fillElem.Deserialize(ref reader);
+            if (reader.IsFailed)
+            {
+                break;
+            }
         }
     }
 }

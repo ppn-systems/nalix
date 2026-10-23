@@ -26,6 +26,9 @@ internal static class Throw
     private static readonly FormatException s_overlongLeb128 =
         new("LEB128 sequence is overlong or corrupt (exceeds 5 bytes for a 32-bit value).");
 
+    private static readonly ArgumentException s_leb128BufferTooSmall =
+        new("Destination buffer is too small to encode the LEB128 value.", "buffer");
+
     [DoesNotReturn]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -45,6 +48,11 @@ internal static class Throw
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void OverlongLeb128() => throw s_overlongLeb128;
+
+    [DoesNotReturn]
+    [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void Leb128BufferTooSmall() => throw s_leb128BufferTooSmall;
 
     [StackTraceHidden]
     private sealed class CachedSerializationException(string message) : SerializationFailureException(message)

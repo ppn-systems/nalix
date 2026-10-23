@@ -52,6 +52,11 @@ public static class Leb128
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static unsafe int Write(Span<byte> buffer, uint value)
     {
+        if (buffer.Length < GetByteCount(value))
+        {
+            Throw.Leb128BufferTooSmall();
+        }
+
         fixed (byte* ptr = &MemoryMarshal.GetReference(buffer))
         {
             byte* p = ptr;
@@ -82,6 +87,11 @@ public static class Leb128
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static unsafe int WriteUnrolled(Span<byte> buffer, uint value)
     {
+        if (buffer.Length < GetByteCount(value))
+        {
+            Throw.Leb128BufferTooSmall();
+        }
+
         fixed (byte* p = &MemoryMarshal.GetReference(buffer))
         {
             if (value < 0x80u) { p[0] = (byte)value; return 1; }
