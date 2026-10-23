@@ -75,7 +75,8 @@ public sealed class PacketDispatchChannelTests
 
         lease1.IsDisposed.Should().BeTrue("DispatchContinuation must dispose the buffer lease once the async task completes");
 
-        // 4. Verify DispatchContinuation directly records IncrementErrorCount() and disposes packet/lease on faulted task
+        // 4. Verify DispatchContinuation records IncrementErrorCount() and disposes the lease on a faulted task.
+        // It must not touch the packet: the pooled PacketContext owns it and releases it exactly once.
         Type continuationType = typeof(PacketDispatchChannel).Assembly
             .GetType("Nalix.Runtime.Internal.Routing.DispatchContinuation")!;
         MethodInfo getContinuation = typeof(ObjectPoolManager)
@@ -85,10 +86,9 @@ public sealed class PacketDispatchChannelTests
 
         TaskCompletionSource faultedGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         FakeBufferLease faultLease = CreateRawPacketLease(opcode: 0x0101, sequence: 3, priority: PacketPriority.NONE);
-        DisposableDummyPacket disposablePacket = new();
 
         object workItem = getContinuation.Invoke(ObjectPoolManager.Shared, null)!;
-        initContinuation.Invoke(workItem, [connection, faultLease, disposablePacket, faultedGate.Task, CancellationToken.None]);
+        initContinuation.Invoke(workItem, [connection, faultLease, faultedGate.Task, CancellationToken.None]);
 
         faultedGate.SetException(new InvalidOperationException("simulated async failure"));
 
@@ -99,7 +99,6 @@ public sealed class PacketDispatchChannelTests
         }
 
         faultLease.IsDisposed.Should().BeTrue();
-        disposablePacket.Disposed.Should().BeTrue();
         connection.ErrorCount.Should().BeGreaterThan(0, "DispatchContinuation must increment connection error count when the awaited task faults");
     }
 
@@ -143,20 +142,6 @@ public sealed class PacketDispatchChannelTests
         return new FakeBufferLease(buffer) { IsReliable = true };
     }
 
-    private sealed class DisposableDummyPacket : IPacket, IDisposable
-    {
-        public bool Disposed { get; private set; }
-
-        public int Length => PacketHeader.Size;
-
-        public PacketHeader Header { get; set; }
-
-        public byte[] Serialize() => new byte[PacketHeader.Size];
-
-        public int Serialize(Span<byte> buffer) => PacketHeader.Size;
-
-        public void Dispose() => Disposed = true;
-    }
 
     private sealed class FakeBufferLease(byte[] buffer) : IBufferLease
     {

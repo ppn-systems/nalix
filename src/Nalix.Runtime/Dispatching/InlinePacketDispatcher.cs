@@ -158,20 +158,15 @@ public sealed class InlinePacketDispatcher
              */
             ValueTask pending = this.Options.ExecuteResolvedHandlerAsync(in handler, packet, connection, isReliable, encryptedOnWire, ct);
 
-            // Fast-path: handler completed synchronously
+            // Fast-path: handler completed synchronously. The packet context already released the packet.
             if (pending.IsCompletedSuccessfully)
             {
-                if (packet is IDisposable disposable)
-                {
-                    disposable.Dispose();
-                }
-
                 lease.Dispose();
                 return ValueTask.CompletedTask;
             }
 
             // Slow-path: async completion (AwaitDispatchAsync handles Return/Dispose)
-            return AwaitPacketHandlerCompletionAsync(connection, lease, packet, pending, ct);
+            return AwaitPacketHandlerCompletionAsync(connection, lease, pending, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -188,19 +183,14 @@ public sealed class InlinePacketDispatcher
                 $"handler-error ep={connection.NetworkEndpoint}");
         }
 
-        // 5. Cleanup for synchronous errors/cancellation
-        if (packet is IDisposable disposableSync)
-        {
-            disposableSync.Dispose();
-        }
-
+        // 5. Cleanup for synchronous errors/cancellation (the packet was already released by its context)
         lease.Dispose();
         return ValueTask.CompletedTask;
     }
 
     private static async ValueTask AwaitPacketHandlerCompletionAsync(
         IConnection connection,
-        IBufferLease lease, IPacket packet, ValueTask pending, CancellationToken ct)
+        IBufferLease lease, ValueTask pending, CancellationToken ct)
     {
         try
         {
@@ -221,12 +211,7 @@ public sealed class InlinePacketDispatcher
         }
         finally
         {
-            // Guaranteed release for async path
-            if (packet is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-
+            // Guaranteed release for async path (the packet is released by its context)
             lease.Dispose();
         }
     }
