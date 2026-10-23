@@ -33,7 +33,13 @@ public sealed class DefaultSessionPersistencePolicy : ISessionPersistencePolicy
             return false;
         }
 
-        // Policy 2: Only persist if there is meaningful metadata beyond internal flags.
+        // Policy 2: Any connection with an active negotiated session secret is resumable.
+        if (!connection.Secret.IsZero)
+        {
+            return true;
+        }
+
+        // Policy 3: Fallback metadata threshold for non-cryptographic/custom sessions.
         if (connection.Attributes.Count <= _options.MinAttributesForPersistence)
         {
             return false;

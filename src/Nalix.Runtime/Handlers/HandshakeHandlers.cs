@@ -67,10 +67,10 @@ public static partial class HandshakeHandlers
         {
             if (connection.Level < PermissionLevel.POW_VERIFIED)
             {
-                // Adaptive Timeout: Expected solve time + 10 seconds network buffer
-                // Time to solve is approximately 2^Difficulty hashes.
-                // Assuming an average client can compute ~500 hashes per millisecond.
-                int adaptiveTimeoutMs = ((1 << s_powPolicy.CurrentDifficulty) / 500) + 5000;
+                // Adaptive Timeout: Expected solve time + 5 seconds network buffer, clamped to [5s, 60s]
+                // to prevent 32-bit signed left-shift overflow when CurrentDifficulty >= 31.
+                int shift = Math.Clamp((int)s_powPolicy.CurrentDifficulty, 0, 24);
+                int adaptiveTimeoutMs = (int)Math.Min(60_000L, ((1L << shift) / 500L) + 5000L);
 
                 PacketScope<Control> error = PacketFactory<Control>.Acquire();
                 try
@@ -117,7 +117,7 @@ public static partial class HandshakeHandlers
                 return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.DECRYPTION_FAILED);
             }
 
-                    try
+            try
             {
                 sharedSecretSE = X25519.Agreement(s_certificate, packet.PublicKey);
             }
@@ -151,6 +151,7 @@ public static partial class HandshakeHandlers
 
             if (!TryPublishHandshakeState(connection, state))
             {
+                s_pool.Return(state);
                 return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.STATE_VIOLATION);
             }
 
@@ -225,16 +226,24 @@ public static partial class HandshakeHandlers
             return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.STATE_VIOLATION);
         }
 
-        Bytes32 expectedProof = HandshakeX25519.ComputeClientProof(state.SharedSecret, state.TranscriptHash);
-        if (packet.Proof != expectedProof)
+        Bytes32 expectedFinish;
+        try
         {
-            return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.SIGNATURE_INVALID);
+            Bytes32 expectedProof = HandshakeX25519.ComputeClientProof(state.SharedSecret, state.TranscriptHash);
+            if (packet.Proof != expectedProof)
+            {
+                return RejectHandshakeAsync(connection, context.Sender, ProtocolReason.SIGNATURE_INVALID);
+            }
+
+            connection.Secret = state.SessionKey;
+            connection.Algorithm = CipherSuiteType.Chacha20Poly1305;
+
+            expectedFinish = HandshakeX25519.ComputeServerFinishProof(state.SharedSecret, state.TranscriptHash);
         }
-
-        connection.Secret = state.SessionKey;
-        connection.Algorithm = CipherSuiteType.Chacha20Poly1305;
-
-        Bytes32 expectedFinish = HandshakeX25519.ComputeServerFinishProof(state.SharedSecret, state.TranscriptHash);
+        finally
+        {
+            s_pool.Return(state);
+        }
 
         if (context.Connection.Level < PermissionLevel.ESTABLISHED)
         {
@@ -244,13 +253,6 @@ public static partial class HandshakeHandlers
         RuntimeConnectionState runtimeState = connection.GetRuntimeState();
 
         runtimeState.HandshakeEstablished = true;
-
-        if (runtimeState.HandshakeState is HandshakeContext contextState)
-        {
-            s_pool.Return(contextState);
-        }
-
-        runtimeState.HandshakeState = null;
 
         if (s_sessionService != null)
         {
@@ -359,7 +361,7 @@ public static partial class HandshakeHandlers
     public static Bytes32 ServerPublicKey => s_serverPublicKey;
 
     [Inject]
-    private static ObjectPoolManager s_pool = null!;
+    private static ObjectPoolManager s_pool = ObjectPoolManager.Shared;
 
     [Inject]
     private static ISessionService? s_sessionService;
@@ -411,12 +413,10 @@ public static partial class HandshakeHandlers
     {
         RuntimeConnectionState runtimeState = connection.GetRuntimeState();
 
-        if (runtimeState.HandshakeState is HandshakeContext contextState)
+        if (Interlocked.Exchange(ref runtimeState.HandshakeState, null) is HandshakeContext contextState)
         {
             s_pool.Return(contextState);
         }
-
-        runtimeState.HandshakeState = null;
 
         Control error = new();
         error.Initialize(ControlType.ERROR, reasonCode: reason, flags: PacketFlags.SYSTEM);
@@ -452,14 +452,21 @@ public static partial class HandshakeHandlers
     {
         RuntimeConnectionState runtimeState = connection.GetRuntimeState();
 
-        if (runtimeState.HandshakeState is HandshakeContext typed)
+        while (true)
         {
-            state = typed;
-            return true;
-        }
+            object? current = Volatile.Read(ref runtimeState.HandshakeState);
+            if (current is not HandshakeContext typed)
+            {
+                state = null;
+                return false;
+            }
 
-        state = null;
-        return false;
+            if (Interlocked.CompareExchange(ref runtimeState.HandshakeState, null, typed) == typed)
+            {
+                state = typed;
+                return true;
+            }
+        }
     }
     private static bool TryAcquireHandshakeSlot(IConnection connection)
     {

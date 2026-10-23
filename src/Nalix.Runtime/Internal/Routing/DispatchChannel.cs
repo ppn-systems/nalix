@@ -462,6 +462,10 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
         }
 
         int priority = ClassifyPriorityIndex(raw.Span);
+        if (connection.Level < PermissionLevel.USER && priority > (int)PacketPriority.LOW)
+        {
+            priority = LowestPriorityIndex;
+        }
 
         if (_maxPerConnectionQueue > 0 && !this.EnsureCapacity(state, noBlock))
         {

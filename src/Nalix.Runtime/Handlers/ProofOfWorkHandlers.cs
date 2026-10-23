@@ -36,11 +36,21 @@ public static class ProofOfWorkHandlers
             return;
         }
 
+        if (context.Connection.Level >= PermissionLevel.POW_VERIFIED)
+        {
+            // Already verified, ignore silently without re-running PoW or disconnecting.
+            return;
+        }
+
         ProofOfWorkProof p = context.Packet;
         long currentTime = System.Environment.TickCount64;
 
-        // Ensure timestamp is not older than 30 seconds
-        if (currentTime - p.TimestampTicks > 30000 || p.TimestampTicks > currentTime + 5000)
+        // Validate difficulty and timestamp bounds safely without signed subtraction overflow
+        if (p.Difficulty == 0 ||
+            p.Difficulty > 32 ||
+            p.TimestampTicks <= 0 ||
+            currentTime < p.TimestampTicks - 5000 ||
+            currentTime - p.TimestampTicks > 30000)
         {
             context.Connection.Disconnect(ProtocolReason.POW_INVALID.ToString());
             return;

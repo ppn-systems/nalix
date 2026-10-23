@@ -172,11 +172,82 @@ TestUtils.SetupCertificate();
 
 
             // 4. Verify Result
-            // SessionHandlers returns TOKEN_REVOKED if proof is invalid
-            Assert.Equal(ProtocolReason.TOKEN_REVOKED, result);
+            // SessionHandlers returns uniform SESSION_EXPIRED if proof is invalid to prevent token enumeration
+            Assert.Equal(ProtocolReason.SESSION_EXPIRED, result);
 
             using SessionScope retained = await store.ConsumeAsync(token);
             Assert.True(retained.IsValid, "invalid resume proof must not consume the stored session token");
+        }
+        finally
+        {
+            await app.DeactivateAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ResumeSessionAsync_WhenPreviousSessionHadHighSequences_ResetsSequencesForFreshTransport()
+    {
+        int port = TestUtils.GetFreePort();
+        ulong token = Snowflake.NewId(SnowflakeType.Session).ToUInt64();
+        byte[] secretBytes = new byte[32];
+        secretBytes[0] = 0xDD;
+        Bytes32 secret = new(secretBytes);
+
+        InMemorySessionStore store = new();
+        SessionService sessionService = new(store: store);
+        ConnectionHub hub = new();
+
+        NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
+        builder.UseConnectionHub(hub);
+        builder.UseSessionService(sessionService);
+        builder.UseSessionStore(store);
+        builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
+        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.UseSecureConnections();
+        builder.UseSessions();
+
+        using NetworkApplication app = builder.Build();
+        await app.ActivateAsync();
+
+        try
+        {
+            var attrs = Nalix.Framework.Memory.Objects.ObjectMap<Nalix.Abstractions.AttributeKey, object>.Rent();
+            attrs[ConnectionAttributes.SequenceState] = new ConnectionSequenceState
+            {
+                TcpSendSequence = 50,
+                TcpReceiveSequence = 50
+            };
+
+            SessionSnapshot snapshot = new()
+            {
+                SessionToken = token,
+                Secret = secret,
+                Algorithm = CipherSuiteType.Chacha20Poly1305,
+                ExpiresAtUnixMilliseconds = long.MaxValue,
+                Attributes = attrs
+            };
+            SessionEntry entry = new(snapshot, 0UL);
+
+            await store.StoreAsync(entry);
+
+            using TcpSession session = new(new TransportOptions
+            {
+                ResumeTimeoutMillis = 30000
+            });
+            session.State.Secret = secret;
+            session.State.SessionToken = token;
+            session.State.EncryptionEnabled = false;
+
+            await session.ConnectAsync("127.0.0.1", (ushort)port);
+
+#pragma warning disable CS0612
+            ProtocolReason result = await session.ResumeSessionAsync();
+#pragma warning restore CS0612
+
+            Assert.Equal(ProtocolReason.NONE, result);
+
+            IConnection serverConn = Assert.Single(hub.ListConnections());
+            Assert.Equal(0u, serverConn.TCP.ReceiveSequence.Current());
         }
         finally
         {

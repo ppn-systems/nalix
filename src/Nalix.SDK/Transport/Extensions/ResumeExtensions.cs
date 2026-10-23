@@ -90,6 +90,7 @@ public static class ResumeExtensions
 
             session.State.SessionToken = response.SessionToken;
             session.State.EncryptionEnabled = true;
+            transportSession?.ResetSequenceCounters();
             transportSession?.NotifyReady();
             return ProtocolReason.NONE;
         }

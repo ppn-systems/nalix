@@ -723,12 +723,9 @@ public sealed class PacketDispatchChannel
 
             // Slow-path: async completion
             // The handler returned an incomplete task (e.g. awaited I/O).
-            // To prevent blocking the DispatchWorkerLoop, we offload the continuation to the ThreadPool.
-            // Using a pooled IThreadPoolWorkItem ensures 0-byte allocation.
+            // To prevent blocking the DispatchWorkerLoop, we attach a pooled continuation via UnsafeOnCompleted.
             DispatchContinuation workItem = ObjectPoolManager.Shared.Get<DispatchContinuation>();
             workItem.Initialize(connection, lease, packet, pending.AsTask(), ct);
-
-            _ = ThreadPool.UnsafeQueueUserWorkItem(workItem, preferLocal: false);
 
             return ValueTask.CompletedTask;
         }

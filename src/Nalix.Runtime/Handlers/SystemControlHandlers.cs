@@ -3,6 +3,7 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Diagnostics;
@@ -17,6 +18,7 @@ using Nalix.Codec.Pooling;
 using Nalix.Codec.ProtocolFrames;
 using Nalix.Codec.Security;
 using Nalix.Runtime.Extensions;
+using Nalix.Runtime.Internal;
 using Nalix.Runtime.Internal.RateLimiting;
 
 namespace Nalix.Runtime.Handlers;
@@ -99,6 +101,14 @@ public static partial class SystemControlHandlers
     [Inject]
     private static IProofOfWorkPolicy? s_powPolicy;
 
+    private static readonly ConditionalWeakTable<RuntimeConnectionState, PreAuthControlCooldownState> s_cooldowns = new();
+
+    private sealed class PreAuthControlCooldownState
+    {
+        public long PowRequestLastSentAtMs;
+        public long PublicKeyRequestLastSentAtMs;
+    }
+
     #endregion Fields
 
     #region Private Methods
@@ -112,6 +122,14 @@ public static partial class SystemControlHandlers
         if (!context.IsReliable)
         {
             // This is a replayed packet, ignore silently.
+            return default;
+        }
+
+        if (!DirectiveGuard.TryAcquire(
+                context.Connection,
+                static state => s_cooldowns.GetOrCreateValue(state).PowRequestLastSentAtMs,
+                static (state, val) => s_cooldowns.GetOrCreateValue(state).PowRequestLastSentAtMs = val))
+        {
             return default;
         }
 
@@ -148,7 +166,23 @@ public static partial class SystemControlHandlers
             return default;
         }
 
-        context.Connection.Algorithm = (CipherSuiteType)packet.Reason;
+        IConnection connection = context.Connection;
+        if (!connection.GetRuntimeState().HandshakeEstablished || !context.EncryptedOnWire)
+        {
+            connection.Disconnect("CIPHER_UPDATE requires an established, encrypted session.");
+            return default;
+        }
+
+        CipherSuiteType requestedCipher = (CipherSuiteType)packet.Reason;
+        if ((ushort)packet.Reason > byte.MaxValue ||
+            requestedCipher == CipherSuiteType.None ||
+            !Enum.IsDefined(requestedCipher))
+        {
+            connection.Disconnect("Invalid or disallowed cipher suite requested.");
+            return default;
+        }
+
+        connection.Algorithm = requestedCipher;
 
         PacketScope<Control> lease = PacketFactory<Control>.Acquire();
         try
@@ -175,7 +209,7 @@ public static partial class SystemControlHandlers
 
         IConnection connection = context.Connection;
 
-        if (!connection.GetRuntimeState().HandshakeEstablished)
+        if (!connection.GetRuntimeState().HandshakeEstablished || !context.EncryptedOnWire)
         {
             connection.Disconnect("Cannot perform Rekey before Handshake is established.");
             return default;
@@ -300,6 +334,14 @@ public static partial class SystemControlHandlers
         if (context.Connection.GetRuntimeState().HandshakeEstablished)
         {
             context.Connection.Disconnect("Key exchange requested after handshake was established (State Violation).");
+            return default;
+        }
+
+        if (!DirectiveGuard.TryAcquire(
+                context.Connection,
+                static state => s_cooldowns.GetOrCreateValue(state).PublicKeyRequestLastSentAtMs,
+                static (state, val) => s_cooldowns.GetOrCreateValue(state).PublicKeyRequestLastSentAtMs = val))
+        {
             return default;
         }
 

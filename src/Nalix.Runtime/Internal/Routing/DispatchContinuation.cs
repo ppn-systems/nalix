@@ -23,6 +23,7 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
     private static readonly ObjectPoolManager s_pool = ObjectPoolManager.Shared;
     private static readonly ThrottleKey s_keyExecute = new("dispatch.execute");
 
+    private readonly Action _onCompleted;
     private IConnection? _connection;
     private IBufferLease? _lease;
     private IPacket? _packet;
@@ -34,6 +35,8 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
         _ = s_pool.SetMaxCapacity<DispatchContinuation>(2048);
         _ = s_pool.Prealloc<DispatchContinuation>(128);
     }
+
+    public DispatchContinuation() => _onCompleted = this.Execute;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Initialize(
@@ -48,14 +51,13 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
 #pragma warning restore NALIX076 // Packet context must not escape handler scope
         _pendingTask = pendingTask;
         _ct = ct;
+
+        pendingTask.ConfigureAwait(false).GetAwaiter().UnsafeOnCompleted(_onCompleted);
     }
 
 
-    // Execute runs on a ThreadPool thread. 
-    // We await the pending task here so the original dispatch worker loop is free.
-    public void Execute() => _ = this.ExecuteAsync();
-
-    private async Task ExecuteAsync()
+    // Execute runs when _pendingTask has completed via UnsafeOnCompleted.
+    public void Execute()
     {
         IConnection? connection = _connection;
         IBufferLease? lease = _lease;
@@ -71,7 +73,9 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
 
         try
         {
-            await pending.ConfigureAwait(false);
+#pragma warning disable CA1849 // _pendingTask is already completed when UnsafeOnCompleted invokes Execute
+            pending.GetAwaiter().GetResult();
+#pragma warning restore CA1849
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
