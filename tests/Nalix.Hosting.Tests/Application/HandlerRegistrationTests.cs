@@ -1,12 +1,15 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Hosting;
-using Nalix.Hosting.Tests.HandlerScan;
 using Nalix.Runtime.Dispatching;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
+using Nalix.Hosting.Tests.TestSupport;
 
-namespace Nalix.Hosting.Tests;
+namespace Nalix.Hosting.Tests.Application;
 
 [Collection(TestCollections.RealServer)]
 public sealed class HandlerRegistrationTests : IDisposable

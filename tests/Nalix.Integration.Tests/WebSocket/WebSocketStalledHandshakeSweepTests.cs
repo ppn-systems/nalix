@@ -19,8 +19,9 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.WebSocket;
 
 /// <summary>
 /// Reproduces the hypothesized hang: stalled (never-completing) WS handshake sockets
@@ -32,6 +33,8 @@ namespace Nalix.Integration.Tests;
 [Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketStalledHandshakeSweepTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-stall-{Guid.NewGuid():N}.private");
 
     public WebSocketStalledHandshakeSweepTests()
@@ -72,7 +75,7 @@ public sealed class WebSocketStalledHandshakeSweepTests : IDisposable
     /// holding _wsUpgradeLock, these requests will stall past the handshake timeout window.
     /// </summary>
     [Fact]
-    public async Task StalledHandshakes_DoNotBlockConcurrentHealthzPings()
+    public async Task Healthz_WithStalledHandshakes_DoesNotBlockConcurrentPings()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -162,6 +165,7 @@ public sealed class WebSocketStalledHandshakeSweepTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -13,9 +16,10 @@ using Nalix.Network.Connections;
 using NSubstitute;
 using Xunit;
 
-namespace Nalix.Hosting.Tests;
+namespace Nalix.Hosting.Tests.Protocols;
 
-public sealed class DefaultFrameProcessorReplayTests
+[Collection(TestCollections.RealServer)]
+public sealed class DefaultFrameProcessorReplayTests : IDisposable
 {
     private static void EnsurePoolConfigured()
     {
@@ -112,4 +116,6 @@ public sealed class DefaultFrameProcessorReplayTests
             seqOpts.TcpWindow = prevTcpWindow;
         }
     }
+
+    public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }

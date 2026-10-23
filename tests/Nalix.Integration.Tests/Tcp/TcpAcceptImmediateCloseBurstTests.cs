@@ -18,8 +18,9 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.Tcp;
 
 /// <summary>
 /// Reproduces the reported "immediate_close" scenario: a burst of raw TCP connects that
@@ -33,6 +34,8 @@ namespace Nalix.Integration.Tests;
 [Collection(TestCollections.NetworkConfig)]
 public sealed class TcpAcceptImmediateCloseBurstTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-tcp-immclose-{Guid.NewGuid():N}.private");
 
     public TcpAcceptImmediateCloseBurstTests()
@@ -112,7 +115,7 @@ public sealed class TcpAcceptImmediateCloseBurstTests : IDisposable
     /// stage would get RST (000).
     /// </summary>
     [Fact]
-    public async Task CumulativeImmediateCloseBurst_AcceptWorkerSurvives_HealthzStaysUp()
+    public async Task Accept_WhenImmediateCloseBurstsAccumulate_KeepsHealthzUp()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.UpdateValue<ConnectionGuardOptions>("MaxConnections", 2000);
@@ -168,6 +171,7 @@ public sealed class TcpAcceptImmediateCloseBurstTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

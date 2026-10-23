@@ -1,9 +1,13 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System.Net.Sockets;
 using Nalix.Hosting;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
+using Nalix.Hosting.Tests.TestSupport;
 
-namespace Nalix.Hosting.Tests;
+namespace Nalix.Hosting.Tests.Application;
 
 [Collection(TestCollections.RealServer)]
 public sealed class HostingLifecycleTests : IDisposable
@@ -36,7 +40,7 @@ public sealed class HostingLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task RunAsync_CancelToken_ShutsDownGracefully()
+    public async Task Run_WhenTokenIsCancelled_ShutsDownGracefully()
     {
         int port = TestUtils.GetFreePort();
         var builder = NetworkApplication.CreateBuilder();
@@ -115,7 +119,7 @@ public sealed class HostingLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task TcpAndUdp_SamePort_Simultaneously_BothWork()
+    public async Task ListenTcpAndUdp_OnSamePort_AcceptsTcpConnection()
     {
         int port = TestUtils.GetFreePort();
         var builder = NetworkApplication.CreateBuilder();

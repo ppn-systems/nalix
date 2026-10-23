@@ -17,8 +17,9 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
+using Nalix.Integration.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests;
+namespace Nalix.Integration.Tests.WebSocket;
 
 /// <summary>
 /// Reproduces the ConnectionGuard per-IP slot leak for stalled WebSocket handshakes that get
@@ -33,6 +34,8 @@ namespace Nalix.Integration.Tests;
 [Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketSweepSlotLeakTests : IDisposable
 {
+    private readonly NetworkConfigSnapshot _configSnapshot = new();
+
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-leak-{Guid.NewGuid():N}.private");
 
     public WebSocketSweepSlotLeakTests()
@@ -126,7 +129,7 @@ public sealed class WebSocketSweepSlotLeakTests : IDisposable
     /// them, the per-IP entry stays saturated and the real handshake is wrongly rejected forever.
     /// </summary>
     [Fact]
-    public async Task StalledHandshakes_SweptByTimeout_MustReleasePerIpSlot_ForSubsequentRealHandshake()
+    public async Task Sweep_WhenStalledHandshakesTimeOut_ReleasesPerIpSlot()
     {
         ushort port = GetFreePort();
 
@@ -209,6 +212,7 @@ public sealed class WebSocketSweepSlotLeakTests : IDisposable
 
     public void Dispose()
     {
+        _configSnapshot.Dispose();
         try
         {
             if (File.Exists(_certificatePath)) File.Delete(_certificatePath);

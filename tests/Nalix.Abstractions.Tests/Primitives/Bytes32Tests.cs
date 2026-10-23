@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using Nalix.Abstractions.Primitives;
 using Xunit;
@@ -7,7 +10,7 @@ namespace Nalix.Abstractions.Tests.Primitives;
 public sealed class Bytes32Tests
 {
     [Fact]
-    public void Constructor_WithValidSpan_CopiesData()
+    public void Ctor_WithValidSpan_CopiesData()
     {
         byte[] data = new byte[32];
         for (int i = 0; i < 32; i++) data[i] = (byte)i;
@@ -18,14 +21,14 @@ public sealed class Bytes32Tests
     }
 
     [Fact]
-    public void Constructor_WithShortSpan_ThrowsArgumentException()
+    public void Ctor_WithShortSpan_ThrowsArgumentException()
     {
         byte[] data = new byte[31];
         Assert.Throws<ArgumentException>(() => new Bytes32(data));
     }
 
     [Fact]
-    public void Equals_BitwiseIdentical_ReturnsTrue()
+    public void Equals_WhenBitwiseIdentical_ReturnsTrue()
     {
         byte[] data = new byte[32];
         new Random(42).NextBytes(data);
@@ -38,7 +41,7 @@ public sealed class Bytes32Tests
     }
 
     [Fact]
-    public void Equals_DifferentData_ReturnsFalse()
+    public void Equals_WhenDataDiffers_ReturnsFalse()
     {
         byte[] data1 = new byte[32];
         byte[] data2 = new byte[32];
@@ -60,7 +63,7 @@ public sealed class Bytes32Tests
     [InlineData(15)]
     [InlineData(16)]
     [InlineData(31)]
-    public void Equals_BitFlipInEachByte_ReturnsFalse(int byteIndex)
+    public void Equals_WithBitFlipInByte_ReturnsFalse(int byteIndex)
     {
         byte[] data1 = new byte[32];
         new Random(byteIndex).NextBytes(data1);
@@ -79,7 +82,7 @@ public sealed class Bytes32Tests
     [InlineData(0, 0x80)] // Bit 7 (MoveMask would see this)
     [InlineData(15, 0x40)]
     [InlineData(31, 0x01)] // Bit 0 (MoveMask would MISS this if it was the only check)
-    public void Equals_SpecificBitFlips_ReturnsFalse(int byteIndex, byte mask)
+    public void Equals_WithSpecificBitMaskInByte_ReturnsFalse(int byteIndex, byte mask)
     {
         byte[] data1 = new byte[32];
         byte[] data2 = new byte[32];
@@ -92,7 +95,7 @@ public sealed class Bytes32Tests
     }
 
     [Fact]
-    public void IsZero_ExhaustiveByteCheck()
+    public void IsZero_WhenAnySingleByteIsNonZero_ReturnsFalse()
     {
         for (int i = 0; i < 32; i++)
         {
@@ -124,7 +127,7 @@ public sealed class Bytes32Tests
     }
 
     [Fact]
-    public void Parse_ValidHexString_ReturnsCorrectBytes()
+    public void Parse_WithValidHexString_RoundTripsToString()
     {
         string hex = "0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20";
         Bytes32 b = Bytes32.Parse(hex);
@@ -133,7 +136,7 @@ public sealed class Bytes32Tests
     }
 
     [Fact]
-    public void Parse_ValidLowercaseHex_Succeeds()
+    public void Parse_WithLowercaseHex_ReturnsUppercaseString()
     {
         string hex = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
         Bytes32 b = Bytes32.Parse(hex);
@@ -141,7 +144,7 @@ public sealed class Bytes32Tests
     }
 
     [Fact]
-    public void Parse_ValidUppercaseHex_Succeeds()
+    public void Parse_WithUppercaseHex_ReturnsSameString()
     {
         string hex = "0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20";
         Bytes32 b = Bytes32.Parse(hex);
@@ -155,19 +158,19 @@ public sealed class Bytes32Tests
     [InlineData(" 0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F2")] // odd length (63 chars) with leading space
     [InlineData("0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F200")] // too long (65 chars)
     [InlineData("01020304050607")] // too short
-    public void Parse_InvalidHex_ThrowsFormatException(string invalidHex)
+    public void Parse_WithInvalidHex_ThrowsFormatException(string invalidHex)
     {
         Assert.Throws<FormatException>(() => Bytes32.Parse(invalidHex));
     }
 
     [Fact]
-    public void Parse_NullHex_ThrowsArgumentNullException()
+    public void Parse_WithNullHex_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() => Bytes32.Parse(null!));
     }
 
     [Fact]
-    public void GetHashCode_SameData_SameHashCode()
+    public void GetHashCode_WhenDataIsEqual_ReturnsSameHashCode()
     {
         byte[] data = new byte[32];
         new Random(42).NextBytes(data);
@@ -178,19 +181,3 @@ public sealed class Bytes32Tests
         Assert.Equal(b1.GetHashCode(), b2.GetHashCode());
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

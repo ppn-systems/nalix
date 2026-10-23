@@ -1,8 +1,11 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Serialization;
 using Nalix.Codec.DataFrames;
 
-namespace Nalix.Hosting.Tests.HandlerScan;
+namespace Nalix.Hosting.Tests.TestSupport;
 
 [Packet]
 [GenerateFormatter]

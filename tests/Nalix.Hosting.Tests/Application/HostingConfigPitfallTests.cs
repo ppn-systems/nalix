@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System.Net;
 using Nalix.Abstractions.Networking;
 using Nalix.Environment.Configuration;
@@ -7,8 +10,9 @@ using Nalix.Network.RateLimiting;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Nalix.SDK.Transport.Extensions;
+using Nalix.Hosting.Tests.TestSupport;
 
-namespace Nalix.Hosting.Tests;
+namespace Nalix.Hosting.Tests.Application;
 
 /// <summary>
 /// Regression tests for hosting configuration pitfalls: option ordering around
@@ -18,6 +22,7 @@ namespace Nalix.Hosting.Tests;
 [Collection(TestCollections.RealServer)]
 public sealed class HostingConfigPitfallTests : IDisposable
 {
+    private readonly string _certPath = Path.Combine(Path.GetTempPath(), $"nalix-hosting-pitfall-{Guid.NewGuid():N}.cert");
     private readonly int _savedMaxPerIp;
     private readonly int _savedMaxPerWindow;
 
@@ -88,7 +93,7 @@ public sealed class HostingConfigPitfallTests : IDisposable
     }
 
     [Fact]
-    public void UseSecureConnections_And_UseSystemControl_InAnyOrder_DoNotDuplicateHandlers()
+    public void UseSecureConnections_WhenCombinedWithUseSystemControlInAnyOrder_DoesNotDuplicateHandlers()
     {
         var a = NetworkApplication.CreateBuilder();
         a.UseSystemControl();
@@ -148,7 +153,7 @@ public sealed class HostingConfigPitfallTests : IDisposable
         }
     }
 
-    private static string CertPath() => Path.Combine(Path.GetTempPath(), $"nalix-hosting-pitfall-{System.Environment.ProcessId}.cert");
+    private string CertPath() => _certPath;
 
     private static string ReportJson(ConnectionGuard guard)
     {
@@ -167,5 +172,13 @@ public sealed class HostingConfigPitfallTests : IDisposable
         quota.MaxConnectionsPerIpAddress = _savedMaxPerIp;
         quota.MaxConnectionsPerWindow = _savedMaxPerWindow;
         InstanceManager.Instance.Clear(dispose: false);
+
+        try
+        {
+            File.Delete(_certPath);
+        }
+        catch (IOException)
+        {
+        }
     }
 }
