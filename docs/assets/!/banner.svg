@@ -1,136 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" fill="none">
+  <title>Nalix — Low-latency binary realtime networking for .NET</title>
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f0c29"/>
-      <stop offset="50%" stop-color="#302b63"/>
-      <stop offset="100%" stop-color="#24243e"/>
+    <linearGradient id="tileFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141414"/><stop offset="0.45" stop-color="#050505"/><stop offset="1" stop-color="#000000"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#667eea"/>
-      <stop offset="100%" stop-color="#764ba2"/>
+    <linearGradient id="tileRim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A4A4A"/><stop offset="1" stop-color="#232323"/>
     </linearGradient>
-    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#667eea" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#764ba2" stop-opacity="0"/>
+    <clipPath id="nRings"><rect x="0" y="19" width="400" height="4"/><rect x="0" y="40" width="400" height="4"/></clipPath>
+    <radialGradient id="spot" cx="0.5" cy="0.38" r="0.6">
+      <stop offset="0" stop-color="#1E1E1E"/><stop offset="1" stop-color="#050505"/>
+    </radialGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.55"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
-    <filter id="textShadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#667eea" flood-opacity="0.5"/>
-    </filter>
-    <filter id="subtleShadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#667eea" flood-opacity="0.3"/>
-    </filter>
-    <!-- Grid pattern -->
-    <pattern id="grid" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#667eea" stroke-width="0.3" stroke-opacity="0.15"/>
-    </pattern>
-    <!-- Dot pattern -->
-    <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-      <circle cx="2" cy="2" r="0.8" fill="#667eea" fill-opacity="0.2"/>
-    </pattern>
   </defs>
-
-  <!-- Background -->
-  <rect width="1200" height="300" fill="url(#bg)"/>
-  <rect width="1200" height="300" fill="url(#grid)"/>
-  <rect width="1200" height="300" fill="url(#dots)"/>
-
-  <!-- Decorative circles -->
-  <circle cx="100" cy="150" r="180" fill="url(#glow)" opacity="0.4"/>
-  <circle cx="1100" cy="100" r="200" fill="url(#glow)" opacity="0.3"/>
-  <circle cx="600" cy="300" r="250" fill="url(#glow)" opacity="0.2"/>
-
-  <!-- Accent line top -->
-  <rect x="0" y="0" width="1200" height="3" fill="url(#accent)"/>
-
-  <!-- Network node decorations - left -->
-  <g opacity="0.25" stroke="#667eea" stroke-width="1" fill="none">
-    <circle cx="80" cy="60" r="4" fill="#667eea"/>
-    <circle cx="140" cy="90" r="3" fill="#667eea"/>
-    <circle cx="60" cy="130" r="3" fill="#667eea"/>
-    <circle cx="160" cy="50" r="2.5" fill="#667eea"/>
-    <circle cx="120" cy="160" r="2.5" fill="#667eea"/>
-    <line x1="80" y1="60" x2="140" y2="90"/>
-    <line x1="80" y1="60" x2="60" y2="130"/>
-    <line x1="140" y1="90" x2="160" y2="50"/>
-    <line x1="140" y1="90" x2="120" y2="160"/>
-    <line x1="60" y1="130" x2="120" y2="160"/>
+  <rect width="1200" height="300" fill="url(#spot)"/>
+  <rect x="47.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="147.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="247.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="347.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="447.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="547.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="647.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="747.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="847.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="947.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="1047.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/><rect x="1147.0" y="0" width="6" height="300" fill="#FFFFFF" fill-opacity="0.018"/>
+  <rect x="0" y="6.0" width="1200" height="1" fill="url(#hair)"/>
+  <rect x="0" y="294.0" width="1200" height="1" fill="url(#hair)"/>
+  <g transform="translate(428.73 70.40) scale(1.55)">
+    <rect x="0.5" y="0.5" width="63" height="63" rx="8.5" fill="url(#tileFill)" stroke="url(#tileRim)"/>
+    <path d="M15 16H21L43 38V16H49V47H43V46L21 24V47H15Z" fill="#FFFFFF"/>
+    <path d="M15 16H21L43 38V16H49V47H43V46L21 24V47H15Z" fill="#929292" clip-path="url(#nRings)"/>
+    <path d="M14 47H22V48H23V50H13V48H14Z M42 47H50V48H51V50H41V48H42Z" fill="#2E2E2E"/>
+    <path d="M78 16 H84 L106 38 V16 H112 V47 H106 V46 L84 24 V47 H78Z M118 47 L131.5 16 H137.5 L149 47 H142.5 L134.5 25 L126 47Z M154 16 H160 V41 H174 V47 H154Z M179 16 H185 V47 H179Z M190 16 H198 L221 47 H213Z M213 16 H221 L198 47 H190Z" fill="#F5F5F5"/>
+    <path d="M78 16 H84 L106 38 V16 H112 V47 H106 V46 L84 24 V47 H78Z M118 47 L131.5 16 H137.5 L149 47 H142.5 L134.5 25 L126 47Z M154 16 H160 V41 H174 V47 H154Z M179 16 H185 V47 H179Z M190 16 H198 L221 47 H213Z M213 16 H221 L198 47 H190Z" fill="#8E8E8E" clip-path="url(#nRings)"/>
   </g>
-
-  <!-- Network node decorations - right -->
-  <g opacity="0.2" stroke="#764ba2" stroke-width="1" fill="none">
-    <circle cx="1050" cy="200" r="4" fill="#764ba2"/>
-    <circle cx="1100" cy="160" r="3" fill="#764ba2"/>
-    <circle cx="1140" cy="230" r="3" fill="#764ba2"/>
-    <circle cx="1020" cy="240" r="2.5" fill="#764ba2"/>
-    <circle cx="1080" cy="260" r="2" fill="#764ba2"/>
-    <line x1="1050" y1="200" x2="1100" y2="160"/>
-    <line x1="1050" y1="200" x2="1140" y2="230"/>
-    <line x1="1050" y1="200" x2="1020" y2="240"/>
-    <line x1="1140" y1="230" x2="1080" y2="260"/>
-    <line x1="1020" y1="240" x2="1080" y2="260"/>
-  </g>
-
-  <!-- Binary/data stream decoration -->
-  <g opacity="0.08" fill="#667eea" font-family="monospace" font-size="10">
-    <text x="30" y="220">01001110 01100001 01101100</text>
-    <text x="30" y="235">01101001 01111000 00100000</text>
-    <text x="950" y="60">10110010 01001110 11010100</text>
-    <text x="950" y="75">01100001 01101100 01101001</text>
-  </g>
-
-  <!-- Packet frame decoration - left side -->
-  <g opacity="0.12" transform="translate(40, 240)">
-    <rect x="0" y="0" width="120" height="30" rx="4" stroke="#667eea" stroke-width="1" fill="none"/>
-    <rect x="0" y="0" width="30" height="30" rx="4" fill="#667eea" fill-opacity="0.15"/>
-    <text x="8" y="19" font-family="monospace" font-size="8" fill="#667eea">HDR</text>
-    <text x="38" y="19" font-family="monospace" font-size="8" fill="#667eea">PAYLOAD →</text>
-  </g>
-
-  <!-- Main title -->
-  <text x="600" y="120" text-anchor="middle" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-weight="800" font-size="72" fill="white" filter="url(#textShadow)" letter-spacing="6">
-    NALIX
-  </text>
-
-  <!-- Tagline -->
-  <text x="600" y="165" text-anchor="middle" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-weight="400" font-size="18" fill="#a8b2d1" letter-spacing="4">
-    HIGH-PERFORMANCE NETWORKING FOR .NET
-  </text>
-
-  <!-- Feature pills -->
-  <g transform="translate(600, 210)" text-anchor="middle">
-    <!-- Pill 1 -->
-    <g transform="translate(-280, 0)">
-      <rect x="-60" y="-14" width="120" height="28" rx="14" fill="#667eea" fill-opacity="0.15" stroke="#667eea" stroke-width="1" stroke-opacity="0.4"/>
-      <text y="5" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" fill="#8892b0" font-weight="500">⚡ Zero-Alloc</text>
-    </g>
-    <!-- Pill 2 -->
-    <g transform="translate(-140, 0)">
-      <rect x="-55" y="-14" width="110" height="28" rx="14" fill="#667eea" fill-opacity="0.15" stroke="#667eea" stroke-width="1" stroke-opacity="0.4"/>
-      <text y="5" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" fill="#8892b0" font-weight="500">🔐 AEAD</text>
-    </g>
-    <!-- Pill 3 -->
-    <g transform="translate(0, 0)">
-      <rect x="-55" y="-14" width="110" height="28" rx="14" fill="#764ba2" fill-opacity="0.15" stroke="#764ba2" stroke-width="1" stroke-opacity="0.4"/>
-      <text y="5" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" fill="#8892b0" font-weight="500">🔌 Pluggable</text>
-    </g>
-    <!-- Pill 4 -->
-    <g transform="translate(140, 0)">
-      <rect x="-55" y="-14" width="110" height="28" rx="14" fill="#764ba2" fill-opacity="0.15" stroke="#764ba2" stroke-width="1" stroke-opacity="0.4"/>
-      <text y="5" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" fill="#8892b0" font-weight="500">📡 Real-Time</text>
-    </g>
-    <!-- Pill 5 -->
-    <g transform="translate(280, 0)">
-      <rect x="-55" y="-14" width="110" height="28" rx="14" fill="#764ba2" fill-opacity="0.15" stroke="#764ba2" stroke-width="1" stroke-opacity="0.4"/>
-      <text y="5" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" fill="#8892b0" font-weight="500">🧩 Modular</text>
-    </g>
-  </g>
-
-  <!-- Version badge -->
-  <g transform="translate(600, 262)">
-    <rect x="-48" y="-12" width="96" height="24" rx="12" fill="#667eea" fill-opacity="0.2" stroke="#667eea" stroke-width="1" stroke-opacity="0.5"/>
-    <text y="4" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ccd6f6" font-weight="600">.NET 10 · C# 14</text>
-  </g>
-
-  <!-- Accent line bottom -->
-  <rect x="0" y="297" width="1200" height="3" fill="url(#accent)"/>
+  <text x="600.0" y="208.6" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="17" font-weight="400" letter-spacing="1.0" fill="#A8A8A8">Low-latency binary realtime networking for .NET</text>
+  <rect x="247.7" y="229.6" width="106.6" height="26" rx="13.0" fill="#FFFFFF" fill-opacity="0.04" stroke="#FFFFFF" stroke-opacity="0.16"/><text x="301.0" y="246.8" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="11.4" font-weight="500" fill="#BDBDBD">Zero-Alloc</text><rect x="364.7" y="229.6" width="126.1" height="26" rx="13.0" fill="#FFFFFF" fill-opacity="0.04" stroke="#FFFFFF" stroke-opacity="0.16"/><text x="427.8" y="246.8" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="11.4" font-weight="500" fill="#BDBDBD">X25519 + AEAD</text><rect x="501.2" y="229.6" width="178.1" height="26" rx="13.0" fill="#FFFFFF" fill-opacity="0.04" stroke="#FFFFFF" stroke-opacity="0.16"/><text x="590.2" y="246.8" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="11.4" font-weight="500" fill="#BDBDBD">TCP · UDP · WebSocket</text><rect x="689.7" y="229.6" width="106.6" height="26" rx="13.0" fill="#FFFFFF" fill-opacity="0.04" stroke="#FFFFFF" stroke-opacity="0.16"/><text x="743.0" y="246.8" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="11.4" font-weight="500" fill="#BDBDBD">Native AOT</text><rect x="806.7" y="229.6" width="145.6" height="26" rx="13.0" fill="#FFFFFF" fill-opacity="0.04" stroke="#FFFFFF" stroke-opacity="0.16"/><text x="879.5" y="246.8" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="11.4" font-weight="500" fill="#BDBDBD">Source-Generated</text>
+  
 </svg>
