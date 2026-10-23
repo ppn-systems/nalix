@@ -76,11 +76,6 @@ internal sealed class UdpFrameSender : IDisposable
 
             uint? seqToUse = encrypt ? _sequence.Next() : null;
 
-            if (_state.Secret.IsZero)
-            {
-                throw new CipherException("Cannot send UDP datagram before session secret is established.");
-            }
-
             // Transform outbound: Compress -> Encrypt + Sequence
             FramePipeline.ProcessOutbound(
                 ref current,
