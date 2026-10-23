@@ -203,7 +203,7 @@ public sealed class ListenerMetricsTests
         uint zeroSecretHash = Nalix.Environment.Hashing.XxHash32.Compute(raw.AsSpan(0, dataLen + 32));
         System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(dataLen, 4), zeroSecretHash);
 
-        var lease = Nalix.Environment.Memory.BufferLease.CopyFrom(raw.AsSpan(0, dataLen + 16));
+        var lease = Nalix.Environment.Memory.BufferLease.CopyFrom(raw.AsSpan(0, dataLen + 4));
         listener.InvokeProcessDatagram(lease, clientSocket.LocalEndPoint);
 
         listener.Metrics.DroppedUnauth.Should().Be(1);
@@ -238,7 +238,7 @@ public sealed class ListenerMetricsTests
         uint xxHash = Nalix.Environment.Hashing.XxHash32.Compute(raw.AsSpan(0, dataLen + 32));
         System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(dataLen, 4), xxHash);
 
-        var lease = Nalix.Environment.Memory.BufferLease.CopyFrom(raw.AsSpan(0, dataLen + 16));
+        var lease = Nalix.Environment.Memory.BufferLease.CopyFrom(raw.AsSpan(0, dataLen + 4));
         listener.InvokeProcessDatagram(lease, clientSocket.LocalEndPoint);
 
         listener.Metrics.DroppedUnauth.Should().Be(1);

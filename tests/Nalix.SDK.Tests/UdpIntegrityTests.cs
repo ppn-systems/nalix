@@ -71,8 +71,8 @@ public sealed class UdpIntegrityTests : IDisposable
             // But attacker does NOT know the Connection.Secret.
             using UdpClient attacker = new();
             
-            // Craft a fake datagram: [SessionToken (8)] + [Payload (N)] + [FakeMacTag (16)]
-            byte[] fakePacket = new byte[8 + 10 + 16];
+            // Craft a fake datagram: [SessionToken (8)] + [Payload (N)] + [FakeHash (4)]
+            byte[] fakePacket = new byte[8 + 10 + 4];
             System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(fakePacket.AsSpan(0, 8), session.State.SessionToken);
             
             // Attacker sends 20 spoofed packets

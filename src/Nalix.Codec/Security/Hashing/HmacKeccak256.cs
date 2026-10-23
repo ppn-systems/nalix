@@ -12,10 +12,7 @@ namespace Nalix.Codec.Security.Hashing;
 public static class HmacKeccak256
 {
     private const int BlockSize = 136;
-    /// <summary>
-    /// Output size of HMAC-Keccak256 in bytes (32 bytes).
-    /// </summary>
-    public const int HashSize = 32;
+    private const int HashSize = 32;
 
     /// <summary>
     /// Computes HMAC-Keccak256 of the specified data using the given key.

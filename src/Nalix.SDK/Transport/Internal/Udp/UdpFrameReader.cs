@@ -8,10 +8,9 @@ using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Primitives;
-using Nalix.Codec.Security.Hashing;
-using Nalix.Codec.Security.Primitives;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
+using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Options;
 using Nalix.Environment.Sequencing;
@@ -26,7 +25,7 @@ namespace Nalix.SDK.Transport.Internal.Udp;
 /// </summary>
 internal sealed class UdpFrameReader : IDisposable
 {
-    private const int UdpMacTagSize = 16;
+    private const int UdpMacTagSize = XxHash32.KeyedTagSize;
     private static readonly SequenceOptions s_sequenceOptions = ConfigurationManager.Instance.Get<SequenceOptions>();
 
     private readonly SessionState _state;
@@ -145,12 +144,7 @@ internal sealed class UdpFrameReader : IDisposable
 
             int dataLen = datagram.Length - UdpMacTagSize;
             ReadOnlySpan<byte> receivedTag = datagram.Span.Slice(dataLen, UdpMacTagSize);
-            Span<byte> computedMac = stackalloc byte[HmacKeccak256.HashSize];
-            HmacKeccak256.Compute(_state.Secret.AsSpan(), datagram.Span[..dataLen], computedMac);
-            bool macValid = BitwiseOperations.FixedTimeEquals(receivedTag, computedMac[..UdpMacTagSize]);
-            computedMac.Clear();
-
-            if (!macValid)
+            if (!XxHash32.VerifyKeyedTag(_state.Secret.AsSpan(), datagram.Span[..dataLen], receivedTag))
             {
                 return; // Drop spoofed packet
             }

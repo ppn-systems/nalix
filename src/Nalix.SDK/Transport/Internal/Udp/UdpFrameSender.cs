@@ -9,8 +9,8 @@ using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Identity;
-using Nalix.Codec.Security.Hashing;
 using Nalix.Codec.Transforms;
+using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Sequencing;
 using Nalix.SDK.Options;
@@ -23,7 +23,7 @@ namespace Nalix.SDK.Transport.Internal.Udp;
 /// </summary>
 internal sealed class UdpFrameSender : IDisposable
 {
-    private const int UdpMacTagSize = 16;
+    private const int UdpMacTagSize = XxHash32.KeyedTagSize;
     private readonly SessionState _state;
     private readonly Func<Socket> _getSocket;
     private readonly SequenceCounter _sequence;
@@ -97,7 +97,7 @@ internal sealed class UdpFrameSender : IDisposable
                     $"UDP datagram too large after transformation: {current.Length + ISnowflake.Size + UdpMacTagSize} bytes. Max = {_options.MaxUdpDatagramSize}");
             }
 
-            // Envelope: [SessionToken (8 bytes) | Transformed Payload | HMAC-Keccak256 Tag (16 bytes)]
+            // Envelope: [SessionToken (8 bytes) | Transformed Payload | Keyed MAC Tag (4 bytes)]
             int dataLen = ISnowflake.Size + current.Length;
             using BufferLease finalLease = BufferLease.Rent(dataLen + UdpMacTagSize);
 
@@ -107,11 +107,11 @@ internal sealed class UdpFrameSender : IDisposable
             // 2. Write Transformed Payload
             current.Span.CopyTo(finalLease.SpanFull[ISnowflake.Size..]);
 
-            // 3. Compute 128-bit truncated HMAC-Keccak256 tag without copying Secret into the packet buffer
-            Span<byte> computedMac = stackalloc byte[HmacKeccak256.HashSize];
-            HmacKeccak256.Compute(_state.Secret.AsSpan(), finalLease.SpanFull[..dataLen], computedMac);
-            computedMac[..UdpMacTagSize].CopyTo(finalLease.SpanFull.Slice(dataLen, UdpMacTagSize));
-            computedMac.Clear();
+            // 3. Compute keyed MAC tag without copying Secret into the packet buffer
+            XxHash32.ComputeKeyedTag(
+                _state.Secret.AsSpan(),
+                finalLease.SpanFull[..dataLen],
+                finalLease.SpanFull.Slice(dataLen, UdpMacTagSize));
 
             // 4. Commit the final datagram length (Token + Payload + Tag)
             finalLease.CommitLength(dataLen + UdpMacTagSize);

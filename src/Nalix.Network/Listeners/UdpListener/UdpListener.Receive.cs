@@ -14,9 +14,8 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Identity;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Primitives;
-using Nalix.Codec.Security.Hashing;
-using Nalix.Codec.Security.Primitives;
 using Nalix.Environment.Extensions;
+using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 using Nalix.Framework.Identifiers;
 using Nalix.Network.Connections;
@@ -40,7 +39,7 @@ public abstract partial class UdpListenerBase
     /// only non-sensitive game-state data (movement, actions, etc.).
     /// </remarks>
     private const int SessionTokenSize = Snowflake.Size;
-    private const int UdpMacTagSize = 16;
+    private const int UdpMacTagSize = XxHash32.KeyedTagSize;
 
     #endregion Datagram Layout
 
@@ -354,12 +353,7 @@ public abstract partial class UdpListenerBase
 
         int dataLen = lease.Length - UdpMacTagSize;
         ReadOnlySpan<byte> receivedTag = lease.Span.Slice(dataLen, UdpMacTagSize);
-        Span<byte> computedMac = stackalloc byte[HmacKeccak256.HashSize];
-        HmacKeccak256.Compute(connection.Secret.AsSpan(), lease.Span[..dataLen], computedMac);
-        bool macValid = BitwiseOperations.FixedTimeEquals(receivedTag, computedMac[..UdpMacTagSize]);
-        computedMac.Clear();
-
-        if (!macValid)
+        if (!XxHash32.VerifyKeyedTag(connection.Secret.AsSpan(), lease.Span[..dataLen], receivedTag))
         {
             this.Metrics.RECORD_DROP_UNAUTH();
             lease.Dispose();

@@ -9,8 +9,8 @@ using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
-using Nalix.Codec.Security.Hashing;
 using Nalix.Codec.Transforms;
+using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 
 namespace Nalix.Runtime.Internal.Pipelines;
@@ -21,7 +21,7 @@ namespace Nalix.Runtime.Internal.Pipelines;
 /// </summary>
 internal static class PacketPipeline
 {
-    private const int UdpMacTagSize = 16;
+    private const int UdpMacTagSize = XxHash32.KeyedTagSize;
     /// <summary>
     /// Serializes a packet into a pooled BufferLease.
     /// The caller owns the returned lease and must dispose it.
@@ -214,10 +214,10 @@ internal static class PacketPipeline
         {
             current.Span.CopyTo(signedLease.SpanFull);
 
-            Span<byte> computedMac = stackalloc byte[HmacKeccak256.HashSize];
-            HmacKeccak256.Compute(connection.Secret.AsSpan(), signedLease.SpanFull[..dataLen], computedMac);
-            computedMac[..UdpMacTagSize].CopyTo(signedLease.SpanFull.Slice(dataLen, UdpMacTagSize));
-            computedMac.Clear();
+            XxHash32.ComputeKeyedTag(
+                connection.Secret.AsSpan(),
+                signedLease.SpanFull[..dataLen],
+                signedLease.SpanFull.Slice(dataLen, UdpMacTagSize));
 
             signedLease.CommitLength(dataLen + UdpMacTagSize);
 
