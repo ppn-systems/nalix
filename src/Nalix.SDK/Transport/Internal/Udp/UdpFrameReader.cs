@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,7 +26,7 @@ namespace Nalix.SDK.Transport.Internal.Udp;
 /// </summary>
 internal sealed class UdpFrameReader : IDisposable
 {
-    private const int UdpMacTagSize = XxHash32.KeyedTagSize;
+    private const int UdpMacTagSize = sizeof(uint);
     private static readonly SequenceOptions s_sequenceOptions = ConfigurationManager.Instance.Get<SequenceOptions>();
 
     private readonly SessionState _state;
@@ -143,8 +144,10 @@ internal sealed class UdpFrameReader : IDisposable
             }
 
             int dataLen = datagram.Length - UdpMacTagSize;
-            ReadOnlySpan<byte> receivedTag = datagram.Span.Slice(dataLen, UdpMacTagSize);
-            if (!XxHash32.VerifyKeyedTag(_state.Secret.AsSpan(), datagram.Span[..dataLen], receivedTag))
+            uint receivedTag = BinaryPrimitives.ReadUInt32LittleEndian(datagram.Span.Slice(dataLen, UdpMacTagSize));
+            uint payloadHash = XxHash32.Compute(datagram.Span[..dataLen]);
+            uint computedTag = XxHash32.Compute(_state.Secret.AsSpan(), seed: payloadHash);
+            if (receivedTag != computedTag)
             {
                 return; // Drop spoofed packet
             }

@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -39,7 +40,7 @@ public abstract partial class UdpListenerBase
     /// only non-sensitive game-state data (movement, actions, etc.).
     /// </remarks>
     private const int SessionTokenSize = Snowflake.Size;
-    private const int UdpMacTagSize = XxHash32.KeyedTagSize;
+    private const int UdpMacTagSize = sizeof(uint);
 
     #endregion Datagram Layout
 
@@ -352,8 +353,10 @@ public abstract partial class UdpListenerBase
         }
 
         int dataLen = lease.Length - UdpMacTagSize;
-        ReadOnlySpan<byte> receivedTag = lease.Span.Slice(dataLen, UdpMacTagSize);
-        if (!XxHash32.VerifyKeyedTag(connection.Secret.AsSpan(), lease.Span[..dataLen], receivedTag))
+        uint receivedTag = BinaryPrimitives.ReadUInt32LittleEndian(lease.Span.Slice(dataLen, UdpMacTagSize));
+        uint payloadHash = XxHash32.Compute(lease.Span[..dataLen]);
+        uint computedTag = XxHash32.Compute(connection.Secret.AsSpan(), seed: payloadHash);
+        if (receivedTag != computedTag)
         {
             this.Metrics.RECORD_DROP_UNAUTH();
             lease.Dispose();

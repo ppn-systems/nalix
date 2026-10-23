@@ -169,11 +169,11 @@ public sealed class UdpIntegrityTests : IDisposable
             await tcpSession.ConnectAsync();
             await tcpSession.HandshakeAsync();
 
-            // Craft a UDP datagram whose outer tag is computed with non-cryptographic XxHash32(data || Secret)
+            // Craft a UDP datagram whose outer tag is computed with unseeded concatenated XxHash32(data || Secret)
             // and whose inner frame has seq = 500.
-            // On unpatched code (XxHash32), the server accepts it and advances UDP ReceiveSequence to 500,
+            // On unpatched code (concatenated XxHash32), the server accepts it and advances UDP ReceiveSequence to 500,
             // causing a subsequent legitimate udpSession.PingAsync() (seq = 1) to be dropped as old/replay!
-            // On patched code (cryptographic MAC), the XxHash32-tagged packet is rejected at UdpListener,
+            // On patched code (2-step seeded XxHash32), the concatenated-tagged packet is rejected at UdpListener,
             // so udpSession.PingAsync() (seq = 1) succeeds.
             TimeSync ping500 = new();
             ping500.Initialize(Nalix.Abstractions.Networking.Protocols.ControlType.PING, 7777, PacketFlags.NONE);
@@ -257,10 +257,9 @@ public sealed class UdpIntegrityTests : IDisposable
             TransportOptions options = new() { Algorithm = CipherSuiteType.Chacha20Poly1305 };
             using TcpSession session = new(options);
             int delivered = 0;
-            session.OnMessageReceived += (_, lease) =>
+            session.OnMessageReceived += (_, _) =>
             {
                 delivered++;
-                lease.Dispose();
             };
 
             Span<byte> secretBytes = stackalloc byte[32];

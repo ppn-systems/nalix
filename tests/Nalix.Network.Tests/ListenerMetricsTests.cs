@@ -196,11 +196,12 @@ public sealed class ListenerMetricsTests
 
         listener.ResolvedConnection = conn;
 
-        // Craft a packet signed with Bytes32.Zero using XxHash32
+        // Craft a packet signed with Bytes32.Zero using seeded XxHash32
         int dataLen = 8 + Nalix.Abstractions.Primitives.PacketHeader.Size + 4;
-        byte[] raw = new byte[dataLen + 32];
+        byte[] raw = new byte[dataLen + 4];
         System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(raw.AsSpan(0, 8), conn.ConnectionId);
-        uint zeroSecretHash = Nalix.Environment.Hashing.XxHash32.Compute(raw.AsSpan(0, dataLen + 32));
+        uint payloadHash = Nalix.Environment.Hashing.XxHash32.Compute(raw.AsSpan(0, dataLen));
+        uint zeroSecretHash = Nalix.Environment.Hashing.XxHash32.Compute(conn.Secret.AsSpan(), seed: payloadHash);
         System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(dataLen, 4), zeroSecretHash);
 
         var lease = Nalix.Environment.Memory.BufferLease.CopyFrom(raw.AsSpan(0, dataLen + 4));
@@ -211,7 +212,7 @@ public sealed class ListenerMetricsTests
     }
 
     [Fact]
-    public void UdpProcessDatagram_WhenAuthenticatedWithXxHash32InsteadOfHmac_DropsPacketAsUnauth()
+    public void UdpProcessDatagram_WhenAuthenticatedWithUnseededConcatenatedXxHash32_DropsPacketAsUnauth()
     {
         var protocol = Substitute.For<IProtocol>();
         var hub = Substitute.For<IConnectionHub>();

@@ -23,7 +23,7 @@ namespace Nalix.SDK.Transport.Internal.Udp;
 /// </summary>
 internal sealed class UdpFrameSender : IDisposable
 {
-    private const int UdpMacTagSize = XxHash32.KeyedTagSize;
+    private const int UdpMacTagSize = sizeof(uint);
     private readonly SessionState _state;
     private readonly Func<Socket> _getSocket;
     private readonly SequenceCounter _sequence;
@@ -107,11 +107,10 @@ internal sealed class UdpFrameSender : IDisposable
             // 2. Write Transformed Payload
             current.Span.CopyTo(finalLease.SpanFull[ISnowflake.Size..]);
 
-            // 3. Compute keyed MAC tag without copying Secret into the packet buffer
-            XxHash32.ComputeKeyedTag(
-                _state.Secret.AsSpan(),
-                finalLease.SpanFull[..dataLen],
-                finalLease.SpanFull.Slice(dataLen, UdpMacTagSize));
+            // 3. Compute seeded XxHash32 tag without copying Secret into the packet buffer
+            uint payloadHash = XxHash32.Compute(finalLease.SpanFull[..dataLen]);
+            uint computedTag = XxHash32.Compute(_state.Secret.AsSpan(), seed: payloadHash);
+            BinaryPrimitives.WriteUInt32LittleEndian(finalLease.SpanFull.Slice(dataLen, UdpMacTagSize), computedTag);
 
             // 4. Commit the final datagram length (Token + Payload + Tag)
             finalLease.CommitLength(dataLen + UdpMacTagSize);

@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,7 +22,7 @@ namespace Nalix.Runtime.Internal.Pipelines;
 /// </summary>
 internal static class PacketPipeline
 {
-    private const int UdpMacTagSize = XxHash32.KeyedTagSize;
+    private const int UdpMacTagSize = sizeof(uint);
     /// <summary>
     /// Serializes a packet into a pooled BufferLease.
     /// The caller owns the returned lease and must dispose it.
@@ -214,10 +215,9 @@ internal static class PacketPipeline
         {
             current.Span.CopyTo(signedLease.SpanFull);
 
-            XxHash32.ComputeKeyedTag(
-                connection.Secret.AsSpan(),
-                signedLease.SpanFull[..dataLen],
-                signedLease.SpanFull.Slice(dataLen, UdpMacTagSize));
+            uint payloadHash = XxHash32.Compute(signedLease.SpanFull[..dataLen]);
+            uint computedTag = XxHash32.Compute(connection.Secret.AsSpan(), seed: payloadHash);
+            BinaryPrimitives.WriteUInt32LittleEndian(signedLease.SpanFull.Slice(dataLen, UdpMacTagSize), computedTag);
 
             signedLease.CommitLength(dataLen + UdpMacTagSize);
 
