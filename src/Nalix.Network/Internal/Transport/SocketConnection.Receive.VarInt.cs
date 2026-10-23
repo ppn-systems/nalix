@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Packets;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Time;
 
@@ -201,6 +202,18 @@ internal sealed partial class SocketConnection
 
         BufferLease lease = BufferLease.CopyFrom(rawPayloadSpan);
         lease.IsReliable = true;
+
+        if (payloadLen < PacketConstants.HeaderSize)
+        {
+#if DEBUG
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning, new DiagnosticLog("NW.SocketConnection:Internal", $"malformed-payload (too small for protocol header) payload-length={payloadLen} endpoint={_endpointString}"));
+            }
+#endif
+            lease.Dispose();
+            return;
+        }
 
         this.LastPingTime = Clock.UnixMillisecondsNow();
 

@@ -110,11 +110,11 @@ public sealed class SocketConnectionFragmentationTests
         };
 
         connection.TCP.BeginReceive();
-        await scope.ClientSocket.SendAsync(CreateFrame(CreateFragmentPayload([9, 8, 7])));
+        await scope.ClientSocket.SendAsync(CreateFrame(CreateFragmentPayload([9, 8, 7, 6, 5, 4])));
 
         byte[] receivedPayload = await processObserved.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
-        receivedPayload.Should().Equal([9, 8, 7]);
+        receivedPayload.Should().Equal([9, 8, 7, 6, 5, 4]);
         GetFragmentAssembler(connection).Should().NotBeNull();
     }
 

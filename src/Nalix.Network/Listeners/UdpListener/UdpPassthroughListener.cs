@@ -143,13 +143,6 @@ public sealed class UdpPassthroughListener : UdpListenerBase
         }
 
         connection.LastPingTime = Clock.UnixMillisecondsNow();
-
-        if (_timing is not null && !connection.IsRegisteredInWheel)
-        {
-            connection.ConnectionClosed += this.OnConnectionClosed;
-            _timing.Register(connection);
-        }
-
         connection.BindUdp(this.ListenerSocket!, ipEndPoint);
 
         if (!connection.TryAcquirePendingPacket())
@@ -223,6 +216,11 @@ public sealed class UdpPassthroughListener : UdpListenerBase
                 lease.Dispose();
                 return null;
             }
+        }
+        else
+        {
+            connection.ConnectionClosed += this.OnConnectionClosed;
+            _timing?.Register(connection);
         }
 
         return connection;

@@ -325,6 +325,17 @@ internal readonly struct SocketEndpoint : INetworkEndpoint, IEquatable<SocketEnd
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static SocketEndpoint FromRawBytes(ReadOnlySpan<byte> addressBytes, int port, bool isIPv6)
     {
+        if (isIPv6 && addressBytes.Length == 16 &&
+            BinaryPrimitives.ReadUInt64BigEndian(addressBytes[..8]) == 0UL &&
+            addressBytes[8] == 0 &&
+            addressBytes[9] == 0 &&
+            addressBytes[10] == 0xFF &&
+            addressBytes[11] == 0xFF)
+        {
+            addressBytes = addressBytes.Slice(12, 4);
+            isIPv6 = false;
+        }
+
         if (!isIPv6)
         {
             uint v4 = BinaryPrimitives.ReadUInt32BigEndian(addressBytes[..4]);
