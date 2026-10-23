@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Networking.Packets;
@@ -65,7 +64,6 @@ public sealed class TimeSyncExtensionsTests : IDisposable
     }
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
-#endif
 
 
 

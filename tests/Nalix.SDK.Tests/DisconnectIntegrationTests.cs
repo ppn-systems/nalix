@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Networking.Packets;
@@ -60,7 +59,6 @@ public sealed class DisconnectIntegrationTests : IDisposable
     }
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
-#endif
 
 
 

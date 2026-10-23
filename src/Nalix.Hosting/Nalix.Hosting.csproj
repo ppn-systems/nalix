@@ -41,11 +41,6 @@ Nalix.Hosting provides Microsoft-style host and builder APIs for the Nalix ecosy
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(Configuration)' == 'Debug'">
-		<InternalsVisibleTo Include="Nalix.Network.Tests" />
-		<InternalsVisibleTo Include="Nalix.Network.Benchmarks" />
-	</ItemGroup>
-	
 	<ItemGroup>
 	  <Compile Update="Resource.Designer.cs">
 	    <DesignTime>True</DesignTime>

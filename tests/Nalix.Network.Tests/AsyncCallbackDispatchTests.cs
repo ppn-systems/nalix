@@ -1,5 +1,4 @@
 using Nalix.Environment.Memory;
-#if DEBUG
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
@@ -143,7 +142,6 @@ public sealed class AsyncCallbackDispatchTests
         InstanceManager.Instance.Register<ObjectPoolManager>(ObjectPoolManager.Shared);
     }
 }
-#endif
 
 
 

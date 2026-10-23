@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Net;
 using System.Threading;
@@ -334,7 +333,6 @@ TestUtils.SetupCertificate();
 
     public void Dispose() => InstanceManager.Instance.Clear(dispose: false);
 }
-#endif
 
 
 

@@ -5,11 +5,9 @@ using Nalix.Network.RateLimiting;
 using Xunit;
 
 
-#if DEBUG
 using System;
 using NSubstitute;
 using Nalix.Abstractions.Networking;
-#endif
 
 namespace Nalix.Network.Tests;
 
@@ -95,7 +93,6 @@ public sealed class ConnectionGuardTests
         guard.TryAccept(remote).Should().BeFalse();
     }
 
-#if DEBUG
     [Fact]
     public void OnConnectionClosed_DecrementsCounter()
     {
@@ -214,7 +211,6 @@ public sealed class ConnectionGuardTests
         entry.BanCount.Should().Be(2);
         entry.BannedUntilTicks.Should().BeGreaterThan(initialBannedUntil);
     }
-#endif
 
     [Fact]
     public void TryAccept_WhenIpBlacklistedInFile_ReturnsFalse()

@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
@@ -442,4 +441,3 @@ public sealed class SocketConnectionFramingAdversarialTests
         }
     }
 }
-#endif

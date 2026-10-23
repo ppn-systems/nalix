@@ -10,7 +10,6 @@ using Xunit;
 
 namespace Nalix.Runtime.Tests;
 
-#if DEBUG
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 public sealed class WorkerWakeSignalTests
 {
@@ -274,4 +273,3 @@ public sealed class WorkerWakeSignalTests
         Assert.True(turns1 - turns0 <= 1, $"consumer kept looping while idle ({turns1 - turns0} turns)");
     }
 }
-#endif

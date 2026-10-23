@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using Nalix.Environment.Random;
 using Xunit;
@@ -62,7 +61,6 @@ public sealed class OsRandomTests
         Assert.False(allZero);
     }
 }
-#endif
 
 
 

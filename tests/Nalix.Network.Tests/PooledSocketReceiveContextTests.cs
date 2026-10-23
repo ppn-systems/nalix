@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
@@ -53,7 +52,6 @@ public sealed class PooledSocketReceiveContextTests
         _ = buffer[0..secondRead].Should().Equal(secondPayload);
     }
 }
-#endif
 
 
 

@@ -7,12 +7,6 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Nalix.Abstractions;
 
-
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-#endif
-
 namespace Nalix.Network.Internal.Pooling;
 
 /// <summary>

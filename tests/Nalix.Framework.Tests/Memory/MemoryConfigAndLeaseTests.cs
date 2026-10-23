@@ -122,6 +122,7 @@ public sealed partial class MemoryTests
         Assert.Equal(zeroOnDispose, sliceLease.ZeroOnDispose);
     }
 
+    // BufferLease.AsSegment is compiled into Debug builds only.
 #if DEBUG
     [Fact]
     public void AsSegment_LeaseContainsData_ReturnsMatchingSegment()

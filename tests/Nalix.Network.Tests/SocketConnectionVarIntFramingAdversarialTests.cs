@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
@@ -242,4 +241,3 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
         }
     }
 }
-#endif

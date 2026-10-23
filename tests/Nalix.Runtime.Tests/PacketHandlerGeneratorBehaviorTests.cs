@@ -36,7 +36,6 @@ namespace Nalix.Runtime.Tests;
 /// instead of <c>return await handler(...)</c> — silently never sending a response.
 /// </para>
 /// </summary>
-#if DEBUG
 public sealed class PacketHandlerGeneratorBehaviorTests
 {
     private static PacketDispatchOptions<EchoPacket> BuildDispatcher(EchoController controller)
@@ -372,7 +371,6 @@ public sealed class PacketHandlerGeneratorBehaviorTests
         public void UpdateIdleTimeout(int newTimeoutMs) => IdleTimeoutMs = newTimeoutMs;
     }
 }
-#endif
 
 /// <summary>
 /// Test-only packet handled by <see cref="EchoController"/>, real generator output flows through it.

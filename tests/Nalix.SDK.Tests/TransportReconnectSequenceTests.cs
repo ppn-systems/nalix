@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -121,4 +120,3 @@ public sealed class TransportReconnectSequenceTests : IDisposable
         public override void ProcessMessage(object? sender, IConnectionEventArgs args) { }
     }
 }
-#endif

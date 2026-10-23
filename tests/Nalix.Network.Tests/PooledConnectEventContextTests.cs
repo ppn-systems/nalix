@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
@@ -403,5 +402,4 @@ public sealed class PooledConnectEventContextTests
 
     #endregion
 }
-#endif
 

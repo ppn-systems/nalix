@@ -15,9 +15,6 @@ using Nalix.Environment.Memory;
 using Nalix.Environment.Sequencing;
 using Nalix.Network.Connections;
 
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-
 namespace Nalix.Network.Internal.Transport;
 
 [SkipLocalsInit]

@@ -23,7 +23,6 @@ using Nalix.SDK.Transport;
 using Nalix.Network.Protocols;
 using FluentAssertions;
 
-#if DEBUG
 namespace Nalix.Network.Tests;
 
 [Collection("NetworkConfigTests")]
@@ -311,4 +310,3 @@ public class WebSocketConnectionTimeoutTests : IDisposable
         Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
     }
 }
-#endif

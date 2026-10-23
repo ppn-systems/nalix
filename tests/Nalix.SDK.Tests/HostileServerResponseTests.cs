@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Buffers.Binary;
 using System.Diagnostics;
@@ -168,4 +167,3 @@ public sealed class HostileServerResponseTests : IDisposable
 
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
-#endif

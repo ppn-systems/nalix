@@ -15,9 +15,7 @@ using Nalix.Network.Connections;
 using Nalix.Runtime.Sessions;
 using NSubstitute;
 
-#if DEBUG
 using Nalix.Runtime.Extensions;
-#endif
 
 namespace Nalix.Network.Tests;
 
@@ -107,7 +105,6 @@ public sealed class ConnectionHubTests
         hub.Count.Should().Be(0);
     }
 
-#if DEBUG
     [Fact]
     public async Task UnregisterConnection_WhenSessionStoreFails_ReclaimsSessionSnapshot()
     {
@@ -149,7 +146,6 @@ public sealed class ConnectionHubTests
         reclaimed.Should().BeTrue("Session secret should be zeroed after store failure.");
         attempted.Snapshot.Attributes.Should().BeNull();
     }
-#endif
 
     private sealed class ConnectedSocketScope : IDisposable
     {

@@ -15,11 +15,6 @@ using Nalix.Network.Internal.Transport;
 using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
 
-#if DEBUG
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Network.Benchmarks")]
-#endif
-
 namespace Nalix.Network.Internal.Security;
 
 /// <summary>

@@ -11,11 +11,6 @@ using System.Runtime.CompilerServices;
 using Nalix.Abstractions.Networking;
 using Nalix.Environment.Hashing;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-#endif
-
 namespace Nalix.Network.Internal.Transport;
 
 [SkipLocalsInit]

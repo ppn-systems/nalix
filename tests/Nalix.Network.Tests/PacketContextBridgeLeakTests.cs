@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
@@ -175,4 +174,3 @@ public sealed class PacketContextBridgeLeakTests
         public void UpdateIdleTimeout(int newTimeoutMs) => IdleTimeoutMs = newTimeoutMs;
     }
 }
-#endif

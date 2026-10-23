@@ -41,6 +41,28 @@
 		<InformationalVersion Condition="'$(InformationalVersion)' == ''">$(Version)+$(SourceRevisionId)</InformationalVersion>
 	</PropertyGroup>
 	
+	<!--
+		Internals are visible to the test and benchmark assemblies in every configuration, so Debug and Release
+		exercise the same tests. A strong-name-signed assembly cannot grant IVT by simple name (CS1726) and a
+		shipped package should not expose internals anyway, so signed builds skip the grant. Test and analysis
+		builds must therefore stay unsigned (they do not need the signing key).
+	-->
+	<ItemGroup Condition="'$(SignAssembly)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Generators'">
+		<InternalsVisibleTo Include="Nalix.Abstractions.Tests" />
+		<InternalsVisibleTo Include="Nalix.Codec.Tests" />
+		<InternalsVisibleTo Include="Nalix.Environment.Tests" />
+		<InternalsVisibleTo Include="Nalix.Framework.Tests" />
+		<InternalsVisibleTo Include="Nalix.Hosting.Tests" />
+		<InternalsVisibleTo Include="Nalix.Integration.Tests" />
+		<InternalsVisibleTo Include="Nalix.Network.Tests" />
+		<InternalsVisibleTo Include="Nalix.Runtime.Tests" />
+		<InternalsVisibleTo Include="Nalix.SDK.Tests" />
+		<InternalsVisibleTo Include="Nalix.Codec.Benchmarks" />
+		<InternalsVisibleTo Include="Nalix.Framework.Benchmarks" />
+		<InternalsVisibleTo Include="Nalix.Network.Benchmarks" />
+		<InternalsVisibleTo Include="Nalix.Runtime.Benchmarks" />
+	</ItemGroup>
+
 	<ItemGroup Condition="'$(PublishAot)' != 'true' And '$(DisableNalixAnalyzers)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Tests'">
 		<ProjectReference Include="$(MSBuildThisFileDirectory)..\analyzers\Nalix.Analyzers\Nalix.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" AdditionalProperties="Configuration=$(Configuration)" />
 		<ProjectReference Include="$(MSBuildThisFileDirectory)..\analyzers\Nalix.Analyzers.CodeFixes\Nalix.Analyzers.CodeFixes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" AdditionalProperties="Configuration=$(Configuration)" />

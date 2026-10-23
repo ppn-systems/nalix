@@ -53,22 +53,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      - name: Restore dependencies
+        run: dotnet restore ./tests/Nalix.Tests.sln
+
+      # Never ship a package whose tests are red. The test build must stay unsigned: a strong-name-signed assembly
+      # cannot grant InternalsVisibleTo by simple name, so the signing key is decoded only after this step.
+      - name: Test
+        timeout-minutes: 20
+        run: dotnet test ./tests/Nalix.Tests.sln --configuration Release --no-restore --blame-hang --blame-hang-timeout 120000
+
       - name: Decode signing key
         shell: bash
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         run: echo "$SIGNING_KEY" | base64 -d > ./src/Nalix.snk
 
-      - name: Restore dependencies
-        run: dotnet restore ./src/Nalix.sln
-
+      # Rebuild everything from scratch so the packed assemblies are the signed, version-stamped ones.
       - name: Build
-        run: dotnet build ./src/Nalix.sln --configuration Release --no-restore /p:Version=${{ env.VERSION }}
-
-      # Never ship a package whose tests are red.
-      - name: Test
-        timeout-minutes: 20
-        run: dotnet test ./tests/Nalix.Tests.sln --configuration Release --blame-hang --blame-hang-timeout 120000
+        run: dotnet build ./src/Nalix.sln --configuration Release --no-restore --no-incremental /p:Version=${{ env.VERSION }}
 
       - name: Pack
         run: dotnet pack ./src/Nalix.sln --configuration Release --no-build --output ./out /p:Version=${{ env.VERSION }}

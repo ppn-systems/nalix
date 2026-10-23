@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Net;
 using System.Threading.Tasks;
@@ -109,7 +108,6 @@ public sealed class RequestIntegrationTests : IDisposable
     }
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
-#endif
 
 
 

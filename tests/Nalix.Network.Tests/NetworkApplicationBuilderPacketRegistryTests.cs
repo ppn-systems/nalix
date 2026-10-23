@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Reflection;
 using Nalix.Abstractions.Networking.Packets;
@@ -23,7 +22,6 @@ public sealed class NetworkApplicationBuilderPacketRegistryTests
         Assert.True(PacketRegistry.DeserializerCount >= 0);
     }
 }
-#endif
 
 
 

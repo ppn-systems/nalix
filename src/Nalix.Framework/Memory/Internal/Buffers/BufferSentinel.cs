@@ -5,10 +5,6 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
-#if DEBUG
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Framework.Tests")]
-#endif
-
 namespace Nalix.Framework.Memory.Internal.Buffers;
 
 internal sealed class BufferSentinel

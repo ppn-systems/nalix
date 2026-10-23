@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Reflection;
 using Nalix.Environment.Configuration.Binding;
 
@@ -64,6 +63,5 @@ public class IniConfigTests : IDisposable
         Assert.Equal(1, occurrences);
     }
 }
-#endif
 
 

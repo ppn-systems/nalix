@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -212,4 +211,3 @@ public sealed class ConnectFailureResilienceTests : IDisposable
 
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
-#endif

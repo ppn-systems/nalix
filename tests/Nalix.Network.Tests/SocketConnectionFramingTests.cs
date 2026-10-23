@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -59,4 +58,3 @@ public class SocketConnectionFramingTests
         Assert.Contains("Framing can only be configured once before receive", ex.Message);
     }
 }
-#endif

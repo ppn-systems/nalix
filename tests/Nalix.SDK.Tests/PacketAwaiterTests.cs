@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Diagnostics.CodeAnalysis;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking.Packets;
@@ -86,7 +85,6 @@ public sealed class PacketAwaiterTests
         public int Serialize(Span<byte> buffer) => 0;
     }
 }
-#endif
 
 
 

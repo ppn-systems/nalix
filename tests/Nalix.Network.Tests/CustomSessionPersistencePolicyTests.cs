@@ -66,7 +66,6 @@ public sealed class CustomSessionPersistencePolicyTests
         attributes.Return();
     }
 
-#if DEBUG
     [Fact]
     public void DefaultSessionPersistencePolicy_Succeeds_WhenHandshakeEstablishedAndEnoughAttributes()
     {
@@ -130,6 +129,5 @@ public sealed class CustomSessionPersistencePolicyTests
 
         attributes.Return();
     }
-#endif
 }
 

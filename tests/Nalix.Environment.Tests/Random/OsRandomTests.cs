@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Threading.Tasks;
 using Nalix.Environment.Random;
@@ -60,6 +59,5 @@ public class OsRandomTests
         }
     }
 }
-#endif
 
 

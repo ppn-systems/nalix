@@ -99,9 +99,7 @@ public sealed class NetworkApplicationIntegrationTests
             h2.OpCode = 0x1234;
             pkt.Header = h2;
 
-#if DEBUG
             Console.WriteLine($"[TEST] Sending packet: OpCode={pkt.Header.OpCode}");
-#endif
             // Disambiguate SendAsync by specifying CancellationToken
             await client.SendAsync(pkt, ct: default);
 

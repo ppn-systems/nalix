@@ -1,7 +1,6 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-#if DEBUG
 using System;
 using System.Buffers.Binary;
 using System.Net;
@@ -420,4 +419,3 @@ public sealed class SdkUpgradeTests : IDisposable
 
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
-#endif

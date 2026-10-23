@@ -18,7 +18,6 @@ using Xunit;
 
 namespace Nalix.Runtime.Tests;
 
-#if DEBUG
 public sealed class MiddlewarePipelineTests
 {
     private static MiddlewarePipeline<IPacket> CreatePipeline() => new();
@@ -278,5 +277,4 @@ public sealed class MiddlewarePipelineTests
             => next(context.CancellationToken);
     }
 }
-#endif
 

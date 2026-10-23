@@ -39,10 +39,15 @@ on:
         required: false
         type: boolean
         default: false
+      configuration:
+        description: "Build configuration (Release | Debug)"
+        required: false
+        type: string
+        default: "Release"
 
 jobs:
   build:
-    name: "Build & Test (${{ inputs.os }})"
+    name: "Build & Test (${{ inputs.os }}, ${{ inputs.configuration }})"
     runs-on: ${{ inputs.os }}
     # Concurrency lives in the caller: a job-level group here made matrix callers on the same OS cancel each other.
     timeout-minutes: 30
@@ -51,8 +56,8 @@ jobs:
       - name: Set environment variables
         shell: bash
         run: |
-          echo "TEST_RESULTS_DIR=artifacts/test-results/${{ runner.os }}" >> "$GITHUB_ENV"
-          echo "COVERAGE_REPORT_DIR=artifacts/coverage/${{ runner.os }}" >> "$GITHUB_ENV"
+          echo "TEST_RESULTS_DIR=artifacts/test-results/${{ runner.os }}-${{ inputs.configuration }}" >> "$GITHUB_ENV"
+          echo "COVERAGE_REPORT_DIR=artifacts/coverage/${{ runner.os }}-${{ inputs.configuration }}" >> "$GITHUB_ENV"
 
       # Real-time scanning of every obj/bin write is the main reason Windows builds lag Linux.
       # Ephemeral GitHub-hosted runner only; the VM is discarded after the job.
@@ -77,17 +82,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Decode signing key
-        shell: bash
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: |
-          if [ -n "$SIGNING_KEY" ]; then
-            echo "$SIGNING_KEY" | base64 -d > "$GITHUB_WORKSPACE/src/Nalix.snk"
-          else
-            echo "SIGNING_KEY is not set. Skipping signing key creation."
-          fi
-
       - name: Restore main project
         if: ${{ inputs.test == '' || inputs.deploy }}
         shell: bash
@@ -102,13 +96,13 @@ jobs:
         if: ${{ inputs.test == '' || inputs.deploy }}
         shell: bash
         timeout-minutes: 15
-        run: dotnet build "${{ inputs.project }}" -c Release --no-restore -m
+        run: dotnet build "${{ inputs.project }}" -c "${{ inputs.configuration }}" --no-restore -m
 
       - name: Build test projects
         if: ${{ inputs.test != '' }}
         shell: bash
         timeout-minutes: 15
-        run: dotnet build "${{ inputs.test }}" -c Release --no-restore -m
+        run: dotnet build "${{ inputs.test }}" -c "${{ inputs.configuration }}" --no-restore -m
 
       - name: Run all tests
         if: ${{ inputs.test != '' }}
@@ -124,7 +118,7 @@ jobs:
             echo "Running tests (Attempt $attempt/$max_retries)..."
             test_args=(
               "${{ inputs.test }}"
-              --configuration Release
+              --configuration "${{ inputs.configuration }}"
               --no-build
               --no-restore
               --logger "trx"
@@ -186,7 +180,7 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           files: ${{ env.TEST_RESULTS_DIR }}/**/coverage.cobertura.xml
-          flags: ${{ runner.os }}
+          flags: ${{ runner.os }}-${{ inputs.configuration }}
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -194,7 +188,7 @@ jobs:
         if: ${{ inputs.test != '' }}
         uses: actions/upload-artifact@v7
         with:
-          name: test-results-${{ runner.os }}
+          name: test-results-${{ runner.os }}-${{ inputs.configuration }}
           path: ${{ github.workspace }}/${{ env.TEST_RESULTS_DIR }}
           if-no-files-found: warn
           compression-level: 0
@@ -203,7 +197,7 @@ jobs:
         if: always() && steps.coverage_files.outputs.found == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-report-${{ runner.os }}
+          name: coverage-report-${{ runner.os }}-${{ inputs.configuration }}
           path: ${{ github.workspace }}/${{ env.COVERAGE_REPORT_DIR }}
           if-no-files-found: warn
           compression-level: 0
@@ -211,13 +205,13 @@ jobs:
       - name: Publish build output
         if: inputs.deploy
         shell: bash
-        run: dotnet publish "${{ inputs.project }}" --configuration Release --no-restore --no-build --output ./publish
+        run: dotnet publish "${{ inputs.project }}" --configuration "${{ inputs.configuration }}" --no-restore --no-build --output ./publish
 
       - name: Upload publish artifact
         if: inputs.deploy
         uses: actions/upload-artifact@v7
         with:
-          name: publish-${{ runner.os }}
+          name: publish-${{ runner.os }}-${{ inputs.configuration }}
           path: ${{ github.workspace }}/publish
           if-no-files-found: warn
           compression-level: 0

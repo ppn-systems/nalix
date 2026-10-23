@@ -26,10 +26,8 @@ using Nalix.Environment.Time;
 using Nalix.Framework.Identifiers;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Connections;
-#if DEBUG
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
-#endif
 using Nalix.Network.Listeners.Udp;
 using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
@@ -145,7 +143,6 @@ public sealed class NetworkGuardProxyTimingWheelReproductionTests
         subnetMapV6.Count.Should().Be(0, "Dispose() must clear _subnetMapV6");
     }
 
-#if DEBUG
     // =========================================================================
     // 1. [HIGH-06] SocketEndpoint.FromRawBytes IPv4-mapped IPv6 normalization
     // =========================================================================
@@ -555,5 +552,4 @@ public sealed class NetworkGuardProxyTimingWheelReproductionTests
             listener.Dispose();
         }
     }
-#endif
 }

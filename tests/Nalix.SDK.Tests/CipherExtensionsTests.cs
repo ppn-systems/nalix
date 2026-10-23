@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Networking.Packets;
@@ -71,5 +70,4 @@ public sealed class CipherExtensionsTests : IDisposable
 
     public void Dispose() => InstanceManager.Instance.Clear(dispose: false);
 }
-#endif
 

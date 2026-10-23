@@ -27,11 +27,6 @@ using Nalix.Network.Options;
 
 #pragma warning disable CA2213 // Disposable fields should be disposed
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-#endif
-
 #nullable enable
 
 namespace Nalix.Network.Internal.Transport;

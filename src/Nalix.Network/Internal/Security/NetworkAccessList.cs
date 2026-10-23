@@ -14,11 +14,6 @@ using Nalix.Environment.IO;
 using Nalix.Network.Internal.Transport;
 using Nalix.Network.Options;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-#endif
-
 namespace Nalix.Network.Internal.Security;
 
 /// <summary>

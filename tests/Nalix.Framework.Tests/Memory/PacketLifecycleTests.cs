@@ -46,7 +46,6 @@ public sealed class PacketLifecycleTests : IDisposable
         Assert.Equal(1L, (long)_manager.GetTypeInfo<Control>()["TotalReturns"]);
     }
 
-#if DEBUG
     [Fact]
     public void PacketBase_AtomicDisposal_PreventsDoubleReturn()
     {
@@ -65,7 +64,6 @@ public sealed class PacketLifecycleTests : IDisposable
         Assert.Equal(0L, (long)_manager.GetTypeInfo<Control>()["Outstanding"]);
         Assert.Equal(1L, (long)_manager.GetTypeInfo<Control>()["TotalReturns"]); // Should NOT be 2
     }
-#endif
 }
 
 

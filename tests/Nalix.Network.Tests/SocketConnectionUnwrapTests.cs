@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -51,5 +50,4 @@ public class SocketConnectionUnwrapTests
         unwrappedSocket.Dispose();
     }
 }
-#endif
 

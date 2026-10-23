@@ -20,7 +20,6 @@ namespace Nalix.Runtime.Tests;
 
 public sealed class PacketSenderTests
 {
-#if DEBUG
     [Fact]
     public async Task ReplyAsync_EchoesRequestSequenceIdOntoResponse()
     {
@@ -35,7 +34,6 @@ public sealed class PacketSenderTests
 
         Assert.Equal((ushort)42, response.Header.SequenceId);
     }
-#endif
 
     private sealed class FakeContext(FakeConnection connection, TestPacket packet) : IPacketContext<TestPacket>
     {

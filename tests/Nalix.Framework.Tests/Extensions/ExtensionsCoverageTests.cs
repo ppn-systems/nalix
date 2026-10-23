@@ -65,6 +65,7 @@ public sealed class ExtensionsCoverageTests
         Assert.Equal(ULongFlags.C, value);
     }
 
+    // EnumExtensions validates the [Flags] contract in Debug builds only.
 #if DEBUG
     [Fact]
     public void EnumExtensionsWhenTypeIsNotFlagsThrowsArgumentExceptionInDebugBuilds()

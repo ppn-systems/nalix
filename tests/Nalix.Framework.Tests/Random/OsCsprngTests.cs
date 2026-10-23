@@ -1,4 +1,3 @@
-#if DEBUG
 using System;
 using Nalix.Environment.Random;
 using Xunit;
@@ -44,7 +43,6 @@ public sealed class OsCsprngTests
         Assert.NotEqual(b1, b2);
     }
 }
-#endif
 
 
 

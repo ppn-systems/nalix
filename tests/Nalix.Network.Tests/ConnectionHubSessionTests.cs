@@ -17,13 +17,10 @@ using Nalix.Network.Connections;
 using Nalix.Runtime.Sessions;
 using Xunit;
 
-#if DEBUG
 using Nalix.Runtime.Extensions;
-#endif
 
 namespace Nalix.Network.Tests;
 
-#if DEBUG
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 public sealed class ConnectionHubSessionTests
 {
@@ -368,6 +365,5 @@ public sealed class ConnectionHubSessionTests
         }
     }
 }
-#endif
 
 

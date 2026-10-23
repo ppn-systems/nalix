@@ -83,7 +83,6 @@ public sealed class RuntimeDispatchAndHandlersTests
 
 
 
-#if DEBUG
     [Fact]
     public void PacketContextDefaultsAndReturn_WhenCalledMultipleTimes_RemainsSafe()
     {
@@ -96,7 +95,6 @@ public sealed class RuntimeDispatchAndHandlersTests
         context.Return();
         context.ResetForPool();
     }
-#endif
 
     [Fact]
     public async Task ConnectionExtensionsSendAsync_WhenSenderIsNull_ThrowsArgumentNullException()
@@ -129,7 +127,6 @@ public sealed class RuntimeDispatchAndHandlersTests
 
 
 
-#if DEBUG
     /// <summary>
     /// Area 4: a packet handler that throws synchronously (before ever returning a ValueTask)
     /// must propagate the exception directly out of ExecuteResolvedHandlerAsync — the terminal
@@ -569,7 +566,6 @@ public sealed class RuntimeDispatchAndHandlersTests
         public int IdleTimeoutMs { get; set; } = 60000;
         public void UpdateIdleTimeout(int newTimeoutMs) => IdleTimeoutMs = newTimeoutMs;
     }
-#endif
 
     private sealed class FakeSessionService : ISessionService
     {

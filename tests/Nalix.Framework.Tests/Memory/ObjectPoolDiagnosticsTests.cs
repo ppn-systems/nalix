@@ -217,7 +217,6 @@ public sealed class ObjectPoolDiagnosticsTests
             .SetValue(manager, size);
     }
 
-#if DEBUG
     [Fact]
     public void Finalizer_LeakDetection_IncrementsCount()
     {
@@ -244,7 +243,6 @@ public sealed class ObjectPoolDiagnosticsTests
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private void CreateLeak(ObjectPoolManager manager) => _ = manager.Get<TestPoolable>();
-#endif
 
     private sealed class DiagnosticCollector : IObserver<KeyValuePair<string, object?>>, IDisposable
     {
