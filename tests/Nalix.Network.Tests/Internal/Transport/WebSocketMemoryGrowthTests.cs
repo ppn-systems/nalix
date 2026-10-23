@@ -20,10 +20,10 @@ using Nalix.Network.Connections;
 using Nalix.Network.Internal.Transport;
 using Nalix.Network.Options;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 [Collection(TestCollections.NetworkConfig)]
-public class WebSocketMemoryGrowthTests : IDisposable
+public sealed class WebSocketMemoryGrowthTests : IDisposable
 {
     private readonly DefaultBufferPoolManager _defaultManager = new();
     private readonly NetworkWebSocketOptions _options;
@@ -136,7 +136,7 @@ public class WebSocketMemoryGrowthTests : IDisposable
     }
 
     [Fact]
-    public async Task HANDLE_LARGE_MESSAGE_ASYNC_DoesNotRentMaxMessageSizeUpfront()
+    public async Task HandleLargeMessage_WithSmallPayload_DoesNotRentMaxMessageSizeUpfront()
     {
         // Arrange
         var spy = new SpyBufferPoolManager();
@@ -168,7 +168,7 @@ public class WebSocketMemoryGrowthTests : IDisposable
     }
 
     [Fact]
-    public async Task HANDLE_LARGE_MESSAGE_ASYNC_ExceedingMaxMessageSize_ThrowsException()
+    public async Task HandleLargeMessage_WhenExceedingMaxMessageSize_ThrowsException()
     {
         // Arrange
         var spy = new SpyBufferPoolManager();
@@ -197,7 +197,7 @@ public class WebSocketMemoryGrowthTests : IDisposable
     }
 
     [Fact]
-    public async Task HANDLE_LARGE_MESSAGE_ASYNC_ReturnsBufferOnExceptionBeforeTakeOwnership()
+    public async Task HandleLargeMessage_WhenExceptionBeforeOwnershipTransfer_ReturnsBuffer()
     {
         // Arrange
         var spy = new SpyBufferPoolManager();
@@ -226,7 +226,7 @@ public class WebSocketMemoryGrowthTests : IDisposable
     }
 
     [Fact]
-    public void WebSocketTransport_SequenceCounter_ReturnsSameReferenceAndPersistsState()
+    public void SequenceCounter_OnWebSocketTransport_ReturnsSameReferenceAndPersistsState()
     {
         // Arrange
         var socket = new StubWebSocket();

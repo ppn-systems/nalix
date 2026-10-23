@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -9,9 +12,9 @@ using Nalix.Abstractions.Networking;
 using Nalix.Network.Internal.Transport;
 using Nalix.Network.Connections;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
-public class SocketConnectionUnwrapTests
+public sealed class SocketConnectionUnwrapTests
 {
     private SocketConnection CreateConnection(out Socket originalSocket)
     {
@@ -26,7 +29,7 @@ public class SocketConnectionUnwrapTests
     }
 
     [Fact]
-    public void Unwrap_DetachesSocket_PreventsDisposal()
+    public void Unwrap_WhenConnectionDisposed_KeepsSocketOpen()
     {
         // Arrange
         var conn = CreateConnection(out var originalSocket);

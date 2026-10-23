@@ -14,9 +14,10 @@ using Nalix.Network.Connections;
 using Nalix.Network.Internal.Time;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Connections;
 
-public sealed class WebSocketTimeoutIntegrationTests : IDisposable
+[Collection(TestCollections.NetworkConfig)]
+public sealed class WebSocketConnectionTimeoutTests : IDisposable
 {
     private sealed class StubOpCodeExtractor : IOpCodeExtractor
     {
@@ -46,7 +47,7 @@ public sealed class WebSocketTimeoutIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void WebSocketConnection_UpdateIdleTimeout_ReregistersInTimingWheel()
+    public void UpdateIdleTimeout_WhenCalled_ReregistersInTimingWheel()
     {
         TimingWheel wheel = InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
         using StubWebSocket socket = new();
@@ -70,7 +71,7 @@ public sealed class WebSocketTimeoutIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void WebSocketConnection_MultipleRapidTimeoutUpdates_DoesNotLeak()
+    public void UpdateIdleTimeout_WithRapidRepeatedUpdates_DoesNotLeak()
     {
         TimingWheel wheel = InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
         using StubWebSocket socket = new();
@@ -92,7 +93,7 @@ public sealed class WebSocketTimeoutIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void WebSocketConnection_WhenExcludedFromTimeout_UnregistersFromWheelOnTick()
+    public void TimingWheelTick_WhenExcludedFromTimeout_UnregistersConnection()
     {
         TimingWheel wheel = InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
         using StubWebSocket socket = new();

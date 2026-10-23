@@ -17,14 +17,14 @@ using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Listeners.WebListener;
 
 [Collection(TestCollections.NetworkConfig)]
-public sealed class WebSocketHealthCheckTests : IDisposable
+public sealed class WebSocketListenerHealthCheckTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-health-{Guid.NewGuid():N}.private");
 
-    public WebSocketHealthCheckTests()
+    public WebSocketListenerHealthCheckTests()
     {
         File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
     }
@@ -67,7 +67,7 @@ public sealed class WebSocketHealthCheckTests : IDisposable
     [InlineData("/readyz")]
     [InlineData("/startupz")]
     [InlineData("/ping")]
-    public async Task WebSocketListener_GetHealthzEndpoint_Returns200OKHealthy(string path)
+    public async Task HealthEndpoint_WithHealthPath_Returns200Healthy(string path)
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -108,7 +108,7 @@ public sealed class WebSocketHealthCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketListener_GetVersionEndpoint_ReturnsCustomConfiguredVersion()
+    public async Task VersionEndpoint_WithConfiguredVersion_ReturnsConfiguredVersion()
     {
         ushort port = GetFreePort();
         var wsOpt = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
@@ -151,7 +151,7 @@ public sealed class WebSocketHealthCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketListener_GetMetricsEndpoint_ReturnsPrometheusFormattedMetrics()
+    public async Task MetricsEndpoint_WhenRequested_ReturnsPrometheusFormattedMetrics()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -191,7 +191,7 @@ public sealed class WebSocketHealthCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketListener_CustomMapGetAndMapPost_AndOverrideMetrics_WorkEndToEnd()
+    public async Task CustomRoutes_WithMapGetMapPostAndMetricsOverride_WorkEndToEnd()
     {
         ushort port = GetFreePort();
         ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
@@ -347,7 +347,7 @@ public sealed class WebSocketHealthCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task WebSocketListener_AbortedAndRejectedHandshakes_ReleasePerIpLimiterSlots()
+    public async Task Handshake_WhenAbortedOrRejected_ReleasesPerIpLimiterSlots()
     {
         ushort port = GetFreePort();
         const int maxPerIp = 2;

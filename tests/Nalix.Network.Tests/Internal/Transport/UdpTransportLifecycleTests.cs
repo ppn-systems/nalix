@@ -10,7 +10,7 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Network.Internal.Transport;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 public sealed class UdpTransportLifecycleTests
 {
@@ -28,7 +28,7 @@ public sealed class UdpTransportLifecycleTests
     }
 
     [Fact]
-    public void Send_PayloadExceedingMaxDatagramSize_ThrowsNetworkException()
+    public void Send_WithPayloadOverMaxDatagramSize_ThrowsNetworkException()
     {
         var (transport, socket) = CreateInitialized();
         try
@@ -45,7 +45,7 @@ public sealed class UdpTransportLifecycleTests
     }
 
     [Fact]
-    public async Task SendAsync_PayloadExceedingMaxDatagramSize_ThrowsNetworkException()
+    public async Task SendAsync_WithPayloadOverMaxDatagramSize_ThrowsNetworkException()
     {
         var (transport, socket) = CreateInitialized();
         try
@@ -62,7 +62,7 @@ public sealed class UdpTransportLifecycleTests
     }
 
     [Fact]
-    public void Send_WithoutInitialize_IsNoOp_DoesNotThrow()
+    public void Send_WithoutInitialize_DoesNotThrow()
     {
         SocketUdpTransport transport = new();
         Action act = () => transport.Send(new byte[] { 1, 2, 3 });
@@ -70,7 +70,7 @@ public sealed class UdpTransportLifecycleTests
     }
 
     [Fact]
-    public void ResetForPool_ZeroesSequenceCountersAndBytes_ForReuse()
+    public void ResetForPool_AfterUse_ZeroesSequenceCountersAndBytes()
     {
         var (transport, socket) = CreateInitialized();
         try
@@ -94,7 +94,7 @@ public sealed class UdpTransportLifecycleTests
     }
 
     [Fact]
-    public void ResetForPool_ReleasesOwnedSocket_ButNotSharedSocket()
+    public void ResetForPool_WithOwnedAndSharedSocket_ReleasesOnlyOwnedSocket()
     {
         // Owned socket: Initialize() created it internally (no SetSocket call).
         SocketUdpTransport owned = new();

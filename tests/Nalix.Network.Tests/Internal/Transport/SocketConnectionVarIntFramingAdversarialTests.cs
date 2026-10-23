@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
@@ -13,7 +16,7 @@ using Nalix.Network.Internal.Transport;
 using Xunit;
 using TransportAsyncCallback = Nalix.Network.Internal.Transport.AsyncCallback;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 /// <summary>
 /// Adversarial coverage for the VarInt (LEB128) length-prefixed framing path
@@ -63,7 +66,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
     /// (even a well-formed one sent right after) is ever dispatched.
     /// </summary>
     [Fact]
-    public async Task DeclaredLength_UIntMaxValueAsLeb128_RejectedAsNegative_ClosesConnection()
+    public async Task BeginReceive_WithUIntMaxValueLeb128Length_ClosesConnectionAndDispatchesNothing()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = await CreateVarIntConnectionAsync(scope);
@@ -99,7 +102,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
     /// attacker-controlled buffer, and the connection must remain usable/disposable.
     /// </summary>
     [Fact]
-    public async Task DeclaredLength_OneByteOverMaxVarIntPayloadSize_RejectedWithoutAllocating()
+    public async Task BeginReceive_WithLengthOneByteOverMaxPayload_RejectsWithoutAllocating()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = await CreateVarIntConnectionAsync(scope);
@@ -129,7 +132,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
     /// GetMessageSize() rather than growing the receive buffer without bound.
     /// </summary>
     [Fact]
-    public async Task DeclaredLength_WithinMaxPayloadSizeButOverReceiveBufferCeiling_RejectedWithoutUnboundedGrowth()
+    public async Task BeginReceive_WithLengthOverReceiveBufferCeiling_RejectsWithoutUnboundedGrowth()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = await CreateVarIntConnectionAsync(scope);
@@ -163,7 +166,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
     [InlineData(2)]
     [InlineData(3)]
     [InlineData(5)]
-    public async Task PartialVarIntFrame_SplitAtEveryChunkSize_ReassemblesExactly(int chunkSize)
+    public async Task BeginReceive_WithVarIntFrameSplitIntoChunks_ReassemblesExactPayload(int chunkSize)
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = await CreateVarIntConnectionAsync(scope);

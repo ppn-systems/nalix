@@ -16,8 +16,9 @@ using Nalix.Network.Connections;
 using Nalix.Runtime.Groups;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Connections;
 
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketGroupBroadcastTests : IDisposable
 {
     private sealed class StubOpCodeExtractor : IOpCodeExtractor
@@ -69,7 +70,7 @@ public sealed class WebSocketGroupBroadcastTests : IDisposable
     }
 
     [Fact]
-    public async Task BroadcastAsync_ToWebSocketConnections_AllReceive()
+    public async Task BroadcastAsync_WithWebSocketConnections_DeliversToAll()
     {
         using ConnectionHub hub = new();
         using TrackingStubWebSocket socket1 = new();
@@ -91,7 +92,7 @@ public sealed class WebSocketGroupBroadcastTests : IDisposable
     }
 
     [Fact]
-    public async Task MulticastAsync_ToGroup_OnlyGroupMembersReceive()
+    public async Task MulticastAsync_WithGroup_DeliversOnlyToGroupMembers()
     {
         using ConnectionHub hub = new();
         InMemoryGroupStore groupStore = new();
@@ -123,7 +124,7 @@ public sealed class WebSocketGroupBroadcastTests : IDisposable
     }
 
     [Fact]
-    public async Task MulticastExceptAsync_ExcludesSpecifiedConnection()
+    public async Task MulticastExceptAsync_WithExcludedConnection_SkipsExcludedConnection()
     {
         using ConnectionHub hub = new();
         InMemoryGroupStore groupStore = new();
@@ -156,7 +157,7 @@ public sealed class WebSocketGroupBroadcastTests : IDisposable
     }
 
     [Fact]
-    public async Task BroadcastAsync_MixedTcpAndWebSocket_BothReceive()
+    public async Task BroadcastAsync_WithMixedTcpAndWebSocket_DeliversToBoth()
     {
         using ConnectionHub hub = new();
         using TrackingStubWebSocket socket1 = new();
@@ -258,7 +259,7 @@ public sealed class WebSocketGroupBroadcastTests : IDisposable
     }
 
     [Fact]
-    public async Task MulticastAsync_EmptyGroup_ReturnsImmediately()
+    public async Task MulticastAsync_WithEmptyGroup_ReturnsImmediately()
     {
         using ConnectionHub hub = new();
         InMemoryGroupStore groupStore = new();
@@ -273,7 +274,7 @@ public sealed class WebSocketGroupBroadcastTests : IDisposable
 
 #pragma warning disable CS0618 // Type or member is obsolete
     [Fact]
-    public async Task BroadcastWhereAsync_WebSocket_FiltersByPredicate()
+    public async Task BroadcastWhereAsync_WithPredicate_DeliversOnlyToMatchingWebSocketConnections()
     {
         using ConnectionHub hub = new();
         using TrackingStubWebSocket socket1 = new();

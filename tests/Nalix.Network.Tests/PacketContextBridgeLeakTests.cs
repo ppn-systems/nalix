@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
@@ -34,7 +37,7 @@ public sealed class PacketContextBridgeLeakTests
     }
 
     [Fact]
-    public void Return_DoesNotDisposeBorrowedPacket_OwnershipStaysWithBaseContext()
+    public void Return_WhenBridgeReturned_DoesNotDisposeBorrowedPacket()
     {
         TestPacket packet = new();
         PacketContext<TestPacket> baseContext = RentInitializedBaseContext();
@@ -50,7 +53,7 @@ public sealed class PacketContextBridgeLeakTests
     }
 
     [Fact]
-    public void Return_ClearsConnectionAndAttributes_PreventingStaleReferenceRetention()
+    public void Create_AfterPreviousBridgeReturned_DoesNotRetainStaleConnection()
     {
         PacketContext<TestPacket> baseContext1 = RentInitializedBaseContext();
         FakeConnection firstConnection = (FakeConnection)baseContext1.Connection;
@@ -77,7 +80,7 @@ public sealed class PacketContextBridgeLeakTests
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
-    public async Task HighConcurrency_CreateReturnRoundTrips_NeverCrashesOrDoubleReturns()
+    public async Task CreateAndReturn_UnderHighConcurrency_CompletesAllRoundTrips()
     {
         const int seed = 20260704;
         const int iterations = 200;

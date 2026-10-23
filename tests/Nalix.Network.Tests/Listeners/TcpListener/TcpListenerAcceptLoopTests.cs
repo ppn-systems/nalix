@@ -13,7 +13,7 @@ using Nalix.Network.Listeners.Tcp;
 using NSubstitute;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Listeners.TcpListener;
 
 /// <summary>
 /// Regression tests for the 2026-07-28 prod incident: a transient ListenerClosed/SocketAborted
@@ -50,7 +50,7 @@ public sealed class TcpListenerAcceptLoopTests
     }
 
     [Fact]
-    public async Task AcceptLoop_TransientListenerClosed_RetriesInsteadOfBreaking()
+    public async Task AcceptConnectionsAsync_WhenListenerSocketClosed_RetriesInsteadOfBreaking()
     {
         var protocol = Substitute.For<IProtocol>();
         var hub = Substitute.For<IConnectionHub>();

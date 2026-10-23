@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
@@ -15,7 +18,7 @@ using Nalix.Network.Internal.Transport;
 using Xunit;
 using TransportAsyncCallback = Nalix.Network.Internal.Transport.AsyncCallback;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 /// <summary>
 /// Area 1 (wire framing/fragmentation) adversarial coverage — length-prefix attacks, partial-frame
@@ -61,7 +64,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// dispatched. See SocketConnection.cs SAEA_RECEIVE_LOOP_ASYNC invalid-size branch.
     /// </summary>
     [Fact]
-    public async Task DeclaredLength_Zero_ClosesConnection_NoFurtherFrameDispatched()
+    public async Task BeginReceive_WithZeroDeclaredLength_ClosesConnectionAndDispatchesNothing()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -101,7 +104,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// the VarInt framing path in <see cref="SocketConnectionVarIntFramingAdversarialTests"/>.
     /// </summary>
     [Fact]
-    public async Task DeclaredLength_UInt16MaxValue_DoesNotAllocateUnboundedBuffer()
+    public async Task BeginReceive_WithUInt16MaxDeclaredLength_DoesNotAllocateUnboundedBuffer()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -139,7 +142,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     [InlineData(3)]
     [InlineData(5)]
     [InlineData(8)]
-    public async Task PartialFrame_SplitAtEveryChunkSize_ReassemblesExactly(int chunkSize)
+    public async Task BeginReceive_WithFrameSplitIntoChunks_ReassemblesExactPayload(int chunkSize)
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -173,7 +176,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// dispatched separately, in order.
     /// </summary>
     [Fact]
-    public async Task TwoFramesCoalescedInOneRead_BothParsedInOrder()
+    public async Task BeginReceive_WithTwoCoalescedFrames_DispatchesBothInOrder()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -216,7 +219,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// must be dispatched, and the truncated remainder must not be dispatched nor crash the loop.
     /// </summary>
     [Fact]
-    public async Task ValidFrameFollowedByTruncatedFrame_OnlyValidFrameDispatched()
+    public async Task BeginReceive_WithValidFrameThenTruncatedFrame_DispatchesOnlyValidFrame()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -254,7 +257,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// crash the loop or get dispatched as a spurious frame.
     /// </summary>
     [Fact]
-    public async Task TrailingGarbageAfterValidFrame_DoesNotCrashOrDispatchSpuriously()
+    public async Task BeginReceive_WithTrailingGarbageByte_DispatchesOnlyValidFrame()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -292,7 +295,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// through a live socket is not deterministically reproducible with TCP's in-order guarantee.
     /// </summary>
     [Fact]
-    public void FragmentAssembler_DuplicateChunkIndex_ThrowsInvalidDataException()
+    public void Add_WithDuplicateChunkIndex_ThrowsInvalidDataException()
     {
         using FragmentAssembler assembler = new();
         FragmentHeader first = new(streamId: 5, chunkIndex: 0, totalChunks: 2, isLast: false);
@@ -310,7 +313,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// <see cref="System.IO.InvalidDataException"/> immediately, before any buffer growth.
     /// </summary>
     [Fact]
-    public void FragmentAssembler_ChunkIndexAtOrBeyondTotalChunks_ThrowsInvalidDataException()
+    public void Add_WithChunkIndexAtTotalChunks_ThrowsInvalidDataException()
     {
         using FragmentAssembler assembler = new();
         FragmentHeader bogus = new(streamId: 7, chunkIndex: 3, totalChunks: 3, isLast: true);
@@ -325,7 +328,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// once its configured timeout elapses — the stream must not leak indefinitely.
     /// </summary>
     [Fact]
-    public void FragmentAssembler_NeverCompletedStream_IsEvictedAfterTimeout()
+    public void EvictExpired_WithIncompleteStreamPastTimeout_EvictsStream()
     {
         using FragmentAssembler assembler = new() { StreamTimeoutMs = 1 };
         FragmentHeader header = new(streamId: 11, chunkIndex: 0, totalChunks: 5, isLast: false);
@@ -346,7 +349,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// must reject the excess streams (SEC-34 guard) instead of allocating unbounded memory.
     /// </summary>
     [Fact]
-    public void FragmentAssembler_ExceedingMaxOpenStreams_RejectsExcessStreams()
+    public void Add_WhenMaxOpenStreamsExceeded_RejectsExcessStream()
     {
         using FragmentAssembler assembler = new() { MaxOpenStreams = 2 };
 
@@ -369,7 +372,7 @@ public sealed class SocketConnectionFramingAdversarialTests
     /// unhandled exception that escapes the async loop.
     /// </summary>
     [Fact]
-    public async Task RemoteHalfCloseMidFrame_EndsReceiveLoopCleanly()
+    public async Task BeginReceive_WithHalfCloseMidFrame_EndsReceiveLoopCleanly()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);

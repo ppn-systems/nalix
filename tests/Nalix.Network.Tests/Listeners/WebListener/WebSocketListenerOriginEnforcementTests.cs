@@ -14,20 +14,20 @@ using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Listeners.WebListener;
 
 /// <summary>
 /// End-to-end CSWSH enforcement on the real WebSocket listener: a disallowed or (when configured)
 /// missing <c>Origin</c> must get <c>403 Forbidden</c> before the upgrade and never register a connection.
 /// </summary>
 [Collection(TestCollections.NetworkConfig)]
-public sealed class WebSocketOriginEnforcementTests : IDisposable
+public sealed class WebSocketListenerOriginEnforcementTests : IDisposable
 {
     private const string Allowed = "https://app.example.com";
 
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-origin-{Guid.NewGuid():N}.private");
 
-    public WebSocketOriginEnforcementTests()
+    public WebSocketListenerOriginEnforcementTests()
     {
         File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
     }
@@ -48,7 +48,7 @@ public sealed class WebSocketOriginEnforcementTests : IDisposable
     }
 
     [Fact]
-    public async Task Upgrade_EmptyAllowlist_AcceptsAnyOrigin_LegacyDefault()
+    public async Task Upgrade_WithEmptyAllowlist_AcceptsAnyOrigin()
     {
         string response = await this.SendUpgradeAsync(string.Empty, allowMissing: false, origin: "https://evil.example");
 
@@ -68,10 +68,10 @@ public sealed class WebSocketOriginEnforcementTests : IDisposable
         });
         builder.UseSecureConnections(_certificatePath);
         builder.UseConnectionHub(hub);
-        builder.MapWebSocket<WebSocketHealthCheckTests.HealthTestProtocol>()
+        builder.MapWebSocket<WebSocketListenerHealthCheckTests.HealthTestProtocol>()
                .OnPort(port)
                .WithPath("/ws/")
-               .WithFactory(_ => new WebSocketHealthCheckTests.HealthTestProtocol());
+               .WithFactory(_ => new WebSocketListenerHealthCheckTests.HealthTestProtocol());
 
         using var app = builder.Build();
         await app.ActivateAsync();

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
@@ -13,7 +16,7 @@ using Nalix.Network.Internal.Transport;
 using Xunit;
 using TransportAsyncCallback = Nalix.Network.Internal.Transport.AsyncCallback;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Network.Tests.Internal.Transport;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 [Collection(TestCollections.AsyncCallback)]
@@ -60,7 +63,7 @@ public sealed class SocketConnectionFragmentationTests
     }
 
     [Fact]
-    public async Task BeginReceive_NonFragmentedFrame_DoesNotCreateFragmentAssembler()
+    public async Task BeginReceive_WithNonFragmentedFrame_DoesNotCreateFragmentAssembler()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -89,7 +92,7 @@ public sealed class SocketConnectionFragmentationTests
     }
 
     [Fact]
-    public async Task BeginReceive_FragmentedFrame_CreatesFragmentAssemblerOnDemand()
+    public async Task BeginReceive_WithFragmentedFrame_CreatesFragmentAssemblerOnDemand()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -118,7 +121,7 @@ public sealed class SocketConnectionFragmentationTests
     }
 
     [Fact]
-    public async Task BeginReceive_DuplicateChunkZeroAndCorruptedStreams_DoesNotLeakOpenFragmentStreamsQuota()
+    public async Task BeginReceive_WithDuplicateChunkZeroStreams_DoesNotLeakOpenFragmentStreamsQuota()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
