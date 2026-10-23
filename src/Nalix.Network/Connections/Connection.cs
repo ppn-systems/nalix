@@ -46,7 +46,6 @@ public sealed partial class Connection :
     #region Fields
 
     private static readonly ObjectPoolManager s_pool;
-    private static readonly TimingWheel s_timingWheel;
 
     private static readonly ConnectionGuardOptions s_options;
     private static readonly DatagramGuardOptions s_datagramOptions;
@@ -54,6 +53,7 @@ public sealed partial class Connection :
     private static readonly NetworkCallbackOptions s_callbackOptions;
 
     private ConnectionBacking? _backing;
+    private readonly TimingWheel _timingWheel;
 
     private volatile bool _disposed;
 
@@ -68,7 +68,6 @@ public sealed partial class Connection :
 
         s_pool = ObjectPoolManager.Shared;
         s_options = ConfigurationManager.Instance.Get<ConnectionGuardOptions>();
-        s_timingWheel = InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
         s_datagramOptions = ConfigurationManager.Instance.Get<DatagramGuardOptions>();
         s_callbackOptions = ConfigurationManager.Instance.Get<NetworkCallbackOptions>();
         s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
@@ -81,7 +80,7 @@ public sealed partial class Connection :
     /// <param name="packetClassifier">The opcode extractor for classifying incoming packets.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="socket"/> is null.</exception>
     public Connection(Socket socket, IOpCodeExtractor packetClassifier)
-        : this(socket, packetClassifier, socket?.RemoteEndPoint ?? throw new InternalErrorException("Socket does not expose a remote endpoint."))
+        : this(socket, packetClassifier, socket?.RemoteEndPoint ?? throw new InternalErrorException("Socket does not expose a remote endpoint."), timingWheel: null)
     {
     }
 
@@ -90,11 +89,22 @@ public sealed partial class Connection :
     /// Use this overload when the TCP peer is a proxy that injects a PROXY header.
     /// </summary>
     public Connection(Socket socket, IOpCodeExtractor packetClassifier, System.Net.EndPoint realEndPoint)
+        : this(socket, packetClassifier, realEndPoint, timingWheel: null)
+    {
+    }
+
+    internal Connection(Socket socket, IOpCodeExtractor packetClassifier, TimingWheel timingWheel)
+        : this(socket, packetClassifier, socket?.RemoteEndPoint ?? throw new InternalErrorException("Socket does not expose a remote endpoint."), timingWheel)
+    {
+    }
+
+    internal Connection(Socket socket, IOpCodeExtractor packetClassifier, System.Net.EndPoint realEndPoint, TimingWheel? timingWheel)
     {
         ArgumentNullException.ThrowIfNull(realEndPoint);
         ArgumentNullException.ThrowIfNull(packetClassifier);
 
         _disposed = false;
+        _timingWheel = timingWheel ?? InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
 
         _backing = s_pool.Get<ConnectionBacking>();
         _backing.Initialize();
@@ -457,8 +467,8 @@ public sealed partial class Connection :
 
         this.IdleTimeoutMs = newTimeoutMs;
 
-        s_timingWheel.Unregister(this);
-        s_timingWheel.Register(this);
+        _timingWheel.Unregister(this);
+        _timingWheel.Register(this);
     }
 
     #endregion Methods

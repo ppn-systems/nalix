@@ -63,12 +63,12 @@ public sealed class PassthroughConnection :
     #region Fields
 
     private static readonly ObjectPoolManager s_pool;
-    private static readonly TimingWheel s_timingWheel;
 
     private static readonly TimingWheelOptions s_timingWheelOptions;
 
     private readonly long _createdAtMs;
     private readonly EndPoint _endPointKey;
+    private readonly TimingWheel _timingWheel;
 
     private SocketUdpTransport? _udpTransport;
     private IObjectMap<AttributeKey, object>? _attributes;
@@ -85,7 +85,6 @@ public sealed class PassthroughConnection :
     static PassthroughConnection()
     {
         s_pool = ObjectPoolManager.Shared;
-        s_timingWheel = InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
 
         s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
     }
@@ -97,9 +96,16 @@ public sealed class PassthroughConnection :
     /// <param name="remoteEndPoint">The remote UDP endpoint (must be an <see cref="IPEndPoint"/>).</param>
 
     public PassthroughConnection(IOpCodeExtractor packetClassifier, EndPoint remoteEndPoint)
+        : this(packetClassifier, remoteEndPoint, timingWheel: null)
+    {
+    }
+
+    internal PassthroughConnection(IOpCodeExtractor packetClassifier, EndPoint remoteEndPoint, TimingWheel? timingWheel)
     {
         ArgumentNullException.ThrowIfNull(remoteEndPoint);
         ArgumentNullException.ThrowIfNull(packetClassifier);
+
+        _timingWheel = timingWheel ?? InstanceManager.Instance.GetOrCreateInstance<TimingWheel>();
 
         _endPointKey = remoteEndPoint;
         _lastPingTime = _createdAtMs = Clock.UnixMillisecondsNow();
@@ -317,8 +323,8 @@ public sealed class PassthroughConnection :
 
         this.IdleTimeoutMs = newTimeoutMs;
 
-        s_timingWheel.Unregister(this);
-        s_timingWheel.Register(this);
+        _timingWheel.Unregister(this);
+        _timingWheel.Register(this);
     }
 
     #endregion IConnection Methods

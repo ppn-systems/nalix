@@ -146,6 +146,8 @@ public sealed class HandshakeIntegrationTests : IDisposable
     public async Task HandshakeAsync_UnderAttack_CompletesWithPoW()
     {
         int port = TestUtils.GetFreePort();
+        InstanceManager.Instance.Register<IProofOfWorkPolicy>(new MockUnderAttackPolicy());
+
         var builder = NetworkApplication.CreateBuilder();
         builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
         builder.UseSecureConnections();
@@ -153,10 +155,6 @@ public sealed class HandshakeIntegrationTests : IDisposable
 
         using NetworkApplication app = builder.Build();
         await app.ActivateAsync();
-
-        var field = typeof(Nalix.Runtime.Handlers.HandshakeHandlers).GetField("s_powPolicy", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        var oldPolicy = field?.GetValue(null);
-        field?.SetValue(null, new MockUnderAttackPolicy());
 
         try
         {
@@ -179,7 +177,6 @@ public sealed class HandshakeIntegrationTests : IDisposable
         }
         finally
         {
-            field?.SetValue(null, oldPolicy);
             await app.DeactivateAsync();
         }
     }

@@ -398,7 +398,7 @@ public abstract partial class WebSocketListenerBase
                 KeepAliveInterval = TimeSpan.FromSeconds(_wsconfig.KeepAliveIntervalSeconds)
             });
 
-            WebSocketConnection? connection = new(webSocket, _protocol.OpCodeExtractor, realEndPoint);
+            WebSocketConnection? connection = new(webSocket, _protocol.OpCodeExtractor, realEndPoint, _timing);
             try
             {
                 connection.ConnectionClosed += this.HandleConnectionClose;
