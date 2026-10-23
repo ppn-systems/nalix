@@ -87,7 +87,9 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.RpcServiceContainsInvalidMembers,
             DiagnosticDescriptors.RpcServiceMissingAttribute,
             DiagnosticDescriptors.InjectFieldCannotBeReadOnly,
-            DiagnosticDescriptors.RequiredSymbolUnresolved
+            DiagnosticDescriptors.RequiredSymbolUnresolved,
+            DiagnosticDescriptors.DuplicatePacketStaticOpCode,
+            DiagnosticDescriptors.PacketResetForPoolMissingMemberReset
         ];
 
     public override void Initialize(AnalysisContext context)
@@ -114,9 +116,10 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
 
             ConcurrentDictionary<string, (IMethodSymbol Method, INamedTypeSymbol Controller)> globalOpcodes = new();
             ConcurrentDictionary<string, INamedTypeSymbol> controllerNames = new(StringComparer.OrdinalIgnoreCase);
+            ConcurrentDictionary<ushort, INamedTypeSymbol> globalPacketOpcodes = new();
 
             startContext.RegisterSymbolAction(
-                symbolContext => AnalyzeNamedType(symbolContext, symbols, globalOpcodes, controllerNames),
+                symbolContext => AnalyzeNamedType(symbolContext, symbols, globalOpcodes, controllerNames, globalPacketOpcodes),
                 SymbolKind.NamedType);
 
             startContext.RegisterSymbolAction(
@@ -230,7 +233,8 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         SymbolAnalysisContext context,
         SymbolSet symbols,
         ConcurrentDictionary<string, (IMethodSymbol Method, INamedTypeSymbol Controller)> globalOpcodes,
-        ConcurrentDictionary<string, INamedTypeSymbol> controllerNames)
+        ConcurrentDictionary<string, INamedTypeSymbol> controllerNames,
+        ConcurrentDictionary<ushort, INamedTypeSymbol> globalPacketOpcodes)
     {
         INamedTypeSymbol typeSymbol = (INamedTypeSymbol)context.Symbol;
 
@@ -239,7 +243,7 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        AnalyzePacketType(context, typeSymbol, symbols);
+        AnalyzePacketType(context, typeSymbol, symbols, globalPacketOpcodes);
         AnalyzeSerializationType(context, typeSymbol, symbols);
         AnalyzeConfigurationType(context, typeSymbol, symbols);
         AnalyzeMetadataProviderType(context, typeSymbol, symbols);
@@ -570,6 +574,220 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
                 methodDeclaration.Identifier.GetLocation(),
                 containingType.Name));
         }
+
+        AnalyzePacketResetForPoolCompleteness(context, methodDeclaration, containingType, symbols);
+    }
+
+    private static void AnalyzePacketResetForPoolCompleteness(
+        SyntaxNodeAnalysisContext context,
+        MethodDeclarationSyntax methodDeclaration,
+        INamedTypeSymbol containingType,
+        SymbolSet symbols)
+    {
+        ImmutableArray<ISymbol> declaredMembers = containingType.GetMembers();
+        List<ISymbol> mutableMembers = [];
+
+        foreach (ISymbol member in declaredMembers)
+        {
+            if (member.IsStatic || member.IsImplicitlyDeclared)
+            {
+                continue;
+            }
+
+            if (HasSkipCleanOrInject(member, symbols))
+            {
+                continue;
+            }
+
+            if (member is IPropertySymbol prop)
+            {
+                if (prop.IsReadOnly || prop.IsIndexer || prop.SetMethod is null || prop.SetMethod.IsInitOnly)
+                {
+                    continue;
+                }
+
+                bool isAutoProperty = declaredMembers
+                    .OfType<IFieldSymbol>()
+                    .Any(f => SymbolEqualityComparer.Default.Equals(f.AssociatedSymbol, prop));
+                if (!isAutoProperty)
+                {
+                    continue;
+                }
+
+                mutableMembers.Add(prop);
+            }
+            else if (member is IFieldSymbol field)
+            {
+                if (field.IsReadOnly || field.IsConst)
+                {
+                    continue;
+                }
+
+                mutableMembers.Add(field);
+            }
+        }
+
+        if (mutableMembers.Count == 0)
+        {
+            return;
+        }
+
+        HashSet<string> touchedNames = new(StringComparer.Ordinal);
+        CollectTouchedMemberNames(methodDeclaration, containingType, touchedNames, context.CancellationToken, depth: 0);
+
+        foreach (ISymbol member in mutableMembers)
+        {
+            if (!touchedNames.Contains(member.Name))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.PacketResetForPoolMissingMemberReset,
+                    methodDeclaration.Identifier.GetLocation(),
+                    containingType.Name,
+                    member.Name));
+            }
+        }
+    }
+
+    private static void CollectTouchedMemberNames(
+        SyntaxNode root,
+        INamedTypeSymbol containingType,
+        HashSet<string> touchedNames,
+        System.Threading.CancellationToken cancellationToken,
+        int depth)
+    {
+        foreach (SyntaxNode node in root.DescendantNodes())
+        {
+            switch (node)
+            {
+                case AssignmentExpressionSyntax assignment:
+                    if (TryExtractInstanceMemberName(assignment.Left, out string? assignedName))
+                    {
+                        _ = touchedNames.Add(assignedName!);
+                    }
+                    break;
+
+                case PrefixUnaryExpressionSyntax prefixUnary:
+                    if (TryExtractInstanceMemberName(prefixUnary.Operand, out string? prefixName))
+                    {
+                        _ = touchedNames.Add(prefixName!);
+                    }
+                    break;
+
+                case PostfixUnaryExpressionSyntax postfixUnary:
+                    if (TryExtractInstanceMemberName(postfixUnary.Operand, out string? postfixName))
+                    {
+                        _ = touchedNames.Add(postfixName!);
+                    }
+                    break;
+
+                case ArgumentSyntax argument:
+                    if (TryExtractInstanceMemberName(argument.Expression, out string? argMemberName))
+                    {
+                        _ = touchedNames.Add(argMemberName!);
+                    }
+                    break;
+
+                case InvocationExpressionSyntax invocation:
+                    if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+                    {
+                        if (TryExtractInstanceMemberName(memberAccess.Expression, out string? targetMemberName))
+                        {
+                            _ = touchedNames.Add(targetMemberName!);
+                        }
+                        else if (depth < 2
+                                 && memberAccess.Expression is ThisExpressionSyntax
+                                 && memberAccess.Name.Identifier.ValueText != "ResetForPool")
+                        {
+                            CollectHelperMethodTouchedNames(
+                                containingType,
+                                memberAccess.Name.Identifier.ValueText,
+                                touchedNames,
+                                cancellationToken,
+                                depth + 1);
+                        }
+                    }
+                    else if (depth < 2
+                             && invocation.Expression is IdentifierNameSyntax helperId
+                             && helperId.Identifier.ValueText != "ResetForPool")
+                    {
+                        CollectHelperMethodTouchedNames(
+                            containingType,
+                            helperId.Identifier.ValueText,
+                            touchedNames,
+                            cancellationToken,
+                            depth + 1);
+                    }
+                    break;
+
+                case ConditionalAccessExpressionSyntax conditionalAccess:
+                    if (TryExtractInstanceMemberName(conditionalAccess.Expression, out string? condTargetName))
+                    {
+                        _ = touchedNames.Add(condTargetName!);
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+    }
+
+    private static void CollectHelperMethodTouchedNames(
+        INamedTypeSymbol containingType,
+        string methodName,
+        HashSet<string> touchedNames,
+        System.Threading.CancellationToken cancellationToken,
+        int depth)
+    {
+        foreach (IMethodSymbol method in containingType.GetMembers(methodName).OfType<IMethodSymbol>())
+        {
+            foreach (SyntaxReference syntaxRef in method.DeclaringSyntaxReferences)
+            {
+                SyntaxNode syntax = syntaxRef.GetSyntax(cancellationToken);
+                CollectTouchedMemberNames(syntax, containingType, touchedNames, cancellationToken, depth);
+            }
+        }
+    }
+
+    private static bool TryExtractInstanceMemberName(ExpressionSyntax expression, out string? memberName)
+    {
+        switch (expression)
+        {
+            case IdentifierNameSyntax id:
+                memberName = id.Identifier.ValueText;
+                return true;
+
+            case MemberAccessExpressionSyntax
+            {
+                Expression: ThisExpressionSyntax,
+                Name.Identifier.ValueText: var thisMemberName
+            }:
+                memberName = thisMemberName;
+                return true;
+
+            default:
+                memberName = null;
+                return false;
+        }
+    }
+
+    private static bool HasSkipCleanOrInject(ISymbol member, SymbolSet symbols)
+    {
+        if (HasAttribute(member, symbols.SkipCleanAttribute) || HasAttribute(member, symbols.InjectAttribute))
+        {
+            return true;
+        }
+
+        foreach (AttributeData attr in member.GetAttributes())
+        {
+            string? attrName = attr.AttributeClass?.Name;
+            if (attrName is "SkipClean" or "SkipCleanAttribute" or "Inject" or "InjectAttribute")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AnalyzeRedundantPacketContextPacketCast(
@@ -619,7 +837,11 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    private static void AnalyzePacketType(SymbolAnalysisContext context, INamedTypeSymbol typeSymbol, SymbolSet symbols)
+    private static void AnalyzePacketType(
+        SymbolAnalysisContext context,
+        INamedTypeSymbol typeSymbol,
+        SymbolSet symbols,
+        ConcurrentDictionary<ushort, INamedTypeSymbol> globalPacketOpcodes)
     {
         INamedTypeSymbol? baseType = typeSymbol.BaseType;
         bool isPacketBaseSelfType = false;
@@ -672,10 +894,155 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         if (isPacketBaseSelfType)
         {
             AnalyzePacketBaseDeserializeContract(context, typeSymbol);
+
+            if (HasPacketRegistrationAttribute(typeSymbol, symbols)
+                && TryGetPacketStaticOpCode(typeSymbol, context.CancellationToken, out ushort staticOpCode, out Location? opCodeLocation))
+            {
+                INamedTypeSymbol existing = globalPacketOpcodes.GetOrAdd(staticOpCode, typeSymbol);
+                if (!IsSymbol(existing, typeSymbol) && opCodeLocation is not null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.DuplicatePacketStaticOpCode,
+                        opCodeLocation,
+                        typeSymbol.Name,
+                        staticOpCode,
+                        existing.Name));
+                }
+            }
         }
 
         AnalyzeFixedSizeSerializableDynamics(context, typeSymbol, symbols);
         AnalyzeDeserializeOverloads(context, typeSymbol, symbols);
+    }
+
+    private static bool HasPacketRegistrationAttribute(INamedTypeSymbol typeSymbol, SymbolSet symbols)
+    {
+        if (HasAttribute(typeSymbol, symbols.PacketAttribute))
+        {
+            return true;
+        }
+
+        foreach (AttributeData attr in typeSymbol.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is "Packet" or "PacketAttribute")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetPacketStaticOpCode(
+        INamedTypeSymbol typeSymbol,
+        System.Threading.CancellationToken cancellationToken,
+        out ushort staticOpCode,
+        out Location? location)
+    {
+        staticOpCode = default;
+        IPropertySymbol? prop = typeSymbol.GetMembers("StaticOpCode")
+            .OfType<IPropertySymbol>()
+            .FirstOrDefault(static p => p.IsStatic);
+
+        location = prop?.Locations.FirstOrDefault(static l => l.IsInSource)
+            ?? typeSymbol.Locations.FirstOrDefault(static l => l.IsInSource);
+
+        if (prop is null)
+        {
+            return false;
+        }
+
+        foreach (SyntaxReference syntaxRef in prop.DeclaringSyntaxReferences)
+        {
+            if (syntaxRef.GetSyntax(cancellationToken) is not PropertyDeclarationSyntax propSyntax)
+            {
+                continue;
+            }
+
+            ExpressionSyntax? expr = propSyntax.ExpressionBody?.Expression ?? propSyntax.Initializer?.Value;
+            if (expr is null && propSyntax.AccessorList is not null)
+            {
+                AccessorDeclarationSyntax? getter = propSyntax.AccessorList.Accessors
+                    .FirstOrDefault(static a => a.Keyword.ValueText == "get");
+                expr = getter?.ExpressionBody?.Expression
+                    ?? getter?.Body?.Statements.OfType<ReturnStatementSyntax>().FirstOrDefault()?.Expression;
+            }
+
+            if (expr is not null && TryEvaluateStaticOpCodeExpression(expr, typeSymbol, out staticOpCode))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryEvaluateStaticOpCodeExpression(
+        ExpressionSyntax expr,
+        INamedTypeSymbol containingType,
+        out ushort staticOpCode)
+    {
+        switch (expr)
+        {
+            case LiteralExpressionSyntax literal:
+                return TryConvertConstantToUShort(literal.Token.Value, out staticOpCode);
+
+            case ParenthesizedExpressionSyntax parenthesized:
+                return TryEvaluateStaticOpCodeExpression(parenthesized.Expression, containingType, out staticOpCode);
+
+            case CastExpressionSyntax cast:
+                return TryEvaluateStaticOpCodeExpression(cast.Expression, containingType, out staticOpCode);
+
+            case IdentifierNameSyntax id:
+                for (INamedTypeSymbol? current = containingType; current is not null; current = current.BaseType)
+                {
+                    IFieldSymbol? constField = current.GetMembers(id.Identifier.ValueText)
+                        .OfType<IFieldSymbol>()
+                        .FirstOrDefault(static f => f.HasConstantValue);
+                    if (constField is not null && TryConvertConstantToUShort(constField.ConstantValue, out staticOpCode))
+                    {
+                        return true;
+                    }
+                }
+                break;
+
+            default:
+                break;
+        }
+
+        staticOpCode = default;
+        return false;
+    }
+
+    private static bool TryConvertConstantToUShort(object? value, out ushort staticOpCode)
+    {
+        switch (value)
+        {
+            case ushort u:
+                staticOpCode = u;
+                return true;
+            case int i and >= 0 and <= ushort.MaxValue:
+                staticOpCode = (ushort)i;
+                return true;
+            case short s and >= 0:
+                staticOpCode = (ushort)s;
+                return true;
+            case byte b:
+                staticOpCode = b;
+                return true;
+            case uint ui and <= ushort.MaxValue:
+                staticOpCode = (ushort)ui;
+                return true;
+            case long l and >= 0 and <= ushort.MaxValue:
+                staticOpCode = (ushort)l;
+                return true;
+            case ulong ul and <= ushort.MaxValue:
+                staticOpCode = (ushort)ul;
+                return true;
+            default:
+                staticOpCode = default;
+                return false;
+        }
     }
 
     private static void AnalyzeControllerType(

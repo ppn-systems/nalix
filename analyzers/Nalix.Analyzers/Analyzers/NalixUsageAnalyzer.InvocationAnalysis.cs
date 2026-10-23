@@ -274,12 +274,14 @@ public sealed partial class NalixUsageAnalyzer
 
     private static void AnalyzeRegisterPacketInvocation(OperationAnalysisContext context, IInvocationOperation invocation, SymbolSet symbols)
     {
-        if (!IsSymbol(invocation.TargetMethod.ContainingType, symbols.PacketRegistryFactoryType))
+        if (invocation.TargetMethod.TypeArguments.Length != 1 || invocation.TargetMethod.TypeArguments[0] is not INamedTypeSymbol packetType)
         {
             return;
         }
 
-        if (invocation.TargetMethod.TypeArguments.Length != 1 || invocation.TargetMethod.TypeArguments[0] is not INamedTypeSymbol packetType)
+        AnalyzeRegisterPacketDuplicateStaticOpCode(context, invocation, packetType);
+
+        if (!IsSymbol(invocation.TargetMethod.ContainingType, symbols.PacketRegistryFactoryType))
         {
             return;
         }
@@ -303,6 +305,51 @@ public sealed partial class NalixUsageAnalyzer
                 DiagnosticDescriptors.PacketRegistryPacketMissingDeserializer,
                 invocation.Syntax.GetLocation(),
                 packetType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+        }
+    }
+
+    private static void AnalyzeRegisterPacketDuplicateStaticOpCode(
+        OperationAnalysisContext context,
+        IInvocationOperation invocation,
+        INamedTypeSymbol currentPacketType)
+    {
+        if (!TryGetPacketStaticOpCode(currentPacketType, context.CancellationToken, out ushort currentOpCode, out _))
+        {
+            return;
+        }
+
+        IOperation? current = invocation.Instance;
+        while (current is not null)
+        {
+            if (current is IInvocationOperation prevInvocation)
+            {
+                if (prevInvocation.TargetMethod.Name == "RegisterPacket"
+                    && prevInvocation.TargetMethod.TypeArguments.Length == 1
+                    && prevInvocation.TargetMethod.TypeArguments[0] is INamedTypeSymbol prevPacketType
+                    && !IsSymbol(prevPacketType, currentPacketType)
+                    && TryGetPacketStaticOpCode(prevPacketType, context.CancellationToken, out ushort prevOpCode, out _)
+                    && prevOpCode == currentOpCode)
+                {
+                    Report(
+                        context,
+                        DiagnosticDescriptors.DuplicatePacketStaticOpCode,
+                        invocation.Syntax.GetLocation(),
+                        currentPacketType.Name,
+                        currentOpCode,
+                        prevPacketType.Name);
+                    return;
+                }
+
+                current = prevInvocation.Instance;
+            }
+            else if (current is IConversionOperation conv)
+            {
+                current = conv.Operand;
+            }
+            else
+            {
+                break;
+            }
         }
     }
 

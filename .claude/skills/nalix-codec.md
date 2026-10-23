@@ -69,7 +69,7 @@ Without this, no code is generated and the serializer fails at runtime with a mi
 
 ## Gotchas
 
-- **Opcode collision is runtime-silent**: Two packet types registered with the same opcode produce no compile-time error. The second registration silently overwrites the first. The symptom is wrong deserialization — the wrong packet type is instantiated for that opcode.
+- **Opcode collision protection**: Duplicate `StaticOpCode` declarations on `[Packet]` classes or `RegisterPacket<T>()` chains are rejected at compile time (`NALIX068` in `PacketRegistryGenerator` and `NALIX106` in `NalixUsageAnalyzer`), and `PacketRegistry` throws `InternalErrorException` at runtime if two distinct packet types register the same opcode.
 
 - **`[SerializeOrder]` gaps produce wire format mismatches**: The generator assigns wire slots by `[SerializeOrder]` value. A sequence like `(0, 1, 3)` leaves an empty slot at position 2. Clients expecting a 4-field packet receive 3 fields — deserialization produces truncated or corrupt data.
 

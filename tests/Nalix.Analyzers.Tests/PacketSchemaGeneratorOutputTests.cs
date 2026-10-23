@@ -67,4 +67,49 @@ public sealed class PacketSchemaGeneratorOutputTests
         // emitted for this type despite the diagnostic being the only observable signal.
         Assert.DoesNotContain(result.GeneratedSources, static s => s.Text.Contains("NotPartialPacket"));
     }
+
+    [Fact]
+    public void Generator_ResetForPool_ResetsSerializeIgnoreMembers_AndPreservesSkipCleanMembers()
+    {
+        const string source = """
+            using Nalix.Abstractions.Networking.Packets;
+            using Nalix.Abstractions.Pooling;
+            using Nalix.Codec.DataFrames;
+            using Nalix.Codec.Serialization;
+
+            namespace GenHarness.Schema;
+
+            [Packet]
+            [SerializePackable(SerializeLayout.Explicit)]
+            public sealed partial class PoolSafetyPacket : PacketBase<PoolSafetyPacket>, IPacketStaticOpcode
+            {
+                public static ushort StaticOpCode => 6003;
+
+                [SerializeOrder(0)]
+                public int WireValue { get; set; }
+
+                [SerializeIgnore]
+                public string? CachedTag { get; set; }
+
+                [SerializeIgnore]
+                private int _transientCounter;
+
+                [SerializeOrder(1)]
+                [SkipClean]
+                public int PreservedSlot { get; set; }
+            }
+            """;
+
+        GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(new PacketSchemaGenerator(), source);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+
+        (string HintName, string Text) packetSource = result.GeneratedSources
+            .Single(static s => s.HintName.Contains("PoolSafetyPacket"));
+
+        Assert.Contains("this.WireValue = default;", packetSource.Text);
+        Assert.Contains("this.CachedTag = string.Empty;", packetSource.Text);
+        Assert.Contains("this._transientCounter = default;", packetSource.Text);
+        Assert.DoesNotContain("this.PreservedSlot =", packetSource.Text);
+    }
 }

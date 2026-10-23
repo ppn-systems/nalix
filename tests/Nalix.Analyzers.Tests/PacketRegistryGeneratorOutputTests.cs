@@ -74,4 +74,39 @@ public sealed class PacketRegistryGeneratorOutputTests
         Assert.Empty(result.GeneratedSources);
         Assert.Empty(result.GeneratorDiagnostics);
     }
+
+    [Fact]
+    public void Generator_ReportsNALIX068_WhenTwoPacketsShareSameStaticOpCode()
+    {
+        const string duplicateOpCodeSource = """
+            using Nalix.Abstractions.Networking.Packets;
+            using Nalix.Codec.DataFrames;
+
+            namespace GenHarness.Registry.Collision;
+
+            [Packet]
+            public sealed partial class FirstPacket : PacketBase<FirstPacket>, IPacketStaticOpcode
+            {
+                public static ushort StaticOpCode => 7777;
+            }
+
+            [Packet]
+            public sealed partial class SecondPacket : PacketBase<SecondPacket>, IPacketStaticOpcode
+            {
+                public static ushort StaticOpCode => 7777;
+            }
+            """;
+
+        GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(
+            [new PacketRegistryGenerator(), new PacketSchemaGenerator()],
+            duplicateOpCodeSource);
+
+        string[] ids = [.. result.GeneratorDiagnostics.Select(static d => d.Id)];
+        Assert.Contains("NALIX068", ids);
+
+        (string HintName, string Text) registryOutput = result.GeneratedSources
+            .Single(static s => s.HintName.Contains("PacketRegistryGenerated"));
+        Assert.Contains("FirstPacket", registryOutput.Text);
+        Assert.DoesNotContain("SecondPacket", registryOutput.Text);
+    }
 }

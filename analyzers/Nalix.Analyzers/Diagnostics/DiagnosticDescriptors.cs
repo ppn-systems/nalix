@@ -598,4 +598,22 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "When a mandatory Nalix symbol cannot be resolved (e.g. a missing package reference), the entire analyzer silently reports nothing. This diagnostic surfaces that condition instead of leaving it indistinguishable from 'no issues found'.",
         customTags: WellKnownDiagnosticTags.CompilationEnd);
+
+    public static readonly DiagnosticDescriptor DuplicatePacketStaticOpCode = new(
+        id: "NALIX106",
+        title: "Packet StaticOpCode is already used by another packet",
+        messageFormat: "Packet type '{0}' declares StaticOpCode 0x{1:X4} ({1}), which is already registered by packet '{2}'",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Each registered packet type in a compilation must declare a unique ushort StaticOpCode to prevent opcode collisions in PacketRegistry.");
+
+    public static readonly DiagnosticDescriptor PacketResetForPoolMissingMemberReset = new(
+        id: "NALIX107",
+        title: "Packet ResetForPool does not reset mutable member",
+        messageFormat: "Packet type '{0}' overrides ResetForPool() but does not reset mutable member '{1}', which may cause cross-request state bleed",
+        category: "Lifecycle",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Manual implementations of ResetForPool() on packet types must reset all mutable instance fields and auto-properties (unless annotated with [SkipClean]) to prevent cross-request data leaks when instances are reused from the object pool.");
 }

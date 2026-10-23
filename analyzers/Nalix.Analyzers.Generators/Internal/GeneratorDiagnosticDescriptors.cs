@@ -100,4 +100,17 @@ internal static class GeneratorDiagnosticDescriptors
         category: "Nalix.Runtime.Dispatching",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  PacketRegistryGenerator
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>NALIX068: Two or more [Packet] types declare the same StaticOpCode in the same compilation.</summary>
+    public static readonly DiagnosticDescriptor DuplicatePacketStaticOpCode = new(
+        id: "NALIX068",
+        title: "Duplicate packet StaticOpCode",
+        messageFormat: "Packet '{0}' declares StaticOpCode 0x{1:X4} ({1}), which is already registered by packet '{2}'",
+        category: "Nalix.Codec.DataFrames",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

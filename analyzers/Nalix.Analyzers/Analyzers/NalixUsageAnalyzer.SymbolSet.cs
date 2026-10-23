@@ -60,6 +60,10 @@ public sealed partial class NalixUsageAnalyzer
             INamedTypeSymbol? rpcServiceAttribute,
             INamedTypeSymbol? rpcCallType,
             INamedTypeSymbol? rpcStreamType,
+            INamedTypeSymbol? packetAttribute,
+            INamedTypeSymbol? skipCleanAttribute,
+            INamedTypeSymbol? injectAttribute,
+            INamedTypeSymbol? poolableInterface,
             int packetHeaderRegionOffset)
         {
             this.PacketOpcodeAttribute = packetOpcodeAttribute;
@@ -108,6 +112,10 @@ public sealed partial class NalixUsageAnalyzer
             this.RpcServiceAttribute = rpcServiceAttribute;
             this.RpcCallType = rpcCallType;
             this.RpcStreamType = rpcStreamType;
+            this.PacketAttribute = packetAttribute;
+            this.SkipCleanAttribute = skipCleanAttribute;
+            this.InjectAttribute = injectAttribute;
+            this.PoolableInterface = poolableInterface;
             this.PacketHeaderRegionOffset = packetHeaderRegionOffset;
         }
 
@@ -157,6 +165,10 @@ public sealed partial class NalixUsageAnalyzer
         public INamedTypeSymbol? RpcServiceAttribute { get; }
         public INamedTypeSymbol? RpcCallType { get; }
         public INamedTypeSymbol? RpcStreamType { get; }
+        public INamedTypeSymbol? PacketAttribute { get; }
+        public INamedTypeSymbol? SkipCleanAttribute { get; }
+        public INamedTypeSymbol? InjectAttribute { get; }
+        public INamedTypeSymbol? PoolableInterface { get; }
         public int PacketHeaderRegionOffset { get; }
 
         public static SymbolSet? Create(Compilation compilation, out string? missingSymbol)
@@ -212,6 +224,10 @@ public sealed partial class NalixUsageAnalyzer
             INamedTypeSymbol? rpcServiceAttribute = compilation.GetTypeByMetadataName("Nalix.Abstractions.Networking.Rpc.RpcServiceAttribute");
             INamedTypeSymbol? rpcCallType = compilation.GetTypeByMetadataName("Nalix.SDK.Transport.Rpc.RpcCall`1");
             INamedTypeSymbol? rpcStreamType = compilation.GetTypeByMetadataName("Nalix.SDK.Transport.Rpc.RpcStream`1");
+            INamedTypeSymbol? packetAttribute = compilation.GetTypeByMetadataName("Nalix.Abstractions.Networking.Packets.PacketAttribute");
+            INamedTypeSymbol? skipCleanAttribute = compilation.GetTypeByMetadataName("Nalix.Abstractions.SkipCleanAttribute");
+            INamedTypeSymbol? injectAttribute = compilation.GetTypeByMetadataName("Nalix.Abstractions.Injection.InjectAttribute");
+            INamedTypeSymbol? poolableInterface = compilation.GetTypeByMetadataName("Nalix.Abstractions.IPoolable");
             int packetHeaderRegionOffset = 12;
             if (packetHeaderOffsetType is not null)
             {
@@ -298,6 +314,10 @@ public sealed partial class NalixUsageAnalyzer
                     rpcServiceAttribute,
                     rpcCallType,
                     rpcStreamType,
+                    packetAttribute,
+                    skipCleanAttribute,
+                    injectAttribute,
+                    poolableInterface,
                     packetHeaderRegionOffset);
         }
     }
