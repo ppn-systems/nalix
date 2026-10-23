@@ -25,7 +25,7 @@ using FluentAssertions;
 
 namespace Nalix.Network.Tests;
 
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public class WebSocketConnectionTimeoutTests : IDisposable
 {
     public WebSocketConnectionTimeoutTests()

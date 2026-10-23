@@ -29,7 +29,7 @@ namespace Nalix.Integration.Tests;
 /// During a genuine idle period with no new connections, the heartbeat legitimately stops
 /// advancing; this is expected behavior and must not be conflated with a stalled worker.
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class TcpDispatchLoopStallTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-tcp-stall-{Guid.NewGuid():N}.private");

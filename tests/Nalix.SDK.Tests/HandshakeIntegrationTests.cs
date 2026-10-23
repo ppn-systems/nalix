@@ -12,7 +12,7 @@ using Nalix.SDK.Transport;
 using Nalix.SDK.Transport.Extensions;
 namespace Nalix.SDK.Tests;
 
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class HandshakeIntegrationTests : IDisposable
 {
     private readonly Bytes32 _serverPublicKey;

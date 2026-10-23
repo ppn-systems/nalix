@@ -8,7 +8,7 @@ using Nalix.SDK.Transport;
 
 namespace Nalix.Hosting.Tests;
 
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class HandlerRegistrationTests : IDisposable
 {
     public HandlerRegistrationTests()

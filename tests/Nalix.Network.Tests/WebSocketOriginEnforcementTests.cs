@@ -20,7 +20,7 @@ namespace Nalix.Network.Tests;
 /// End-to-end CSWSH enforcement on the real WebSocket listener: a disallowed or (when configured)
 /// missing <c>Origin</c> must get <c>403 Forbidden</c> before the upgrade and never register a connection.
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketOriginEnforcementTests : IDisposable
 {
     private const string Allowed = "https://app.example.com";

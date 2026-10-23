@@ -11,7 +11,7 @@ using Nalix.Abstractions.Networking;
 
 namespace Nalix.Network.Tests;
 
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class ConnectionGuardTests
 {
     private static IPAddress GetUniqueIp()

@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Nalix.Framework.Tests.Memory;
 
-[Collection("ObjectPoolDiagnostics")]
+[Collection(TestCollections.ObjectPoolDiagnostics)]
 public sealed class ObjectPoolDiagnosticsTests
 {
     [Fact]

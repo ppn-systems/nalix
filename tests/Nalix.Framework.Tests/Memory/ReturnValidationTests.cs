@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Nalix.Framework.Tests.Memory;
 
-[Collection("ReturnValidation")]
+[Collection(TestCollections.ReturnValidation)]
 public sealed class ReturnValidationTests
 {
     [Fact]

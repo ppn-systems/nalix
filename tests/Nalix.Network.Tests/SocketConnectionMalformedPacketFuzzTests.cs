@@ -22,7 +22,7 @@ namespace Nalix.Network.Tests;
 /// Uses the same real-loopback-socket harness as <see cref="SocketConnectionFramingAdversarialTests"/>.
 /// </summary>
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
-[Collection(AsyncCallbackSerialGroup.Name)]
+[Collection(TestCollections.AsyncCallback)]
 public sealed class SocketConnectionMalformedPacketFuzzTests
 {
     private const int Seed = 20260704;

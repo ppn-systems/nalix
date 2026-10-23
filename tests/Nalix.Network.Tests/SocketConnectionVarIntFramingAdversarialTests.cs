@@ -27,7 +27,7 @@ namespace Nalix.Network.Tests;
 /// <c>SocketConnection.Receive.VarInt.cs</c>.
 /// </summary>
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
-[Collection(AsyncCallbackSerialGroup.Name)]
+[Collection(TestCollections.AsyncCallback)]
 public sealed class SocketConnectionVarIntFramingAdversarialTests
 {
     private static readonly IOpCodeExtractor s_testOpCodeExtractor = new TestOpCodeExtractor();

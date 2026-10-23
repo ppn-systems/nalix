@@ -26,7 +26,7 @@ namespace Nalix.Integration.Tests;
 /// with success:true so its own SafeCloseSocket branch is skipped too. Every /healthz request
 /// therefore leaks one socket handle permanently (no tunnel, no TLS, no concurrency needed).
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class HealthzSocketLeakTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-healthz-leak-{Guid.NewGuid():N}.private");

@@ -16,7 +16,7 @@ using TransportAsyncCallback = Nalix.Network.Internal.Transport.AsyncCallback;
 namespace Nalix.Network.Tests;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
-[Collection(AsyncCallbackSerialGroup.Name)]
+[Collection(TestCollections.AsyncCallback)]
 public sealed class SocketConnectionFragmentationTests
 {
     private static readonly IOpCodeExtractor s_testOpCodeExtractor = new TestOpCodeExtractor();

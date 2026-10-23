@@ -17,7 +17,7 @@ namespace Nalix.SDK.Tests;
 /// listener closed mid-handshake, and mismatched keys — all must fail cleanly and
 /// quickly, never hang or leak the underlying socket.
 /// </summary>
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class ConnectFailureResilienceTests : IDisposable
 {
     public ConnectFailureResilienceTests()

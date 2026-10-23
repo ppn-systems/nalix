@@ -26,7 +26,7 @@ namespace Nalix.Integration.Tests;
 /// listener instance. Reported thresholds: ~20 cumulative survives, ~40+ cumulative kills
 /// the listener permanently (no self-recovery).
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketHealthzSpamRegressionTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-healthz-spam-{Guid.NewGuid():N}.private");

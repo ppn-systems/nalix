@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Nalix.Framework.Tests.Time;
 
-[Collection("ClockTests")]
+[Collection(TestCollections.Clock)]
 public sealed class ClockValidationTests
 {
     [Fact]

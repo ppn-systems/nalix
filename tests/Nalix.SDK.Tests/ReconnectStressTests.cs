@@ -13,7 +13,7 @@ namespace Nalix.SDK.Tests;
 /// Repeated connect/disconnect cycles against a single long-lived server, checking that
 /// the SDK client does not leak sockets, awaiters, or handshake state across cycles.
 /// </summary>
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class ReconnectStressTests : IDisposable
 {
     public ReconnectStressTests()

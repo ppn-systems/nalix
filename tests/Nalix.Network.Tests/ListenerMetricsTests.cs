@@ -15,7 +15,7 @@ using Xunit;
 
 namespace Nalix.Network.Tests;
 
-[Collection(AsyncCallbackSerialGroup.Name)]
+[Collection(TestCollections.AsyncCallback)]
 public sealed class ListenerMetricsTests
 {
     private sealed class StubTcpListener : TcpListenerBase

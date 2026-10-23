@@ -19,32 +19,3 @@ internal static class TestAssemblySetup
         Directories.SetBasePathOverride(testDir);
     }
 }
-
-[CollectionDefinition("Sequential Pooling Tests", DisableParallelization = true)]
-public sealed class SequentialPoolingTestCollection;
-
-[CollectionDefinition("ObjectPoolDiagnostics", DisableParallelization = true)]
-public sealed class ObjectPoolDiagnosticsCollection;
-
-[CollectionDefinition("ReturnValidation", DisableParallelization = true)]
-public sealed class ReturnValidationCollection;
-
-[CollectionDefinition("TypePoolPhase1", DisableParallelization = true)]
-public sealed class TypePoolPhase1Collection;
-
-[CollectionDefinition("ClockTests", DisableParallelization = true)]
-public sealed class ClockTestCollection;
-
-
-
-
-
-
-
-
-
-
-
-
-
-

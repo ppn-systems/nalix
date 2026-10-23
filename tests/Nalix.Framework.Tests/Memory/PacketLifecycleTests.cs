@@ -10,7 +10,7 @@ using Nalix.Codec.Pooling;
 
 namespace Nalix.Framework.Tests.Memory;
 
-[Collection("Sequential Pooling Tests")]
+[Collection(TestCollections.SequentialPooling)]
 public sealed class PacketLifecycleTests : IDisposable
 {
     private readonly ObjectPoolManager _manager;

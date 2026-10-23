@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Nalix.Network.Tests;
 
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class NetworkAccessListTests
 {
     [Fact]

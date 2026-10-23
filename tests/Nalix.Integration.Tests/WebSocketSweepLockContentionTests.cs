@@ -29,7 +29,7 @@ namespace Nalix.Integration.Tests;
 /// (no OnAccept override) so any hang here can only come from the listener's own lock/close
 /// logic, not from a slow user handler.
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketSweepLockContentionTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-sweep-{Guid.NewGuid():N}.private");

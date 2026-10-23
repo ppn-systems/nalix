@@ -10,7 +10,7 @@ using Nalix.Abstractions.Serialization;
 
 namespace Nalix.Codec.Tests.DataFrames;
 
-[Collection(Nalix.Codec.Tests.Scrubbing.PooledBufferScrubCollection.Name)]
+[Collection(TestCollections.PooledBufferScrub)]
 public sealed partial class PacketPoolLeaseTests
 {
     [Fact]

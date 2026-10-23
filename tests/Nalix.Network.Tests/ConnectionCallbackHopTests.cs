@@ -25,7 +25,7 @@ namespace Nalix.Network.Tests;
 /// processing for processors that declare <see cref="IFrameProcessor.SupportsInlineProcessing"/>.
 /// </summary>
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
-[Collection(AsyncCallbackSerialGroup.Name)]
+[Collection(TestCollections.AsyncCallback)]
 public sealed class ConnectionCallbackHopTests
 {
     private static readonly IOpCodeExtractor s_extractor = new TestOpCodeExtractor();

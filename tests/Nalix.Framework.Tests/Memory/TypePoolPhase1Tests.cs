@@ -10,7 +10,7 @@ using Nalix.Framework.Options;
 
 namespace Nalix.Framework.Tests.Memory;
 
-[Collection("TypePoolPhase1")]
+[Collection(TestCollections.TypePoolPhase1)]
 public sealed class TypePoolPhase1Tests
 {
     [Fact]

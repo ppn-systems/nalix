@@ -17,7 +17,7 @@ using Nalix.SDK.Transport;
 
 namespace Nalix.SDK.Tests;
 
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class TransportReconnectSequenceTests : IDisposable
 {
     [Fact]

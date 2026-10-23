@@ -28,7 +28,7 @@ one source project wired together.
 - The folder tree of a test project **mirrors the folder tree of its source project**.
   `src/Nalix.Network/Internal/Security/SlidingWindow.cs` is tested by
   `tests/Nalix.Network.Tests/Internal/Security/SlidingWindowTests.cs`.
-- No test files at the project root except `TestAssemblySetup.cs` and `TestCollections.cs`.
+- No test files at the project root except `TestAssemblySetup.cs` and `TestCollections.cs` (both optional).
 - Shared helpers, fakes and builders live in `TestSupport/` inside the project. Anything used by several test
   projects goes in `tests/Shared/` and is linked in through `tests/Directory.Build.props`.
 - One top-level test class per file. The file name equals the class name.
@@ -101,8 +101,9 @@ public void Ctor_WhenCapacityIsNotPositive_ThrowsArgumentOutOfRangeException(int
 `ConfigurationManager`, `InstanceManager`, static pools, clocks and `TimingWheel` are process-wide. A test that
 mutates or depends on them must:
 
-1. Join a collection declared in the project's `TestCollections.cs`
-   (`[Collection(TestCollections.GlobalState)]`; collections disable parallelization).
+1. Join a collection from the project's `TestCollections.cs` (`[Collection(TestCollections.Clock)]`). A collection
+   is declared there as a `const string` plus a `[CollectionDefinition]` (`DisableParallelization = true` when
+   it needs exclusive use of the process). Never use string literals in `[Collection]`.
 2. Restore what it changed in a `finally`/`Dispose`, even when the assertion fails.
 
 A test that passes alone but fails in the full run has leaked state; fix the leak, do not retry or skip it.

@@ -24,7 +24,7 @@ using Xunit;
 
 namespace Nalix.Integration.Tests;
 
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketDeepVerificationTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-deep-{Guid.NewGuid():N}.private");

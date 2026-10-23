@@ -30,7 +30,7 @@ namespace Nalix.Integration.Tests;
 /// consumed a per-IP slot via <c>TryAccept(ip)</c> at accept time. If this is fixed, slots must be
 /// released after sweep and a real handshake from the same IP right after must succeed.
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketSweepSlotLeakTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-leak-{Guid.NewGuid():N}.private");

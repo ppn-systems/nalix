@@ -20,7 +20,7 @@ namespace Nalix.SDK.Tests;
 /// Covers request timeout accounting, server-drop mid-request, and concurrent
 /// out-of-order request/response correlation for <see cref="RequestExtensions.RequestAsync{TResponse}"/>.
 /// </summary>
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class RequestResilienceTests : IDisposable
 {
     public RequestResilienceTests()

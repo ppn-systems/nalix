@@ -29,7 +29,7 @@ namespace Nalix.Integration.Tests;
 /// response forces the server's Socket.Send() to potentially block on a half-open/dead
 /// peer if no SendTimeout is set. Cumulative repeats should never hang the listener.
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class HealthzSendTimeoutTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-healthz-timeout-{Guid.NewGuid():N}.private");

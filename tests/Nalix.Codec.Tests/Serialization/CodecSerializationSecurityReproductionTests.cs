@@ -23,7 +23,7 @@ using Nalix.Framework.Options;
 
 namespace Nalix.Codec.Tests.Serialization;
 
-[Collection(Nalix.Codec.Tests.Scrubbing.PooledBufferScrubCollection.Name)]
+[Collection(TestCollections.PooledBufferScrub)]
 public sealed partial class CodecSerializationSecurityReproductionTests
 {
     // =========================================================================

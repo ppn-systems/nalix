@@ -7,12 +7,6 @@ using Nalix.SDK.Transport.Extensions;
 
 namespace Nalix.Network.Tests;
 
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class DispatchChurnSerialGroup
-{
-    public const string Name = "Dispatch churn serial";
-}
-
 /// <summary>
 /// End-to-end regression guard for the dispatch busy-spin fixed in #372.
 /// </summary>
@@ -26,7 +20,7 @@ public sealed class DispatchChurnSerialGroup
 /// every client is gone. On the pre-#372 code (b) fails reliably: phantom ready entries keep
 /// every worker spinning at ~3 cores on a 4-core machine long after the last client left.
 /// </remarks>
-[Collection(DispatchChurnSerialGroup.Name)]
+[Collection(TestCollections.DispatchChurn)]
 public sealed class DispatchChurnRegressionTests(ITestOutputHelper output)
 {
     private const int Rounds = 5;

@@ -18,7 +18,7 @@ namespace Nalix.Codec.Tests.Scrubbing;
 /// that held plaintext must scrub it. These tests install a spy pool that inspects each array as
 /// it is returned and records any array that still contains a known plaintext marker.
 /// </summary>
-[Collection(PooledBufferScrubCollection.Name)]
+[Collection(TestCollections.PooledBufferScrub)]
 public sealed class PooledBufferScrubTests : IDisposable
 {
     private static readonly byte[] Marker = Encoding.ASCII.GetBytes("TOP-SECRET-PLAINTEXT-MARKER-7f3a");
@@ -216,10 +216,4 @@ public sealed class PooledBufferScrubTests : IDisposable
 
         public void WriteReportData(System.Text.Json.Utf8JsonWriter writer) { }
     }
-}
-
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class PooledBufferScrubCollection
-{
-    public const string Name = "PooledBufferScrub";
 }

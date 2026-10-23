@@ -29,7 +29,7 @@ namespace Nalix.Integration.Tests;
 /// socket, every other handshake path (including /ping, /healthz) contends on the same lock
 /// and the whole listener appears to hang.
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketStalledHandshakeSweepTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-stall-{Guid.NewGuid():N}.private");

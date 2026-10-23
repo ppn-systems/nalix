@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Nalix.SDK.Tests;
 
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class PingExtensionsTests : IDisposable
 {
     public PingExtensionsTests()

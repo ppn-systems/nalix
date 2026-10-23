@@ -22,7 +22,7 @@ using Xunit;
 
 namespace Nalix.Integration.Tests;
 
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class WebSocketAdvancedEdgeCasesTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-ws-adv-{Guid.NewGuid():N}.private");

@@ -18,7 +18,7 @@ namespace Nalix.SDK.Tests;
 /// <see cref="TcpSession"/>, verifying the receive loop never hangs an awaiter forever
 /// and never crashes on garbage input.
 /// </summary>
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class HostileServerResponseTests : IDisposable
 {
     public HostileServerResponseTests()

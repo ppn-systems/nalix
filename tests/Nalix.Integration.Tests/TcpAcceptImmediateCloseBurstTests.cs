@@ -30,7 +30,7 @@ namespace Nalix.Integration.Tests;
 /// listener instance, matching the reported repro) and that /healthz stays reachable
 /// afterward.
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class TcpAcceptImmediateCloseBurstTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-tcp-immclose-{Guid.NewGuid():N}.private");

@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Nalix.Framework.Tests.Time;
 
-[Collection("ClockTests")]
+[Collection(TestCollections.Clock)]
 public sealed class ClockBasicTests
 {
     private static void BusyWaitMs(double ms)

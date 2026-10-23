@@ -28,7 +28,7 @@ using Xunit;
 
 namespace Nalix.SDK.Tests;
 
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class ResumeExtensionsTests : IDisposable
 {
     public ResumeExtensionsTests()

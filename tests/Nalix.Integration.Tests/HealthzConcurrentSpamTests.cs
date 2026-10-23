@@ -27,7 +27,7 @@ namespace Nalix.Integration.Tests;
 /// AT THE SAME TIME, matching a real burst of health-check traffic instead of one-at-a-time
 /// probing. Listener must stay up and answer every request.
 /// </summary>
-[Collection("NetworkConfigTests")]
+[Collection(TestCollections.NetworkConfig)]
 public sealed class HealthzConcurrentSpamTests : IDisposable
 {
     private readonly string _certificatePath = Path.Combine(Path.GetTempPath(), $"nalix-healthz-concurrent-{Guid.NewGuid():N}.private");

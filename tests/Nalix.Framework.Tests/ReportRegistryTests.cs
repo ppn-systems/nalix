@@ -16,7 +16,7 @@ namespace Nalix.Framework.Tests;
 /// <summary>
 /// Verifies the correctness of the <see cref="ReportRegistry"/> class.
 /// </summary>
-[Collection("Sequential Pooling Tests")]
+[Collection(TestCollections.SequentialPooling)]
 public sealed class ReportRegistryTests : IDisposable
 {
     private readonly ReportRegistry _registry = ReportRegistry.Instance;

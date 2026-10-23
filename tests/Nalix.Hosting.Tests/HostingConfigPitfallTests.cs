@@ -15,7 +15,7 @@ namespace Nalix.Hosting.Tests;
 /// UseSecureConnections, the implicit system-control dependency of the handshake,
 /// and loopback clients tripping the per-IP connection guard.
 /// </summary>
-[Collection("RealServerTests")]
+[Collection(TestCollections.RealServer)]
 public sealed class HostingConfigPitfallTests : IDisposable
 {
     private readonly int _savedMaxPerIp;

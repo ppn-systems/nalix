@@ -11,7 +11,7 @@ using Nalix.Abstractions.Networking.Protocols;
 
 namespace Nalix.Framework.Tests;
 
-[Collection("Sequential Pooling Tests")]
+[Collection(TestCollections.SequentialPooling)]
 public class LeakReproductionTests
 {
     [Fact]
