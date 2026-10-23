@@ -1,129 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Nalix</title>
   <defs>
-    <!-- Main background gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f0c29"/>
-      <stop offset="45%" stop-color="#1a1740"/>
-      <stop offset="100%" stop-color="#24243e"/>
+    <linearGradient id="tileFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141414"/><stop offset="0.45" stop-color="#050505"/><stop offset="1" stop-color="#000000"/>
     </linearGradient>
-
-    <!-- Accent gradient for the N letter -->
-    <linearGradient id="letterGrad" x1="20%" y1="0%" x2="80%" y2="100%">
-      <stop offset="0%" stop-color="#8b9cf7"/>
-      <stop offset="40%" stop-color="#667eea"/>
-      <stop offset="100%" stop-color="#764ba2"/>
+    <linearGradient id="tileRim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A4A4A"/><stop offset="1" stop-color="#232323"/>
     </linearGradient>
-
-    <!-- Border gradient -->
-    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#667eea" stop-opacity="0.6"/>
-      <stop offset="50%" stop-color="#764ba2" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="#667eea" stop-opacity="0.6"/>
-    </linearGradient>
-
-    <!-- Corner ambient light -->
-    <radialGradient id="cornerGlow" cx="10%" cy="10%" r="60%">
-      <stop offset="0%" stop-color="#667eea" stop-opacity="0.15"/>
-      <stop offset="100%" stop-color="#667eea" stop-opacity="0"/>
-    </radialGradient>
-
-    <!-- Center glow behind letter -->
-    <radialGradient id="glowCenter" cx="50%" cy="50%" r="40%">
-      <stop offset="0%" stop-color="#667eea" stop-opacity="0.15"/>
-      <stop offset="60%" stop-color="#764ba2" stop-opacity="0.04"/>
-      <stop offset="100%" stop-color="#764ba2" stop-opacity="0"/>
-    </radialGradient>
-
-    <!-- Grid pattern -->
-    <pattern id="grid" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
-      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#667eea" stroke-width="0.4" stroke-opacity="0.07"/>
-    </pattern>
-
-    <!-- Letter glow filter -->
-    <filter id="letterGlow" x="-25%" y="-25%" width="150%" height="150%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.4  0 0 0 0 0.49  0 0 0 0 0.92  0 0 0 0.5 0" result="glow"/>
-      <feMerge>
-        <feMergeNode in="glow"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <!-- Clip rounded square -->
-    <clipPath id="roundClip">
-      <rect width="512" height="512" rx="100"/>
-    </clipPath>
+    <clipPath id="nRings"><rect x="0" y="19" width="400" height="4"/><rect x="0" y="40" width="400" height="4"/></clipPath>
   </defs>
-
-  <!-- Clipped container -->
-  <g clip-path="url(#roundClip)">
-
-    <!-- Background fill -->
-    <rect width="512" height="512" fill="url(#bgGrad)"/>
-    <rect width="512" height="512" fill="url(#grid)"/>
-
-    <!-- Ambient lighting -->
-    <rect width="512" height="512" fill="url(#cornerGlow)"/>
-    <rect width="512" height="512" fill="url(#glowCenter)"/>
-    <circle cx="480" cy="480" r="200" fill="#764ba2" fill-opacity="0.04"/>
-
-    <!-- Network nodes - top right (subtle) -->
-    <g opacity="0.1" stroke="#667eea" stroke-width="0.8">
-      <circle cx="400" cy="70" r="2.5" fill="#667eea"/>
-      <circle cx="435" cy="95" r="2" fill="#667eea"/>
-      <circle cx="420" cy="50" r="1.5" fill="#667eea"/>
-      <circle cx="460" cy="70" r="1.5" fill="#667eea"/>
-      <line x1="400" y1="70" x2="435" y2="95"/>
-      <line x1="400" y1="70" x2="420" y2="50"/>
-      <line x1="435" y1="95" x2="460" y2="70"/>
-      <line x1="420" y1="50" x2="460" y2="70"/>
-    </g>
-
-    <!-- Network nodes - bottom left (subtle) -->
-    <g opacity="0.08" stroke="#764ba2" stroke-width="0.8">
-      <circle cx="75" cy="430" r="2.5" fill="#764ba2"/>
-      <circle cx="50" cy="455" r="2" fill="#764ba2"/>
-      <circle cx="100" cy="455" r="1.5" fill="#764ba2"/>
-      <circle cx="65" cy="470" r="1.5" fill="#764ba2"/>
-      <line x1="75" y1="430" x2="50" y2="455"/>
-      <line x1="75" y1="430" x2="100" y2="455"/>
-      <line x1="50" y1="455" x2="65" y2="470"/>
-      <line x1="100" y1="455" x2="65" y2="470"/>
-    </g>
-
-    <!-- ═══════════════════════════════════ -->
-    <!-- The "N" letterform                 -->
-    <!-- ═══════════════════════════════════ -->
-    <!--
-      Geometric wide "N" for a bold, modern tech look.
-      Canvas: 512x512. Letter occupies ~130..382 x, ~120..392 y.
-      Stroke width: 50px. Diagonal width: 50px visual.
-    -->
-    <g filter="url(#letterGlow)">
-      <path d="
-        M 135 120
-        L 185 120
-        L 327 290
-        L 327 120
-        L 377 120
-        L 377 392
-        L 327 392
-        L 185 222
-        L 185 392
-        L 135 392
-        Z
-      " fill="url(#letterGrad)"/>
-    </g>
-
-    <!-- Subtle highlight on top edges -->
-    <path d="M 135 120 L 185 120 L 185 127 L 135 127 Z" fill="white" fill-opacity="0.15"/>
-    <path d="M 327 120 L 377 120 L 377 127 L 327 127 Z" fill="white" fill-opacity="0.1"/>
-
-    <!-- Subtle reflection on left edge -->
-    <path d="M 135 120 L 140 120 L 140 392 L 135 392 Z" fill="white" fill-opacity="0.06"/>
-
-  </g>
-
-  <!-- Border -->
-  <rect x="2" y="2" width="508" height="508" rx="98" fill="none" stroke="url(#borderGrad)" stroke-width="2.5"/>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="8.5" fill="url(#tileFill)" stroke="url(#tileRim)"/>
+    <path d="M15 16H21L43 38V16H49V47H43V46L21 24V47H15Z" fill="#FFFFFF"/>
+    <path d="M15 16H21L43 38V16H49V47H43V46L21 24V47H15Z" fill="#929292" clip-path="url(#nRings)"/>
+    <path d="M14 47H22V48H23V50H13V48H14Z M42 47H50V48H51V50H41V48H42Z" fill="#2E2E2E"/>
 </svg>

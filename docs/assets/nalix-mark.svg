@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 14 40 38" fill="none">
+  <title>Nalix</title>
+  <defs>
+    <clipPath id="nRings"><rect x="0" y="19" width="400" height="4"/><rect x="0" y="40" width="400" height="4"/></clipPath>
+  </defs>
+  <path d="M15 16H21L43 38V16H49V47H43V46L21 24V47H15Z" fill="#FFFFFF"/>
+    <path d="M15 16H21L43 38V16H49V47H43V46L21 24V47H15Z" fill="#929292" clip-path="url(#nRings)"/>
+    <path d="M14 47H22V48H23V50H13V48H14Z M42 47H50V48H51V50H41V48H42Z" fill="#5A5A5A"/>
+</svg>
