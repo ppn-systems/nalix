@@ -1,11 +1,14 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using Nalix.Codec.LZ4;
 
-namespace Nalix.Codec.Tests.LZ4;
+namespace Nalix.Codec.Tests.LZ4.Engine;
 
-public class LZ4OverlapTests
+public sealed class LZ4DecoderTests
 {
     [Fact]
-    public void DecompressOverlapMatch_Succeeds()
+    public void Decode_WhenMatchOverlapsItsOwnOutput_RestoresOriginal()
     {
         // Arrange: Create a payload with long repeating pattern (RLE-like)
         // This will force the encoder to use a match with offset = 1 and large length.

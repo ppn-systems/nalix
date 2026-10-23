@@ -1,7 +1,9 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Serialization;
+using Nalix.Codec.Tests.TestSupport;
 
 namespace Nalix.Codec.Tests.Serialization;
 
@@ -100,7 +102,7 @@ public sealed class LiteSerializerAdversarialTests
     [InlineData(1)]
     [InlineData(int.MaxValue)]
     [InlineData(-2)] // negative-as-signed (not the null sentinel -1)
-    public void Deserialize_IntArray_HostileLengthField_RejectsWithoutHugeAllocation(int hostileLength)
+    public void Deserialize_WhenIntArrayLengthIsHostile_RejectsWithoutHugeAllocation(int hostileLength)
     {
         // A tiny 4-byte blob claiming an element count with no backing element bytes. If the array
         // formatter allocated `hostileLength` elements before checking against remaining bytes,
@@ -114,7 +116,7 @@ public sealed class LiteSerializerAdversarialTests
     }
 
     [Fact]
-    public void Deserialize_IntArray_LengthOnePastReal_RejectsCleanly()
+    public void Deserialize_WhenIntArrayLengthIsOnePastReal_RejectsCleanly()
     {
         int[] input = [1, 2, 3];
         byte[] full = LiteSerializer.Serialize(input);
@@ -161,7 +163,7 @@ public sealed class LiteSerializerAdversarialTests
     // ---- String edge cases ----
 
     [Fact]
-    public void Deserialize_String_NullVsEmpty_AreDistinct()
+    public void Deserialize_WhenStringIsNullVersusEmpty_KeepsThemDistinct()
     {
         string? nullOutput = null;
         byte[] nullBuffer = LiteSerializer.Serialize<string?>(null);
@@ -176,7 +178,7 @@ public sealed class LiteSerializerAdversarialTests
     }
 
     [Fact]
-    public void Deserialize_String_EmbeddedNulls_RoundTrip()
+    public void Deserialize_WhenStringHasEmbeddedNulls_RoundTrips()
     {
         string input = "abc\0def\0";
         byte[] buffer = LiteSerializer.Serialize(input);
@@ -187,7 +189,7 @@ public sealed class LiteSerializerAdversarialTests
     }
 
     [Fact]
-    public void Deserialize_String_InvalidUtf8Bytes_DoesNotThrowUnhandled()
+    public void Deserialize_WhenStringHasInvalidUtf8_DoesNotThrowUnhandled()
     {
         // 0xFF and 0xFE are never valid UTF-8 lead bytes; 0xC0 0x80 is an overlong encoding.
         byte[] invalidUtf8 = [0xFF, 0xFE, 0xC0, 0x80, 0x80];
@@ -207,7 +209,7 @@ public sealed class LiteSerializerAdversarialTests
     // ---- Type/layout mismatch ----
 
     [Fact]
-    public void Deserialize_BytesForOneUnmanagedStruct_IntoDifferentSizedStruct_ThrowsOrRejects()
+    public void Deserialize_WhenStructSizesDiffer_ThrowsOrRejects()
     {
         // ComplexStruct (int + short + byte, likely padded) serialized then read back as SmallStruct (1 byte).
         // Unmanaged fast-path deserialization only checks buffer.Length >= sizeof(T); reading a smaller
@@ -230,7 +232,7 @@ public sealed class LiteSerializerAdversarialTests
     // ---- Random fuzz across supported shapes ----
 
     [Fact]
-    public void Deserialize_IntArray_RandomFuzzBlobs_OnlyDocumentedErrors()
+    public void Deserialize_WhenIntArrayBlobIsRandom_OnlyDocumentedErrors()
     {
         const int Seed = 90210;
         System.Random rng = new(Seed);
@@ -247,7 +249,7 @@ public sealed class LiteSerializerAdversarialTests
     }
 
     [Fact]
-    public void Deserialize_String_RandomFuzzBlobs_OnlyDocumentedErrors()
+    public void Deserialize_WhenStringBlobIsRandom_OnlyDocumentedErrors()
     {
         const int Seed = 90211;
         System.Random rng = new(Seed);
@@ -264,7 +266,7 @@ public sealed class LiteSerializerAdversarialTests
     }
 
     [Fact]
-    public void Deserialize_Object_RandomFuzzBlobs_OnlyDocumentedErrors()
+    public void Deserialize_WhenObjectBlobIsRandom_OnlyDocumentedErrors()
     {
         const int Seed = 90212;
         System.Random rng = new(Seed);

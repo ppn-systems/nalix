@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System.Text;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
@@ -7,22 +10,10 @@ using Nalix.Codec.ProtocolFrames;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Fragments;
 
-namespace Nalix.Codec.Tests.DataFrames;
+namespace Nalix.Codec.Tests.TestSupport;
 
-public sealed partial class DataFramesPublicApiTests
+public static class FrameTestData
 {
-    static DataFramesPublicApiTests()
-    {
-        if (!PacketRegistry.IsBuilt)
-        {
-            PacketRegistry.Build();
-        }
-    }
-
-    public enum TextFrameKind
-    {
-    }
-
     public enum PacketRoundTripKind
     {
         Control,
@@ -39,7 +30,7 @@ public sealed partial class DataFramesPublicApiTests
         ];
     }
 
-    private static byte[] CreatePacketBytes(string payload)
+    public static byte[] CreatePacketBytes(string payload)
     {
         byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
         byte[] buffer = new byte[FrameTransformer.Offset + payloadBytes.Length];
@@ -53,7 +44,8 @@ public sealed partial class DataFramesPublicApiTests
         payloadBytes.CopyTo(buffer, FrameTransformer.Offset);
         return buffer;
     }
-    private static FrameBase CreateRoundTripPacket(PacketRoundTripKind packetKind)
+
+    public static FrameBase CreateRoundTripPacket(PacketRoundTripKind packetKind)
         => packetKind switch
         {
             PacketRoundTripKind.Control => CreateControlPacket(),
@@ -61,22 +53,21 @@ public sealed partial class DataFramesPublicApiTests
             _ => throw new InvalidOperationException("Unexpected packet round-trip kind.")
         };
 
-    private static Control CreateControlPacket()
+    public static Control CreateControlPacket()
     {
         Control packet = new();
         packet.Initialize(ControlType.PING, 55, PacketFlags.SYSTEM, ProtocolReason.NONE);
         return packet;
     }
 
-    private static Directive CreateDirectivePacket()
+    public static Directive CreateDirectivePacket()
     {
         Directive packet = new();
         packet.Initialize(ControlType.REDIRECT, ProtocolReason.THROTTLED, ProtocolAdvice.SLOW_DOWN, 12, PacketFlags.SYSTEM, ControlFlags.SLOW_DOWN, 9, 8, 7);
         return packet;
     }
 
-
-    private static void AssertRoundTripPacketEquivalent(PacketRoundTripKind packetKind, FrameBase expected, FrameBase actual)
+    public static void AssertRoundTripPacketEquivalent(PacketRoundTripKind packetKind, FrameBase expected, FrameBase actual)
     {
         switch (packetKind)
         {
@@ -111,7 +102,7 @@ public sealed partial class DataFramesPublicApiTests
         }
     }
 
-    private static byte[] CreateFragmentPayload(FragmentHeader header, ReadOnlySpan<byte> body)
+    public static byte[] CreateFragmentPayload(FragmentHeader header, ReadOnlySpan<byte> body)
     {
         byte[] payload = new byte[FragmentHeader.WireSize + body.Length];
         header.WriteTo(payload);
@@ -119,22 +110,3 @@ public sealed partial class DataFramesPublicApiTests
         return payload;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

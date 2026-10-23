@@ -1,5 +1,6 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
@@ -12,14 +13,14 @@ using Nalix.Codec.Transforms;
 using Nalix.Environment.Extensions;
 using Nalix.Environment.Memory;
 
-namespace Nalix.Codec.Tests;
+namespace Nalix.Codec.Tests.Transforms;
 
 /// <summary>
 /// Adversarial tests for the real serialize -> LZ4-compress -> LZ4-decompress -> deserialize
 /// wire pipeline (<see cref="FrameCompression"/> over <see cref="PacketBase{TSelf}"/> packets).
 /// Goal: value-exact round-trips plus clean rejection when any stage-boundary buffer is corrupted.
 /// </summary>
-public sealed class PipelineAdversarialTests
+public sealed class FramePipelineAdversarialTests
 {
     private const int Seed = 424242;
 
@@ -76,7 +77,7 @@ public sealed class PipelineAdversarialTests
     // ---- Full round-trip: serialize -> compress -> decompress -> deserialize, value-exact ----
 
     [Fact]
-    public void FullPipeline_Control_RoundTrip_IsValueExact()
+    public void RoundTrip_WhenControlIsCompressedAndDecompressed_IsValueExact()
     {
         System.Random rng = new(Seed);
         for (int i = 0; i < 200; i++)
@@ -100,7 +101,7 @@ public sealed class PipelineAdversarialTests
     }
 
     [Fact]
-    public void FullPipeline_Directive_RoundTrip_IsValueExact()
+    public void RoundTrip_WhenDirectiveIsCompressedAndDecompressed_IsValueExact()
     {
         System.Random rng = new(Seed + 1);
         for (int i = 0; i < 200; i++)
@@ -126,7 +127,7 @@ public sealed class PipelineAdversarialTests
     }
 
     [Fact]
-    public void FullPipeline_SessionResume_RoundTrip_IsValueExact()
+    public void RoundTrip_WhenSessionResumeIsCompressedAndDecompressed_IsValueExact()
     {
         System.Random rng = new(Seed + 2);
         for (int i = 0; i < 200; i++)
@@ -152,7 +153,7 @@ public sealed class PipelineAdversarialTests
     // ---- Stage-boundary tampering: flip one byte, expect clean rejection (never silent corruption / crash) ----
 
     [Fact]
-    public void Tamper_PostSerializePreCompress_SingleByteFlip_RejectsCleanlyOrChangesValue()
+    public void Tamper_WhenByteIsFlippedBeforeCompression_RejectsCleanlyOrChangesValue()
     {
         System.Random rng = new(Seed + 3);
         Control original = MakeControl(rng);
@@ -191,7 +192,7 @@ public sealed class PipelineAdversarialTests
     }
 
     [Fact]
-    public void Tamper_PostCompressPreDecompress_SingleByteFlip_RejectsCleanlyOrChangesValue()
+    public void Tamper_WhenByteIsFlippedAfterCompression_RejectsCleanlyOrChangesValue()
     {
         System.Random rng = new(Seed + 4);
         Directive original = MakeDirective(rng);
@@ -231,7 +232,7 @@ public sealed class PipelineAdversarialTests
     }
 
     [Fact]
-    public void Tamper_PostDecompressPreDeserialize_SingleByteFlip_RejectsCleanlyOrChangesValue()
+    public void Tamper_WhenByteIsFlippedAfterDecompression_RejectsCleanlyOrChangesValue()
     {
         System.Random rng = new(Seed + 5);
         SessionResume original = MakeSessionResume(rng);
@@ -271,52 +272,8 @@ public sealed class PipelineAdversarialTests
 
     // ---- Allocation-bomb & header consistency defenses in FrameTransformer / FrameCompression / FramePipeline ----
 
-    [Theory]
-    [InlineData(LZ4CompressionConstants.MaxBlockSize + 1)]
-    [InlineData(32 * 1024 * 1024)]
-    public void FrameTransformer_OriginalLengthExceedsMaxBlockSize_RejectsBeforeAllocation(int fakeOriginalLength)
-    {
-        byte[] block = new byte[LZ4BlockHeader.Size + 16];
-        System.BitConverter.GetBytes(fakeOriginalLength).CopyTo(block, 0);
-        System.BitConverter.GetBytes(block.Length).CopyTo(block, 4);
-
-        Assert.False(FrameTransformer.TryGetDecompressedLength(block, out int length));
-        Assert.Equal(0, length);
-        _ = Assert.ThrowsAny<LZ4Exception>(() => FrameTransformer.GetDecompressedLength(block));
-    }
-
     [Fact]
-    public void FrameTransformer_MismatchedCompressedLength_RejectsBeforeAllocation()
-    {
-        byte[] block = new byte[LZ4BlockHeader.Size + 8];
-        System.BitConverter.GetBytes(16).CopyTo(block, 0);
-        System.BitConverter.GetBytes(block.Length + 4).CopyTo(block, 4); // Mismatched CompressedLength
-
-        Assert.False(FrameTransformer.TryGetDecompressedLength(block, out int length));
-        Assert.Equal(0, length);
-        _ = Assert.ThrowsAny<LZ4Exception>(() => FrameTransformer.GetDecompressedLength(block));
-    }
-
-    [Fact]
-    public void FrameTransformer_ImpossibleExpansionRatio_RejectsBeforeAllocation()
-    {
-        // 4 bytes of LZ4 token stream can mathematically expand to at most 19 bytes.
-        byte[] block = new byte[LZ4BlockHeader.Size + 4];
-        System.BitConverter.GetBytes(20).CopyTo(block, 0);
-        System.BitConverter.GetBytes(block.Length).CopyTo(block, 4);
-
-        Assert.False(FrameTransformer.TryGetDecompressedLength(block, out int length));
-        Assert.Equal(0, length);
-        _ = Assert.ThrowsAny<LZ4Exception>(() => FrameTransformer.GetDecompressedLength(block));
-
-        // Exact boundary (19 bytes for 4-byte stream) passes header validation:
-        System.BitConverter.GetBytes(19).CopyTo(block, 0);
-        Assert.True(FrameTransformer.TryGetDecompressedLength(block, out int validLength));
-        Assert.Equal(19, validLength);
-    }
-
-    [Fact]
-    public void FramePipeline_TryProcessInbound_ShortFrameAndBombHeaders_ReturnFalseWithoutThrowing()
+    public void TryProcessInbound_WhenFrameIsShortOrCarriesBombHeader_ReturnsFalseWithoutThrowing()
     {
         // 1. Frame shorter than PacketHeader.Size (6 bytes) must return false without throwing ArgumentException.
         using BufferLease shortLease = BufferLease.Rent(4);

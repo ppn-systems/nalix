@@ -1,5 +1,6 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using Nalix.Codec.LZ4;
 using Nalix.Environment.Memory;
 
@@ -29,7 +30,7 @@ public sealed class LZ4CodecTests
     }
 
     [Fact]
-    public void EncodeDecodeWithSpanRoundTripsData()
+    public void EncodeDecode_WithSpanBuffers_RoundTripsData()
     {
         // Arrange
         byte[] original = CreateSamplePayload(4 * 1024); // 4 KB
@@ -56,7 +57,7 @@ public sealed class LZ4CodecTests
     }
 
     [Fact]
-    public void EncodeWithTooSmallOutputThrowsArgumentOutOfRangeException()
+    public void Encode_WhenOutputIsSmallerThanHeader_ThrowsArgumentOutOfRangeException()
     {
         // Arrange
         byte[] original = CreateSamplePayload(1024);
@@ -67,7 +68,7 @@ public sealed class LZ4CodecTests
     }
 
     [Fact]
-    public void EncodeWithLeaseRoundTripsData()
+    public void Encode_WithLeaseOutput_RoundTripsData()
     {
         // Arrange
         byte[] original = CreateSamplePayload(8 * 1024);
@@ -97,7 +98,7 @@ public sealed class LZ4CodecTests
     }
 
     [Fact]
-    public void DecodeToLeaseRoundTripsData()
+    public void Decode_WithLeaseOutput_RoundTripsData()
     {
         // Arrange
         byte[] original = CreateSamplePayload(10 * 1024);
@@ -126,7 +127,7 @@ public sealed class LZ4CodecTests
     }
 
     [Fact]
-    public void EncodeDecodeWithEmptyInputWorks()
+    public void EncodeDecode_WhenInputIsEmpty_DecodesToZeroBytes()
     {
         // Arrange
         ReadOnlySpan<byte> original = [];

@@ -17,7 +17,7 @@ public sealed class FragmentStreamIdTests
     private static void SetCounter(uint value) => s_counterField.SetValue(null, value);
 
     [Fact]
-    public void NextFromZeroStartsAtOneAndIncrements()
+    public void Next_WhenCounterStartsAtZero_StartsAtOneAndIncrements()
     {
         lock (s_gate)
         {
@@ -42,7 +42,7 @@ public sealed class FragmentStreamIdTests
     }
 
     [Fact]
-    public void NextAtCounter65535SkipsZeroAndDoesNotReturnZero()
+    public void Next_WhenCounterWrapsPastUshortMax_SkipsZero()
     {
         lock (s_gate)
         {
@@ -68,7 +68,7 @@ public sealed class FragmentStreamIdTests
     }
 
     [Fact]
-    public void NextNeverReturnsZeroInManyCalls()
+    public void Next_WhenCalledManyTimes_NeverReturnsZero()
     {
         lock (s_gate)
         {
@@ -87,22 +87,17 @@ public sealed class FragmentStreamIdTests
             }
         }
     }
+
+    [Fact]
+    public void Next_WhenCalledRepeatedly_NeverReturnsZero()
+    {
+        ushort[] values = new ushort[128];
+
+        for (int index = 0; index < values.Length; index++)
+        {
+            values[index] = FragmentStreamId.Next();
+        }
+
+        Assert.DoesNotContain((ushort)0, values);
+    }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

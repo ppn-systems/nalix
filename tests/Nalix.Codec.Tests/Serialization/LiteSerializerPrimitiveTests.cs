@@ -1,5 +1,8 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
+using Nalix.Codec.Tests.TestSupport;
+
 namespace Nalix.Codec.Tests.Serialization;
 
 public sealed class LiteSerializerPrimitiveTests
@@ -10,7 +13,7 @@ public sealed class LiteSerializerPrimitiveTests
     [InlineData(-999)]
     public void SerializeDeserialize_Int32_RoundTripsValue(int input)
     {
-        int output = LiteSerializerTestHelper.RoundTrip(input);
+        int output = LiteSerializerRoundTrip.RoundTrip(input);
         Assert.Equal(input, output);
     }
 
@@ -20,14 +23,14 @@ public sealed class LiteSerializerPrimitiveTests
     [InlineData(-1.23)]
     public void SerializeDeserialize_Double_RoundTripsValue(double input)
     {
-        double output = LiteSerializerTestHelper.RoundTrip(input);
+        double output = LiteSerializerRoundTrip.RoundTrip(input);
         Assert.Equal(input, output, precision: 5);
     }
 
     [Fact]
     public void SerializeDeserialize_Boolean_RoundTripsValue()
     {
-        bool result = LiteSerializerTestHelper.RoundTrip(true);
+        bool result = LiteSerializerRoundTrip.RoundTrip(true);
         Assert.True(result);
     }
 }

@@ -1,7 +1,9 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Serialization;
+using Nalix.Codec.Tests.TestSupport;
 
 namespace Nalix.Codec.Tests.Serialization;
 
@@ -11,7 +13,7 @@ public sealed class LiteSerializerArrayTests
     public void SerializeDeserialize_IntArray_RoundTripsValues()
     {
         int[] input = [1, 2, 3, 4];
-        int[] output = LiteSerializerTestHelper.RoundTrip(input);
+        int[] output = LiteSerializerRoundTrip.RoundTrip(input);
 
         Assert.Equal(input, output);
     }
@@ -20,7 +22,7 @@ public sealed class LiteSerializerArrayTests
     public void SerializeDeserialize_EmptyArray_RoundTripsValues()
     {
         int[] input = [];
-        int[] output = LiteSerializerTestHelper.RoundTrip(input);
+        int[] output = LiteSerializerRoundTrip.RoundTrip(input);
 
         Assert.Empty(output);
     }
@@ -40,7 +42,7 @@ public sealed class LiteSerializerArrayTests
     [Theory]
     [InlineData(-2)]
     [InlineData(int.MaxValue)]
-    public void Deserialize_ReferenceArray_InvalidLength_ReturnsNull(int length)
+    public void Deserialize_WhenReferenceArrayLengthIsInvalid_ThrowsSerializationFailureException(int length)
     {
         byte[] buffer = BitConverter.GetBytes(length);
         object[]? output = null;

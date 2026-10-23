@@ -3,13 +3,13 @@
 
 using Nalix.Codec.LZ4;
 
-namespace Nalix.Codec.Tests.LZ4;
+namespace Nalix.Codec.Tests.LZ4.Engine;
 
 /// <summary>
 /// The per-thread LZ4 hash table is reused without clearing; stale entries from earlier blocks must
 /// only act as (verified) hints and never corrupt the output.
 /// </summary>
-public sealed class LZ4HashTableReuseTests
+public sealed class LZ4HashTablePoolTests
 {
     [Fact]
     public void Encode_AfterUnrelatedBlocks_StillRoundTrips()
@@ -44,7 +44,7 @@ public sealed class LZ4HashTableReuseTests
     }
 
     [Fact]
-    public void Encode_SameInput_AfterDifferentPriorBlock_DecodesIdentically()
+    public void Encode_AfterDifferentPriorBlock_DecodesIdentically()
     {
         byte[] input = new byte[4096];
         for (int i = 0; i < input.Length; i++)

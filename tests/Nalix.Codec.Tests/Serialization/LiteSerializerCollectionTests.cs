@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using Nalix.Codec.Serialization;
+using Nalix.Codec.Tests.TestSupport;
 
 namespace Nalix.Codec.Tests.Serialization;
 
@@ -12,7 +13,7 @@ public sealed class LiteSerializerCollectionTests
     {
         List<int> input = [10, 20, 30, 40, 50];
         List<int>? output = null;
-        _ = LiteSerializerTestHelper.RoundTrip(input, ref output);
+        _ = LiteSerializerRoundTrip.RoundTrip(input, ref output);
 
         Assert.NotNull(output);
         Assert.Equal(input, output);
@@ -28,7 +29,7 @@ public sealed class LiteSerializerCollectionTests
             ["three"] = 3
         };
         Dictionary<string, int>? output = null;
-        _ = LiteSerializerTestHelper.RoundTrip(input, ref output);
+        _ = LiteSerializerRoundTrip.RoundTrip(input, ref output);
 
         Assert.NotNull(output);
         Assert.Equal(input.Count, output.Count);
@@ -48,7 +49,7 @@ public sealed class LiteSerializerCollectionTests
         input.Enqueue("third");
 
         Queue<string>? output = null;
-        _ = LiteSerializerTestHelper.RoundTrip(input, ref output);
+        _ = LiteSerializerRoundTrip.RoundTrip(input, ref output);
 
         Assert.NotNull(output);
         Assert.Equal(input.Count, output.Count);
@@ -66,7 +67,7 @@ public sealed class LiteSerializerCollectionTests
         input.Push(3.3f);
 
         Stack<float>? output = null;
-        _ = LiteSerializerTestHelper.RoundTrip(input, ref output);
+        _ = LiteSerializerRoundTrip.RoundTrip(input, ref output);
 
         Assert.NotNull(output);
         Assert.Equal(input.Count, output.Count);
@@ -80,7 +81,7 @@ public sealed class LiteSerializerCollectionTests
     {
         HashSet<int> input = [1, 2, 3, 4, 5];
         HashSet<int>? output = null;
-        _ = LiteSerializerTestHelper.RoundTrip(input, ref output);
+        _ = LiteSerializerRoundTrip.RoundTrip(input, ref output);
 
         Assert.NotNull(output);
         Assert.Equal(input.Count, output.Count);
@@ -92,7 +93,7 @@ public sealed class LiteSerializerCollectionTests
     {
         Memory<int> input = new int[] { 100, 200, 300, 400 };
         Memory<int> output = default;
-        _ = LiteSerializerTestHelper.RoundTrip(input, ref output);
+        _ = LiteSerializerRoundTrip.RoundTrip(input, ref output);
 
         Assert.Equal(input.Length, output.Length);
         Assert.Equal(input.ToArray(), output.ToArray());
@@ -103,14 +104,14 @@ public sealed class LiteSerializerCollectionTests
     {
         ReadOnlyMemory<long> input = new long[] { 1L, 2L, 3L };
         ReadOnlyMemory<long> output = default;
-        _ = LiteSerializerTestHelper.RoundTrip(input, ref output);
+        _ = LiteSerializerRoundTrip.RoundTrip(input, ref output);
 
         Assert.Equal(input.Length, output.Length);
         Assert.Equal(input.ToArray(), output.ToArray());
     }
 
     [Fact]
-    public void Deserialize_Memory_WhenLengthTooLarge_ThrowsSerializationFailureException()
+    public void Deserialize_WhenMemoryLengthIsTooLarge_ThrowsSerializationFailureException()
     {
         byte[] buffer = BitConverter.GetBytes(1_048_577);
         Memory<int> output = default;
@@ -119,7 +120,7 @@ public sealed class LiteSerializerCollectionTests
     }
 
     [Fact]
-    public void Deserialize_List_WhenDeclaredCountExceedsPayload_ReturnsNull()
+    public void Deserialize_WhenListCountExceedsPayload_ThrowsSerializationFailureException()
     {
         byte[] buffer = BitConverter.GetBytes(1_048_576);
         List<string>? output = null;
@@ -129,7 +130,7 @@ public sealed class LiteSerializerCollectionTests
     }
 
     [Fact]
-    public void Deserialize_Dictionary_WhenDeclaredCountExceedsPayload_ReturnsNull()
+    public void Deserialize_WhenDictionaryCountExceedsPayload_ThrowsSerializationFailureException()
     {
         byte[] buffer = BitConverter.GetBytes(1_048_576);
         Dictionary<string, int>? output = null;
@@ -139,26 +140,26 @@ public sealed class LiteSerializerCollectionTests
     }
 
     [Fact]
-    public void SerializeDeserialize_ValueTuples_Arity2Through5_RoundTripState()
+    public void SerializeDeserialize_WhenValueTuplesHaveArityTwoToFive_RoundTripsState()
     {
         // Arity 2
         (int, string) t2 = (1, "two");
-        (int, string) r2 = LiteSerializerTestHelper.RoundTrip(t2);
+        (int, string) r2 = LiteSerializerRoundTrip.RoundTrip(t2);
         Assert.Equal(t2, r2);
 
         // Arity 3
         (int, string, float) t3 = (1, "two", 3.3f);
-        (int, string, float) r3 = LiteSerializerTestHelper.RoundTrip(t3);
+        (int, string, float) r3 = LiteSerializerRoundTrip.RoundTrip(t3);
         Assert.Equal(t3, r3);
 
         // Arity 4
         (int, string, float, long) t4 = (1, "two", 3.3f, 4L);
-        (int, string, float, long) r4 = LiteSerializerTestHelper.RoundTrip(t4);
+        (int, string, float, long) r4 = LiteSerializerRoundTrip.RoundTrip(t4);
         Assert.Equal(t4, r4);
 
         // Arity 5
         (int, string, float, long, bool) t5 = (1, "two", 3.3f, 4L, true);
-        (int, string, float, long, bool) r5 = LiteSerializerTestHelper.RoundTrip(t5);
+        (int, string, float, long, bool) r5 = LiteSerializerRoundTrip.RoundTrip(t5);
         Assert.Equal(t5, r5);
     }
 

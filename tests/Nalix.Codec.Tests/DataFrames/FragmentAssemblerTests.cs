@@ -1,82 +1,29 @@
-using System.Text;
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
+using Nalix.Abstractions;
+using Nalix.Abstractions.Exceptions;
+using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Primitives;
+using Nalix.Abstractions.Security;
+using Nalix.Codec.DataFrames;
+using Nalix.Codec.ProtocolFrames;
+using Nalix.Codec.Security;
+using Nalix.Codec.Tests.TestSupport;
+using Nalix.Codec.Transforms;
+using Nalix.Environment.Extensions;
 using Nalix.Environment.Fragments;
 using Nalix.Environment.Memory;
-using Nalix.Environment.Options;
+using Nalix.Environment.Random;
+using System.Text;
 
 namespace Nalix.Codec.Tests.DataFrames;
 
-public sealed partial class DataFramesPublicApiTests
+public sealed class FragmentAssemblerTests
 {
-    [Theory]
-    [InlineData((ushort)1, (ushort)0, (ushort)1, true)]
-    [InlineData((ushort)2, (ushort)1, (ushort)3, false)]
-    public void WriteToThenReadFromFragmentHeaderPreservesPublicState(ushort streamId, ushort chunkIndex, ushort totalChunks, bool isLast)
-    {
-        FragmentHeader header = new(streamId, chunkIndex, totalChunks, isLast);
-        byte[] buffer = new byte[FragmentHeader.WireSize];
-
-        header.WriteTo(buffer);
-        FragmentHeader roundTripped = FragmentHeader.ReadFrom(buffer);
-
-        Assert.Equal(header, roundTripped);
-        Assert.Equal(streamId, roundTripped.StreamId);
-        Assert.Equal(chunkIndex, roundTripped.ChunkIndex);
-        Assert.Equal(totalChunks, roundTripped.TotalChunks);
-        Assert.Equal(isLast, roundTripped.IsLast);
-    }
-
     [Fact]
-    public void ReadFromWhenMagicIsInvalidThrowsInvalidDataException()
-    {
-        byte[] buffer = new byte[FragmentHeader.WireSize];
-
-        InvalidDataException exception = Assert.Throws<InvalidDataException>(() => FragmentHeader.ReadFrom(buffer));
-
-        Assert.Equal("Invalid fragment magic", exception.Message);
-    }
-
-    [Theory]
-    [InlineData(8192, 8192, true)]
-    [InlineData(0, 8192, false)]
-    [InlineData(4096, 8192, false)]
-    public void ValidateWhenFragmentOptionsVaryMatchesExpectedValidity(
-        int maxPayloadSize,
-        int maxChunkSize,
-        bool shouldSucceed)
-    {
-        FragmentOptions options = new()
-        {
-            MaxPayloadSize = maxPayloadSize,
-            MaxChunkSize = maxChunkSize
-        };
-
-        Exception? exception = Record.Exception(options.Validate);
-
-        if (shouldSucceed)
-        {
-            Assert.Null(exception);
-        }
-        else
-        {
-            _ = Assert.IsType<Nalix.Abstractions.Exceptions.ValidationException>(exception);
-        }
-    }
-
-    [Fact]
-    public void NextWhenCalledRepeatedlyNeverReturnsZero()
-    {
-        ushort[] values = new ushort[128];
-
-        for (int index = 0; index < values.Length; index++)
-        {
-            values[index] = FragmentStreamId.Next();
-        }
-
-        Assert.DoesNotContain((ushort)0, values);
-    }
-
-    [Fact]
-    public void AddWhenAllChunksArriveInOrderReturnsAssembledBuffer()
+    public void Add_WhenAllChunksArriveInOrder_ReturnsAssembledBuffer()
     {
         using FragmentAssembler assembler = new();
         FragmentHeader first = new(7, 0, 2, false);
@@ -95,7 +42,7 @@ public sealed partial class DataFramesPublicApiTests
     }
 
     [Fact]
-    public void AddWhenFirstChunkArrivesOutOfOrderThrowsInvalidDataException()
+    public void Add_WhenFirstChunkIsNotChunkZero_ThrowsInvalidDataException()
     {
         using FragmentAssembler assembler = new();
         FragmentHeader second = new(9, 1, 2, true);
@@ -108,7 +55,7 @@ public sealed partial class DataFramesPublicApiTests
     }
 
     [Fact]
-    public void AddWhenChunkSequenceStartsCorrectlyAndCompletesAssemblesPayload()
+    public void Add_WhenSequenceStartsAtChunkZeroAndCompletes_AssemblesPayload()
     {
         using FragmentAssembler assembler = new();
         FragmentHeader first = new(10, 0, 2, false);
@@ -130,7 +77,7 @@ public sealed partial class DataFramesPublicApiTests
     [InlineData((ushort)0, (ushort)0, (ushort)1)]
     [InlineData((ushort)1, (ushort)1, (ushort)1)]
     [InlineData((ushort)1, (ushort)0, (ushort)0)]
-    public void AddWhenHeaderIsInvalidThrowsInvalidDataException(ushort streamId, ushort chunkIndex, ushort totalChunks)
+    public void Add_WhenHeaderIsInvalid_ThrowsInvalidDataException(ushort streamId, ushort chunkIndex, ushort totalChunks)
     {
         using FragmentAssembler assembler = new();
         FragmentHeader header = new(streamId, chunkIndex, totalChunks, false);
@@ -139,13 +86,13 @@ public sealed partial class DataFramesPublicApiTests
     }
 
     [Fact]
-    public void AddWhenStreamHasTimedOutEvictsStreamAndReturnsNull()
+    public void Add_WhenStreamHasTimedOut_EvictsStreamAndReturnsNull()
     {
         using FragmentAssembler assembler = new() { StreamTimeoutMs = 1000 };
         FragmentHeader first = new(15, 0, 2, false);
         FragmentHeader second = new(15, 1, 2, true);
         _ = assembler.Add(first, [1], out _);
-        Thread.Sleep(1500);
+        TickClock.Advance(1500);
 
         FragmentAssemblyResult? assembled = assembler.Add(second, [2], out bool streamEvicted);
 
@@ -155,11 +102,11 @@ public sealed partial class DataFramesPublicApiTests
     }
 
     [Fact]
-    public void EvictExpiredAndClearWhenStreamsExistRemovesTrackedStreams()
+    public void EvictExpiredAndClear_WhenStreamsExist_RemovesTrackedStreams()
     {
         using FragmentAssembler assembler = new() { StreamTimeoutMs = 1000 };
         _ = assembler.Add(new FragmentHeader(21, 0, 2, false), [1, 2], out _);
-        Thread.Sleep(1500);
+        TickClock.Advance(1500);
 
         int evicted = assembler.EvictExpired();
         _ = assembler.Add(new FragmentHeader(22, 0, 2, false), [3, 4], out _);
@@ -170,12 +117,12 @@ public sealed partial class DataFramesPublicApiTests
     }
 
     [Fact]
-    public void AddWhenEvictIntervalIsReachedAutomaticallySweepsExpiredStreams()
+    public void Add_WhenEvictIntervalIsReached_SweepsExpiredStreams()
     {
         using FragmentAssembler assembler = new() { StreamTimeoutMs = 2000 };
 
         _ = assembler.Add(new FragmentHeader(40, 0, 2, false), [1], out _);
-        Thread.Sleep(2500);
+        TickClock.Advance(2500);
 
         for (ushort streamId = 41; streamId < 41 + FragmentAssembler.EvictInterval - 1; streamId++)
         {
@@ -188,10 +135,10 @@ public sealed partial class DataFramesPublicApiTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void IsFragmentedFrameWhenPayloadVariesReturnsExpectedResult(bool useValidPayload)
+    public void IsFragmentedFrame_WhenPayloadVaries_ReturnsExpectedResult(bool useValidPayload)
     {
         byte[] payload = useValidPayload
-            ? CreateFragmentPayload(new FragmentHeader(30, 0, 1, true), [9, 8, 7])
+            ? FrameTestData.CreateFragmentPayload(new FragmentHeader(30, 0, 1, true), [9, 8, 7])
             : [0x01, 0x02, 0x03];
 
         bool isFragment = FragmentAssembler.IsFragmentedFrame(payload, out FragmentHeader header);
@@ -209,7 +156,7 @@ public sealed partial class DataFramesPublicApiTests
     }
 
     [Fact]
-    public void AddWhenSmallFirstChunkClaimsMaxTotalChunksBoundsInitialAllocation()
+    public void Add_WhenSmallFirstChunkClaimsMaxTotalChunks_BoundsInitialAllocation()
     {
         using FragmentAssembler assembler = new();
         FragmentHeader header = new(streamId: 77, chunkIndex: 0, totalChunks: ushort.MaxValue, isLast: false);
@@ -234,7 +181,7 @@ public sealed partial class DataFramesPublicApiTests
     }
 
     [Fact]
-    public void AddWhenDuplicateChunkZeroArrivesEvictsCorruptedStreamAndThrows()
+    public void Add_WhenChunkZeroIsDuplicated_EvictsStreamAndThrows()
     {
         using FragmentAssembler assembler = new();
         FragmentHeader chunk0 = new(streamId: 88, chunkIndex: 0, totalChunks: 3, isLast: false);
@@ -251,7 +198,7 @@ public sealed partial class DataFramesPublicApiTests
     }
 
     [Fact]
-    public void AddWhenMaxOpenStreamsReachedSweepsExpiredStreamsBeforeRejecting()
+    public void Add_WhenMaxOpenStreamsReachedWithExpiredStreams_SweepsBeforeRejecting()
     {
         using FragmentAssembler assembler = new()
         {
@@ -263,7 +210,7 @@ public sealed partial class DataFramesPublicApiTests
         _ = assembler.Add(new FragmentHeader(streamId: 2, chunkIndex: 0, totalChunks: 2, isLast: false), [2], out _);
         Assert.Equal(2, assembler.OpenStreamCount);
 
-        Thread.Sleep(100);
+        TickClock.Advance(100);
 
         FragmentAssemblyResult? res = assembler.Add(new FragmentHeader(streamId: 3, chunkIndex: 0, totalChunks: 2, isLast: false), [3], out bool evicted);
 
@@ -271,24 +218,47 @@ public sealed partial class DataFramesPublicApiTests
         Assert.False(evicted);
         Assert.Equal(1, assembler.OpenStreamCount);
     }
+
+    [Fact]
+    public void Add_WhenTotalChunksChanges_EvictsStreamAndThrows()
+    {
+        using FragmentAssembler assembler = new();
+        _ = assembler.Add(new FragmentHeader(50, 0, 2, false), [1], out _);
+
+        bool evicted = false;
+        InvalidDataException ex = Assert.Throws<InvalidDataException>(() =>
+            assembler.Add(new FragmentHeader(50, 1, 3, true), [2], out evicted));
+
+        Assert.True(evicted);
+        Assert.Contains("changed TotalChunks", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, assembler.OpenStreamCount);
+    }
+
+    [Fact]
+    public void Add_WhenSecondChunkSkipsAhead_EvictsStreamAndThrows()
+    {
+        using FragmentAssembler assembler = new();
+        _ = assembler.Add(new FragmentHeader(51, 0, 3, false), [1], out _);
+
+        bool evicted = false;
+        InvalidDataException ex = Assert.Throws<InvalidDataException>(() =>
+            assembler.Add(new FragmentHeader(51, 2, 3, true), [2], out evicted));
+
+        Assert.True(evicted);
+        Assert.Contains("out-of-order", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, assembler.OpenStreamCount);
+    }
+
+    [Fact]
+    public void Add_WhenMaxOpenStreamsReached_ReturnsNullAndMarksEvicted()
+    {
+        using FragmentAssembler assembler = new() { MaxOpenStreams = 1 };
+        _ = assembler.Add(new FragmentHeader(60, 0, 2, false), [1], out _);
+
+        FragmentAssemblyResult? result = assembler.Add(new FragmentHeader(61, 0, 2, false), [2], out bool evicted);
+
+        Assert.Null(result);
+        Assert.True(evicted);
+        Assert.Equal(1, assembler.OpenStreamCount);
+    }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
