@@ -109,6 +109,10 @@ jobs:
         shell: bash
         timeout-minutes: 20
         run: |
+          # One retry of the whole suite. Two tests are known to be flaky because they expose real races in src/
+          # (WebSocketEchoAndGroupTests.Multicast_WithMultipleRooms_IsolatesMessagesByRoom and
+          # RequestResilienceTests.RequestAsync_ConcurrentOutOfOrderResponses_EachResolvesCorrectly); remove the retry
+          # (set max_retries=1) once those are fixed so new flakiness is not hidden.
           max_retries=2
           attempt=1
           while true; do

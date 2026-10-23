@@ -5,7 +5,7 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Runtime.Options;
 using Xunit;
 
-namespace Nalix.Network.Tests.Throttling;
+namespace Nalix.Runtime.Tests.Options;
 
 public sealed class TokenBucketOptionsTests
 {

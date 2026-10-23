@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
+using System.Threading.Tasks;
 using FluentAssertions;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
@@ -9,7 +10,7 @@ using Nalix.Runtime.Sessions;
 using NSubstitute;
 using Xunit;
 
-namespace Nalix.Network.Tests.Sessions;
+namespace Nalix.Runtime.Tests.Sessions;
 
 public sealed class SessionServiceTests
 {

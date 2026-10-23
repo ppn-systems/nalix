@@ -8,9 +8,9 @@ using Nalix.Runtime.Sessions;
 using NSubstitute;
 using Xunit;
 
-namespace Nalix.Network.Tests.Sessions;
+namespace Nalix.Runtime.Tests.Sessions;
 
-public sealed class DefaultSessionPersistencePolicyTests
+public sealed class DefaultSessionPersistencePolicyThresholdTests
 {
     [Fact]
     public void ShouldPersist_WhenHandshakeNotEstablished_ReturnsFalse()

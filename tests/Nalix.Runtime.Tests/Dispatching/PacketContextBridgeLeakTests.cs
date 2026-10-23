@@ -17,7 +17,7 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Xunit;
 
-namespace Nalix.Network.Tests;
+namespace Nalix.Runtime.Tests.Dispatching;
 
 /// <summary>
 /// Area 5 (pooling leaks): <see cref="PacketContextBridge"/> rents a strongly-typed

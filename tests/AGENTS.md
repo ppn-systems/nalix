@@ -28,7 +28,8 @@ one source project wired together.
 - The folder tree of a test project **mirrors the folder tree of its source project**.
   `src/Nalix.Network/Internal/Security/SlidingWindow.cs` is tested by
   `tests/Nalix.Network.Tests/Internal/Security/SlidingWindowTests.cs`.
-- No test files at the project root except `TestAssemblySetup.cs` and `TestCollections.cs` (both optional).
+- No test files at the project root except `TestAssemblySetup.cs` and `TestCollections.cs` (both optional), and
+  tests whose subject sits directly at the root of its source project (for example `ReportRegistry.cs`).
 - Shared helpers, fakes and builders live in `TestSupport/` inside the project. Anything used by several test
   projects goes in `tests/Shared/` and is linked in through `tests/Directory.Build.props`.
 - One top-level test class per file. The file name equals the class name.

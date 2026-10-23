@@ -11,10 +11,10 @@ using Nalix.Framework.Injection;
 using Nalix.Framework.Memory.Objects;
 using Xunit;
 
-namespace Nalix.Framework.Tests;
+namespace Nalix.Codec.Tests.Pooling;
 
-[Collection(TestCollections.SequentialPooling)]
-public sealed class LeakReproductionTests
+[Collection(TestCollections.PooledBufferScrub)]
+public sealed class PacketFactoryLeakTests
 {
     [Fact]
     public void Deserialize_WhenInstanceIsRented_KeepsRentedInstance()

@@ -6,9 +6,9 @@ using Nalix.Runtime.Options;
 using Nalix.Runtime.Throttling;
 using Xunit;
 
-namespace Nalix.Network.Tests.Throttling;
+namespace Nalix.Runtime.Tests.Throttling;
 
-public sealed class TokenBucketLimiterTests
+public sealed class TokenBucketLimiterDisposalTests
 {
     [Fact]
     public void Evaluate_WhenLimiterDisposed_ReturnsHardLockoutDecision()

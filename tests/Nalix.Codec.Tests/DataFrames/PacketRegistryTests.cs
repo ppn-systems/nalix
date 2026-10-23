@@ -144,13 +144,14 @@ public sealed class PacketRegistryTests : IDisposable
         Assert.StartsWith("Raw packet data is too short to contain a valid header", ex.Message);
     }
 
-    public void DeserializeWhenOpCodeIsUnknownThrowsInvalidOperationException()
+    [Fact]
+    public void Deserialize_WhenOpCodeIsMaxValueAndUnregistered_ThrowsInvalidOperationException()
     {
         byte[] buf = new byte[PacketConstants.HeaderSize];
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(4), 0xFFFF);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(buf, ushort.MaxValue);
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => PacketRegistry.Deserialize(buf));
-        Assert.StartsWith("Cannot deserialize packet: OpCode", ex.Message);
+        Assert.StartsWith("Cannot deserialize packet: OpCode 65535 is not registered", ex.Message);
     }
 
     [Fact]

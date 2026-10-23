@@ -14,13 +14,13 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Sessions;
 using Xunit;
 
-namespace Nalix.Network.Tests.Sessions;
+namespace Nalix.Runtime.Tests.Sessions;
 
-public sealed class InMemorySessionStoreTests : IDisposable
+public sealed class InMemorySessionStoreConsumptionTests : IDisposable
 {
     private readonly InMemorySessionStore _store;
 
-    public InMemorySessionStoreTests()
+    public InMemorySessionStoreConsumptionTests()
     {
         _store = new InMemorySessionStore();
     }
