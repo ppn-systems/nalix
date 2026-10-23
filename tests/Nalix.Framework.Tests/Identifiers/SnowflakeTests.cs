@@ -11,7 +11,7 @@ using Nalix.Environment.Time;
 using Nalix.Framework.Identifiers;
 using Xunit;
 
-namespace Nalix.Abstractions.Tests.Identity;
+namespace Nalix.Framework.Tests.Identifiers;
 
 public sealed class SnowflakeTests
 {

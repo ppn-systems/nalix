@@ -10,7 +10,7 @@ using Nalix.Abstractions.Security;
 using Nalix.Codec.DataFrames;
 using Nalix.Codec.ProtocolFrames;
 using Nalix.Codec.Security;
-using Nalix.Codec.Tests.TestSupport;
+using Nalix.Environment.Tests.TestSupport;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Extensions;
 using Nalix.Environment.Fragments;
@@ -18,7 +18,7 @@ using Nalix.Environment.Memory;
 using Nalix.Environment.Random;
 using System.Text;
 
-namespace Nalix.Codec.Tests.DataFrames;
+namespace Nalix.Environment.Tests.Fragments;
 
 public sealed class FragmentAssemblerTests
 {
@@ -138,7 +138,7 @@ public sealed class FragmentAssemblerTests
     public void IsFragmentedFrame_WhenPayloadVaries_ReturnsExpectedResult(bool useValidPayload)
     {
         byte[] payload = useValidPayload
-            ? FrameTestData.CreateFragmentPayload(new FragmentHeader(30, 0, 1, true), [9, 8, 7])
+            ? CreateFragmentPayload(new FragmentHeader(30, 0, 1, true), [9, 8, 7])
             : [0x01, 0x02, 0x03];
 
         bool isFragment = FragmentAssembler.IsFragmentedFrame(payload, out FragmentHeader header);
@@ -260,5 +260,13 @@ public sealed class FragmentAssemblerTests
         Assert.Null(result);
         Assert.True(evicted);
         Assert.Equal(1, assembler.OpenStreamCount);
+    }
+
+    private static byte[] CreateFragmentPayload(FragmentHeader header, ReadOnlySpan<byte> body)
+    {
+        byte[] payload = new byte[FragmentHeader.WireSize + body.Length];
+        header.WriteTo(payload);
+        body.CopyTo(payload.AsSpan(FragmentHeader.WireSize));
+        return payload;
     }
 }

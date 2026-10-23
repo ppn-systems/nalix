@@ -10,7 +10,6 @@ using Nalix.Abstractions.Security;
 using Nalix.Codec.DataFrames;
 using Nalix.Codec.ProtocolFrames;
 using Nalix.Codec.Security;
-using Nalix.Codec.Tests.TestSupport;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Extensions;
 using Nalix.Environment.Fragments;
@@ -18,7 +17,7 @@ using Nalix.Environment.Memory;
 using Nalix.Environment.Random;
 using System.Text;
 
-namespace Nalix.Codec.Tests.DataFrames;
+namespace Nalix.Environment.Tests.Fragments;
 
 public sealed class FragmentHeaderTests
 {

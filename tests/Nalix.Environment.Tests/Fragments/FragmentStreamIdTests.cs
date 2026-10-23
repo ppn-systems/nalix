@@ -4,7 +4,7 @@
 using System.Reflection;
 using Nalix.Environment.Fragments;
 
-namespace Nalix.Codec.Tests.DataFrames;
+namespace Nalix.Environment.Tests.Fragments;
 
 public sealed class FragmentStreamIdTests
 {

@@ -5,7 +5,7 @@ using System.Text;
 using Nalix.Environment.Fragments;
 using Nalix.Environment.Memory;
 
-namespace Nalix.Codec.Tests.DataFrames;
+namespace Nalix.Environment.Tests.Fragments;
 
 public sealed class FragmentAssemblyResultTests
 {

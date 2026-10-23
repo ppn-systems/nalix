@@ -1,7 +1,7 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-namespace Nalix.Codec.Tests.TestSupport;
+namespace Nalix.Environment.Tests.TestSupport;
 
 /// <summary>
 /// Waits for the process tick clock (<see cref="System.Environment.TickCount64"/>) to advance, so tests that

@@ -3,12 +3,10 @@
 
 using System;
 using Nalix.Abstractions.Exceptions;
-using Nalix.Codec.Options;
 using Nalix.Environment.Options;
-using Nalix.Framework.Options;
 using Xunit;
 
-namespace Nalix.Framework.Tests.Options;
+namespace Nalix.Environment.Tests.Options;
 
 public sealed class FragmentOptionsTests
 {
@@ -58,5 +56,32 @@ public sealed class FragmentOptionsTests
         };
 
         Assert.Throws<ValidationException>(options.Validate);
+    }
+
+    [Theory]
+    [InlineData(8192, 8192, true)]
+    [InlineData(0, 8192, false)]
+    [InlineData(4096, 8192, false)]
+    public void Validate_WhenPayloadAndChunkSizesVary_MatchesExpectedValidity(
+        int maxPayloadSize,
+        int maxChunkSize,
+        bool shouldSucceed)
+    {
+        FragmentOptions options = new()
+        {
+            MaxPayloadSize = maxPayloadSize,
+            MaxChunkSize = maxChunkSize
+        };
+
+        Exception? exception = Record.Exception(options.Validate);
+
+        if (shouldSucceed)
+        {
+            Assert.Null(exception);
+        }
+        else
+        {
+            _ = Assert.IsType<ValidationException>(exception);
+        }
     }
 }
