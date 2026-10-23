@@ -139,7 +139,8 @@ public sealed class AsyncCallbackDispatchTests
         poolOpts.DefaultPreallocate = 16;
         poolOpts.DefaultMaxPoolSize = 1024;
         InstanceManager.Instance.GetOrCreateInstance<BufferPoolManager>();
-        InstanceManager.Instance.GetOrCreateInstance<ObjectPoolManager>();
+        InstanceManager.Instance.Register<Nalix.Abstractions.IObjectPoolManager>(ObjectPoolManager.Shared);
+        InstanceManager.Instance.Register<ObjectPoolManager>(ObjectPoolManager.Shared);
     }
 }
 #endif

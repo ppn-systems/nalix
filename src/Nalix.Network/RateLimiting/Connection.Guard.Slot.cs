@@ -136,7 +136,7 @@ public sealed partial class ConnectionGuard
             {
                 if (_maxTrackedEndpoints > 0 && _map.Count >= _maxTrackedEndpoints)
                 {
-                    _ = this.TRY_RANDOM_SAMPLE_EVICT();
+                    _ = this.TRY_RANDOM_SAMPLE_EVICT(nowTicks);
                 }
 
                 entry = _map.GetOrAdd(key, static _ => new ConnectionLimitEntry());
@@ -351,7 +351,7 @@ public sealed partial class ConnectionGuard
     /// <see cref="EvictionSampleSize"/> random samples from the map.
     /// </summary>
     /// <returns>True if an entry was evicted and the caller may retry GetOrAdd.</returns>
-    private bool TRY_RANDOM_SAMPLE_EVICT()
+    private bool TRY_RANDOM_SAMPLE_EVICT(long nowTicks)
     {
         // Collect a small fixed number of random samples from the map.
         // We iterate with a random skip to avoid always hitting the same entries.
@@ -364,7 +364,13 @@ public sealed partial class ConnectionGuard
         SocketEndpoint bestKey = default;
         long bestLastSeen = long.MaxValue;
         bool foundCandidate = false;
+
+        SocketEndpoint fallbackKey = default;
+        bool hasFallback = false;
+
         int sampled = 0;
+        int maxSkip = Math.Max(1, mapCount / EvictionSampleSize);
+        int skip = mapCount > EvictionSampleSize ? Random.Shared.Next(0, maxSkip) : 0;
 
         foreach (KeyValuePair<SocketEndpoint, ConnectionLimitEntry> kvp in _map)
         {
@@ -373,17 +379,34 @@ public sealed partial class ConnectionGuard
                 break;
             }
 
-            // Random skip: with a full map, this distributes samples across the space.
-            // Skip 0..mapCount/EvictionSampleSize entries between samples for spread.
-            sampled++;
-
             ConnectionLimitEntry entry = kvp.Value;
-            long lastSeen = Interlocked.Read(ref entry.LastSeenAtTicks);
             int conns = entry.Info.CurrentConnections;
 
-            // Only consider entries with zero active connections.
+            // Only consider entries with zero active connections that are not currently banned.
+            if (conns > 0 || Interlocked.Read(ref entry.BannedUntilTicks) > nowTicks || Volatile.Read(ref entry.BanCount) > 0)
+            {
+                continue;
+            }
+
+            long lastSeen = Interlocked.Read(ref entry.LastSeenAtTicks);
+            if (!hasFallback)
+            {
+                fallbackKey = kvp.Key;
+                hasFallback = true;
+            }
+
+            // Random skip: with a full map, this distributes samples across the space.
+            if (skip > 0)
+            {
+                skip--;
+                continue;
+            }
+
+            sampled++;
+            skip = mapCount > EvictionSampleSize ? Random.Shared.Next(0, maxSkip) : 0;
+
             // Prefer the one that has been idle the longest.
-            if (conns <= 0 && lastSeen < bestLastSeen)
+            if (lastSeen < bestLastSeen)
             {
                 bestKey = kvp.Key;
                 bestLastSeen = lastSeen;
@@ -393,7 +416,12 @@ public sealed partial class ConnectionGuard
 
         if (!foundCandidate)
         {
-            return false;
+            if (!hasFallback)
+            {
+                return false;
+            }
+
+            bestKey = fallbackKey;
         }
 
         // Double-check under lock before evicting.
@@ -403,7 +431,10 @@ public sealed partial class ConnectionGuard
             try
             {
                 victim.SpinLock.Enter(ref lockTaken);
-                if (victim.Info.CurrentConnections <= 0 && !victim.IsRemoved)
+                if (victim.Info.CurrentConnections <= 0 &&
+                    !victim.IsRemoved &&
+                    Interlocked.Read(ref victim.BannedUntilTicks) <= nowTicks &&
+                    victim.BanCount <= 0)
                 {
                     victim.IsRemoved = true;
                     if (_map.TryRemove(bestKey, out ConnectionLimitEntry? removed))
@@ -470,7 +501,7 @@ public sealed partial class ConnectionGuard
                 // This prevents memory exhaustion under spoofed-IP DDoS floods.
                 if (_maxTrackedEndpoints > 0 && _map.Count >= _maxTrackedEndpoints)
                 {
-                    _ = this.TRY_RANDOM_SAMPLE_EVICT();
+                    _ = this.TRY_RANDOM_SAMPLE_EVICT(nowTicks);
                 }
 
                 entry = _map.GetOrAdd(key, static _ => new ConnectionLimitEntry());

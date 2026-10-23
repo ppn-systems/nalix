@@ -163,6 +163,7 @@ public sealed class ConnectionCallbackHopTests
         InstanceManager.Instance.Register<ILogger>(NullLogger.Instance);
         _ = ConfigurationManager.Instance.Get<Nalix.Framework.Options.ObjectPoolOptions>();
         _ = InstanceManager.Instance.GetOrCreateInstance<BufferPoolManager>();
-        _ = InstanceManager.Instance.GetOrCreateInstance<ObjectPoolManager>();
+        InstanceManager.Instance.Register<Nalix.Abstractions.IObjectPoolManager>(ObjectPoolManager.Shared);
+        InstanceManager.Instance.Register<ObjectPoolManager>(ObjectPoolManager.Shared);
     }
 }

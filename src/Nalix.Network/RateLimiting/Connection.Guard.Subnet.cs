@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -64,16 +65,32 @@ public sealed partial class ConnectionGuard
 
         while (true)
         {
-            SubnetLimitEntry entry;
+            SubnetLimitEntry? entry;
             if (isIpv4)
             {
                 uint key = EXTRACT_IPV4_SUBNET_KEY(address);
-                entry = _subnetMapV4.GetOrAdd(key, static _ => new SubnetLimitEntry());
+                if (!_subnetMapV4.TryGetValue(key, out entry) || entry is null)
+                {
+                    if (_maxTrackedEndpoints > 0 && _subnetMapV4.Count >= _maxTrackedEndpoints)
+                    {
+                        _ = this.TRY_RANDOM_SAMPLE_EVICT_SUBNET(_subnetMapV4);
+                    }
+
+                    entry = _subnetMapV4.GetOrAdd(key, static _ => new SubnetLimitEntry());
+                }
             }
             else
             {
                 long key = EXTRACT_IPV6_SUBNET_KEY(address);
-                entry = _subnetMapV6.GetOrAdd(key, static _ => new SubnetLimitEntry());
+                if (!_subnetMapV6.TryGetValue(key, out entry) || entry is null)
+                {
+                    if (_maxTrackedEndpoints > 0 && _subnetMapV6.Count >= _maxTrackedEndpoints)
+                    {
+                        _ = this.TRY_RANDOM_SAMPLE_EVICT_SUBNET(_subnetMapV6);
+                    }
+
+                    entry = _subnetMapV6.GetOrAdd(key, static _ => new SubnetLimitEntry());
+                }
             }
 
             _ = Interlocked.Exchange(ref entry.LastSeenAtTicks, nowTicks);
@@ -134,14 +151,30 @@ public sealed partial class ConnectionGuard
 
         while (true)
         {
-            SubnetLimitEntry entry;
+            SubnetLimitEntry? entry;
             if (!isV6)
             {
-                entry = _subnetMapV4.GetOrAdd(ipv4Key, static _ => new SubnetLimitEntry());
+                if (!_subnetMapV4.TryGetValue(ipv4Key, out entry) || entry is null)
+                {
+                    if (_maxTrackedEndpoints > 0 && _subnetMapV4.Count >= _maxTrackedEndpoints)
+                    {
+                        _ = this.TRY_RANDOM_SAMPLE_EVICT_SUBNET(_subnetMapV4);
+                    }
+
+                    entry = _subnetMapV4.GetOrAdd(ipv4Key, static _ => new SubnetLimitEntry());
+                }
             }
             else
             {
-                entry = _subnetMapV6.GetOrAdd(ipv6Key, static _ => new SubnetLimitEntry());
+                if (!_subnetMapV6.TryGetValue(ipv6Key, out entry) || entry is null)
+                {
+                    if (_maxTrackedEndpoints > 0 && _subnetMapV6.Count >= _maxTrackedEndpoints)
+                    {
+                        _ = this.TRY_RANDOM_SAMPLE_EVICT_SUBNET(_subnetMapV6);
+                    }
+
+                    entry = _subnetMapV6.GetOrAdd(ipv6Key, static _ => new SubnetLimitEntry());
+                }
             }
 
             _ = Interlocked.Exchange(ref entry.LastSeenAtTicks, nowTicks);
@@ -240,5 +273,101 @@ public sealed partial class ConnectionGuard
                 entry.SpinLock.Exit();
             }
         }
+    }
+
+    private bool TRY_RANDOM_SAMPLE_EVICT_SUBNET<TKey>(ConcurrentDictionary<TKey, SubnetLimitEntry> subnetMap)
+        where TKey : notnull
+    {
+        int mapCount = subnetMap.Count;
+        if (mapCount == 0)
+        {
+            return false;
+        }
+
+        TKey bestKey = default!;
+        long bestLastSeen = long.MaxValue;
+        bool foundCandidate = false;
+
+        TKey fallbackKey = default!;
+        bool hasFallback = false;
+
+        int sampled = 0;
+        int maxSkip = Math.Max(1, mapCount / EvictionSampleSize);
+        int skip = mapCount > EvictionSampleSize ? Random.Shared.Next(0, maxSkip) : 0;
+
+        foreach (KeyValuePair<TKey, SubnetLimitEntry> kvp in subnetMap)
+        {
+            if (sampled >= EvictionSampleSize)
+            {
+                break;
+            }
+
+            SubnetLimitEntry entry = kvp.Value;
+            if (Volatile.Read(ref entry.CurrentConnections) > 0)
+            {
+                continue;
+            }
+
+            long lastSeen = Interlocked.Read(ref entry.LastSeenAtTicks);
+            if (!hasFallback)
+            {
+                fallbackKey = kvp.Key;
+                hasFallback = true;
+            }
+
+            if (skip > 0)
+            {
+                skip--;
+                continue;
+            }
+
+            sampled++;
+            skip = mapCount > EvictionSampleSize ? Random.Shared.Next(0, maxSkip) : 0;
+
+            if (lastSeen < bestLastSeen)
+            {
+                bestKey = kvp.Key;
+                bestLastSeen = lastSeen;
+                foundCandidate = true;
+            }
+        }
+
+        if (!foundCandidate)
+        {
+            if (!hasFallback)
+            {
+                return false;
+            }
+
+            bestKey = fallbackKey;
+        }
+
+        if (subnetMap.TryGetValue(bestKey, out SubnetLimitEntry? victim) && victim is not null)
+        {
+            bool lockTaken = false;
+            try
+            {
+                victim.SpinLock.Enter(ref lockTaken);
+                if (victim.CurrentConnections <= 0 && !victim.IsRemoved)
+                {
+                    victim.IsRemoved = true;
+                    if (subnetMap.TryRemove(bestKey, out SubnetLimitEntry? removed) && removed is not null)
+                    {
+                        removed.RecentConnectionTimestamps.Clear();
+                        _ = Interlocked.Increment(ref _totalCleanedEntries);
+                        return true;
+                    }
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    victim.SpinLock.Exit();
+                }
+            }
+        }
+
+        return false;
     }
 }

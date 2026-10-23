@@ -802,28 +802,47 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             {
                 BufferLease assembledLease = assembled.Value.Lease;
                 assembledLease.IsReliable = true;
-                assembledLease.Retain();
+
+                if (assembledLease.Length < PacketConstants.HeaderSize)
+                {
+#if DEBUG
+                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+                    {
+                        DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning, new DiagnosticLog("NW.SocketConnection:Internal", $"malformed-payload (too small for protocol header) payload-length={assembledLease.Length} endpoint={_endpointString}"));
+                    }
+#endif
+                    assembledLease.Dispose();
+                    return;
+                }
 
                 this.LastPingTime = Clock.UnixMillisecondsNow();
 
-                bool handled = _connectionOwner?.OnFrameReceived(assembledLease) ?? true;
-                if (!handled)
+                bool handled = false;
+                try
                 {
-                    if (_owner is IConnectionTrafficMetrics trafficMetrics)
+                    handled = _connectionOwner?.OnFrameReceived(assembledLease) ?? true;
+                    if (!handled)
                     {
-                        trafficMetrics.IncrementPacketsDropped();
+                        if (_owner is IConnectionTrafficMetrics trafficMetrics)
+                        {
+                            trafficMetrics.IncrementPacketsDropped();
+                        }
+                        assembledLease.Dispose();
                     }
-                    assembledLease.Dispose();
-                }
-                else
-                {
 #if DEBUG
-                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Debug))
+                    else if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Debug))
                     {
                         DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Debug, new DiagnosticLog("NW.SocketConnection:Internal", $"assembled stream stream-id={header.StreamId} endpoint={_endpointString}"));
                     }
 #endif
-                    assembledLease.Dispose();
+                }
+                catch
+                {
+                    if (!handled)
+                    {
+                        assembledLease.Dispose();
+                    }
+                    throw;
                 }
             }
             else if (streamEvicted && fragmentAssembler.OpenStreamCount >= s_opts.MaxPerConnectionOpenFragmentStreams)

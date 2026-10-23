@@ -675,6 +675,8 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
             }
 
             _map.Clear();
+            _subnetMapV4.Clear();
+            _subnetMapV6.Clear();
 
             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Debug))
             {

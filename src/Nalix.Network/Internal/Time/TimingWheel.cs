@@ -676,11 +676,19 @@ internal sealed class TimingWheel : IActivatable
                             continue;
                         }
 
+                        Lock syncLock = _connectionLocks[connection.ConnectionId.GetHashCode() & 255];
+
                         // If version mismatch or connection is marked as not in wheel, it's stale.
                         if (connection.TimeoutVersion != task.Version || !connection.IsRegisteredInWheel)
                         {
                             _ = Interlocked.Increment(ref _totalStaleSkips);
-                            connection.TimeoutTask = null;
+                            lock (syncLock)
+                            {
+                                if (ReferenceEquals(connection.TimeoutTask, task))
+                                {
+                                    connection.TimeoutTask = null;
+                                }
+                            }
 
                             s_pool.Return(task);
                             task = next;
@@ -692,9 +700,25 @@ internal sealed class TimingWheel : IActivatable
                         {
                             task.Rounds--;
 
-                            task.Next = null;
-                            task.Prev = null;
-                            _wheel[bucketIndex].Enqueue(task);
+                            lock (syncLock)
+                            {
+                                if (!connection.IsRegisteredInWheel || connection.TimeoutVersion != task.Version)
+                                {
+                                    _ = Interlocked.Increment(ref _totalStaleSkips);
+                                    if (ReferenceEquals(connection.TimeoutTask, task))
+                                    {
+                                        connection.TimeoutTask = null;
+                                    }
+
+                                    s_pool.Return(task);
+                                    task = next;
+                                    continue;
+                                }
+
+                                task.Next = null;
+                                task.Prev = null;
+                                _wheel[bucketIndex].Enqueue(task);
+                            }
 
                             task = next;
 
@@ -703,9 +727,26 @@ internal sealed class TimingWheel : IActivatable
 
                         if (connection.ExcludeFromIdleTimeout)
                         {
-                            connection.IsRegisteredInWheel = false;
-                            connection.TimeoutVersion++;
-                            connection.TimeoutTask = null;
+                            lock (syncLock)
+                            {
+                                if (connection.IsRegisteredInWheel && connection.TimeoutVersion == task.Version)
+                                {
+                                    connection.IsRegisteredInWheel = false;
+                                    _ = Interlocked.Decrement(ref _registeredCount);
+                                    connection.TimeoutVersion++;
+                                    connection.ConnectionClosed -= this.OnConnectionClosed;
+                                }
+                                else
+                                {
+                                    _ = Interlocked.Increment(ref _totalStaleSkips);
+                                }
+
+                                if (ReferenceEquals(connection.TimeoutTask, task))
+                                {
+                                    connection.TimeoutTask = null;
+                                }
+                            }
+
                             s_pool.Return(task);
                             task = next;
                             continue;
@@ -743,9 +784,21 @@ internal sealed class TimingWheel : IActivatable
                                 }
                             }
 
-                            connection.IsRegisteredInWheel = false;
-                            connection.TimeoutVersion++;
-                            connection.TimeoutTask = null;
+                            lock (syncLock)
+                            {
+                                if (connection.IsRegisteredInWheel && connection.TimeoutVersion == task.Version)
+                                {
+                                    connection.IsRegisteredInWheel = false;
+                                    _ = Interlocked.Decrement(ref _registeredCount);
+                                    connection.TimeoutVersion++;
+                                    connection.ConnectionClosed -= this.OnConnectionClosed;
+                                }
+
+                                if (ReferenceEquals(connection.TimeoutTask, task))
+                                {
+                                    connection.TimeoutTask = null;
+                                }
+                            }
 
                             s_pool.Return(task);
                             task = next;
@@ -755,16 +808,30 @@ internal sealed class TimingWheel : IActivatable
                         long remainingMs = currentTimeoutMs - idleMs;
                         long ticksMore = Math.Max(1, remainingMs / _tickMs);
 
-                        task.Version = connection.TimeoutVersion;
-                        task.Rounds = (int)((ticksMore - 1) / _wheelSize);
-
                         int nextBucket = _useMask
                             ? (int)((tickToProcess + ticksMore) & _mask)
                             : (int)((tickToProcess + ticksMore) % _wheelSize);
 
-                        task.Next = null;
-                        task.Prev = null;
-                        _wheel[nextBucket].Enqueue(task);
+                        lock (syncLock)
+                        {
+                            if (!connection.IsRegisteredInWheel || connection.TimeoutVersion != task.Version)
+                            {
+                                _ = Interlocked.Increment(ref _totalStaleSkips);
+                                if (ReferenceEquals(connection.TimeoutTask, task))
+                                {
+                                    connection.TimeoutTask = null;
+                                }
+
+                                s_pool.Return(task);
+                                task = next;
+                                continue;
+                            }
+
+                            task.Rounds = (int)((ticksMore - 1) / _wheelSize);
+                            task.Next = null;
+                            task.Prev = null;
+                            _wheel[nextBucket].Enqueue(task);
+                        }
 
                         task = next;
                     }
