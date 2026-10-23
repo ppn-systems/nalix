@@ -142,6 +142,29 @@ public sealed partial class TransportOptions : ConfigurationLoader
     public int ReconnectMaxAttempts { get; set; }
 
     /// <summary>
+    /// Gets or sets the periodic keepalive PING interval in milliseconds.
+    /// A value of 0 (the default) disables automatic keepalive probing.
+    /// </summary>
+    [IniComment("Periodic keepalive PING interval in milliseconds (0 = disabled)")]
+    [ValueRange(0, int.MaxValue)]
+    public int KeepAliveIntervalMillis { get; set; }
+
+    /// <summary>
+    /// Gets or sets the timeout in milliseconds to wait for each keepalive PONG response.
+    /// </summary>
+    [IniComment("Timeout in milliseconds for each keepalive PONG response")]
+    [ValueRange(100, int.MaxValue)]
+    public int KeepAliveTimeoutMillis { get; set; } = 5000;
+
+    /// <summary>
+    /// Gets or sets the number of consecutive missed keepalive PONG responses before the
+    /// transport is treated as dead and torn down so <c>ReconnectSupervisor</c> can recover it.
+    /// </summary>
+    [IniComment("Consecutive missed keepalive PONG responses before declaring the connection dead")]
+    [ValueRange(1, int.MaxValue)]
+    public int KeepAliveMissThreshold { get; set; } = 3;
+
+    /// <summary>
     /// Gets or sets whether the internal global clock can be synchronized with the server's time during SyncTimeAsync.
     /// Disable this if the connection is untrusted to prevent cross-session clock skew.
     /// </summary>

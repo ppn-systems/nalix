@@ -70,8 +70,8 @@ public static class RequestExtensions
     /// <see langword="null"/> falls back to <see cref="RequestOptions.Default"/>.
     /// </param>
     /// <param name="predicate">
-    /// Optional response filter. <see langword="null"/> accepts the first
-    /// <typeparamref name="TResponse"/> that arrives.
+    /// Optional response filter. <see langword="null"/> correlates by matching
+    /// <c>response.Header.SequenceId</c> against the stamped <paramref name="request"/>'s <c>SequenceId</c>.
     /// </param>
     /// <param name="ct">Cancellation token for the entire operation (all attempts).</param>
     /// <returns>The first matching response packet.</returns>
@@ -125,9 +125,18 @@ public static class RequestExtensions
             await AwaitReadyOrThrowAsync(client, options.TimeoutMs, typeof(TResponse).Name, ct).ConfigureAwait(false);
         }
 
+        if (client is TransportSession session)
+        {
+            session.StampSequenceIdIfUnset(request);
+        }
+
+        ushort expectedSeqId = request.Header.SequenceId;
         Exception? lastException = null;
         int totalAttempts = options.RetryCount + 1;
-        Func<TResponse, bool> effectivePredicate = predicate ?? (_ => true);
+        Func<TResponse, bool> effectivePredicate = predicate
+            ?? (expectedSeqId != 0
+                ? response => response.Header.SequenceId == expectedSeqId
+                : static _ => true);
 
         for (int attempt = 1; attempt <= totalAttempts; attempt++)
         {
@@ -204,9 +213,18 @@ public static class RequestExtensions
             }
         }
 
+        if (client is TransportSession session)
+        {
+            session.StampSequenceIdIfUnset(request);
+        }
+
+        ushort expectedSeqId = request.Header.SequenceId;
         Exception? lastException = null;
         int totalAttempts = options.RetryCount + 1;
-        Func<TResponse, bool> effectivePredicate = predicate ?? (_ => true);
+        Func<TResponse, bool> effectivePredicate = predicate
+            ?? (expectedSeqId != 0
+                ? response => response.Header.SequenceId == expectedSeqId
+                : static _ => true);
 
         for (int attempt = 1; attempt <= totalAttempts; attempt++)
         {
@@ -252,8 +270,13 @@ public static class RequestExtensions
     internal static async ValueTask AwaitReadyOrThrowAsync(
         ITransportSession client, int timeoutMs, string responseTypeName, CancellationToken ct)
     {
-        Internal.ReconnectSupervisor supervisor = (client as TransportSession)?.ReconnectSupervisor
-            ?? throw new NetworkException($"[SDK.RequestAsync<{responseTypeName}>] Client is not connected.");
+        if (client is not TransportSession session ||
+            (!session.Options.AutoReconnectEnabled && !session.ReconnectSupervisor.IsReconnecting))
+        {
+            throw new NetworkException($"[SDK.RequestAsync<{responseTypeName}>] Client is not connected.");
+        }
+
+        Internal.ReconnectSupervisor supervisor = session.ReconnectSupervisor;
 
         using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         if (timeoutMs > 0)

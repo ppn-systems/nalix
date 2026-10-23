@@ -148,6 +148,68 @@ public sealed class ConnectFailureResilienceTests : IDisposable
         Assert.False(session.IsConnected);
     }
 
+    [Fact]
+    public async Task ConnectAsync_Tcp_NoListener_DoesNotRaiseOnDisconnected()
+    {
+        int port = TestUtils.GetFreePort();
+
+        using TcpSession session = new(new TransportOptions
+        {
+            Address = "127.0.0.1",
+            Port = (ushort)port,
+            ConnectTimeoutMillis = 2000
+        });
+
+        int disconnectedCount = 0;
+        int connectedCount = 0;
+        session.OnDisconnected += (_, _) => disconnectedCount++;
+        session.OnConnected += (_, _) => connectedCount++;
+
+        _ = await Assert.ThrowsAsync<NetworkException>(() => session.ConnectAsync());
+
+        Assert.Equal(0, connectedCount);
+        Assert.Equal(0, disconnectedCount);
+        Assert.False(session.IsConnected);
+    }
+
+    [Fact]
+    public async Task HandshakeAsync_MismatchedServerPublicKey_PreservesConfiguredAlgorithm()
+    {
+        int port = TestUtils.GetFreePort();
+        var builder = NetworkApplication.CreateBuilder();
+        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.UseSecureConnections();
+        builder.UseSystemControl();
+
+        using NetworkApplication app = builder.Build();
+        await app.ActivateAsync();
+
+        try
+        {
+            string wrongKey = new('7', 64);
+
+            using TcpSession session = new(new TransportOptions
+            {
+                Address = "127.0.0.1",
+                Port = (ushort)port,
+                ServerPublicKey = wrongKey,
+                Algorithm = Nalix.Abstractions.Security.CipherSuiteType.Salsa20Poly1305,
+                ConnectTimeoutMillis = 5000
+            });
+
+            await session.ConnectAsync();
+
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+            _ = await Assert.ThrowsAnyAsync<Exception>(() => session.HandshakeAsync(cts.Token).AsTask());
+
+            Assert.Equal(Nalix.Abstractions.Security.CipherSuiteType.Salsa20Poly1305, session.Options.Algorithm);
+        }
+        finally
+        {
+            await app.DeactivateAsync();
+        }
+    }
+
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
 #endif
