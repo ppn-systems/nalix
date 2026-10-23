@@ -6,6 +6,7 @@ using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
 using Nalix.Codec.DataFrames;
+using Nalix.Codec.LZ4;
 using Nalix.Codec.ProtocolFrames;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Extensions;
@@ -266,5 +267,72 @@ public sealed class PipelineAdversarialTests
                     "but deserialize silently reproduced the original bytes.");
             }
         }
+    }
+
+    // ---- Allocation-bomb & header consistency defenses in FrameTransformer / FrameCompression / FramePipeline ----
+
+    [Theory]
+    [InlineData(LZ4CompressionConstants.MaxBlockSize + 1)]
+    [InlineData(32 * 1024 * 1024)]
+    public void FrameTransformer_OriginalLengthExceedsMaxBlockSize_RejectsBeforeAllocation(int fakeOriginalLength)
+    {
+        byte[] block = new byte[LZ4BlockHeader.Size + 16];
+        System.BitConverter.GetBytes(fakeOriginalLength).CopyTo(block, 0);
+        System.BitConverter.GetBytes(block.Length).CopyTo(block, 4);
+
+        Assert.False(FrameTransformer.TryGetDecompressedLength(block, out int length));
+        Assert.Equal(0, length);
+        _ = Assert.ThrowsAny<LZ4Exception>(() => FrameTransformer.GetDecompressedLength(block));
+    }
+
+    [Fact]
+    public void FrameTransformer_MismatchedCompressedLength_RejectsBeforeAllocation()
+    {
+        byte[] block = new byte[LZ4BlockHeader.Size + 8];
+        System.BitConverter.GetBytes(16).CopyTo(block, 0);
+        System.BitConverter.GetBytes(block.Length + 4).CopyTo(block, 4); // Mismatched CompressedLength
+
+        Assert.False(FrameTransformer.TryGetDecompressedLength(block, out int length));
+        Assert.Equal(0, length);
+        _ = Assert.ThrowsAny<LZ4Exception>(() => FrameTransformer.GetDecompressedLength(block));
+    }
+
+    [Fact]
+    public void FrameTransformer_ImpossibleExpansionRatio_RejectsBeforeAllocation()
+    {
+        // 4 bytes of LZ4 token stream can mathematically expand to at most 19 bytes.
+        byte[] block = new byte[LZ4BlockHeader.Size + 4];
+        System.BitConverter.GetBytes(20).CopyTo(block, 0);
+        System.BitConverter.GetBytes(block.Length).CopyTo(block, 4);
+
+        Assert.False(FrameTransformer.TryGetDecompressedLength(block, out int length));
+        Assert.Equal(0, length);
+        _ = Assert.ThrowsAny<LZ4Exception>(() => FrameTransformer.GetDecompressedLength(block));
+
+        // Exact boundary (19 bytes for 4-byte stream) passes header validation:
+        System.BitConverter.GetBytes(19).CopyTo(block, 0);
+        Assert.True(FrameTransformer.TryGetDecompressedLength(block, out int validLength));
+        Assert.Equal(19, validLength);
+    }
+
+    [Fact]
+    public void FramePipeline_TryProcessInbound_ShortFrameAndBombHeaders_ReturnFalseWithoutThrowing()
+    {
+        // 1. Frame shorter than PacketHeader.Size (6 bytes) must return false without throwing ArgumentException.
+        using BufferLease shortLease = BufferLease.Rent(4);
+        shortLease.CommitLength(3);
+        IBufferLease current = shortLease;
+        Assert.False(FramePipeline.TryProcessInbound(ref current, default, Nalix.Abstractions.Security.CipherSuiteType.None, out _));
+
+        // 2. Unencrypted compressed frame with fake 16 MB OriginalLength must be rejected cleanly.
+        byte[] bombFrame = new byte[FrameTransformer.Offset + LZ4BlockHeader.Size + 4];
+        bombFrame.AsSpan().AsHeaderRef() = new PacketHeader { Flags = PacketFlags.COMPRESSED };
+        System.BitConverter.GetBytes(16 * 1024 * 1024).CopyTo(bombFrame, FrameTransformer.Offset);
+        System.BitConverter.GetBytes(LZ4BlockHeader.Size + 4).CopyTo(bombFrame, FrameTransformer.Offset + 4);
+
+        using BufferLease bombLease = ToLease(bombFrame);
+        IBufferLease inboundBomb = bombLease;
+        Assert.False(FramePipeline.TryProcessInbound(ref inboundBomb, default, Nalix.Abstractions.Security.CipherSuiteType.None, out _));
+        Assert.Same(bombLease, inboundBomb);
     }
 }

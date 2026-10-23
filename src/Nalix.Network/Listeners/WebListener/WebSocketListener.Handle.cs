@@ -44,6 +44,7 @@ public abstract partial class WebSocketListenerBase
 
         if (!this.InitializeOptions(socket))
         {
+            this.Limiter.Release(ip);
             SafeCloseSocket(socket);
             this.Metrics.RECORD_ERROR();
             return new AcceptResult(AcceptConnectionResult.Failed, null);
@@ -52,7 +53,7 @@ public abstract partial class WebSocketListenerBase
         // Return context to pool since we don't need it for WS handshake
         ObjectPoolManager.Shared.Return(context);
 
-        this.BeginWebSocketHandshake(socket, null, null, 0);
+        this.BeginWebSocketHandshake(socket, null, null, 0, 0);
 
         return new AcceptResult(AcceptConnectionResult.Pending, null);
     }
@@ -60,30 +61,42 @@ public abstract partial class WebSocketListenerBase
     [DebuggerStepThrough]
     internal override AcceptResult ProcessProxyAcceptedSocket(Socket socket, EndPoint? realEndPoint, int headerBytesConsumed, byte[]? receiveBuffer, int bytesReceived)
     {
-        // For proxy connections, we intercept here.
-        // The socket is already validated and options are initialized by TcpListenerBase.
-        // We just need to start the WS handshake.
-        this.BeginWebSocketHandshake(socket, realEndPoint, receiveBuffer, bytesReceived);
+        if (!this.InitializeOptions(socket))
+        {
+            try
+            {
+                if ((realEndPoint ?? socket.RemoteEndPoint) is IPEndPoint ip)
+                {
+                    _limiter.Release(ip);
+                }
+            }
+            catch { }
+            SafeCloseSocket(socket);
+            this.Metrics.RECORD_ERROR();
+            return new AcceptResult(AcceptConnectionResult.Failed, null);
+        }
+
+        int extraBytes = (receiveBuffer != null && bytesReceived > headerBytesConsumed)
+            ? bytesReceived - headerBytesConsumed
+            : 0;
+
+        this.BeginWebSocketHandshake(socket, realEndPoint, receiveBuffer, headerBytesConsumed, extraBytes);
 
         return new AcceptResult(AcceptConnectionResult.Pending, null);
     }
 
-    private void BeginWebSocketHandshake(Socket socket, EndPoint? realEndPoint, byte[]? proxyBuffer, int proxyBytesReceived)
+    private void BeginWebSocketHandshake(Socket socket, EndPoint? realEndPoint, byte[]? proxyBuffer, int proxyOffset, int proxyBytesReceived)
     {
         WebSocketUpgradeContext state = ObjectPoolManager.Shared.Get<WebSocketUpgradeContext>();
         state.Socket = socket;
         state.RealEndPoint = realEndPoint;
         state.HandshakeStartTimeTicks = Stopwatch.GetTimestamp();
 
-        int initialOffset = 0;
         if (proxyBuffer != null && proxyBytesReceived > 0)
         {
             state.Buffer = BufferLease.ByteArrayPool.Rent(Math.Max(_wsconfig.MaxUpgradeRequestSize, proxyBytesReceived));
-            Buffer.BlockCopy(proxyBuffer, 0, state.Buffer, 0, proxyBytesReceived);
+            Buffer.BlockCopy(proxyBuffer, proxyOffset, state.Buffer, 0, proxyBytesReceived);
             state.BytesReceived = proxyBytesReceived;
-            initialOffset = proxyBytesReceived;
-            // Return proxy buffer since we copied what we needed
-            BufferLease.ByteArrayPool.Return(proxyBuffer);
         }
         else
         {
@@ -100,12 +113,19 @@ public abstract partial class WebSocketListenerBase
 #pragma warning restore CA2000
 
         args.UserToken = state;
-        args.SetBuffer(state.Buffer, initialOffset, state.Buffer.Length - initialOffset);
 
         lock (_wsUpgradeLock)
         {
             this.EnqueueWsUpgradeContext(state);
         }
+
+        if (state.BytesReceived > 0)
+        {
+            this.ProcessWebSocketUpgradeBuffer(socket, state, args);
+            return;
+        }
+
+        args.SetBuffer(state.Buffer, 0, state.Buffer.Length);
 
         bool pending = false;
         try
@@ -145,7 +165,11 @@ public abstract partial class WebSocketListenerBase
         }
 
         state.BytesReceived += args.BytesTransferred;
+        this.ProcessWebSocketUpgradeBuffer(sender, state, args);
+    }
 
+    private void ProcessWebSocketUpgradeBuffer(object? sender, WebSocketUpgradeContext state, SocketAsyncEventArgs args)
+    {
         WebSocketUpgradeResult result = WebSocketUpgradeParser.Parse(new ReadOnlySpan<byte>(state.Buffer, 0, state.BytesReceived));
 
         if (result.IsMalformed)
@@ -159,7 +183,10 @@ public abstract partial class WebSocketListenerBase
             return;
         }
 
-        if (result.IsHeaderComplete && result.BytesConsumed + result.ContentLength > state.Buffer.Length)
+        long totalRequiredBytes = (long)result.BytesConsumed + result.ContentLength;
+        int maxAllowedBytes = Math.Min(state.Buffer.Length, _wsconfig.MaxUpgradeRequestSize);
+
+        if (result.IsHeaderComplete && (result.ContentLength < 0 || totalRequiredBytes > maxAllowedBytes))
         {
             lock (_wsUpgradeLock)
             {
@@ -170,17 +197,16 @@ public abstract partial class WebSocketListenerBase
             return;
         }
 
-        if (!result.IsHeaderComplete || state.BytesReceived < result.BytesConsumed + result.ContentLength)
+        if (!result.IsHeaderComplete || state.BytesReceived < totalRequiredBytes)
         {
             // If incomplete, check if we've exceeded the max request size
-            if (state.BytesReceived >= _wsconfig.MaxUpgradeRequestSize || state.BytesReceived >= state.Buffer.Length)
+            if (state.BytesReceived >= maxAllowedBytes)
             {
                 lock (_wsUpgradeLock)
                 {
                     this.DetachWsUpgradeContext(state);
                 }
                 this.Metrics.RECORD_ERROR();
-                this.RELEASE_LIMITER_SLOT(state);
                 this.ReleaseWsUpgradeContext(state, args, success: false);
                 return;
             }
@@ -201,7 +227,6 @@ public abstract partial class WebSocketListenerBase
                     this.DetachWsUpgradeContext(state);
                 }
                 this.Metrics.RECORD_ERROR();
-                this.RELEASE_LIMITER_SLOT(state);
                 this.ReleaseWsUpgradeContext(state, args, success: false);
             }
             return;
@@ -300,6 +325,34 @@ public abstract partial class WebSocketListenerBase
                 return;
             }
 
+            // Capture socket and resolve forwarded endpoint BEFORE sending 101 Switching Protocols
+            Socket socket = state.Socket!;
+            EndPoint realEndPoint = state.RealEndPoint ?? socket.RemoteEndPoint!;
+
+            if (state.RealEndPoint is null && this.TryResolveForwardedEndpoint(socket, result, out IPEndPoint? forwardedEndpoint, out bool rejectForwarded))
+            {
+                if (rejectForwarded)
+                {
+                    this.Metrics.RECORD_LIMITER_REJECTION();
+                    this.ReleaseWsUpgradeContext(state, args, success: false);
+                    return;
+                }
+
+                if (forwardedEndpoint is not null && socket.RemoteEndPoint is IPEndPoint)
+                {
+                    if (!_limiter.TryAccept(forwardedEndpoint))
+                    {
+                        this.Metrics.RECORD_LIMITER_REJECTION();
+                        this.ReleaseWsUpgradeContext(state, args, success: false);
+                        return;
+                    }
+
+                    this.RELEASE_PHYSICAL_SLOT(socket);
+                    state.RealEndPoint = forwardedEndpoint;
+                    realEndPoint = forwardedEndpoint;
+                }
+            }
+
             Span<byte> responseBuffer = stackalloc byte[256];
             int offset = 0;
 
@@ -325,43 +378,14 @@ public abstract partial class WebSocketListenerBase
 
             // ponytail: fixed 1s timeout guards against a slow/stalled peer blocking this
             // IOCP completion thread indefinitely; make configurable if load demands it.
-            state.Socket!.SendTimeout = 1000;
-            int sent = state.Socket.Send(responseBuffer[..responseLength], SocketFlags.None);
+            socket.SendTimeout = 1000;
+            int sent = socket.Send(responseBuffer[..responseLength], SocketFlags.None);
 
             if (sent != responseLength)
             {
                 this.Metrics.RECORD_ERROR();
                 this.ReleaseWsUpgradeContext(state, args, success: false);
                 return;
-            }
-
-            // Capture socket and endpoint before releasing state back to the pool
-            Socket socket = state.Socket!;
-            EndPoint realEndPoint = state.RealEndPoint ?? socket.RemoteEndPoint!;
-
-            if (state.RealEndPoint is null && this.TryResolveForwardedEndpoint(socket, result, out IPEndPoint? forwardedEndpoint, out bool rejectForwarded))
-            {
-                if (rejectForwarded)
-                {
-                    this.RELEASE_PHYSICAL_SLOT(socket);
-                    this.Metrics.RECORD_LIMITER_REJECTION();
-                    this.ReleaseWsUpgradeContext(state, args, success: false);
-                    return;
-                }
-
-                if (forwardedEndpoint is not null && socket.RemoteEndPoint is IPEndPoint)
-                {
-                    if (!_limiter.TryAccept(forwardedEndpoint))
-                    {
-                        this.RELEASE_PHYSICAL_SLOT(socket);
-                        this.Metrics.RECORD_LIMITER_REJECTION();
-                        this.ReleaseWsUpgradeContext(state, args, success: false);
-                        return;
-                    }
-
-                    this.RELEASE_PHYSICAL_SLOT(socket);
-                    realEndPoint = forwardedEndpoint;
-                }
             }
 
             // Create a NetworkStream and wrap it in a WebSocket (ownsSocket: true so closing WS closes TCP socket immediately)
@@ -379,6 +403,7 @@ public abstract partial class WebSocketListenerBase
             {
                 connection.ConnectionClosed += this.HandleConnectionClose;
                 connection.ConnectionClosed += _limiter.OnConnectionClosed;
+                _ = System.Threading.Interlocked.Exchange(ref state.LimiterSlotReleased, 1);
                 connection.MessageProcessed += _protocol.PostProcessMessage;
                 connection.MessageProcessing += _protocol.FrameProcessor.ProcessFrame;
 
@@ -525,7 +550,12 @@ public abstract partial class WebSocketListenerBase
 
     private void ReleaseWsUpgradeContext(WebSocketUpgradeContext state, SocketAsyncEventArgs args, bool success)
     {
-        if (state.Buffer is { } buf)
+        if (!success)
+        {
+            this.RELEASE_LIMITER_SLOT(state);
+        }
+
+        if (state.Buffer is { Length: > 0 } buf)
         {
             BufferLease.ByteArrayPool.Return(buf);
             state.Buffer = [];

@@ -11,8 +11,8 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Security;
 using Nalix.Codec.Internal;
-using Nalix.Codec.Internal.Memory;
 using Nalix.Codec.LZ4;
+using Nalix.Codec.LZ4.Engine;
 using Nalix.Codec.Options;
 using Nalix.Codec.Security;
 using Nalix.Codec.Security.Internal;
@@ -124,19 +124,12 @@ public static class FrameTransformer
             Throw.SourceTooSmallForLZ4Header();
         }
 
-        LZ4BlockHeader header = MemOps.ReadUnaligned<LZ4BlockHeader>(src);
-
-        // Validate OriginalLength before returning it for pre-allocation.
-        // Malicious payloads can declare any value here to trigger allocation-based DoS.
-        // The limit is read from the cached configuration instance to ensure high performance.
-        int limit = s_compressionOptions.MaxDecompressedSize;
-
-        if (header.OriginalLength <= 0 || header.OriginalLength > limit)
+        if (!TryGetDecompressedLength(src, out int length))
         {
             Throw.InvalidDecompressedLength();
         }
 
-        return header.OriginalLength;
+        return length;
     }
 
     /// <summary>
@@ -146,13 +139,13 @@ public static class FrameTransformer
     public static bool TryGetDecompressedLength(ReadOnlySpan<byte> src, out int length)
     {
         length = 0;
-        if (src.Length < Unsafe.SizeOf<LZ4BlockHeader>())
+        if (LZ4Decoder.TryReadAndValidateHeader(src, out LZ4BlockHeader header) < 0)
         {
             return false;
         }
 
-        LZ4BlockHeader header = MemOps.ReadUnaligned<LZ4BlockHeader>(src);
-        int limit = s_compressionOptions.MaxDecompressedSize;
+        // Validate OriginalLength against both configured MaxDecompressedSize and hard LZ4 MaxBlockSize.
+        int limit = Math.Min(s_compressionOptions.MaxDecompressedSize, LZ4CompressionConstants.MaxBlockSize);
 
         if (header.OriginalLength <= 0 || header.OriginalLength > limit)
         {
@@ -344,9 +337,8 @@ public static class FrameTransformer
         Span<byte> destFull = dest.SpanFull;
         ReadOnlySpan<byte> srcSpan = src.Span;
 
-        srcSpan[..Offset].CopyTo(destFull[..Offset]);
-
         int decoded = LZ4Codec.Decode(srcSpan[Offset..], destFull[Offset..]);
+        srcSpan[..Offset].CopyTo(destFull[..Offset]);
         dest.CommitLength(Offset + decoded);
     }
 

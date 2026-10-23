@@ -34,12 +34,24 @@ public sealed class SocketConnectionFragmentationTests
         typeof(Nalix.Network.Internal.Transport.SocketConnection).GetField("_fragmentAssembler", BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new InvalidOperationException("SocketConnection._fragmentAssembler field was not found.");
 
+    private static readonly FieldInfo s_openFragmentStreamsField =
+        typeof(Nalix.Network.Internal.Transport.SocketConnection).GetField("_openFragmentStreams", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("SocketConnection._openFragmentStreams field was not found.");
+
     private static object? GetFragmentAssembler(Connection connection)
     {
         object? backing = s_backingField.GetValue(connection);
         if (backing == null) return null;
         object? socketConnection = s_backingSocketField.GetValue(backing);
         return socketConnection is null ? null : s_fragmentAssemblerField.GetValue(socketConnection);
+    }
+
+    private static int GetOpenFragmentStreams(Connection connection)
+    {
+        object? backing = s_backingField.GetValue(connection);
+        if (backing == null) return -1;
+        object? socketConnection = s_backingSocketField.GetValue(backing);
+        return socketConnection is null ? -1 : (int)s_openFragmentStreamsField.GetValue(socketConnection)!;
     }
 
     private sealed class TestOpCodeExtractor : IOpCodeExtractor
@@ -106,6 +118,53 @@ public sealed class SocketConnectionFragmentationTests
         GetFragmentAssembler(connection).Should().NotBeNull();
     }
 
+    [Fact]
+    public async Task BeginReceive_DuplicateChunkZeroAndCorruptedStreams_DoesNotLeakOpenFragmentStreamsQuota()
+    {
+        using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
+        using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
+        TransportAsyncCallback.ResetStatistics();
+
+        TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.MessageProcessing += (_, args) =>
+        {
+            try
+            {
+                processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []);
+            }
+            finally
+            {
+                args.Lease?.Dispose();
+            }
+        };
+
+        connection.TCP.BeginReceive();
+
+        // Send 10 pairs of duplicate ChunkIndex=0 frames on the same StreamId (exceeding MaxPerConnectionOpenFragmentStreams=4).
+        // Previously, each duplicate ChunkIndex=0 incremented _openFragmentStreams and threw InvalidDataException without decrementing,
+        // permanently exhausting the connection's fragment stream quota.
+        for (ushort streamId = 1; streamId <= 10; streamId++)
+        {
+            byte[] dupChunk0 = CreateFrame(CreateFragmentPayload(streamId, chunkIndex: 0, totalChunks: 2, isLast: false, [1, 2, 3]));
+            await scope.ClientSocket.SendAsync(dupChunk0);
+            await scope.ClientSocket.SendAsync(dupChunk0);
+        }
+
+        // Now send a valid 2-chunk fragmented stream (StreamId=99) and verify it still reassembles and dispatches cleanly.
+        byte[] validChunk0 = CreateFrame(CreateFragmentPayload(streamId: 99, chunkIndex: 0, totalChunks: 2, isLast: false, [10, 20, 30]));
+        byte[] validChunk1 = CreateFrame(CreateFragmentPayload(streamId: 99, chunkIndex: 1, totalChunks: 2, isLast: true, [40, 50, 60]));
+        await scope.ClientSocket.SendAsync(validChunk0);
+        await scope.ClientSocket.SendAsync(validChunk1);
+
+        byte[] receivedPayload = await processObserved.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        receivedPayload.Should().Equal([10, 20, 30, 40, 50, 60]);
+        GetOpenFragmentStreams(connection).Should().Be(0);
+        FragmentAssembler? assembler = GetFragmentAssembler(connection) as FragmentAssembler;
+        assembler.Should().NotBeNull();
+        assembler!.OpenStreamCount.Should().Be(0);
+    }
+
     private static byte[] CreateFrame(ReadOnlySpan<byte> payload)
     {
         byte[] frame = new byte[payload.Length + sizeof(ushort)];
@@ -115,9 +174,12 @@ public sealed class SocketConnectionFragmentationTests
     }
 
     private static byte[] CreateFragmentPayload(ReadOnlySpan<byte> body)
+        => CreateFragmentPayload(streamId: 1, chunkIndex: 0, totalChunks: 1, isLast: true, body);
+
+    private static byte[] CreateFragmentPayload(ushort streamId, ushort chunkIndex, ushort totalChunks, bool isLast, ReadOnlySpan<byte> body)
     {
         byte[] payload = new byte[FragmentHeader.WireSize + body.Length];
-        FragmentHeader header = new(streamId: 1, chunkIndex: 0, totalChunks: 1, isLast: true);
+        FragmentHeader header = new(streamId, chunkIndex, totalChunks, isLast);
         header.WriteTo(payload);
         body.CopyTo(payload.AsSpan(FragmentHeader.WireSize));
         return payload;

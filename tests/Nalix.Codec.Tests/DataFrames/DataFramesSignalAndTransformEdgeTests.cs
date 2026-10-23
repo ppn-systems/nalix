@@ -30,7 +30,7 @@ public sealed class DataFramesSignalAndTransformEdgeTests
     }
 
     [Fact]
-    public void FragmentAssemblerWhenSecondChunkIsOutOfOrderThrowsAndKeepsStreamOpen()
+    public void FragmentAssemblerWhenSecondChunkIsOutOfOrderThrowsAndEvictsCorruptedStream()
     {
         using FragmentAssembler assembler = new();
         _ = assembler.Add(new FragmentHeader(51, 0, 3, false), [1], out _);
@@ -39,9 +39,9 @@ public sealed class DataFramesSignalAndTransformEdgeTests
         InvalidDataException ex = Assert.Throws<InvalidDataException>(() =>
             assembler.Add(new FragmentHeader(51, 2, 3, true), [2], out evicted));
 
-        Assert.False(evicted);
+        Assert.True(evicted);
         Assert.Contains("out-of-order", ex.Message, StringComparison.Ordinal);
-        Assert.Equal(1, assembler.OpenStreamCount);
+        Assert.Equal(0, assembler.OpenStreamCount);
     }
 
     [Fact]

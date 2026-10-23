@@ -477,20 +477,23 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
                     if ((++_packetCount & (FragmentAssembler.EvictInterval - 1)) == 0)
                     {
                         FragmentAssembler? fragmentAssembler = _fragmentAssembler;
-                        int evicted = fragmentAssembler?.EvictExpired() ?? 0;
-                        if (evicted > 0)
+                        if (fragmentAssembler is not null)
                         {
-                            _ = Interlocked.Add(ref _openFragmentStreams, -evicted);
+                            int evicted = fragmentAssembler.EvictExpired();
+                            Volatile.Write(ref _openFragmentStreams, fragmentAssembler.OpenStreamCount);
 
-                            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+                            if (evicted > 0)
                             {
-                                if (Security.ThrottledEventGate.TryAcquire(ref s_evictedFragmentsTicks, ref s_evictedFragmentsSuppressed, DateTime.UtcNow.Ticks, TimeSpan.TicksPerSecond * 5, out long suppressed))
+                                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
                                 {
-                                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+                                    if (Security.ThrottledEventGate.TryAcquire(ref s_evictedFragmentsTicks, ref s_evictedFragmentsSuppressed, DateTime.UtcNow.Ticks, TimeSpan.TicksPerSecond * 5, out long suppressed))
                                     {
-                                        DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning, new DiagnosticLog("NW.SocketConnection:Internal", $"evicted stale fragment stream(s) evicted-count={evicted} endpoint={_owner.NetworkEndpoint.Address} suppressed-count={suppressed}"));
+                                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+                                        {
+                                            DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning, new DiagnosticLog("NW.SocketConnection:Internal", $"evicted stale fragment stream(s) evicted-count={evicted} endpoint={_owner.NetworkEndpoint.Address} suppressed-count={suppressed}"));
+                                        }
+                                        ;
                                     }
-                                    ;
                                 }
                             }
                         }
@@ -781,31 +784,10 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     /// </summary>
     private void HANDLE_FRAGMENTED_FRAME_DIRECT(FragmentHeader header, ReadOnlySpan<byte> chunkBody)
     {
+        FragmentAssembler? fragmentAssembler = null;
         try
         {
-            FragmentAssembler fragmentAssembler = this.GET_OR_CREATE_FRAGMENT_ASSEMBLER();
-
-            if (header.ChunkIndex == 0)
-            {
-                int openStreams = Interlocked.Increment(ref _openFragmentStreams);
-
-                if (openStreams > s_opts.MaxPerConnectionOpenFragmentStreams)
-                {
-                    Interlocked.Decrement(ref _openFragmentStreams);
-
-                    if (s_opts.OverflowPolicy == NetworkOverflowPolicy.Disconnect)
-                    {
-                        _connectionOwner?.Disconnect("Exceeded MaxPerConnectionOpenFragmentStreams threshold.");
-                    }
-#if DEBUG
-                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Debug))
-                    {
-                        DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Debug, new DiagnosticLog("NW.SocketConnection:Internal", $"fragment-limit open-streams={openStreams} endpoint={_endpointString}"));
-                    }
-#endif
-                    return;
-                }
-            }
+            fragmentAssembler = this.GET_OR_CREATE_FRAGMENT_ASSEMBLER();
 
 #if DEBUG
             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Debug))
@@ -831,7 +813,6 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
                     {
                         trafficMetrics.IncrementPacketsDropped();
                     }
-                    Interlocked.Decrement(ref _openFragmentStreams);
                     assembledLease.Dispose();
                 }
                 else
@@ -842,18 +823,33 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
                         DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Debug, new DiagnosticLog("NW.SocketConnection:Internal", $"assembled stream stream-id={header.StreamId} endpoint={_endpointString}"));
                     }
 #endif
-                    Interlocked.Decrement(ref _openFragmentStreams);
                     assembledLease.Dispose();
                 }
             }
-            else if (streamEvicted)
+            else if (streamEvicted && fragmentAssembler.OpenStreamCount >= s_opts.MaxPerConnectionOpenFragmentStreams)
             {
-                Interlocked.Decrement(ref _openFragmentStreams);
+                if (s_opts.OverflowPolicy == NetworkOverflowPolicy.Disconnect)
+                {
+                    _connectionOwner?.Disconnect("Exceeded MaxPerConnectionOpenFragmentStreams threshold.");
+                }
+#if DEBUG
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Debug))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Debug, new DiagnosticLog("NW.SocketConnection:Internal", $"fragment-limit open-streams={fragmentAssembler.OpenStreamCount + 1} endpoint={_endpointString}"));
+                }
+#endif
             }
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             this.HANDLE_FRAGMENT_ERROR(ex);
+        }
+        finally
+        {
+            if (fragmentAssembler is not null)
+            {
+                Volatile.Write(ref _openFragmentStreams, fragmentAssembler.OpenStreamCount);
+            }
         }
     }
 
@@ -1148,7 +1144,12 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             return assembler;
         }
 
-        assembler = new FragmentAssembler();
+        assembler = new FragmentAssembler
+        {
+            MaxStreamBytes = s_fragmentOptions.MaxReassemblyBytes,
+            StreamTimeoutMs = s_fragmentOptions.ReassemblyTimeoutMs,
+            MaxOpenStreams = s_opts.MaxPerConnectionOpenFragmentStreams
+        };
         FragmentAssembler? existing = Interlocked.CompareExchange(ref _fragmentAssembler, assembler, null);
         if (existing is not null)
         {

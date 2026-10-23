@@ -237,14 +237,14 @@ public ref struct HttpResponseWriter
 
     private void EnsureCapacity(int needed)
     {
+        if ((uint)needed > MaxResponseBodyCapacity || this.WrittenCount > MaxResponseBodyCapacity - needed)
+        {
+            throw new InvalidOperationException($"HTTP response body exceeds maximum capacity of {MaxResponseBodyCapacity} bytes.");
+        }
+
         if (_buffer is null)
         {
             int initial = Math.Max(DefaultInitialCapacity, needed);
-            if (initial > MaxResponseBodyCapacity)
-            {
-                throw new InvalidOperationException($"HTTP response body exceeds maximum capacity of {MaxResponseBodyCapacity} bytes.");
-            }
-
             _buffer = BufferLease.ByteArrayPool.Rent(initial);
             return;
         }
@@ -255,12 +255,7 @@ public ref struct HttpResponseWriter
             return;
         }
 
-        int newSize = Math.Max(_buffer.Length * 2, this.WrittenCount + needed);
-        if (newSize > MaxResponseBodyCapacity)
-        {
-            throw new InvalidOperationException($"HTTP response body exceeds maximum capacity of {MaxResponseBodyCapacity} bytes.");
-        }
-
+        int newSize = Math.Min(MaxResponseBodyCapacity, Math.Max(_buffer.Length * 2, this.WrittenCount + needed));
         byte[] newBuf = BufferLease.ByteArrayPool.Rent(newSize);
         if (this.WrittenCount > 0)
         {

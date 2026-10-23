@@ -18,6 +18,7 @@ internal sealed class WebSocketUpgradeContext : IPoolable
     public byte[] Buffer = [];
     public int BytesReceived;
     public bool RemovedFromList;
+    public int LimiterSlotReleased;
     public long HandshakeStartTimeTicks;
     public EndPoint? RealEndPoint;
 
@@ -33,6 +34,7 @@ internal sealed class WebSocketUpgradeContext : IPoolable
         BytesReceived = 0;
         HandshakeStartTimeTicks = 0;
         RemovedFromList = false;
+        LimiterSlotReleased = 0;
         Next = null;
         Prev = null;
     }

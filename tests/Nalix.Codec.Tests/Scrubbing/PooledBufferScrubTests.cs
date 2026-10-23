@@ -118,6 +118,35 @@ public sealed class PooledBufferScrubTests : IDisposable
         Assert.Empty(_pool.Leaks);
     }
 
+    [Theory]
+    [InlineData(262_144)]        // MaxBlockSize (256 KB) with tiny 4B LZ4 stream (impossible expansion ratio)
+    [InlineData(32 * 1024 * 1024)] // 32 MB MaxDecompressedSize bomb
+    public void TryProcessInbound_FakeOriginalLengthBomb_NeverRentsLargeBuffer(int fakeOriginalLength)
+    {
+        byte[] key = NewKey();
+        int payloadLen = 8 + 4; // 8B LZ4BlockHeader + 4B token stream
+        using BufferLease rawBomb = BufferLease.Rent(FrameTransformer.Offset + payloadLen);
+        Span<byte> span = rawBomb.SpanFull;
+        span[..(FrameTransformer.Offset + payloadLen)].Clear();
+        BitConverter.GetBytes(fakeOriginalLength).CopyTo(span[FrameTransformer.Offset..]);
+        BitConverter.GetBytes(payloadLen).CopyTo(span[(FrameTransformer.Offset + 4)..]);
+        rawBomb.CommitLength(FrameTransformer.Offset + payloadLen);
+
+        // Encrypt the fake-header bomb and mark as COMPRESSED | ENCRYPTED (fused inbound path)
+        using IBufferLease encryptedBomb = FrameCipher.EncryptFrame(rawBomb, key, seq: 9, CipherSuiteType.Chacha20Poly1305);
+        Nalix.Environment.Extensions.HeaderExtensions.AsHeaderRef(encryptedBomb.Span).Flags |=
+            Nalix.Abstractions.Networking.Packets.PacketFlags.COMPRESSED | Nalix.Abstractions.Networking.Packets.PacketFlags.ENCRYPTED;
+
+        _pool.RentedRequests.Clear();
+
+        IBufferLease inbound = encryptedBomb;
+        Assert.False(FramePipeline.TryProcessInbound(ref inbound, key, CipherSuiteType.Chacha20Poly1305, out _));
+        Assert.Same(encryptedBomb, inbound);
+
+        // Only the small temp decrypt buffer (12 bytes) was rented; no 256 KB / 32 MB buffer was ever requested.
+        Assert.DoesNotContain(_pool.RentedRequests, requested => requested > 256);
+    }
+
     private static byte[] NewKey()
     {
         byte[] key = new byte[32];
@@ -143,8 +172,13 @@ public sealed class PooledBufferScrubTests : IDisposable
     private sealed class ScanningPool(byte[] marker) : IBufferPoolManager
     {
         public ConcurrentBag<int> Leaks { get; } = [];
+        public ConcurrentBag<int> RentedRequests { get; } = [];
 
-        public byte[] Rent(int minimumLength = 256) => ArrayPool<byte>.Shared.Rent(minimumLength);
+        public byte[] Rent(int minimumLength = 256)
+        {
+            this.RentedRequests.Add(minimumLength);
+            return ArrayPool<byte>.Shared.Rent(minimumLength);
+        }
 
         public void Return(byte[]? array, bool arrayClear = false)
         {
