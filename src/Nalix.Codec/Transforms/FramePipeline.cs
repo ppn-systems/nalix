@@ -56,7 +56,7 @@ public static class FramePipeline
         [Borrowed] ref IBufferLease current,
         ReadOnlySpan<byte> secret, CipherSuiteType algorithm, out uint? seq)
     {
-        if (current is null)
+        if (current is null || current.Length < FrameTransformer.Offset)
         {
             seq = null;
             return false;
@@ -178,7 +178,8 @@ public static class FramePipeline
             Span<byte> destFull = finalLease.SpanFull;
 
             // 4. Decompress from tempRegion into the final lease's payload section
-            if (!LZ4.LZ4Codec.TryDecode(tempRegion[..decLen], destFull[FrameTransformer.Offset..], out int finalLen))
+            if (!LZ4.LZ4Codec.TryDecode(tempRegion[..decLen], destFull.Slice(FrameTransformer.Offset, decompressedSize), out int finalLen)
+                || finalLen != decompressedSize)
             {
                 finalLease.Dispose();
                 return false;

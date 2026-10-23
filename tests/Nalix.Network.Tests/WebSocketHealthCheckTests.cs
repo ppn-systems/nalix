@@ -302,11 +302,121 @@ public sealed class WebSocketHealthCheckTests : IDisposable
                 Assert.Contains("HTTP/1.1 404 Not Found", response);
             }
 
+            // 6. Test integer overflow protection on Content-Length: 2147483647 -> 413 Payload Too Large
+            using (Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                await socket.ConnectAsync(IPAddress.Loopback, port);
+                string req = "POST /webhook HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 2147483647\r\n\r\n";
+                await socket.SendAsync(Encoding.ASCII.GetBytes(req), SocketFlags.None);
+
+                byte[] buffer = new byte[1024];
+                int read = await socket.ReceiveAsync(buffer, SocketFlags.None);
+                string response = Encoding.UTF8.GetString(buffer, 0, read);
+
+                Assert.Contains("HTTP/1.1 413 Payload Too Large", response);
+            }
+
+            // 7. Test CL.CL request smuggling & whitespace-before-colon -> 400 Bad Request
+            using (Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                await socket.ConnectAsync(IPAddress.Loopback, port);
+                string req = "POST /webhook HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 5\r\nContent-Length: 0\r\n\r\nhello";
+                await socket.SendAsync(Encoding.ASCII.GetBytes(req), SocketFlags.None);
+
+                byte[] buffer = new byte[1024];
+                int read = await socket.ReceiveAsync(buffer, SocketFlags.None);
+                string response = Encoding.UTF8.GetString(buffer, 0, read);
+
+                Assert.Contains("HTTP/1.1 400 Bad Request", response);
+            }
+
             Assert.Equal(0, hub.Count);
         }
         finally
         {
             await app.DeactivateAsync();
+        }
+    }
+
+    private sealed class IsolatedWebSocketListener : Nalix.Network.Listeners.Web.WebSocketListenerBase
+    {
+        public IsolatedWebSocketListener(ushort port, string path, IProtocol protocol, IConnectionHub hub, IConnectionGuard guard)
+            : base(port, path, protocol, hub, guard)
+        {
+        }
+    }
+
+    [Fact]
+    public async Task WebSocketListener_AbortedAndRejectedHandshakes_ReleasePerIpLimiterSlots()
+    {
+        ushort port = GetFreePort();
+        const int maxPerIp = 2;
+
+        ConnectionQuotaOptions localQuota = new()
+        {
+            MaxConnectionsPerIpAddress = maxPerIp,
+            ExemptLoopback = false,
+            MaxConnectionsPerWindow = 2000,
+            MaxConnectionsPerSubnet = 2000,
+            MaxSubnetConnectionsPerWindow = 2000
+        };
+
+        var wsOpt = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
+        wsOpt.Host = "127.0.0.1";
+        wsOpt.SubProtocol = "nalix.v1";
+
+        using var guard = new Nalix.Network.RateLimiting.ConnectionGuard(localQuota);
+        using var hub = new ConnectionHub();
+        using var protocol = new HealthTestProtocol();
+        using var listener = new IsolatedWebSocketListener(port, "/ws/", protocol, hub, guard);
+
+        listener.Activate();
+        await Task.Delay(300);
+
+        try
+        {
+            // 1. Open and immediately close sockets (0-byte EOF during handshake) more times than maxPerIp
+            for (int i = 0; i < maxPerIp + 2; i++)
+            {
+                using Socket aborted = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                await aborted.ConnectAsync(IPAddress.Loopback, port);
+                aborted.Close();
+            }
+
+            // 2. Send WS upgrade with mismatched SubProtocol more times than maxPerIp
+            for (int i = 0; i < maxPerIp + 2; i++)
+            {
+                using Socket wrongProto = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                await wrongProto.ConnectAsync(IPAddress.Loopback, port);
+                string req =
+                    "GET /ws/ HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\n" +
+                    "Upgrade: websocket\r\n" +
+                    "Connection: Upgrade\r\n" +
+                    "Sec-WebSocket-Version: 13\r\n" +
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+                    "Sec-WebSocket-Protocol: invalid.proto\r\n\r\n";
+                await wrongProto.SendAsync(Encoding.ASCII.GetBytes(req), SocketFlags.None);
+                await Task.Delay(50);
+            }
+
+            await Task.Delay(100);
+
+            // 3. Subsequent legitimate request from the same IP must not be blocked by leaked slots
+            using Socket validClient = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            await validClient.ConnectAsync(IPAddress.Loopback, port);
+            string healthReq = "GET /healthz HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
+            await validClient.SendAsync(Encoding.ASCII.GetBytes(healthReq), SocketFlags.None);
+
+            byte[] buffer = new byte[512];
+            int read = await validClient.ReceiveAsync(buffer, SocketFlags.None);
+            string response = Encoding.ASCII.GetString(buffer, 0, read);
+
+            Assert.Contains("HTTP/1.1 200 OK", response);
+        }
+        finally
+        {
+            listener.Deactivate();
         }
     }
 

@@ -63,6 +63,38 @@ public sealed class LZ4AdversarialTests
         Assert.Equal(0, bytesWritten);
     }
 
+    [Theory]
+    [InlineData(0, 1)]    // 0 payload bytes cannot produce 1 byte
+    [InlineData(1, 1)]    // 1 payload byte (token only) cannot produce 1 byte
+    [InlineData(2, 2)]    // 2 payload bytes (token + 1 literal) can produce at most 1 byte
+    [InlineData(3, 3)]    // 3 payload bytes (token + 2 literals) can produce at most 2 bytes
+    [InlineData(4, 20)]   // 4 payload bytes (token + 1 literal + 2B offset) can produce at most 19 bytes
+    [InlineData(5, 275)]  // 5 payload bytes can produce at most 274 bytes
+    [InlineData(4, LZ4CompressionConstants.MaxBlockSize)] // 4-byte payload claiming 256 KB
+    public void Decode_OriginalLengthExceedsMathematicalMaxExpansion_RejectsWithoutAllocating(int payloadLength, int declaredOriginalLength)
+    {
+        byte[] input = new byte[LZ4BlockHeader.Size + payloadLength];
+        System.BitConverter.GetBytes(declaredOriginalLength).CopyTo(input, 0);
+        System.BitConverter.GetBytes(input.Length).CopyTo(input, 4);
+
+        bool result = LZ4Codec.TryDecode(input, out var lease, out int bytesWritten);
+        Assert.False(result);
+        Assert.Null(lease);
+        Assert.Equal(0, bytesWritten);
+    }
+
+    [Fact]
+    public void Decode_ZeroOriginalLengthWithTrailingPayload_RejectsCleanly()
+    {
+        byte[] input = new byte[LZ4BlockHeader.Size + 4];
+        System.BitConverter.GetBytes(0).CopyTo(input, 0);
+        System.BitConverter.GetBytes(input.Length).CopyTo(input, 4);
+
+        byte[] output = new byte[16];
+        _ = Assert.ThrowsAny<LZ4Exception>(() => LZ4Codec.Decode(input, output));
+        Assert.False(LZ4Codec.TryDecode(input, output, out _));
+    }
+
     // ---- Malformed match offsets ----
 
     [Fact]

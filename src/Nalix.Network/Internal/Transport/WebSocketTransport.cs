@@ -415,7 +415,6 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
             if (written == 0)
             {
-                BufferLease.ByteArrayPool.Return(buffer);
                 return;
             }
 

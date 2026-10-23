@@ -144,12 +144,12 @@ internal static class LZ4Decoder
 
     /// <summary>
     /// Validates input length and reads the LZ4 block header.
-    /// Centralises header checks shared by all three Decode overloads.
+    /// Centralises header checks shared by all three Decode overloads and FrameTransformer.
     /// </summary>
     /// <param name="input"></param>
     /// <param name="header"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int TryReadAndValidateHeader(ReadOnlySpan<byte> input, out LZ4BlockHeader header)
+    internal static int TryReadAndValidateHeader(ReadOnlySpan<byte> input, out LZ4BlockHeader header)
     {
         header = default;
         if (input.Length < LZ4BlockHeader.Size)
@@ -159,22 +159,33 @@ internal static class LZ4Decoder
 
         header = MemOps.ReadUnaligned<LZ4BlockHeader>(input);
 
-        if (header.OriginalLength < 0)
+        if (header.OriginalLength < 0 || header.OriginalLength > LZ4CompressionConstants.MaxBlockSize)
         {
             return ErrorInvalidHeader;
         }
 
-        if (header.CompressedLength < LZ4BlockHeader.Size)
+        if (header.CompressedLength < LZ4BlockHeader.Size || header.CompressedLength != input.Length)
         {
             return ErrorInvalidHeader;
         }
 
-        if (header.CompressedLength != input.Length)
+        int payloadLength = input.Length - LZ4BlockHeader.Size;
+        if (header.OriginalLength == 0)
         {
-            return ErrorInvalidHeader;
+            return payloadLength == 0 ? 0 : ErrorInvalidHeader;
         }
 
-        if (header.OriginalLength > LZ4CompressionConstants.MaxBlockSize)
+        // Mathematical upper bound on LZ4 block expansion:
+        // - Every non-empty LZ4 block must start with at least 1 token byte + 1 literal byte (payloadLength >= 2).
+        // - Blocks with payloadLength < 4 cannot fit a 2-byte match offset after the initial literal, so they
+        //   can only emit literals: OriginalLength <= payloadLength - 1.
+        // - Blocks with payloadLength >= 4 can at best spend 4 bytes on (token + 1 literal + 2-byte offset) for
+        //   19 output bytes, and every additional input byte as a 0xFF match-length varint byte (+255 bytes).
+        long maxPossibleOriginalLength = payloadLength < 4
+            ? payloadLength - 1
+            : ((long)(payloadLength - 4) * 255) + 19;
+
+        if (header.OriginalLength > maxPossibleOriginalLength)
         {
             return ErrorInvalidHeader;
         }
@@ -214,9 +225,9 @@ internal static class LZ4Decoder
                     if (literalLength == LZ4CompressionConstants.TokenLiteralMask)
                     {
                         int bytesRead = SpanOps.ReadVarInt(ref inputPtr, inputEnd, out int extraLength);
-                        if (bytesRead == -1 || extraLength < 0)
+                        if (bytesRead == -1 || extraLength < 0 || extraLength > (int)(inputEnd - inputPtr) - literalLength)
                         {
-                            MemorySecurity.ZeroMemory(output);
+                            MemorySecurity.ZeroMemory(output[..(int)(outputPtr - outputBase)]);
                             return ErrorCorruptPayload;
                         }
 
@@ -225,9 +236,9 @@ internal static class LZ4Decoder
 
                     if (literalLength > 0)
                     {
-                        if (inputPtr + literalLength > inputEnd || outputPtr + literalLength > outputEnd)
+                        if (literalLength > (int)(inputEnd - inputPtr) || literalLength > (int)(outputEnd - outputPtr))
                         {
-                            MemorySecurity.ZeroMemory(output);
+                            MemorySecurity.ZeroMemory(output[..(int)(outputPtr - outputBase)]);
                             return ErrorCorruptPayload;
                         }
 
@@ -241,9 +252,9 @@ internal static class LZ4Decoder
                         break;
                     }
 
-                    if (inputPtr + sizeof(ushort) > inputEnd)
+                    if ((inputEnd - inputPtr) < sizeof(ushort))
                     {
-                        MemorySecurity.ZeroMemory(output);
+                        MemorySecurity.ZeroMemory(output[..(int)(outputPtr - outputBase)]);
                         return ErrorCorruptPayload;
                     }
 
@@ -251,17 +262,18 @@ internal static class LZ4Decoder
                     inputPtr += sizeof(ushort);
                     if (offset == 0 || offset > (outputPtr - outputBase))
                     {
-                        MemorySecurity.ZeroMemory(output);
+                        MemorySecurity.ZeroMemory(output[..(int)(outputPtr - outputBase)]);
                         return ErrorCorruptPayload;
                     }
 
+                    int remainingOutput = (int)(outputEnd - outputPtr);
                     int matchLength = token & LZ4CompressionConstants.TokenMatchMask;
                     if (matchLength == LZ4CompressionConstants.TokenMatchMask)
                     {
                         int bytesRead = SpanOps.ReadVarInt(ref inputPtr, inputEnd, out int extraLength);
-                        if (bytesRead == -1 || extraLength < 0)
+                        if (bytesRead == -1 || extraLength < 0 || extraLength > remainingOutput - (LZ4CompressionConstants.TokenMatchMask + LZ4CompressionConstants.MinMatchLength))
                         {
-                            MemorySecurity.ZeroMemory(output);
+                            MemorySecurity.ZeroMemory(output[..(int)(outputPtr - outputBase)]);
                             return ErrorCorruptPayload;
                         }
 
@@ -269,20 +281,20 @@ internal static class LZ4Decoder
                     }
                     matchLength += LZ4CompressionConstants.MinMatchLength;
 
-                    byte* matchSourcePtr = outputPtr - offset;
-                    if (outputPtr + matchLength > outputEnd)
+                    if (matchLength > remainingOutput)
                     {
-                        MemorySecurity.ZeroMemory(output);
+                        MemorySecurity.ZeroMemory(output[..(int)(outputPtr - outputBase)]);
                         return ErrorCorruptPayload;
                     }
 
+                    byte* matchSourcePtr = outputPtr - offset;
                     MemOps.Copy(matchSourcePtr, outputPtr, matchLength);
                     outputPtr += matchLength;
                 }
 
                 if (outputPtr != outputEnd || inputPtr != inputEnd)
                 {
-                    MemorySecurity.ZeroMemory(output);
+                    MemorySecurity.ZeroMemory(output[..(int)(outputPtr - outputBase)]);
                     return ErrorCorruptPayload;
                 }
 

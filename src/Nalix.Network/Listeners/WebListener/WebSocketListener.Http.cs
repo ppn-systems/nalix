@@ -59,6 +59,11 @@ public abstract partial class WebSocketListenerBase
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void RELEASE_LIMITER_SLOT(WebSocketUpgradeContext state)
     {
+        if (System.Threading.Interlocked.Exchange(ref state.LimiterSlotReleased, 1) != 0)
+        {
+            return;
+        }
+
         try
         {
             if (state.RealEndPoint is IPEndPoint realIp)
@@ -158,7 +163,7 @@ public abstract partial class WebSocketListenerBase
             }
         }
 
-        ReadOnlySpan<byte> bodySpan = result.ContentLength > 0
+        ReadOnlySpan<byte> bodySpan = result.ContentLength > 0 && (long)result.BytesConsumed + result.ContentLength <= state.BytesReceived
             ? new ReadOnlySpan<byte>(state.Buffer, result.BytesConsumed, result.ContentLength)
             : ReadOnlySpan<byte>.Empty;
 
@@ -247,8 +252,13 @@ public abstract partial class WebSocketListenerBase
         this.ReleaseWsUpgradeContext(state, args, success: true);
     }
 
-    private static int FormatHttpResponseHeader(int statusCode, ReadOnlySpan<byte> contentType, int contentLength, Span<byte> destination)
+    internal static int FormatHttpResponseHeader(int statusCode, ReadOnlySpan<byte> contentType, int contentLength, Span<byte> destination)
     {
+        if (statusCode is < 100 or > 599)
+        {
+            statusCode = 500;
+        }
+
         ReadOnlySpan<byte> statusLine = GetStatusLinePrefix(statusCode);
         int offset = 0;
 
@@ -274,8 +284,28 @@ public abstract partial class WebSocketListenerBase
         offset += corsAndCtPrefix.Length;
 
         int maxCtLen = Math.Min(contentType.Length, 128);
-        contentType[..maxCtLen].CopyTo(destination[offset..]);
-        offset += maxCtLen;
+        int safeCtLen = 0;
+        while (safeCtLen < maxCtLen)
+        {
+            byte b = contentType[safeCtLen];
+            if ((b < 0x20 && b != (byte)'\t') || b == 0x7F)
+            {
+                break;
+            }
+            safeCtLen++;
+        }
+
+        if (safeCtLen > 0)
+        {
+            contentType[..safeCtLen].CopyTo(destination[offset..]);
+            offset += safeCtLen;
+        }
+        else
+        {
+            ReadOnlySpan<byte> fallbackCt = "text/plain; charset=utf-8"u8;
+            fallbackCt.CopyTo(destination[offset..]);
+            offset += fallbackCt.Length;
+        }
 
         ReadOnlySpan<byte> clPrefix = "\r\nContent-Length: "u8;
         clPrefix.CopyTo(destination[offset..]);

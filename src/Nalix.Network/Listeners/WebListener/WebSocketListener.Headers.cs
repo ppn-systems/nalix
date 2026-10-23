@@ -20,7 +20,8 @@ public abstract partial class WebSocketListenerBase
         endpoint = null;
         reject = false;
 
-        if (!_forwardedConfig.Enabled || !TryGetForwardedAddress(result, out IPAddress forwardedAddress))
+        bool hasForwardedHeader = !result.CfConnectingIp.IsEmpty || !result.XRealIp.IsEmpty || !result.XForwardedFor.IsEmpty;
+        if (!_forwardedConfig.Enabled || !hasForwardedHeader)
         {
             return false;
         }
@@ -44,6 +45,12 @@ public abstract partial class WebSocketListenerBase
             return true;
         }
 
+        if (!TryGetForwardedAddress(result, out IPAddress forwardedAddress))
+        {
+            reject = true;
+            return true;
+        }
+
         endpoint = new IPEndPoint(forwardedAddress, physicalIp.Port);
         return true;
     }
@@ -51,14 +58,15 @@ public abstract partial class WebSocketListenerBase
     private static bool TryGetForwardedAddress(WebSocketUpgradeResult result, out IPAddress address)
     {
         // Header precedence follows common reverse-proxy deployments: Cloudflare, direct proxy, then chain.
-        if (TryParseHeaderAddress(result.CfConnectingIp, out address))
+        // Do not fall back to lower-priority headers if a higher-priority header is present.
+        if (!result.CfConnectingIp.IsEmpty)
         {
-            return true;
+            return TryParseHeaderAddress(result.CfConnectingIp, out address);
         }
 
-        if (TryParseHeaderAddress(result.XRealIp, out address))
+        if (!result.XRealIp.IsEmpty)
         {
-            return true;
+            return TryParseHeaderAddress(result.XRealIp, out address);
         }
 
         return TryParseHeaderAddress(GetFirstForwardedFor(result.XForwardedFor), out address);
@@ -75,6 +83,31 @@ public abstract partial class WebSocketListenerBase
         address = IPAddress.None;
         value = TrimAsciiSpace(value);
         if (value.IsEmpty || value.Length > 45)
+        {
+            return false;
+        }
+
+        int dotCount = 0;
+        bool hasColon = false;
+        for (int i = 0; i < value.Length; i++)
+        {
+            byte b = value[i];
+            if (b is <= 0x20 or >= 0x7F or (byte)'%')
+            {
+                return false;
+            }
+
+            if (b == (byte)'.')
+            {
+                dotCount++;
+            }
+            else if (b == (byte)':')
+            {
+                hasColon = true;
+            }
+        }
+
+        if (!hasColon && dotCount != 3)
         {
             return false;
         }

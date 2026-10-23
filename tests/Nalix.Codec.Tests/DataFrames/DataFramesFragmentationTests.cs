@@ -207,6 +207,70 @@ public sealed partial class DataFramesPublicApiTests
             Assert.Equal(default, header);
         }
     }
+
+    [Fact]
+    public void AddWhenSmallFirstChunkClaimsMaxTotalChunksBoundsInitialAllocation()
+    {
+        using FragmentAssembler assembler = new();
+        FragmentHeader header = new(streamId: 77, chunkIndex: 0, totalChunks: ushort.MaxValue, isLast: false);
+        byte[] smallChunk = new byte[257]; // 257 * 65535 = 16,842,495 (> 16 MB MaxStreamBytes)
+
+        FragmentAssemblyResult? result = assembler.Add(header, smallChunk, out bool evicted);
+
+        Assert.Null(result);
+        Assert.False(evicted);
+        Assert.Equal(1, assembler.OpenStreamCount);
+
+        // Reflect into _streams[77].AccumLease.Capacity to prove initial pre-allocation is bounded (~4 KB, not 16 MB)
+        System.Reflection.FieldInfo? streamsField = typeof(FragmentAssembler).GetField("_streams", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(streamsField);
+        System.Collections.IDictionary streams = (System.Collections.IDictionary)streamsField!.GetValue(assembler)!;
+        object? state = streams[(ushort)77];
+        Assert.NotNull(state);
+        System.Reflection.FieldInfo? leaseField = state!.GetType().GetField("AccumLease", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(leaseField);
+        BufferLease lease = (BufferLease)leaseField!.GetValue(state)!;
+        Assert.True(lease.Capacity <= 8192, $"Expected bounded initial capacity <= 8192 bytes, but rented {lease.Capacity} bytes.");
+    }
+
+    [Fact]
+    public void AddWhenDuplicateChunkZeroArrivesEvictsCorruptedStreamAndThrows()
+    {
+        using FragmentAssembler assembler = new();
+        FragmentHeader chunk0 = new(streamId: 88, chunkIndex: 0, totalChunks: 3, isLast: false);
+        _ = assembler.Add(chunk0, [1, 2, 3, 4], out _);
+        Assert.Equal(1, assembler.OpenStreamCount);
+
+        bool evicted = false;
+        InvalidDataException ex = Assert.Throws<InvalidDataException>(() =>
+            assembler.Add(chunk0, [5, 6, 7, 8], out evicted));
+
+        Assert.True(evicted);
+        Assert.Contains("out-of-order", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, assembler.OpenStreamCount);
+    }
+
+    [Fact]
+    public void AddWhenMaxOpenStreamsReachedSweepsExpiredStreamsBeforeRejecting()
+    {
+        using FragmentAssembler assembler = new()
+        {
+            MaxOpenStreams = 2,
+            StreamTimeoutMs = 50
+        };
+
+        _ = assembler.Add(new FragmentHeader(streamId: 1, chunkIndex: 0, totalChunks: 2, isLast: false), [1], out _);
+        _ = assembler.Add(new FragmentHeader(streamId: 2, chunkIndex: 0, totalChunks: 2, isLast: false), [2], out _);
+        Assert.Equal(2, assembler.OpenStreamCount);
+
+        Thread.Sleep(100);
+
+        FragmentAssemblyResult? res = assembler.Add(new FragmentHeader(streamId: 3, chunkIndex: 0, totalChunks: 2, isLast: false), [3], out bool evicted);
+
+        Assert.Null(res);
+        Assert.False(evicted);
+        Assert.Equal(1, assembler.OpenStreamCount);
+    }
 }
 
 
