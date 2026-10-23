@@ -1,7 +1,9 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Text;
+using Nalix.Environment.Hashing;
 using Nalix.Network.Internal.WebSockets;
 using Xunit;
 
@@ -219,5 +221,40 @@ public class WebSocketUpgradeParserTests
         Assert.Contains("Content-Type: text/plain\r\n", formatted);
         Assert.DoesNotContain("X-Injected-Header", formatted);
         Assert.DoesNotContain("<script>", formatted);
+    }
+
+    [Fact]
+    public void ComputeAcceptKey_Rfc6455Section1_3Vector_ReturnsExpectedBase64AcceptKey()
+    {
+        ReadOnlySpan<byte> clientKey = "dGhlIHNhbXBsZSBub25jZQ=="u8;
+        ReadOnlySpan<byte> expectedAccept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="u8;
+        Span<byte> dest = stackalloc byte[32];
+
+        int written = WebSocketUpgradeParser.ComputeAcceptKey(clientKey, dest);
+
+        Assert.Equal(expectedAccept.Length, written);
+        Assert.True(dest[..written].SequenceEqual(expectedAccept));
+    }
+
+    [Theory]
+    [InlineData("", "DA39A3EE5E6B4B0D3255BFEF95601890AFD80709")]
+    [InlineData("abc", "A9993E364706816ABA3E25717850C26C9CD0D89D")]
+    [InlineData("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", "84983E441C3BD26EBAAE4AA1F95129E5E54670F1")]
+    [InlineData("dGhlIHNhbXBsZSBub25jZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11", "B37A4F2CC0624F1690F64606CF385945B2BEC4EA")]
+    [InlineData("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu", "A49B2446A02C645BF419F995B67091253A04A259")]
+    public void Sha1_HashData_MatchesFips180AndRfc3174Vectors(string input, string expectedHex)
+    {
+        byte[] inputBytes = Encoding.ASCII.GetBytes(input);
+        byte[] hash = Sha1.HashData(inputBytes);
+
+        Assert.Equal(Sha1.HashSize, hash.Length);
+        Assert.Equal(expectedHex, Convert.ToHexString(hash));
+
+        Span<byte> shortDest = stackalloc byte[Sha1.HashSize - 1];
+        Assert.False(Sha1.TryHashData(inputBytes, shortDest));
+
+        Span<byte> validDest = stackalloc byte[Sha1.HashSize];
+        Assert.True(Sha1.TryHashData(inputBytes, validDest));
+        Assert.Equal(expectedHex, Convert.ToHexString(validDest));
     }
 }
