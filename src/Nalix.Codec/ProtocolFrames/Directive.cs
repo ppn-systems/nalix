@@ -69,7 +69,7 @@ public sealed partial class Directive : PacketBase<Directive>, IPacketReasoned, 
     /// <summary>
     /// Initializes a new instance with default values.
     /// </summary>
-    public Directive() => this.Priority = PacketPriority.HIGH;
+    public Directive() => this.ResetForPool();
 
     /// <summary>Initializes the directive payload.</summary>
     /// <param name="type">The directive type.</param>
@@ -108,6 +108,13 @@ public sealed partial class Directive : PacketBase<Directive>, IPacketReasoned, 
     {
         base.ResetForPool();
 
+        this.Type = ControlType.NONE;
+        this.Reason = ProtocolReason.NONE;
+        this.Action = ProtocolAdvice.NONE;
+        this.Control = ControlFlags.NONE;
+        this.Arg0 = 0;
+        this.Arg1 = 0;
+        this.Arg2 = 0;
         this.Priority = PacketPriority.HIGH;
         this.Flags = PacketFlags.SYSTEM;
     }

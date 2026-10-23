@@ -201,6 +201,86 @@ public sealed class OtherPacket : PacketBase<OtherPacket>, IPacketStaticOpcode
             expectedEquivalenceKey: "Nalix.PacketDeserializer.SelfType.Fix");
     }
 
+    [Fact]
+    public async Task DuplicatePacketStaticOpCode_ProducesDiagnostic()
+    {
+        const string source = """
+namespace Demo;
+using Nalix.Abstractions.Networking.Packets;
+using Nalix.Codec.DataFrames;
+
+[Packet]
+public sealed class FirstPacket : PacketBase<FirstPacket>, IPacketStaticOpcode
+{
+    public static ushort StaticOpCode => 4200;
+}
+
+[Packet]
+public sealed class SecondPacket : PacketBase<SecondPacket>, IPacketStaticOpcode
+{
+    public static ushort StaticOpCode => 4200;
+}
+""";
+
+        await Verifier<ResetForPoolCodeFixProvider>.VerifyAnalyzerAsync(
+            source,
+            "NALIX106");
+    }
+
+    [Fact]
+    public async Task ManualResetForPool_WhenMutablePropertyNotReset_ProducesDiagnostic()
+    {
+        const string source = """
+namespace Demo;
+using Nalix.Codec.DataFrames;
+
+public sealed class LeakyPacket : PacketBase<LeakyPacket>, IPacketStaticOpcode
+{
+    public static ushort StaticOpCode => 9999;
+
+    public int ResetField { get; set; }
+    public string? ForgottenSecret { get; set; }
+
+    public override void ResetForPool()
+    {
+        base.ResetForPool();
+        ResetField = 0;
+    }
+}
+""";
+
+        await Verifier<ResetForPoolCodeFixProvider>.VerifyAnalyzerAsync(
+            source,
+            "NALIX107");
+    }
+
+    [Fact]
+    public async Task ManualResetForPool_WhenAllMutableMembersResetOrSkipClean_DoesNotProduceDiagnostic()
+    {
+        const string source = """
+namespace Demo;
+using Nalix.Abstractions.Pooling;
+using Nalix.Codec.DataFrames;
+
+public sealed class CleanPacket : PacketBase<CleanPacket>, IPacketStaticOpcode
+{
+    public static ushort StaticOpCode => 9999;
+
+    public int ResetField { get; set; }
+
+    [SkipClean]
+    public int KeptField { get; set; }
+
+    public override void ResetForPool()
+    {
+        base.ResetForPool();
+        ResetField = 0;
+    }
+}
+""";
+
+        await Verifier<ResetForPoolCodeFixProvider>.VerifyAnalyzerAsync(source);
+    }
 }
 
 

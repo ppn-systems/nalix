@@ -148,61 +148,44 @@ public abstract partial class WebSocketListenerBase
 
         WebSocketUpgradeResult result = WebSocketUpgradeParser.Parse(new ReadOnlySpan<byte>(state.Buffer, 0, state.BytesReceived));
 
-        if (_wsconfig.EnableDevOpsEndpoints && !result.Path.IsEmpty)
+        if (result.IsMalformed)
         {
-            ReadOnlySpan<byte> pathSpan = result.Path;
-
-            bool isVersion = pathSpan.SequenceEqual("/version"u8);
-            bool isMetrics = pathSpan.SequenceEqual("/metrics"u8);
-            bool isHealthz = pathSpan.SequenceEqual("/healthz"u8) ||
-                             pathSpan.SequenceEqual("/health"u8) ||
-                             pathSpan.SequenceEqual("/livez"u8) ||
-                             pathSpan.SequenceEqual("/readyz"u8) ||
-                             pathSpan.SequenceEqual("/startupz"u8) ||
-                             pathSpan.SequenceEqual("/ping"u8);
-
-            if (isHealthz || isVersion || isMetrics)
+            lock (_wsUpgradeLock)
             {
-                lock (_wsUpgradeLock)
-                {
-                    this.DetachWsUpgradeContext(state);
-                }
-
-                if (result.HttpMethod.SequenceEqual("OPTIONS"u8))
-                {
-                    this.SEND_STATIC_RESPONSE(state, args, CorsPreflightResponse);
-                }
-                else if (isHealthz)
-                {
-                    this.SEND_STATIC_RESPONSE(state, args, HealthzResponse);
-                }
-                else if (isVersion)
-                {
-                    this.SEND_STATIC_RESPONSE(state, args, _versionResponseBytes);
-                }
-                else if (isMetrics)
-                {
-                    this.SEND_METRICS_RESPONSE(state, args);
-                }
-                return;
+                this.DetachWsUpgradeContext(state);
             }
+            this.Metrics.RECORD_ERROR();
+            this.SEND_STATIC_RESPONSE(state, args, BadRequestResponse);
+            return;
         }
 
-        if (!result.IsValid)
+        if (result.IsHeaderComplete && result.BytesConsumed + result.ContentLength > state.Buffer.Length)
         {
-            // If invalid, check if we've exceeded the max request size or if it's incomplete
-            if (state.BytesReceived >= _wsconfig.MaxUpgradeRequestSize)
+            lock (_wsUpgradeLock)
+            {
+                this.DetachWsUpgradeContext(state);
+            }
+            this.Metrics.RECORD_ERROR();
+            this.SEND_STATIC_RESPONSE(state, args, PayloadTooLargeResponse);
+            return;
+        }
+
+        if (!result.IsHeaderComplete || state.BytesReceived < result.BytesConsumed + result.ContentLength)
+        {
+            // If incomplete, check if we've exceeded the max request size
+            if (state.BytesReceived >= _wsconfig.MaxUpgradeRequestSize || state.BytesReceived >= state.Buffer.Length)
             {
                 lock (_wsUpgradeLock)
                 {
                     this.DetachWsUpgradeContext(state);
                 }
                 this.Metrics.RECORD_ERROR();
+                this.RELEASE_LIMITER_SLOT(state);
                 this.ReleaseWsUpgradeContext(state, args, success: false);
                 return;
             }
 
-            // Incomplete, read more
+            // Incomplete, read more into the same buffer
             args.SetBuffer(state.BytesReceived, state.Buffer.Length - state.BytesReceived);
             try
             {
@@ -218,8 +201,47 @@ public abstract partial class WebSocketListenerBase
                     this.DetachWsUpgradeContext(state);
                 }
                 this.Metrics.RECORD_ERROR();
+                this.RELEASE_LIMITER_SLOT(state);
                 this.ReleaseWsUpgradeContext(state, args, success: false);
             }
+            return;
+        }
+
+        if (_httpRoutes.TryMatch(
+            result.HttpMethod,
+            result.Path,
+            out HttpRouteEntry matchedRoute,
+            out bool isOptionsPreflight,
+            out bool methodNotAllowed))
+        {
+            lock (_wsUpgradeLock)
+            {
+                this.DetachWsUpgradeContext(state);
+            }
+
+            if (isOptionsPreflight)
+            {
+                this.SEND_STATIC_RESPONSE(state, args, CorsPreflightResponse);
+            }
+            else if (methodNotAllowed)
+            {
+                this.SEND_STATIC_RESPONSE(state, args, MethodNotAllowedResponse);
+            }
+            else
+            {
+                this.DISPATCH_HTTP_ROUTE(state, args, in result, in matchedRoute);
+            }
+            return;
+        }
+
+        if (!result.IsValid)
+        {
+            lock (_wsUpgradeLock)
+            {
+                this.DetachWsUpgradeContext(state);
+            }
+            this.Metrics.RECORD_ERROR();
+            this.SEND_STATIC_RESPONSE(state, args, NotFoundResponse);
             return;
         }
 

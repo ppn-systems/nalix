@@ -21,6 +21,8 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Hosting.Internal;
 using Nalix.Network.Connections;
 using Nalix.Network.Listeners.Udp;
+using Nalix.Network.Listeners.Web;
+using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
 using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Routing;
@@ -404,16 +406,40 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
 
                 ushort? port = registration.Port;
                 string? path = registration.Path;
+                WebSocketBindingBuilder? wsBuilder = registration.BindingBuilder as WebSocketBindingBuilder;
 
-                if (registration.BindingBuilder is WebSocketBindingBuilder wsBuilder)
+                if (wsBuilder is not null)
                 {
                     port = wsBuilder.Port ?? port;
                     path = wsBuilder.Path ?? path;
                 }
 
-                WebSocketServerListener listener = (port.HasValue && path is not null)
-                    ? new(port.Value, path, protocol, hub, guard)
-                    : new(protocol, hub, guard);
+                WebSocketServerListener listener;
+                if (port.HasValue || path is not null)
+                {
+                    NetworkWebSocketOptions wsOpt = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
+                    listener = new(port ?? wsOpt.Port, path ?? wsOpt.Path, protocol, hub, guard);
+                }
+                else
+                {
+                    listener = new(protocol, hub, guard);
+                }
+
+                if (wsBuilder is not null)
+                {
+                    for (int i = 0; i < wsBuilder.HttpRoutes.Count; i++)
+                    {
+                        HttpRouteRegistration route = wsBuilder.HttpRoutes[i];
+                        if (route.Method == HttpMethodType.Post)
+                        {
+                            listener.MapPost(route.Path, route.Handler);
+                        }
+                        else
+                        {
+                            listener.MapGet(route.Path, route.Handler);
+                        }
+                    }
+                }
 
                 return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.WEBSOCKET);
             });

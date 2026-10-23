@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Text;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
@@ -10,7 +11,7 @@ using System.Security.Cryptography;
 namespace Nalix.Network.Internal.WebSockets;
 
 /// <summary>
-/// Zero-allocation parser for HTTP/1.1 WebSocket upgrade requests.
+/// Zero-allocation parser for HTTP/1.1 WebSocket upgrade and minimal HTTP requests.
 /// </summary>
 internal static class WebSocketUpgradeParser
 {
@@ -27,6 +28,9 @@ internal static class WebSocketUpgradeParser
     private static ReadOnlySpan<byte> CfConnectingIpKey => "cf-connecting-ip:"u8;
     private static ReadOnlySpan<byte> XRealIpKey => "x-real-ip:"u8;
     private static ReadOnlySpan<byte> XForwardedForKey => "x-forwarded-for:"u8;
+    private static ReadOnlySpan<byte> ContentLengthKey => "content-length:"u8;
+    private static ReadOnlySpan<byte> ContentTypeKey => "content-type:"u8;
+    private static ReadOnlySpan<byte> TransferEncodingKey => "transfer-encoding:"u8;
 
     // Header expected values
     private static ReadOnlySpan<byte> UpgradeWebSocketValue => "websocket"u8;
@@ -37,7 +41,7 @@ internal static class WebSocketUpgradeParser
     private static ReadOnlySpan<byte> MagicString => "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"u8;
 
     /// <summary>
-    /// Parses an HTTP/1.1 request to extract WebSocket upgrade headers.
+    /// Parses an HTTP/1.1 request to extract WebSocket upgrade and minimal HTTP headers.
     /// </summary>
     /// <param name="buffer">The received bytes containing the HTTP request.</param>
     /// <returns>A parsed result indicating success or failure and the extracted values.</returns>
@@ -46,7 +50,7 @@ internal static class WebSocketUpgradeParser
         int headerEnd = buffer.IndexOf(DoubleCrlf);
         if (headerEnd < 0)
         {
-            return new WebSocketUpgradeResult { IsValid = false }; // Not complete yet
+            return new WebSocketUpgradeResult { IsValid = false, IsHeaderComplete = false }; // Not complete yet
         }
 
         int totalBytesConsumed = headerEnd + 4; // Including \r\n\r\n
@@ -56,7 +60,7 @@ internal static class WebSocketUpgradeParser
         int firstLineEnd = headersSpan.IndexOf(Crlf);
         if (firstLineEnd <= 0)
         {
-            return new WebSocketUpgradeResult { IsValid = false, BytesConsumed = totalBytesConsumed };
+            return new WebSocketUpgradeResult { IsValid = false, IsHeaderComplete = true, IsMalformed = true, BytesConsumed = totalBytesConsumed };
         }
 
         ReadOnlySpan<byte> requestLine = headersSpan[..firstLineEnd];
@@ -65,7 +69,7 @@ internal static class WebSocketUpgradeParser
         int methodEnd = requestLine.IndexOf((byte)' ');
         if (methodEnd <= 0)
         {
-            return new WebSocketUpgradeResult { IsValid = false, BytesConsumed = totalBytesConsumed };
+            return new WebSocketUpgradeResult { IsValid = false, IsHeaderComplete = true, IsMalformed = true, BytesConsumed = totalBytesConsumed };
         }
 
         ReadOnlySpan<byte> method = requestLine[..methodEnd];
@@ -74,18 +78,29 @@ internal static class WebSocketUpgradeParser
         int pathEnd = remainingRequestLine.IndexOf((byte)' ');
         if (pathEnd <= 0)
         {
-            return new WebSocketUpgradeResult { IsValid = false, BytesConsumed = totalBytesConsumed };
+            return new WebSocketUpgradeResult { IsValid = false, IsHeaderComplete = true, IsMalformed = true, BytesConsumed = totalBytesConsumed };
         }
 
-        ReadOnlySpan<byte> path = remainingRequestLine[..pathEnd];
+        ReadOnlySpan<byte> rawTarget = remainingRequestLine[..pathEnd];
+        int querySeparator = rawTarget.IndexOf((byte)'?');
+        ReadOnlySpan<byte> path = querySeparator >= 0 ? rawTarget[..querySeparator] : rawTarget;
+        ReadOnlySpan<byte> query = querySeparator >= 0 ? rawTarget[(querySeparator + 1)..] : default;
+
+        if (path.IsEmpty || path[0] != (byte)'/')
+        {
+            return new WebSocketUpgradeResult { IsValid = false, IsHeaderComplete = true, IsMalformed = true, BytesConsumed = totalBytesConsumed };
+        }
 
         // 2. Parse Headers
         bool hasUpgrade = false;
         bool hasConnection = false;
         bool hasVersion = false;
+        bool isMalformed = false;
+        int contentLength = 0;
         ReadOnlySpan<byte> secWebSocketKey = default;
         ReadOnlySpan<byte> origin = default;
         ReadOnlySpan<byte> subProtocol = default;
+        ReadOnlySpan<byte> contentType = default;
         ReadOnlySpan<byte> cfConnectingIp = default;
         ReadOnlySpan<byte> xRealIp = default;
         ReadOnlySpan<byte> xForwardedFor = default;
@@ -153,6 +168,28 @@ internal static class WebSocketUpgradeParser
                     {
                         xForwardedFor = value;
                     }
+                    else if (lowerKey.SequenceEqual(ContentLengthKey[..^1]))
+                    {
+                        if (!Utf8Parser.TryParse(value, out int parsedLen, out int consumed) ||
+                            consumed != value.Length ||
+                            parsedLen < 0)
+                        {
+                            isMalformed = true;
+                        }
+                        else
+                        {
+                            contentLength = parsedLen;
+                        }
+                    }
+                    else if (lowerKey.SequenceEqual(ContentTypeKey[..^1]))
+                    {
+                        contentType = value;
+                    }
+                    else if (lowerKey.SequenceEqual(TransferEncodingKey[..^1]))
+                    {
+                        // Strict constraint: Transfer-Encoding (e.g. chunked) is never allowed.
+                        isMalformed = true;
+                    }
                 }
             }
 
@@ -163,17 +200,22 @@ internal static class WebSocketUpgradeParser
             headersSpan = headersSpan[(lineEnd + 2)..];
         }
 
-        // Validate all required fields are present
-        bool isValid = hasUpgrade && hasConnection && hasVersion && !secWebSocketKey.IsEmpty && secWebSocketKey.Length == 24;
+        // Validate all required fields are present for a WebSocket upgrade
+        bool isValid = !isMalformed && hasUpgrade && hasConnection && hasVersion && !secWebSocketKey.IsEmpty && secWebSocketKey.Length == 24;
 
         return new WebSocketUpgradeResult
         {
             IsValid = isValid,
+            IsHeaderComplete = true,
+            IsMalformed = isMalformed,
+            ContentLength = contentLength,
             SecWebSocketKey = secWebSocketKey,
             Path = path,
+            Query = query,
             Origin = origin,
             SubProtocol = subProtocol,
             HttpMethod = method,
+            ContentType = contentType,
             CfConnectingIp = cfConnectingIp,
             XRealIp = xRealIp,
             XForwardedFor = xForwardedFor,
@@ -201,7 +243,7 @@ internal static class WebSocketUpgradeParser
         Span<byte> hash = stackalloc byte[20]; // SHA-1 is 20 bytes
         _ = SHA1.HashData(combined, hash);
 
-        _ = System.Buffers.Text.Base64.EncodeToUtf8(hash, destination, out _, out int bytesWritten);
+        _ = Base64.EncodeToUtf8(hash, destination, out _, out int bytesWritten);
         return bytesWritten;
     }
 

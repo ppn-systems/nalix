@@ -135,6 +135,36 @@ public sealed class PacketRegistryTests : IDisposable
     }
 
     [Fact]
+    public void DirectiveAfterResetForPoolClearsAllPayloadFields()
+    {
+        Directive directive = new();
+        directive.Initialize(
+            type: ControlType.NOTICE,
+            reason: ProtocolReason.INTERNAL_ERROR,
+            action: ProtocolAdvice.RETRY,
+            sequenceId: 456,
+            flags: PacketFlags.COMPRESSED,
+            controlFlags: ControlFlags.IS_TRANSIENT,
+            arg0: 1000,
+            arg1: 2000,
+            arg2: 3);
+
+        directive.ResetForPool();
+
+        Assert.Equal(Directive.StaticOpCode, directive.Header.OpCode);
+        Assert.Equal(0u, directive.Header.SequenceId);
+        Assert.Equal(PacketFlags.SYSTEM, directive.Header.Flags);
+        Assert.Equal(PacketPriority.HIGH, directive.Header.Priority);
+        Assert.Equal(ControlType.NONE, directive.Type);
+        Assert.Equal(ProtocolReason.NONE, directive.Reason);
+        Assert.Equal(ProtocolAdvice.NONE, directive.Action);
+        Assert.Equal(ControlFlags.NONE, directive.Control);
+        Assert.Equal(0u, directive.Arg0);
+        Assert.Equal(0u, directive.Arg1);
+        Assert.Equal((ushort)0, directive.Arg2);
+    }
+
+    [Fact]
     public void DeserializeWhenBufferIsTooShortThrowsArgumentException()
     {
         byte[] tooShort = new byte[3];

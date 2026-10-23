@@ -37,12 +37,24 @@ namespace Nalix.Abstractions.Networking.Packets
     public interface IPacketDeserializer<TPacket> where TPacket : IPacket { }
     public interface IPacketStaticOpcode { static abstract ushort StaticOpCode { get; } }
     public sealed class PacketOpcodeAttribute : Attribute { public PacketOpcodeAttribute(ushort opcode) { } }
+    public sealed class PacketAttribute : Attribute { }
     public sealed class PacketHandlerAttribute : Attribute
     {
         public PacketHandlerAttribute(string? name = null) { }
     }
     public enum PacketFlags : ushort { None = 0 }
     public enum PacketPriority : byte { Normal = 0 }
+}
+
+namespace Nalix.Abstractions.Pooling
+{
+    public interface IPoolable { void ResetForPool(); }
+    public sealed class SkipCleanAttribute : Attribute { }
+}
+
+namespace Nalix.Abstractions.Injection
+{
+    public sealed class InjectAttribute : Attribute { }
 }
 
 namespace Nalix.Abstractions.Networking

@@ -24,21 +24,31 @@ public sealed class PacketRegistryGenerator : IIncrementalGenerator
         public string FullyQualifiedName { get; }
         public string ErrorMessageName { get; }
         public string GeneratedNamespace { get; }
+        public ushort? StaticOpCode { get; }
+        public Location? Location { get; }
 
-        public PacketRegistryModel(string fullyQualifiedName, string errorMessageName, string generatedNamespace)
+        public PacketRegistryModel(
+            string fullyQualifiedName,
+            string errorMessageName,
+            string generatedNamespace,
+            ushort? staticOpCode,
+            Location? location)
         {
             this.FullyQualifiedName = fullyQualifiedName;
             this.ErrorMessageName = errorMessageName;
             this.GeneratedNamespace = generatedNamespace;
+            this.StaticOpCode = staticOpCode;
+            this.Location = location;
         }
 
         public bool Equals(PacketRegistryModel other) =>
             this.FullyQualifiedName == other.FullyQualifiedName &&
             this.ErrorMessageName == other.ErrorMessageName &&
-            this.GeneratedNamespace == other.GeneratedNamespace;
+            this.GeneratedNamespace == other.GeneratedNamespace &&
+            this.StaticOpCode == other.StaticOpCode;
 
         public override bool Equals(object obj) => obj is PacketRegistryModel other && this.Equals(other);
-        public override int GetHashCode() => (this.FullyQualifiedName, this.ErrorMessageName, this.GeneratedNamespace).GetHashCode();
+        public override int GetHashCode() => (this.FullyQualifiedName, this.ErrorMessageName, this.GeneratedNamespace, this.StaticOpCode).GetHashCode();
     }
 
     #region Constants and Diagnostics
@@ -82,9 +92,39 @@ public sealed class PacketRegistryGenerator : IIncrementalGenerator
             return;
         }
 
-        string generatedNamespace = distinctPackets[0].GeneratedNamespace;
+        List<PacketRegistryModel> validPackets = new(distinctPackets.Count);
+        Dictionary<ushort, PacketRegistryModel> seenOpcodes = new();
 
-        EMIT_BOOTSTRAP(context, distinctPackets, generatedNamespace);
+        foreach (PacketRegistryModel packet in distinctPackets)
+        {
+            if (packet.StaticOpCode.HasValue)
+            {
+                ushort opCode = packet.StaticOpCode.Value;
+                if (seenOpcodes.TryGetValue(opCode, out PacketRegistryModel existing))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        GeneratorDiagnosticDescriptors.DuplicatePacketStaticOpCode,
+                        packet.Location ?? Location.None,
+                        packet.ErrorMessageName,
+                        opCode,
+                        existing.ErrorMessageName));
+                    continue;
+                }
+
+                seenOpcodes.Add(opCode, packet);
+            }
+
+            validPackets.Add(packet);
+        }
+
+        if (validPackets.Count == 0)
+        {
+            return;
+        }
+
+        string generatedNamespace = validPackets[0].GeneratedNamespace;
+
+        EMIT_BOOTSTRAP(context, validPackets, generatedNamespace);
     }
 
     private static PacketRegistryModel GET_PACKET_TYPE(GeneratorAttributeSyntaxContext context)
@@ -104,10 +144,83 @@ public sealed class PacketRegistryGenerator : IIncrementalGenerator
             return default;
         }
 
+        ushort? staticOpCode = TRY_GET_STATIC_OPCODE(symbol, context.SemanticModel, out Location? location);
+
         return new PacketRegistryModel(
             symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-            SourceGenNamespaces.Get(symbol));
+            SourceGenNamespaces.Get(symbol),
+            staticOpCode,
+            location);
+    }
+
+    private static ushort? TRY_GET_STATIC_OPCODE(INamedTypeSymbol symbol, SemanticModel semanticModel, out Location? location)
+    {
+        IPropertySymbol? prop = symbol.GetMembers("StaticOpCode")
+            .OfType<IPropertySymbol>()
+            .FirstOrDefault(static p => p.IsStatic);
+
+        location = prop?.Locations.FirstOrDefault(static l => l.IsInSource)
+            ?? symbol.Locations.FirstOrDefault(static l => l.IsInSource);
+
+        if (prop is null)
+        {
+            return null;
+        }
+
+        foreach (SyntaxReference syntaxRef in prop.DeclaringSyntaxReferences)
+        {
+            if (syntaxRef.GetSyntax() is not PropertyDeclarationSyntax propSyntax)
+            {
+                continue;
+            }
+
+            ExpressionSyntax? expr = propSyntax.ExpressionBody?.Expression ?? propSyntax.Initializer?.Value;
+            if (expr is null && propSyntax.AccessorList is not null)
+            {
+                AccessorDeclarationSyntax? getter = propSyntax.AccessorList.Accessors
+                    .FirstOrDefault(static a => a.Keyword.ValueText == "get");
+                expr = getter?.ExpressionBody?.Expression
+                    ?? getter?.Body?.Statements.OfType<ReturnStatementSyntax>().FirstOrDefault()?.Expression;
+            }
+
+            if (expr is null)
+            {
+                continue;
+            }
+
+            SemanticModel model = ReferenceEquals(semanticModel.SyntaxTree, expr.SyntaxTree)
+                ? semanticModel
+                : semanticModel.Compilation.GetSemanticModel(expr.SyntaxTree);
+
+            Optional<object?> constant = model.GetConstantValue(expr);
+            if (!constant.HasValue || constant.Value is null)
+            {
+                continue;
+            }
+
+            switch (constant.Value)
+            {
+                case ushort u:
+                    return u;
+                case int i and >= 0 and <= ushort.MaxValue:
+                    return (ushort)i;
+                case short s and >= 0:
+                    return (ushort)s;
+                case byte b:
+                    return b;
+                case uint ui and <= ushort.MaxValue:
+                    return (ushort)ui;
+                case long l and >= 0 and <= ushort.MaxValue:
+                    return (ushort)l;
+                case ulong ul and <= ushort.MaxValue:
+                    return (ushort)ul;
+                default:
+                    break;
+            }
+        }
+
+        return null;
     }
 
     private static bool INHERITS_PACKET_BASE_OF_SELF(INamedTypeSymbol symbol)

@@ -312,18 +312,9 @@ public sealed class PacketSchemaGenerator : IIncrementalGenerator
             _ = sb.AppendLine("        base.ResetForPool();");
             _ = sb.AppendLine();
 
-            foreach (ISymbol member in members)
+            List<ISymbol> resetMembers = RESOLVE_RESET_MEMBERS(type, members);
+            foreach (ISymbol member in resetMembers)
             {
-                if (member is IPropertySymbol { IsReadOnly: true })
-                {
-                    continue;
-                }
-
-                if (member.Name is "Header" or "_header")
-                {
-                    continue;
-                }
-
                 ITypeSymbol memberType = GET_MEMBER_TYPE(member);
                 _ = sb.AppendLine(BUILD_RESET_STATEMENT(memberType, member.Name));
             }
@@ -822,6 +813,132 @@ public sealed class PacketSchemaGenerator : IIncrementalGenerator
         IFieldSymbol f => f.Type,
         _ => throw new InvalidOperationException($"Unexpected member kind: {member.Kind}")
     };
+
+    private static List<ISymbol> RESOLVE_RESET_MEMBERS(ITypeSymbol type, List<ISymbol> serializedMembers)
+    {
+        List<ISymbol> result = new(serializedMembers.Count + 4);
+        HashSet<string> seenNames = new(StringComparer.Ordinal);
+
+        foreach (ISymbol member in serializedMembers)
+        {
+            if (member is IPropertySymbol { IsReadOnly: true } or IPropertySymbol { SetMethod.IsInitOnly: true } or IFieldSymbol { IsReadOnly: true })
+            {
+                continue;
+            }
+
+            if (member.Name is "Header" or "_header")
+            {
+                continue;
+            }
+
+            if (HAS_SKIP_CLEAN_OR_INJECT(member))
+            {
+                continue;
+            }
+
+            if (seenNames.Add(member.Name))
+            {
+                result.Add(member);
+            }
+        }
+
+        // Also include non-serialized mutable members (e.g. [SerializeIgnore] fields/auto-properties)
+        // declared in the packet hierarchy down to PacketBase/FrameBase, unless marked [SkipClean] or [Inject].
+        List<ISymbol> extraMembers = new();
+        ITypeSymbol? current = type;
+        while (current is not null
+               && current.SpecialType == SpecialType.None
+               && current.Name != KnownNames.PacketBaseName
+               && current.Name != "FrameBase")
+        {
+            ImmutableArray<ISymbol> levelMembers = current.GetMembers();
+            bool isTargetType = SymbolEqualityComparer.Default.Equals(current, type);
+
+            foreach (ISymbol member in levelMembers)
+            {
+                if (member.IsStatic || member.IsImplicitlyDeclared || seenNames.Contains(member.Name))
+                {
+                    continue;
+                }
+
+                if (!isTargetType && member.DeclaredAccessibility == Accessibility.Private)
+                {
+                    continue;
+                }
+
+                if (HAS_SKIP_CLEAN_OR_INJECT(member))
+                {
+                    continue;
+                }
+
+                if (member is IPropertySymbol prop)
+                {
+                    if (prop.IsReadOnly
+                        || prop.IsIndexer
+                        || prop.SetMethod is null
+                        || prop.SetMethod.IsInitOnly
+                        || (!isTargetType && prop.SetMethod.DeclaredAccessibility == Accessibility.Private))
+                    {
+                        continue;
+                    }
+
+                    bool isAutoProperty = levelMembers
+                        .OfType<IFieldSymbol>()
+                        .Any(f => SymbolEqualityComparer.Default.Equals(f.AssociatedSymbol, prop));
+                    if (!isAutoProperty)
+                    {
+                        continue;
+                    }
+
+                    if (seenNames.Add(prop.Name))
+                    {
+                        extraMembers.Add(prop);
+                    }
+                }
+                else if (member is IFieldSymbol field)
+                {
+                    if (field.IsReadOnly || field.IsConst)
+                    {
+                        continue;
+                    }
+
+                    bool wrappedByResetProperty = levelMembers
+                        .OfType<IPropertySymbol>()
+                        .Any(p => seenNames.Contains(p.Name)
+                                  && SymbolEqualityComparer.Default.Equals(p.Type, field.Type)
+                                  && !levelMembers.OfType<IFieldSymbol>().Any(bf => SymbolEqualityComparer.Default.Equals(bf.AssociatedSymbol, p)));
+                    if (wrappedByResetProperty)
+                    {
+                        continue;
+                    }
+
+                    if (seenNames.Add(field.Name))
+                    {
+                        extraMembers.Add(field);
+                    }
+                }
+            }
+
+            current = current.BaseType;
+        }
+
+        result.AddRange(extraMembers);
+        return result;
+    }
+
+    private static bool HAS_SKIP_CLEAN_OR_INJECT(ISymbol member)
+    {
+        foreach (AttributeData attr in member.GetAttributes())
+        {
+            string? name = attr.AttributeClass?.Name;
+            if (name is KnownNames.SkipCleanName or "SkipCleanAttribute" or "Inject" or KnownNames.InjectableAttributeName or "InjectAttribute")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static string BUILD_RESET_STATEMENT(ITypeSymbol type, string memberName)
     {
