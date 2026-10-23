@@ -31,8 +31,8 @@ public sealed class InstanceManagerTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    [Fact(DisplayName = "Register same instance twice should not dispose the instance")]
-    public void RegisterSameInstanceTwiceDoesNotDisposeIt()
+    [Fact]
+    public void Register_WhenSameInstanceRegisteredTwice_DoesNotDisposeInstance()
     {
         DisposableCounter instance = new();
 
@@ -44,8 +44,8 @@ public sealed class InstanceManagerTests : IDisposable
         _ = _manager.RemoveInstance(typeof(DisposableCounter));
     }
 
-    [Fact(DisplayName = "Register replacing instance should dispose previous once")]
-    public void RegisterReplacingInstanceDisposesPreviousOnce()
+    [Fact]
+    public void Register_WhenReplacingInstance_DisposesPreviousOnce()
     {
         DisposableCounter first = new();
         DisposableCounter second = new();
@@ -59,8 +59,8 @@ public sealed class InstanceManagerTests : IDisposable
         _ = _manager.RemoveInstance(typeof(DisposableCounter));
     }
 
-    [Fact(DisplayName = "Register with interfaces publishes interface slot and GetExistingInstance returns it")]
-    public void RegisterWithInterfacesPublishesInterfaceSlot()
+    [Fact]
+    public void Register_WhenTypeIsInjectable_PublishesInterfaceSlot()
     {
         TestService service = new("svc1");
 
@@ -75,8 +75,8 @@ public sealed class InstanceManagerTests : IDisposable
         _ = _manager.RemoveInstance(typeof(TestService));
     }
 
-    [Fact(DisplayName = "GetOrCreateInstance generic caches instance; CreateInstance creates new object")]
-    public void GetOrCreateInstanceCachesWhileCreateInstanceReturnsNewObject()
+    [Fact]
+    public void GetOrCreateInstance_WhenCalledRepeatedly_CachesWhileCreateInstanceReturnsNewObject()
     {
         TestService first = _manager.GetOrCreateInstance<TestService>();
         TestService second = _manager.GetOrCreateInstance<TestService>();
@@ -89,8 +89,8 @@ public sealed class InstanceManagerTests : IDisposable
         _manager.Clear(dispose: true);
     }
 
-    [Fact(DisplayName = "RemoveInstance disposes and removes instance")]
-    public void RemoveInstanceDisposesAndRemovesInstance()
+    [Fact]
+    public void RemoveInstance_WhenInstanceRegistered_DisposesAndRemovesIt()
     {
         DisposableCounter instance = new();
         _manager.Register(instance);
@@ -102,8 +102,8 @@ public sealed class InstanceManagerTests : IDisposable
         Assert.False(_manager.HasInstance<DisposableCounter>());
     }
 
-    [Fact(DisplayName = "Clear disposes all when dispose=true")]
-    public void ClearDisposesTrackedInstances()
+    [Fact]
+    public void Clear_WhenDisposeIsTrue_RemovesTrackedInstances()
     {
         DisposableCounter first = new();
         DisposableCounter second = new();
@@ -121,8 +121,8 @@ public sealed class InstanceManagerTests : IDisposable
         Assert.False(_manager.HasInstance<TestService>());
     }
 
-    [Fact(DisplayName = "GenerateReport contains registered types")]
-    public void GenerateReportContainsRegisteredTypes()
+    [Fact]
+    public void GenerateReport_WhenTypesRegistered_ContainsRegisteredTypes()
     {
         _manager.Clear(dispose: true);
         _manager.Register(new TestService("r1"));
@@ -134,8 +134,8 @@ public sealed class InstanceManagerTests : IDisposable
         Assert.Contains(nameof(DisposableCounter), report);
     }
 
-    [Fact(DisplayName = "Concurrent Register/GetOrCreateInstance should not return disposed instance or throw")]
-    public void ConcurrentRegisterAndGetOrCreateDoesNotThrow()
+    [Fact]
+    public void RegisterAndGetOrCreateInstance_WhenCalledConcurrently_DoesNotThrow()
     {
         _manager.Clear(dispose: true);
 
@@ -184,8 +184,8 @@ public sealed class InstanceManagerTests : IDisposable
         }
     }
 
-    [Fact(DisplayName = "HasInstance and GetExistingInstance behave as expected")]
-    public void HasInstanceAndGetExistingInstanceBehaveAsExpected()
+    [Fact]
+    public void HasInstance_BeforeAndAfterRegister_ReflectsRegistration()
     {
         _manager.Clear(dispose: true);
 
@@ -199,8 +199,8 @@ public sealed class InstanceManagerTests : IDisposable
         Assert.Same(service, _manager.GetExistingInstance<TestService>());
     }
 
-    [Fact(DisplayName = "CreateInstance does not cache the created object")]
-    public void CreateInstanceDoesNotCacheCreatedObject()
+    [Fact]
+    public void CreateInstance_WhenCalledTwice_DoesNotCacheCreatedObject()
     {
         _manager.Clear(dispose: true);
 
@@ -211,21 +211,19 @@ public sealed class InstanceManagerTests : IDisposable
         Assert.Null(_manager.GetExistingInstance<TestService>());
     }
 
-    [Fact(DisplayName = "CreateInstance with null for struct parameter should throw")]
-    public void CreateInstanceWithNullForStructParameterThrows()
+    [Fact]
+    public void CreateInstance_WhenStructParameterIsNull_ThrowsNullReferenceException()
     {
         _ = Assert.Throws<NullReferenceException>(() => _manager.CreateInstance(typeof(StructParamService), [null]));
     }
 
-    [Fact(DisplayName = "CreateInstance with null for Nullable struct parameter should succeed")]
-    public void CreateInstanceWithNullForNullableStructParameterSucceeds()
+    [Fact]
+    public void CreateInstance_WhenNullableStructParameterIsNull_CreatesInstance()
     {
         NullableStructParamService instance = (NullableStructParamService)_manager.CreateInstance(typeof(NullableStructParamService), [null]);
         Assert.NotNull(instance);
         Assert.Null(instance.S);
     }
-
-
 
     private sealed class DisposableCounter : IDisposable
     {
@@ -265,18 +263,4 @@ public sealed class InstanceManagerTests : IDisposable
     [Nalix.Abstractions.Injection.Injectable]
     internal sealed class NullableStructParamService(MyStruct? s) { public MyStruct? S { get; } = s; }
 
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

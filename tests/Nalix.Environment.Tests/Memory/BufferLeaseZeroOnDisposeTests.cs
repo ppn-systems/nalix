@@ -14,7 +14,7 @@ public sealed class BufferLeaseZeroOnDisposeTests
     private const byte Marker = 0xAB;
 
     /// <summary>
-    /// Fills every byte of the rented array — headroom, payload and the uncommitted tail — and
+    /// Fills every byte of the rented array - headroom, payload and the uncommitted tail - and
     /// hands back the array so the caller can inspect it after the lease is disposed.
     /// </summary>
     private static byte[] FillAndRelease(bool zeroOnDispose, int commit)
@@ -39,8 +39,8 @@ public sealed class BufferLeaseZeroOnDisposeTests
 
         byte[] array = FillAndRelease(zeroOnDispose: true, commit);
 
-        // Everything past the committed payload — where SpanFull lets a caller write before, or
-        // without, committing a length — must come back scrubbed.
+        // Everything past the committed payload - where SpanFull lets a caller write before, or
+        // without, committing a length - must come back scrubbed.
         _ = array[(headroom + commit)..].Should().AllBeEquivalentTo<byte>(
             0,
             "a lease marked ZeroOnDispose must not leave secret bytes past its committed length");
@@ -59,7 +59,7 @@ public sealed class BufferLeaseZeroOnDisposeTests
     }
 
     [Fact]
-    public void Dispose_WithZeroOnDispose_AndNothingCommitted_ClearsTheWholeArray()
+    public void Dispose_WhenNothingCommitted_ClearsWholeArray()
     {
         // A committed length of zero used to skip the scrub entirely, leaving whatever the caller
         // had written through SpanFull in the pool. Nothing is committed here, so the DEBUG poison

@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using Nalix.Codec.DataFrames;
+using Nalix.Codec.Pooling;
 using Nalix.Codec.ProtocolFrames;
 using Nalix.Environment.Configuration;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Framework.Options;
-using Nalix.Codec.Pooling;
 
 namespace Nalix.Framework.Tests.Memory;
 
@@ -30,7 +30,7 @@ public sealed class PacketLifecycleTests : IDisposable
     }
 
     [Fact]
-    public void PacketLease_Struct_Disposal_ReturnsToPool()
+    public void Dispose_WhenScopeDisposed_ReturnsPacketToPool()
     {
         Control packet = _manager.Get<Control>();
         Assert.Equal(1L, (long)_manager.GetTypeInfo<Control>()["Outstanding"]);
@@ -47,7 +47,7 @@ public sealed class PacketLifecycleTests : IDisposable
     }
 
     [Fact]
-    public void PacketBase_AtomicDisposal_PreventsDoubleReturn()
+    public void Dispose_WhenCalledTwice_ReturnsPacketOnce()
     {
         Assert.NotNull(PacketRegistry.Manager);
         Assert.Same(_manager, PacketRegistry.Manager);
@@ -65,18 +65,3 @@ public sealed class PacketLifecycleTests : IDisposable
         Assert.Equal(1L, (long)_manager.GetTypeInfo<Control>()["TotalReturns"]); // Should NOT be 2
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

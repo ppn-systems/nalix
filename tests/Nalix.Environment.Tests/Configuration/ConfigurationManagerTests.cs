@@ -1,5 +1,6 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,7 +26,7 @@ namespace Nalix.Environment.Tests.Configuration;
 /// <item><description>Cache invalidation (remove/clear).</description></item>
 /// <item><description>Graceful handling of missing or invalid configuration files.</description></item>
 /// </list>
-/// 
+///
 /// Each test uses an isolated temporary directory to avoid cross-test interference.
 /// </remarks>
 public sealed partial class ConfigurationManagerTests : IDisposable
@@ -90,7 +91,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     /// and no redundant allocations or rebindings occur.
     /// </remarks>
     [Fact]
-    public void GetWhenConfigurationFileContainsValuesReturnsInitializedConfiguration()
+    public void Get_WhenFileContainsValues_ReturnsInitializedConfiguration()
     {
         string filePath = this.WriteConfigFile(
             "appsettings.ini",
@@ -120,7 +121,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     /// and no redundant allocations or rebindings occur.
     /// </remarks>
     [Fact]
-    public void GetWhenCalledMultipleTimesReturnsSameCachedInstance()
+    public void Get_WhenCalledRepeatedly_ReturnsSameCachedInstance()
     {
         string filePath = this.WriteConfigFile(
             "cached.ini",
@@ -139,7 +140,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void GetWhenConfigurationFileDoesNotExistReturnsDefaultValues()
+    public void Get_WhenFileDoesNotExist_ReturnsDefaultValues()
     {
         string filePath = Path.Combine(_testDirectory, "missing.ini");
 
@@ -157,7 +158,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void GetWithPathOverloadUsesProvidedConfigurationFile()
+    public void Get_WithPathOverload_UsesProvidedConfigurationFile()
     {
         string filePath = this.WriteConfigFile(
             "overload.ini",
@@ -180,7 +181,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void SetConfigFilePathWhenPathIsNullOrWhitespaceThrowsArgumentException(string? path)
+    public void SetConfigFilePath_WhenPathIsNullOrWhitespace_ThrowsArgumentException(string? path)
     {
         using ConfigurationManager manager = this.CreateManager();
 
@@ -188,7 +189,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void SetConfigFilePathWhenPathIsOutsideConfigurationDirectoryThrowsInternalErrorException()
+    public void SetConfigFilePath_WhenPathIsOutsideConfigurationDirectory_ThrowsInternalErrorException()
     {
         using ConfigurationManager manager = this.CreateManager();
         string outsidePath = Path.Combine(Path.GetTempPath(), $"outside_{Guid.NewGuid():N}.ini");
@@ -197,7 +198,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void SetConfigFilePath_SwitchesContextAndPreservesState()
+    public void SetConfigFilePath_WhenSwitchingFiles_PreservesCachedState()
     {
         string firstPath = this.WriteConfigFile(
             "first.ini",
@@ -230,7 +231,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void SetConfigFilePathWhenAutoReloadIsEnabledUpdatesContextTimestamp()
+    public void SetConfigFilePath_WhenAutoReloadIsEnabled_UpdatesContextTimestamp()
     {
         string firstPath = this.WriteConfigFile(
             "auto-first.ini",
@@ -269,7 +270,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     /// </list>
     /// </remarks>
     [Fact]
-    public void ReloadAllWhenConfigurationFileChangesReloadsLoadedConfigurationsAndUpdatesTimestamp()
+    public void ReloadAll_WhenFileChanges_ReloadsConfigurationsAndUpdatesTimestamp()
     {
         string filePath = this.WriteConfigFile(
             "reload.ini",
@@ -301,7 +302,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void RemoveWhenConfigurationWasLoadedRemovesItFromCache()
+    public void Remove_WhenConfigurationWasLoaded_RemovesItFromCache()
     {
         string filePath = this.WriteConfigFile(
             "remove.ini",
@@ -323,7 +324,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void RemoveWhenConfigurationWasNotLoadedReturnsFalse()
+    public void Remove_WhenConfigurationWasNotLoaded_ReturnsFalse()
     {
         using ConfigurationManager manager = this.CreateManager();
 
@@ -333,7 +334,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void ClearAllWhenConfigurationsWereLoadedRemovesAllCachedInstances()
+    public void ClearAll_WhenConfigurationsWereLoaded_RemovesAllCachedInstances()
     {
         string filePath = this.WriteConfigFile(
             "clear.ini",
@@ -362,7 +363,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void FlushWhenConfigurationHasNotBeenCreatedDoesNotThrow()
+    public void Flush_WhenConfigurationNotCreated_DoesNotThrow()
     {
         string filePath = Path.Combine(_testDirectory, "flush.ini");
 
@@ -374,7 +375,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void FlushWhenInitializationAddsMissingCommentsPersistsCommentsToFile()
+    public void Flush_WhenInitializationAddsMissingComments_PersistsCommentsToFile()
     {
         string filePath = this.WriteConfigFile(
             "flush-comments.ini",
@@ -393,7 +394,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void FlushWhenSectionExistsWithoutCommentAddsSectionComment()
+    public void Flush_WhenSectionExistsWithoutComment_AddsSectionComment()
     {
         string filePath = this.WriteConfigFile(
             "flush-section-comment.ini",
@@ -413,7 +414,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void ConfigurationLoaderCloneWhenInitializedCopiesValuesAndMetadata()
+    public void Clone_WhenConfigurationInitialized_CopiesValuesAndMetadata()
     {
         string filePath = this.WriteConfigFile(
             "clone.ini",
@@ -436,7 +437,7 @@ public sealed partial class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public void GetWhenConfigurationContainsEnumValuesBindsEnumAndNullableEnum()
+    public void Get_WhenFileContainsEnumValues_BindsEnumAndNullableEnum()
     {
         string filePath = this.WriteConfigFile(
             "enum.ini",
@@ -527,19 +528,3 @@ public sealed partial class ConfigurationManagerTests : IDisposable
         Legacy = 2
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

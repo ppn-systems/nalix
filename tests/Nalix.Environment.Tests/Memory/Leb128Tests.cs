@@ -1,10 +1,13 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using Nalix.Environment.Memory;
 using Xunit;
 
 namespace Nalix.Environment.Tests.Memory;
 
-public class Leb128Tests
+public sealed class Leb128Tests
 {
     [Theory]
     [InlineData(0, 1)]
@@ -16,7 +19,7 @@ public class Leb128Tests
     [InlineData(2097151, 3)]
     [InlineData(2147483647, 5)]
     [InlineData(-1, 5)]
-    public void GetByteCount_ReturnsExpected(int value, int expectedSize)
+    public void GetByteCount_WhenValueProvided_ReturnsExpectedSize(int value, int expectedSize)
     {
         Assert.Equal(expectedSize, Leb128.GetByteCount(value));
     }
@@ -31,7 +34,7 @@ public class Leb128Tests
     [InlineData(2097151, new byte[] { 0xFF, 0xFF, 0x7F })]
     [InlineData(2147483647, new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0x07 })]
     [InlineData(-1, new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0x0F })]
-    public void WriteAndRead_Succeeds(int value, byte[] expectedBytes)
+    public void WriteAndTryRead_WhenValueProvided_RoundTrips(int value, byte[] expectedBytes)
     {
         Span<byte> buffer = stackalloc byte[5];
         int written = Leb128.Write(buffer, value);
@@ -47,7 +50,7 @@ public class Leb128Tests
     }
 
     [Fact]
-    public void TryRead_Incomplete_ReturnsFalse()
+    public void TryRead_WhenInputIsIncomplete_ReturnsFalse()
     {
         ReadOnlySpan<byte> buffer = stackalloc byte[] { 0x80 }; // Needs 1 more byte
 
@@ -59,11 +62,10 @@ public class Leb128Tests
     }
 
     [Fact]
-    public void TryRead_Overlong_ThrowsFormatException()
+    public void TryRead_WhenInputIsOverlong_ThrowsFormatException()
     {
         byte[] buffer = new byte[] { 0x80, 0x80, 0x80, 0x80, 0x80, 0x01 }; // 6 bytes
 
         Assert.Throws<FormatException>(() => Leb128.TryRead(buffer, out int _, out int _));
     }
 }
-
