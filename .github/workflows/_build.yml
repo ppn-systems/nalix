@@ -131,12 +131,15 @@ jobs:
               test_args+=(--collect:"XPlat Code Coverage")
             fi
 
-            if dotnet test "${test_args[@]}"; then
+            # Capture the real exit code: `$?` after an `if` block is the if's status (0), which made
+            # failed runs report green.
+            exit_code=0
+            dotnet test "${test_args[@]}" || exit_code=$?
+            if [ $exit_code -eq 0 ]; then
               echo "Tests passed!"
               break
             fi
 
-            exit_code=$?
             if [ $attempt -ge $max_retries ]; then
               echo "Tests failed after $max_retries attempts."
               exit $exit_code
