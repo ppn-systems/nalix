@@ -3,6 +3,7 @@
 
 using System;
 using Nalix.Abstractions.Networking;
+using Nalix.Network.Listeners.Web;
 using Nalix.Runtime.Dispatching;
 
 namespace Nalix.Hosting;
@@ -32,6 +33,23 @@ public interface IWebSocketBindingBuilder
     /// <param name="factory">The factory delegate.</param>
     /// <returns>The current builder instance.</returns>
     IWebSocketBindingBuilder WithFactory(Func<IPacketDispatch, IProtocol> factory);
+
+    /// <summary>
+    /// Maps a minimal single-buffer HTTP <c>GET</c> route on this WebSocket listener port.
+    /// Can also be used to override built-in DevOps endpoints such as <c>/metrics</c> or <c>/healthz</c>.
+    /// </summary>
+    /// <param name="path">The HTTP route path (e.g., <c>"/status"</c> or <c>"/metrics"</c>).</param>
+    /// <param name="handler">The route handler delegate.</param>
+    /// <returns>The current builder instance.</returns>
+    IWebSocketBindingBuilder MapGet(string path, HttpRouteHandler handler);
+
+    /// <summary>
+    /// Maps a minimal single-buffer HTTP <c>POST</c> route on this WebSocket listener port.
+    /// </summary>
+    /// <param name="path">The HTTP route path (e.g., <c>"/webhook"</c>).</param>
+    /// <param name="handler">The route handler delegate.</param>
+    /// <returns>The current builder instance.</returns>
+    IWebSocketBindingBuilder MapPost(string path, HttpRouteHandler handler);
 
     /// <summary>
     /// Finalizes this binding and returns the parent <see cref="INetworkApplicationBuilder"/>

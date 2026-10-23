@@ -38,6 +38,7 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
 
     private readonly NetworkWebSocketOptions _wsconfig;
     private readonly ForwardedHeadersOptions _forwardedConfig;
+    private readonly HttpRouteTable _httpRoutes = new();
 
     // Intrusive linked list for WebSocket upgrade handshake timeout sweep
     private IRecurringHandle? _recurringHandle;
@@ -71,6 +72,7 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
         _wsconfig.Validate();
         _versionResponseBytes = this.BUILD_VERSION_RESPONSE_BYTES();
         _handshakeTimeoutTicks = (long)(_wsconfig.HandshakeTimeoutMs / 1000.0 * Stopwatch.Frequency);
+        this.REGISTER_DEFAULT_DEVOPS_ROUTES();
     }
 
     /// <summary>
@@ -91,6 +93,7 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
         _wsconfig.Validate();
         _versionResponseBytes = this.BUILD_VERSION_RESPONSE_BYTES();
         _handshakeTimeoutTicks = (long)(_wsconfig.HandshakeTimeoutMs / 1000.0 * Stopwatch.Frequency);
+        this.REGISTER_DEFAULT_DEVOPS_ROUTES();
     }
 
     /// <summary>
@@ -109,6 +112,24 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
     }
 
     #endregion Constructors
+
+    #region Minimal HTTP Routing
+
+    /// <summary>
+    /// Registers or overrides a minimal HTTP <c>GET</c> route on this WebSocket listener port.
+    /// </summary>
+    /// <param name="path">The HTTP route path (e.g., <c>"/status"</c> or <c>"/metrics"</c>).</param>
+    /// <param name="handler">The route handler delegate.</param>
+    public void MapGet(string path, HttpRouteHandler handler) => _httpRoutes.Register(HttpMethodType.Get, path, handler);
+
+    /// <summary>
+    /// Registers or overrides a minimal HTTP <c>POST</c> route on this WebSocket listener port.
+    /// </summary>
+    /// <param name="path">The HTTP route path (e.g., <c>"/webhook"</c>).</param>
+    /// <param name="handler">The route handler delegate.</param>
+    public void MapPost(string path, HttpRouteHandler handler) => _httpRoutes.Register(HttpMethodType.Post, path, handler);
+
+    #endregion Minimal HTTP Routing
 
     #region Lifecycle
 
