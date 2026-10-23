@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 225 64" fill="none">
+  <title>Nalix</title>
+  <defs>
+    <linearGradient id="tileFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141414"/><stop offset="0.45" stop-color="#050505"/><stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+    <linearGradient id="tileRim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A4A4A"/><stop offset="1" stop-color="#232323"/>
+    </linearGradient>
+    <clipPath id="nRings"><rect x="0" y="19" width="400" height="4"/><rect x="0" y="40" width="400" height="4"/></clipPath>
+  </defs>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="8.5" fill="url(#tileFill)" stroke="url(#tileRim)"/>
+    <path d="M15 16H21L43 38V16H49V47H43V46L21 24V47H15Z" fill="#FFFFFF"/>
+    <path d="M15 16H21L43 38V16H49V47H43V46L21 24V47H15Z" fill="#929292" clip-path="url(#nRings)"/>
+    <path d="M14 47H22V48H23V50H13V48H14Z M42 47H50V48H51V50H41V48H42Z" fill="#2E2E2E"/>
+  <path d="M78 16 H84 L106 38 V16 H112 V47 H106 V46 L84 24 V47 H78Z M118 47 L131.5 16 H137.5 L149 47 H142.5 L134.5 25 L126 47Z M154 16 H160 V41 H174 V47 H154Z M179 16 H185 V47 H179Z M190 16 H198 L221 47 H213Z M213 16 H221 L198 47 H190Z" fill="#F5F5F5"/>
+    <path d="M78 16 H84 L106 38 V16 H112 V47 H106 V46 L84 24 V47 H78Z M118 47 L131.5 16 H137.5 L149 47 H142.5 L134.5 25 L126 47Z M154 16 H160 V41 H174 V47 H154Z M179 16 H185 V47 H179Z M190 16 H198 L221 47 H213Z M213 16 H221 L198 47 H190Z" fill="#8E8E8E" clip-path="url(#nRings)"/>
+</svg>
