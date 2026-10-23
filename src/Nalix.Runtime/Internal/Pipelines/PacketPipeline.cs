@@ -7,7 +7,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
-using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Codec.Transforms;
@@ -204,11 +203,6 @@ internal static class PacketPipeline
 
     private static async ValueTask SEND_UDP_ASYNC(IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease current, CancellationToken ct)
     {
-        if (connection.Secret.IsZero)
-        {
-            throw new CipherException("Cannot send UDP packet before session secret is established.");
-        }
-
         int dataLen = current.Length;
         BufferLease signedLease = BufferLease.Rent(dataLen + UdpMacTagSize);
         try
