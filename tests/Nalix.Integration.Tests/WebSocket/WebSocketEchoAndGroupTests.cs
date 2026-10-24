@@ -179,6 +179,14 @@ public sealed class WebSocketEchoAndGroupTests : IDisposable
             ConcurrentBag<string> receivedB = new();
             ConcurrentBag<string> receivedC = new();
 
+            ConcurrentQueue<string> clientEvents = new();
+            clientA.OnError += (_, e) => clientEvents.Enqueue($"A.OnError {e.GetType().Name}: {e.Message}");
+            clientB.OnError += (_, e) => clientEvents.Enqueue($"B.OnError {e.GetType().Name}: {e.Message}");
+            clientC.OnError += (_, e) => clientEvents.Enqueue($"C.OnError {e.GetType().Name}: {e.Message}");
+            clientA.OnDisconnected += (_, e) => clientEvents.Enqueue($"A.OnDisconnected {e.GetType().Name}");
+            clientB.OnDisconnected += (_, e) => clientEvents.Enqueue($"B.OnDisconnected {e.GetType().Name}");
+            clientC.OnDisconnected += (_, e) => clientEvents.Enqueue($"C.OnDisconnected {e.GetType().Name}");
+
             clientA.OnMessageReceived += (_, lease) => { if (lease.Length > 10) receivedA.Add(System.Text.Encoding.UTF8.GetString(lease.Span[10..])); };
             clientB.OnMessageReceived += (_, lease) => { if (lease.Length > 10) receivedB.Add(System.Text.Encoding.UTF8.GetString(lease.Span[10..])); };
             clientC.OnMessageReceived += (_, lease) => { if (lease.Length > 10) receivedC.Add(System.Text.Encoding.UTF8.GetString(lease.Span[10..])); };
@@ -232,17 +240,27 @@ public sealed class WebSocketEchoAndGroupTests : IDisposable
 
             await Task.Delay(1000);
 
+            // Everything needed to diagnose a missing message is part of the failure message.
+            string diagnostics =
+                $"received A=[{string.Join(",", receivedA)}] B=[{string.Join(",", receivedB)}] C=[{string.Join(",", receivedC)}]; " +
+                $"clientConnected A={clientA.IsConnected} B={clientB.IsConnected} C={clientC.IsConnected}; " +
+                $"serverConnections={hub.ListConnections().Count()}; " +
+                $"alphaMembers=[{string.Join(",", groupStore.GetGroupMembers("alpha").Select(c => c.ConnectionId.ToString("X")))}]; " +
+                $"betaMembers=[{string.Join(",", groupStore.GetGroupMembers("beta").Select(c => c.ConnectionId.ToString("X")))}]; " +
+                $"ids A={connA!.ConnectionId:X} B={connB!.ConnectionId:X} C={connC!.ConnectionId:X}; " +
+                $"clientEvents=[{string.Join(" | ", clientEvents)}]";
+
             // Client A should receive ALPHA_MSG only
-            Assert.Contains("ALPHA_MSG", receivedA);
-            Assert.DoesNotContain("BETA_MSG", receivedA);
+            Assert.True(receivedA.Contains("ALPHA_MSG"), "A must receive ALPHA_MSG. " + diagnostics);
+            Assert.False(receivedA.Contains("BETA_MSG"), "A must not receive BETA_MSG. " + diagnostics);
 
             // Client B should receive BOTH ALPHA_MSG and BETA_MSG
-            Assert.Contains("ALPHA_MSG", receivedB);
-            Assert.Contains("BETA_MSG", receivedB);
+            Assert.True(receivedB.Contains("ALPHA_MSG"), "B must receive ALPHA_MSG. " + diagnostics);
+            Assert.True(receivedB.Contains("BETA_MSG"), "B must receive BETA_MSG. " + diagnostics);
 
             // Client C should receive BETA_MSG only
-            Assert.DoesNotContain("ALPHA_MSG", receivedC);
-            Assert.Contains("BETA_MSG", receivedC);
+            Assert.False(receivedC.Contains("ALPHA_MSG"), "C must not receive ALPHA_MSG. " + diagnostics);
+            Assert.True(receivedC.Contains("BETA_MSG"), "C must receive BETA_MSG. " + diagnostics);
 
             await clientA.DisconnectAsync();
             await clientB.DisconnectAsync();
