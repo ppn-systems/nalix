@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MessagePack" Version="2.5.187" />
+    <PackageReference Include="MessagePack" Version="2.5.303" />
     <PackageReference Include="MemoryPack" Version="1.21.3" />
   </ItemGroup>
 </Project>
