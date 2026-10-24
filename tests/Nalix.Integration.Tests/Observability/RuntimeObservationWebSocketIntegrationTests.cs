@@ -23,6 +23,7 @@ using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Nalix.SDK.Transport.Extensions;
 using Nalix.Integration.Tests.TestSupport;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Integration.Tests.Observability;
 
@@ -599,12 +600,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
 
     #region Helpers
 
-    private static ushort GetFreePort()
-    {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return (ushort)((IPEndPoint)socket.LocalEndPoint!).Port;
-    }
+    private static ushort GetFreePort() => (ushort)TestPorts.Next();
 
     private void WriteCertificate()
     {

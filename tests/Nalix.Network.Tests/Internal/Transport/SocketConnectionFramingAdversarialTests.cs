@@ -72,10 +72,9 @@ public sealed class SocketConnectionFramingAdversarialTests
 
         TaskCompletionSource<bool> closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         int callCount = 0;
-        connection.MessageProcessing += (_, args) =>
+        connection.MessageProcessing += (_, _) =>
         {
             Interlocked.Increment(ref callCount);
-            args.Lease?.Dispose();
         };
         connection.ConnectionClosed += (_, _) => closed.TrySetResult(true);
 
@@ -111,7 +110,7 @@ public sealed class SocketConnectionFramingAdversarialTests
         TransportAsyncCallback.ResetStatistics();
 
         TaskCompletionSource<bool> closedOrIdle = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        connection.MessageProcessing += (_, args) => args.Lease?.Dispose();
+        connection.MessageProcessing += (_, _) => { };
         connection.ConnectionClosed += (_, _) => closedOrIdle.TrySetResult(true);
 
         connection.TCP.BeginReceive();
@@ -154,8 +153,7 @@ public sealed class SocketConnectionFramingAdversarialTests
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
-            finally { args.Lease?.Dispose(); }
+            { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
         };
 
         connection.TCP.BeginReceive();
@@ -190,7 +188,6 @@ public sealed class SocketConnectionFramingAdversarialTests
         TaskCompletionSource<bool> gotBoth = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try
             {
                 lock (received)
                 {
@@ -201,7 +198,6 @@ public sealed class SocketConnectionFramingAdversarialTests
                     }
                 }
             }
-            finally { args.Lease?.Dispose(); }
         };
 
         connection.TCP.BeginReceive();
@@ -233,12 +229,10 @@ public sealed class SocketConnectionFramingAdversarialTests
         int callCount = 0;
         connection.MessageProcessing += (_, args) =>
         {
-            try
             {
                 Interlocked.Increment(ref callCount);
                 processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []);
             }
-            finally { args.Lease?.Dispose(); }
         };
 
         connection.TCP.BeginReceive();
@@ -269,8 +263,7 @@ public sealed class SocketConnectionFramingAdversarialTests
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
-            finally { args.Lease?.Dispose(); }
+            { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
         };
 
         connection.TCP.BeginReceive();
@@ -378,7 +371,7 @@ public sealed class SocketConnectionFramingAdversarialTests
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
         TransportAsyncCallback.ResetStatistics();
 
-        connection.MessageProcessing += (_, args) => args.Lease?.Dispose();
+        connection.MessageProcessing += (_, _) => { };
 
         connection.TCP.BeginReceive();
 

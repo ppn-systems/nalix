@@ -7,6 +7,7 @@ using Nalix.Abstractions.Networking;
 using Nalix.Hosting.Protocols;
 using Nalix.Network.Protocols;
 using Nalix.Runtime.Dispatching;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Hosting.Tests.TestSupport;
 
@@ -14,14 +15,7 @@ internal static class TestUtils
 {
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
-    public static int GetFreePort()
-    {
-        System.Net.Sockets.TcpListener l = new(IPAddress.Loopback, 0);
-        l.Start();
-        int port = ((IPEndPoint)l.LocalEndpoint).Port;
-        l.Stop();
-        return port;
-    }
+    public static int GetFreePort() => TestPorts.Next();
 
     /// <summary>
     /// A minimal protocol for integration testing that dispatches packets to the Nalix runtime.

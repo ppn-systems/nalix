@@ -84,7 +84,7 @@ public sealed class SocketConnectionFragmentedFrameRegressionTests
 
             // Force OnFrameReceived to return false by setting PendingProcessCallbacks above MaxPerConnectionPendingPackets
             // and attaching a non-inlineable handler.
-            realConn.MessageProcessing += (_, args) => args.Lease?.Dispose();
+            realConn.MessageProcessing += (_, _) => { };
             FieldInfo pendingField = backing.GetType().GetField("PendingProcessCallbacks", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
             pendingField.SetValue(backing, 1_000_000);
 
@@ -131,10 +131,9 @@ public sealed class SocketConnectionFragmentedFrameRegressionTests
         {
             using Connection connection = new(server, s_testOpCodeExtractor);
             int dispatchedCount = 0;
-            connection.MessageProcessing += (_, args) =>
+            connection.MessageProcessing += (_, _) =>
             {
                 Interlocked.Increment(ref dispatchedCount);
-                args.Lease?.Dispose();
             };
 
             FieldInfo backingField = typeof(Connection).GetField("_backing", BindingFlags.Instance | BindingFlags.NonPublic)!;

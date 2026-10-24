@@ -18,6 +18,7 @@ using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
 using Nalix.Integration.Tests.TestSupport;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Integration.Tests.Tcp;
 
@@ -40,12 +41,7 @@ public sealed class TcpDispatchLoopStallTests : IDisposable
     public TcpDispatchLoopStallTests()
         => File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
 
-    private static ushort GetFreePort()
-    {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return (ushort)((IPEndPoint)socket.LocalEndPoint!).Port;
-    }
+    private static ushort GetFreePort() => (ushort)TestPorts.Next();
 
     private static async Task SendWsHandshakeAsync(Socket socket, string path)
     {

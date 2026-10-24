@@ -72,13 +72,8 @@ public sealed class SocketConnectionFragmentationTests
         TaskCompletionSource<int> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try
             {
                 processObserved.TrySetResult(args.Lease?.Length ?? -1);
-            }
-            finally
-            {
-                args.Lease?.Dispose();
             }
         };
 
@@ -101,13 +96,8 @@ public sealed class SocketConnectionFragmentationTests
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try
             {
                 processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []);
-            }
-            finally
-            {
-                args.Lease?.Dispose();
             }
         };
 
@@ -130,13 +120,8 @@ public sealed class SocketConnectionFragmentationTests
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try
             {
                 processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []);
-            }
-            finally
-            {
-                args.Lease?.Dispose();
             }
         };
 

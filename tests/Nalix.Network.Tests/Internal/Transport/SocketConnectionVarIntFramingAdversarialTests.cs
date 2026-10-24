@@ -74,10 +74,9 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
 
         TaskCompletionSource<bool> closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         int callCount = 0;
-        connection.MessageProcessing += (_, args) =>
+        connection.MessageProcessing += (_, _) =>
         {
             Interlocked.Increment(ref callCount);
-            args.Lease?.Dispose();
         };
         connection.ConnectionClosed += (_, _) => closed.TrySetResult(true);
 
@@ -109,7 +108,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
         TransportAsyncCallback.ResetStatistics();
 
         TaskCompletionSource<bool> closedOrIdle = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        connection.MessageProcessing += (_, args) => args.Lease?.Dispose();
+        connection.MessageProcessing += (_, _) => { };
         connection.ConnectionClosed += (_, _) => closedOrIdle.TrySetResult(true);
 
         connection.TCP.BeginReceive();
@@ -139,7 +138,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
         TransportAsyncCallback.ResetStatistics();
 
         TaskCompletionSource<bool> closedOrIdle = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        connection.MessageProcessing += (_, args) => args.Lease?.Dispose();
+        connection.MessageProcessing += (_, _) => { };
         connection.ConnectionClosed += (_, _) => closedOrIdle.TrySetResult(true);
 
         connection.TCP.BeginReceive();
@@ -178,8 +177,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
-            finally { args.Lease?.Dispose(); }
+            { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
         };
 
         connection.TCP.BeginReceive();

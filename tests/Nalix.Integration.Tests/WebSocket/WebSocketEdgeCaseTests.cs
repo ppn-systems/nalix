@@ -20,6 +20,7 @@ using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Xunit;
 using Nalix.Integration.Tests.TestSupport;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Integration.Tests.WebSocket;
 
@@ -35,12 +36,7 @@ public sealed class WebSocketEdgeCaseTests : IDisposable
         File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
     }
 
-    private static ushort GetFreePort()
-    {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return (ushort)((IPEndPoint)socket.LocalEndPoint!).Port;
-    }
+    private static ushort GetFreePort() => (ushort)TestPorts.Next();
 
     [Nalix.Abstractions.Injection.Injectable]
     internal sealed class EdgeTestProtocol : Protocol

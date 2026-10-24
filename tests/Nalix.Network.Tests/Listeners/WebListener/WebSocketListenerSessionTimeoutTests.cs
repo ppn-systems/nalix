@@ -22,6 +22,7 @@ using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Nalix.Network.Protocols;
 using FluentAssertions;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Network.Tests.Listeners.WebListener;
 
@@ -69,12 +70,7 @@ public sealed class WebSocketListenerSessionTimeoutTests : IDisposable
         public TestWebSocketListener(ushort port, string path, IProtocol protocol, IConnectionHub hub, IConnectionGuard guard) : base(port, path, protocol, hub, guard) { }
     }
 
-    private static ushort GetFreePort()
-    {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return (ushort)((IPEndPoint)socket.LocalEndPoint!).Port;
-    }
+    private static ushort GetFreePort() => (ushort)TestPorts.Next();
 
     private static TestWebSocketListener StartTestServerRobustly(IProtocol protocol, IConnectionHub hub, out ushort port)
     {

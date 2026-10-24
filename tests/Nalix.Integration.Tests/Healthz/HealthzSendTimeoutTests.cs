@@ -18,6 +18,7 @@ using Nalix.Network.Options;
 using Nalix.Network.Protocols;
 using Xunit;
 using Nalix.Integration.Tests.TestSupport;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Integration.Tests.Healthz;
 
@@ -40,12 +41,7 @@ public sealed class HealthzSendTimeoutTests : IDisposable
     public HealthzSendTimeoutTests()
         => File.WriteAllText(_certificatePath, "0000000000000000000000000000000000000000000000000000000000000001");
 
-    private static ushort GetFreePort()
-    {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return (ushort)((IPEndPoint)socket.LocalEndPoint!).Port;
-    }
+    private static ushort GetFreePort() => (ushort)TestPorts.Next();
 
     [Nalix.Abstractions.Injection.Injectable]
     internal sealed class PlainWsProtocol : Protocol
