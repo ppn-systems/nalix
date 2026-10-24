@@ -284,6 +284,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         // still unwinding. Work only with the owner and socket this loop started with, never with the fields.
         WebSocketConnection owner = _owner;
         WebSocket webSocket = _webSocket;
+        NetworkWebSocketOptions options = _options;
 
         // Allocate a buffer matching FragmentOptions.MaxChunkSize (typically 1.4KB) to eliminate 64KB per-connection bloat.
         int length = GET_RECEIVE_BUFFER_SIZE();
@@ -306,7 +307,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
                 if (result.EndOfMessage)
                 {
                     // Fast path: the entire message fit in our buffer
-                    if (result.Count > _options.MaxMessageSize)
+                    if (result.Count > options.MaxMessageSize)
                     {
                         Throw.WebSocketMessageTooLarge();
                     }
@@ -325,7 +326,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
                 else
                 {
                     // Slow path: the message is larger than the buffer, we need to assemble it
-                    await this.HANDLE_LARGE_MESSAGE_ASYNC(owner, webSocket, buffer, result.Count, cancellationToken).ConfigureAwait(false);
+                    await this.HANDLE_LARGE_MESSAGE_ASYNC(owner, webSocket, options, buffer, result.Count, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -352,9 +353,9 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     }
 
     private async Task HANDLE_LARGE_MESSAGE_ASYNC(
-        WebSocketConnection owner, WebSocket webSocket, byte[] initialBuffer, int initialBytes, CancellationToken cancellationToken)
+        WebSocketConnection owner, WebSocket webSocket, NetworkWebSocketOptions options, byte[] initialBuffer, int initialBytes, CancellationToken cancellationToken)
     {
-        if (initialBytes > _options.MaxMessageSize)
+        if (initialBytes > options.MaxMessageSize)
         {
             Throw.WebSocketMessageTooLarge();
         }
@@ -363,9 +364,9 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         // Instead, we start with a small, conservative buffer size (at least 4KB or the initial chunk size)
         // and dynamically grow the buffer by doubling as needed up to MaxMessageSize.
         int initialCapacity = Math.Max(4096, initialBytes);
-        if (initialCapacity > _options.MaxMessageSize)
+        if (initialCapacity > options.MaxMessageSize)
         {
-            initialCapacity = _options.MaxMessageSize;
+            initialCapacity = options.MaxMessageSize;
         }
 
         byte[] payload = BufferLease.ByteArrayPool.Rent(initialCapacity);
@@ -388,7 +389,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
                 int nextWritten = checked(written + result.Count);
 
-                if (nextWritten > _options.MaxMessageSize)
+                if (nextWritten > options.MaxMessageSize)
                 {
                     Throw.WebSocketMessageTooLarge();
                 }
@@ -400,9 +401,9 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
                     {
                         newCapacity = nextWritten;
                     }
-                    if (newCapacity > _options.MaxMessageSize)
+                    if (newCapacity > options.MaxMessageSize)
                     {
-                        newCapacity = _options.MaxMessageSize;
+                        newCapacity = options.MaxMessageSize;
                     }
 
                     byte[] newPayload = BufferLease.ByteArrayPool.Rent(newCapacity);
