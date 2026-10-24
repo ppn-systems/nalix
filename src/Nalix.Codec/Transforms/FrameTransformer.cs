@@ -204,7 +204,10 @@ public static class FrameTransformer
 
         srcSpan[..Offset].CopyTo(destFull[..Offset]);
 
-        EnvelopeCipher.Encrypt(key, srcSpan[Offset..], destFull[Offset..], null, seq, suite, out int encrypted);
+        Span<byte> aad = stackalloc byte[Offset];
+        WriteHeaderAad(srcSpan, aad);
+
+        EnvelopeCipher.Encrypt(key, srcSpan[Offset..], destFull[Offset..], aad, seq, suite, out int encrypted);
         dest.CommitLength(Offset + encrypted);
     }
 
@@ -252,7 +255,10 @@ public static class FrameTransformer
 
         srcSpan[..Offset].CopyTo(destFull[..Offset]);
 
-        EnvelopeCipher.Decrypt(key, srcSpan[Offset..], destFull[Offset..], null, expectedAlgorithm, out int decrypted, out seq);
+        Span<byte> aad = stackalloc byte[Offset];
+        WriteHeaderAad(srcSpan, aad);
+
+        EnvelopeCipher.Decrypt(key, srcSpan[Offset..], destFull[Offset..], aad, expectedAlgorithm, out int decrypted, out seq);
         dest.CommitLength(Offset + decrypted);
     }
 
@@ -278,7 +284,10 @@ public static class FrameTransformer
         Span<byte> destFull = dest.SpanFull;
         ReadOnlySpan<byte> srcSpan = src.Span;
 
-        if (!EnvelopeCipher.TryDecrypt(key, srcSpan[Offset..], destFull[Offset..], null, expectedAlgorithm, out int decrypted, out seq, out _))
+        Span<byte> aad = stackalloc byte[Offset];
+        WriteHeaderAad(srcSpan, aad);
+
+        if (!EnvelopeCipher.TryDecrypt(key, srcSpan[Offset..], destFull[Offset..], aad, expectedAlgorithm, out int decrypted, out seq, out _))
         {
             return false;
         }
@@ -286,6 +295,28 @@ public static class FrameTransformer
         srcSpan[..Offset].CopyTo(destFull[..Offset]);
         dest.CommitLength(Offset + decrypted);
         return true;
+    }
+
+    /// <summary>
+    /// Writes the AEAD associated data for a frame: the <see cref="Offset"/>-byte packet header
+    /// (OpCode, Flags, Priority, SequenceId) exactly as it appears on the wire, so any header
+    /// modification makes authentication fail.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="PacketFlags.ENCRYPTED"/> bit is forced to 1. Every encrypted frame carries
+    /// it on the wire, but it is transform-internal bookkeeping: <see cref="FrameCipher"/> sets it
+    /// only after <see cref="Encrypt"/> returns and clears it after decryption, and direct callers
+    /// of <see cref="Encrypt"/>/<see cref="Decrypt"/> may not have it set at all. Fixing it to 1 keeps
+    /// sender and receiver byte-identical regardless of when the bit is toggled. All other bits,
+    /// including <see cref="PacketFlags.COMPRESSED"/>, must already be in their on-wire state.
+    /// </remarks>
+    /// <param name="frame">The frame whose first <see cref="Offset"/> bytes are the packet header.</param>
+    /// <param name="aad">Destination of exactly <see cref="Offset"/> bytes.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteHeaderAad(ReadOnlySpan<byte> frame, Span<byte> aad)
+    {
+        frame[..Offset].CopyTo(aad);
+        aad[(int)PacketHeaderOffset.Flags] |= (byte)PacketFlags.ENCRYPTED;
     }
 
     /// <summary>
