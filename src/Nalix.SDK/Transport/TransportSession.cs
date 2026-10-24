@@ -505,24 +505,46 @@ public abstract class TransportSession : IDisposable, ITransportSession
     private protected virtual Task FaultFromKeepAliveAsync(Exception ex) => Task.CompletedTask;
 
     /// <summary>
-    /// Assigns an auto-incrementing <c>SequenceId</c> to <paramref name="packet"/> when the caller
-    /// left it unset (<c>0</c>). Packets with a caller-assigned SequenceId are never overwritten.
-    /// Called by concrete sessions from their <c>SendAsync(IPacket, ...)</c> override, before serialization,
-    /// and by <see cref="Extensions.StreamExtensions"/> so it can latch the same value it will send with
-    /// before subscribing, instead of racing the stamp that <c>SendAsync</c> would otherwise apply later.
-    /// Internal rather than private protected so extension code in this assembly can call it directly on
-    /// a concrete session without widening the public API.
+    /// Reserves the next outbound <c>SequenceId</c> from this session's counter.
+    /// The value <c>0</c> (meaning "unset") is skipped when the counter wraps.
     /// </summary>
-    internal void StampSequenceIdIfUnset(IPacket packet)
+    /// <returns>A non-zero sequence id that no other caller of this session has been handed since the last wrap.</returns>
+    public ushort NextSequenceId()
     {
-        if (packet.Header.SequenceId != 0)
+        ushort seq;
+        do
         {
-            return;
+            seq = unchecked((ushort)Interlocked.Increment(ref _outboundSeq));
         }
+        while (seq == 0);
+
+        return seq;
+    }
+
+    /// <summary>
+    /// Stamps <paramref name="packet"/>'s <c>Header.SequenceId</c> from <see cref="NextSequenceId"/> if it is
+    /// <c>0</c>, and returns the value the packet carries afterwards. Idempotent: a packet that already carries a
+    /// non-zero SequenceId is left untouched, so the returned value is the one <c>SendAsync</c> will send with.
+    /// Called by concrete sessions from their <c>SendAsync(IPacket, ...)</c> override, before serialization,
+    /// and by the request/stream extensions so they latch the same value the packet will be sent with
+    /// before subscribing for the reply.
+    /// </summary>
+    /// <param name="packet">The packet to stamp.</param>
+    /// <returns>The packet's <c>SequenceId</c> after stamping.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="packet"/> is <see langword="null"/>.</exception>
+    public ushort StampSequenceId(IPacket packet)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
 
         PacketHeader header = packet.Header;
-        header.SequenceId = unchecked((ushort)Interlocked.Increment(ref _outboundSeq));
+        if (header.SequenceId != 0)
+        {
+            return header.SequenceId;
+        }
+
+        header.SequenceId = this.NextSequenceId();
         packet.Header = header;
+        return header.SequenceId;
     }
 
     /// <summary>

@@ -355,7 +355,7 @@ public class WebSocketSession : TransportSession
     public override async Task SendAsync(IPacket packet, bool? encrypt = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(packet);
-        this.StampSequenceIdIfUnset(packet);
+        _ = this.StampSequenceId(packet);
 
         BufferLease lease = BufferLease.Rent(packet.Length);
         lease.CommitLength(packet.Serialize(lease.SpanFull));
