@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/!/banner.svg" alt="Nalix Banner" width="100%">
+  <img src="assets/banner.svg" alt="Nalix Banner" width="100%">
 </p>
 
 <p align="center">
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <b><a href="DOCUMENTATION.md">Documentation</a></b> · <b><a href="samples/">Samples</a></b> · <b><a href="docs/benchmarks/network-comparison.md">Benchmarks</a></b> · <b><a href="CONTRIBUTING.md">Contributing</a></b>
+  <b><a href="https://ppn.io.vn/en-us/">Documentation</a></b> · <b><a href="samples/">Samples</a></b> · <b><a href="https://ppn.io.vn/en-us/benchmarks/network-comparison">Benchmarks</a></b> · <b><a href="CONTRIBUTING.md">Contributing</a></b>
 </p>
 
 ---
@@ -77,7 +77,7 @@ How Nalix compares with the usual .NET choices for realtime traffic (competitor 
 
 End-to-end echo over loopback, every framework with its own client, same machine, one single session:
 Ubuntu 24.04 (4 vCPU Intel Xeon @ 2.10 GHz), .NET 10 (SDK 10.0.401), Release, median of 3 runs. 32 B payload unless noted.
-All 12 frameworks were benchmarked alongside each other in this pass. Raw data and all cells: **[full comparison](docs/benchmarks/network-comparison.md)**.
+All 12 frameworks were benchmarked alongside each other in this pass. Raw data and all cells: **[full comparison](https://ppn.io.vn/en-us/benchmarks/network-comparison)**.
 
 | Library | p50 latency (µs) | p99 latency (µs) | ops/s, 64 clients | ops/s, 64 clients, 1 KB | server alloc/op (B) | server CPU/op (µs) |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -99,7 +99,7 @@ Latency is one client, sequential calls; allocation and CPU are per message at 6
 
 > **Caveats:** Loopback on a 4-vCPU machine where the load generator and server share the same cores; absolute capacity on bare metal with dedicated network hardware will differ. Encrypted rows use per-packet AEAD vs TLS stream transport.
 
-Micro-benchmarks (serialization, codec, memory) are in [`docs/benchmarks`](docs/benchmarks/).
+Micro-benchmarks (serialization, codec, memory) are in [benchmarks](https://ppn.io.vn/en-us/benchmarks/).
 
 ---
 
@@ -174,7 +174,7 @@ Runnable end-to-end projects, from beginner to production-grade:
 | **[HelloWorld](samples/HelloWorld)** | Minimal TCP client/server — request/response packets, `[PacketHandler]`, graceful shutdown. Start here. |
 | **[ChatRoom](samples/ChatRoom)** | Server push — broadcasting to all clients via `IConnectionBroadcaster`, `session.On<T>()` on the client. |
 | **[SecureMultiTransportHelloWorld](samples/SecureMultiTransportHelloWorld)** | TCP + UDP + WebSocket under one secure session — X25519 handshake, AEAD encryption, authenticated UDP. |
-| **[BlazorWasm](samples/BlazorWasm)** | Browser client — Blazor WebAssembly over WebSocket with the X25519 handshake, request/response, server push, reconnect, DI-registered session. [Guide](docs/guides/blazor-wasm.md) |
+| **[BlazorWasm](samples/BlazorWasm)** | Browser client — Blazor WebAssembly over WebSocket with the X25519 handshake, request/response, server push, reconnect, DI-registered session. [Guide](https://ppn.io.vn/en-us/guides/blazor-wasm) |
 
 ---
 

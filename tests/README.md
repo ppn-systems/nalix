@@ -16,7 +16,7 @@ are in [AGENTS.md](AGENTS.md); this guide covers how to run and extend the suite
 | `Nalix.SDK.Tests` | Client sessions, request/response, reconnect, resume |
 | `Nalix.Hosting.Tests` | Application builder, startup sequence, handler discovery |
 | `Nalix.Analyzers.Tests` | Roslyn analyzers, code fixes and source generators |
-| `Nalix.Integration.Tests` | End-to-end scenarios across several source projects |
+| `Nalix.Integration.Tests` | End-to-end scenarios across several source projects (`EndToEnd/`: real Hosting server + Nalix.SDK client over TCP, UDP and WebSocket) |
 
 Each project mirrors the folder structure of the source project it tests, so
 `src/Nalix.Network/Internal/Security/SlidingWindow.cs` is covered by
@@ -25,7 +25,7 @@ Each project mirrors the folder structure of the source project it tests, so
 
 ## Running
 
-The suite must pass in both configurations; CI runs both.
+CI runs the suite in Release; Debug-only behavior (`#if DEBUG`) must still pass locally in Debug.
 
 ```powershell
 # Everything
@@ -56,8 +56,8 @@ CI publishes a coverage summary on the Linux/Release job.
 
 | Job | Configuration | OS |
 | :--- | :--- | :--- |
-| Core | Release | Linux, Windows |
-| Core | Debug | Linux |
+| Core | Release | Linux (whole suite) |
+| Core | Release | Windows (client-side projects only: `tests/Nalix.Client.Tests.slnf` — SDK, Codec, Environment, Abstractions) |
 | Extensions | Release | Linux |
 
 `CI OK` is the single required status check. Test builds are never strong-name signed (a signed assembly cannot

@@ -65,7 +65,6 @@ Each skill contains: **Triggers** (when to use it), **Rules** (invariants from s
 | [nalix-sdk](.claude/skills/nalix-sdk.md) | `Nalix.SDK` | Client connect flow; `On<T>()` vs `RequestAsync`; reconnect gotchas |
 | [nalix-analyzers](.claude/skills/nalix-analyzers.md) | `Nalix.Analyzers` | `NAL0xxx` ranges; adding diagnostic rules; zero-alloc constraint |
 | [nalix-analyzers-codefixes](.claude/skills/nalix-analyzers-codefixes.md) | `Nalix.Analyzers.CodeFixes` | MEF discovery; trivia preservation; adding code fixes |
-| [documentation](.claude/skills/documentation.md) | `Documentation` | MkDocs rules R1–R20; signature validation; reusable prompt template |
 
 ### Think Before Coding
 

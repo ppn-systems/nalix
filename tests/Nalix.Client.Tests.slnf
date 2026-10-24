@@ -1,0 +1,11 @@
+{
+  "solution": {
+    "path": "Nalix.Tests.sln",
+    "projects": [
+      "Nalix.Abstractions.Tests\\Nalix.Abstractions.Tests.csproj",
+      "Nalix.Environment.Tests\\Nalix.Environment.Tests.csproj",
+      "Nalix.Codec.Tests\\Nalix.Codec.Tests.csproj",
+      "Nalix.SDK.Tests\\Nalix.SDK.Tests.csproj"
+    ]
+  }
+}

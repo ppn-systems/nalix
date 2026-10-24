@@ -111,7 +111,7 @@ A test that passes alone but fails in the full run has leaked state; fix the lea
 
 ## Debug and Release
 
-The suite must be green in **both** `Debug` and `Release`, and CI runs both.
+The suite must be green in **both** `Debug` and `Release`; CI runs Release only, so check Debug locally.
 
 - `InternalsVisibleTo` for every test assembly is declared once in `src/Directory.Build.props` and is active in all
   configurations. Never wrap tests in `#if DEBUG` just to reach `internal` members.

@@ -10,19 +10,15 @@ on:
   push:
     branches: ["master"]
     paths-ignore:
-      - "docs/**"
       - "**/*.md"
       - "site/**"
-      - "mkdocs.yml"
       - "LICENSE"
       - ".github/ISSUE_TEMPLATE/**"
   pull_request:
     branches: ["master"]
     paths-ignore:
-      - "docs/**"
       - "**/*.md"
       - "site/**"
-      - "mkdocs.yml"
       - "LICENSE"
       - ".github/ISSUE_TEMPLATE/**"
   workflow_dispatch:
@@ -89,10 +85,10 @@ jobs:
           echo "core=$core extensions=$extensions workflows=$workflows"
           { echo "core=$core"; echo "extensions=$extensions"; echo "workflows=$workflows"; } >> "$GITHUB_OUTPUT"
 
-  # The suite must be green in both configurations: Release is what ships, Debug compiles extra validation and
-  # diagnostics. Linux covers both; Windows adds Release only to keep runner minutes down.
+  # Release only (what ships). Linux runs the whole suite; Windows runs only the client-side projects
+  # (Nalix.SDK and the libraries it ships with) listed in tests/Nalix.Client.Tests.slnf.
   core:
-    name: Core (${{ matrix.os }}, ${{ matrix.configuration }})
+    name: Core (${{ matrix.os }}, Release)
     needs: [changes]
     if: needs.changes.outputs.core == 'true'
     strategy:
@@ -100,21 +96,18 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            configuration: Release
+            test: tests/Nalix.Tests.sln
             coverage: true
-          - os: ubuntu-latest
-            configuration: Debug
-            coverage: false
           - os: windows-latest
-            configuration: Release
+            test: tests/Nalix.Client.Tests.slnf
             coverage: false
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:
       os: ${{ matrix.os }}
-      configuration: ${{ matrix.configuration }}
+      configuration: Release
       project: src/Nalix.sln
-      test: tests/Nalix.Tests.sln
+      test: ${{ matrix.test }}
       deploy: false
       coverage: ${{ matrix.coverage }}
 

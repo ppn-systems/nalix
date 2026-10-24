@@ -3,7 +3,7 @@
 A Blazor WebAssembly app talking to a Nalix server over **WebSocket** with the full
 **X25519 handshake** (Nalix's crypto is fully managed, so it runs in browser WASM).
 
-Step-by-step walkthrough: [`docs/guides/blazor-wasm.md`](../../docs/guides/blazor-wasm.md).
+Step-by-step walkthrough: [Blazor WebAssembly guide](https://ppn.io.vn/en-us/guides/blazor-wasm).
 
 ## What This Sample Demonstrates
 

@@ -41,7 +41,7 @@ When using Nalix packages in production:
 - Always use the **latest version** of each `Nalix.*` NuGet package.
 - Do **not** disable integrity checks or modify package binaries.
 - Validate all inputs and enforce encryption when using networking or cryptographic APIs.
-- Review the [official documentation](DOCUMENTATION.md) for recommended security configurations.
+- Review the [official documentation](https://ppn.io.vn/en-us/) for recommended security configurations.
 
 ---
 
