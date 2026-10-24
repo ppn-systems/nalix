@@ -224,6 +224,17 @@ public sealed class WebSocketEchoAndGroupTests : IDisposable
             }
             Assert.NotNull(connC);
 
+            // Record who closes each server-side connection and when, to explain connection loss on slow runners.
+            System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+            foreach ((string name, IConnection serverConnection) in new[] { ("A", connA!), ("B", connB!), ("C", connC!) })
+            {
+                serverConnection.ConnectionClosed += (_, _) =>
+                {
+                    string[] frames = System.Environment.StackTrace.Split((char)10, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                    clientEvents.Enqueue($"server {name} closed +{clock.ElapsedMilliseconds}ms by {string.Join(" <- ", frames.Skip(2).Take(10))}");
+                };
+            }
+
             // Add clientA to "alpha", clientB to ("alpha", "beta"), clientC to "beta"
             await groupStore.AddToGroupAsync("alpha", connA!);
             await groupStore.AddToGroupAsync("alpha", connB!);
@@ -235,7 +246,9 @@ public sealed class WebSocketEchoAndGroupTests : IDisposable
 
 #pragma warning disable CS0618
             await hub.MulticastAsync(groupStore, "alpha", msgAlpha);
+            clientEvents.Enqueue($"alpha multicast done +{clock.ElapsedMilliseconds}ms");
             await hub.MulticastAsync(groupStore, "beta", msgBeta);
+            clientEvents.Enqueue($"beta multicast done +{clock.ElapsedMilliseconds}ms");
 #pragma warning restore CS0618
 
             await Task.Delay(1000);
