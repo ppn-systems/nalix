@@ -414,7 +414,7 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         try
         {
             // The opportunistic loop: read as much as possible, then parse as many frames as possible.
-            while (generation == Volatile.Read(ref _generation) && Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _cancelSignaled) == 0 && !token.IsCancellationRequested)
+            while (this.IS_CURRENT_GENERATION(generation) && Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _cancelSignaled) == 0 && !token.IsCancellationRequested)
             {
                 // Step 1: Parse all complete frames currently in the buffer.
                 int consumed = 0;
@@ -574,7 +574,7 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
                 if (!parsedAtLeastOne || _bufferDataLength < HeaderSize)
                 {
                     ReceiveResult receiveResult = await this.RECEIVE_OPPORTUNISTIC_ASYNC(token).ConfigureAwait(false);
-                    if (generation != Volatile.Read(ref _generation))
+                    if (!this.IS_CURRENT_GENERATION(generation))
                     {
                         // This instance was reset and handed to another connection while the receive was pending.
                         return;
@@ -615,7 +615,7 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         finally
         {
             // A loop that outlived its connection must not touch the connection that now owns this pooled instance.
-            if (generation == Volatile.Read(ref _generation))
+            if (this.IS_CURRENT_GENERATION(generation))
             {
                 if (Volatile.Read(ref _socketDetached) == 1 && _bufferDataLength > 0)
                 {
@@ -1123,6 +1123,12 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
 
         return false;
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> while this pooled instance still serves the connection a receive loop started for.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IS_CURRENT_GENERATION(int generation) => generation == Volatile.Read(ref _generation);
 
     [DebuggerStepThrough]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

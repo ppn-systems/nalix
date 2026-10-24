@@ -26,7 +26,7 @@ internal sealed partial class SocketConnection
 
         try
         {
-            while (generation == Volatile.Read(ref _generation) && Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _cancelSignaled) == 0 && !token.IsCancellationRequested)
+            while (this.IS_CURRENT_GENERATION(generation) && Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _cancelSignaled) == 0 && !token.IsCancellationRequested)
             {
                 int consumed = 0;
                 bool incomplete = false;
@@ -141,7 +141,7 @@ internal sealed partial class SocketConnection
                 if (!parsedAtLeastOne || _bufferDataLength == 0 || incomplete)
                 {
                     ReceiveResult receiveResult = await this.RECEIVE_OPPORTUNISTIC_ASYNC(token).ConfigureAwait(false);
-                    if (generation != Volatile.Read(ref _generation))
+                    if (!this.IS_CURRENT_GENERATION(generation))
                     {
                         // This instance was reset and handed to another connection while the receive was pending.
                         return;
@@ -196,7 +196,7 @@ internal sealed partial class SocketConnection
         finally
         {
             // A loop that outlived its connection must not touch the connection that now owns this pooled instance.
-            if (generation == Volatile.Read(ref _generation))
+            if (this.IS_CURRENT_GENERATION(generation))
             {
                 if (Volatile.Read(ref _socketDetached) == 1 && _bufferDataLength > 0)
                 {
