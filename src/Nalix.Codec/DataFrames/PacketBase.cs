@@ -41,6 +41,14 @@ public abstract class PacketBase<[DynamicallyAccessedMembers(DynamicallyAccessed
     [SerializeIgnore]
     private int _isRented;
 
+#if DEBUG
+    /// <summary>
+    /// Debug only: 1 once the instance has been returned to its pool and not yet rented again, so a second
+    /// <see cref="Dispose()"/> can be reported instead of silently doing nothing.
+    /// </summary>
+    private int _isReturned;
+#endif
+
     #endregion Fields
 
     #region Constructor
@@ -194,7 +202,13 @@ public abstract class PacketBase<[DynamicallyAccessedMembers(DynamicallyAccessed
     /// <inheritdoc/>
     [EditorBrowsable(EditorBrowsableState.Never)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void OnRent() => Volatile.Write(ref _isRented, 1);
+    public void OnRent()
+    {
+#if DEBUG
+        Volatile.Write(ref _isReturned, 0);
+#endif
+        Volatile.Write(ref _isRented, 1);
+    }
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -217,12 +231,29 @@ public abstract class PacketBase<[DynamicallyAccessedMembers(DynamicallyAccessed
         // Atomically check and clear the rented flag to ensure we only return to pool once.
         if (Interlocked.Exchange(ref _isRented, 0) == 1)
         {
+#if DEBUG
+            // Mark before the instance is handed back: once it is in the pool another thread may rent it
+            // (OnRent clears the flag) at any time.
+            Volatile.Write(ref _isReturned, 1);
+#endif
+
             // Reset state before returning to pool
             // this.ResetForPool(); - Pool managers typically call ResetForPool after renting, but if needed, it can be called here before returning.
 
             // Use the concrete type TSelf to call the fast generic Return path.
             PacketRegistry.Manager?.Return((TSelf)this);
         }
+#if DEBUG
+        else if (Volatile.Read(ref _isReturned) == 1)
+        {
+            // A pooled packet that was already returned must not be released again: if another thread has
+            // rented it in the meantime, the second release would put a live packet back into the pool
+            // and two owners would share it. Release builds ignore the extra call.
+            throw new InvalidOperationException(
+                $"{typeof(TSelf).Name} was disposed more than once. The first Dispose already returned it to the pool; " +
+                "find the second owner and make sure exactly one party releases the packet.");
+        }
+#endif
     }
 
     #endregion APIs
