@@ -171,10 +171,11 @@ public sealed class SocketConnectionFramingAdversarialTests
 
     /// <summary>
     /// Two complete frames coalesced into a single socket read/write must both be parsed and
-    /// dispatched separately, in order.
+    /// dispatched as two separate messages. The process callbacks run on the thread pool, so their relative order is not
+    /// guaranteed and is not asserted here (only the inline frame-processor path keeps per-connection order).
     /// </summary>
     [Fact]
-    public async Task BeginReceive_WithTwoCoalescedFrames_DispatchesBothInOrder()
+    public async Task BeginReceive_WithTwoCoalescedFrames_DispatchesEachFrameSeparately()
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
@@ -205,9 +206,12 @@ public sealed class SocketConnectionFramingAdversarialTests
 
         await gotBoth.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
-        received.Should().HaveCount(2);
-        received[0].Should().Equal([1, 2, 3, 1, 2, 3]);
-        received[1].Should().Equal([4, 5, 6, 7, 4, 5, 6, 7]);
+        lock (received)
+        {
+            received.Should().HaveCount(2);
+            received.Should().ContainSingle(frame => System.Linq.Enumerable.SequenceEqual(frame, new byte[] { 1, 2, 3, 1, 2, 3 }));
+            received.Should().ContainSingle(frame => System.Linq.Enumerable.SequenceEqual(frame, new byte[] { 4, 5, 6, 7, 4, 5, 6, 7 }));
+        }
     }
 
     /// <summary>

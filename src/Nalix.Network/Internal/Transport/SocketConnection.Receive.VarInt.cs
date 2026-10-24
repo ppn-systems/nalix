@@ -21,9 +21,12 @@ internal sealed partial class SocketConnection
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private async Task SAEA_RECEIVE_LOOP_VARINT_ASYNC(CancellationToken token)
     {
+        // Identifies the connection this loop serves: the instance is pooled, and ResetForPool advances the generation.
+        int generation = Volatile.Read(ref _generation);
+
         try
         {
-            while (Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _cancelSignaled) == 0 && !token.IsCancellationRequested)
+            while (this.IS_CURRENT_GENERATION(generation) && Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _cancelSignaled) == 0 && !token.IsCancellationRequested)
             {
                 int consumed = 0;
                 bool incomplete = false;
@@ -138,6 +141,12 @@ internal sealed partial class SocketConnection
                 if (!parsedAtLeastOne || _bufferDataLength == 0 || incomplete)
                 {
                     ReceiveResult receiveResult = await this.RECEIVE_OPPORTUNISTIC_ASYNC(token).ConfigureAwait(false);
+                    if (!this.IS_CURRENT_GENERATION(generation))
+                    {
+                        // This instance was reset and handed to another connection while the receive was pending.
+                        return;
+                    }
+
                     if (receiveResult != ReceiveResult.Success)
                     {
                         if (receiveResult == ReceiveResult.InvalidPacketSize)
@@ -186,13 +195,18 @@ internal sealed partial class SocketConnection
         }
         finally
         {
-            if (Volatile.Read(ref _socketDetached) == 1 && _bufferDataLength > 0)
+            // A loop that outlived its connection must not touch the connection that now owns this pooled instance.
+            if (this.IS_CURRENT_GENERATION(generation))
             {
-                this.StolenData = new byte[_bufferDataLength];
-                Buffer.BlockCopy(_buffer!, 0, this.StolenData, 0, _bufferDataLength);
+                if (Volatile.Read(ref _socketDetached) == 1 && _bufferDataLength > 0)
+                {
+                    this.StolenData = new byte[_bufferDataLength];
+                    Buffer.BlockCopy(_buffer!, 0, this.StolenData, 0, _bufferDataLength);
+                }
+
+                this.CANCEL_RECEIVE_ONCE();
+                this.INVOKE_CLOSE_ONCE();
             }
-            this.CANCEL_RECEIVE_ONCE();
-            this.INVOKE_CLOSE_ONCE();
         }
     }
 

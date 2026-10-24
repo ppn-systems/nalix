@@ -74,6 +74,9 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         _shutdownRegistration.Dispose();
         _shutdownRegistration = default;
 
+        // Loops started for the previous connection must be able to tell that this instance now belongs to another one.
+        _ = Interlocked.Increment(ref _generation);
+
         _socket = null!;
         _owner = null!;
         _connectionOwner = null;
@@ -162,6 +165,8 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     /// One context per connection; returned to the pool on Dispose.
     /// </summary>
     private PooledSocketReceiveContext _recvCtx = null!;
+
+    private int _generation;
 
     private int _packetCount;
     private long _bytesSent;
@@ -403,10 +408,13 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private async Task SAEA_RECEIVE_LOOP_ASYNC(CancellationToken token)
     {
+        // Identifies the connection this loop serves: the instance is pooled, and ResetForPool advances the generation.
+        int generation = Volatile.Read(ref _generation);
+
         try
         {
             // The opportunistic loop: read as much as possible, then parse as many frames as possible.
-            while (Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _cancelSignaled) == 0 && !token.IsCancellationRequested)
+            while (this.IS_CURRENT_GENERATION(generation) && Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _cancelSignaled) == 0 && !token.IsCancellationRequested)
             {
                 // Step 1: Parse all complete frames currently in the buffer.
                 int consumed = 0;
@@ -566,6 +574,12 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
                 if (!parsedAtLeastOne || _bufferDataLength < HeaderSize)
                 {
                     ReceiveResult receiveResult = await this.RECEIVE_OPPORTUNISTIC_ASYNC(token).ConfigureAwait(false);
+                    if (!this.IS_CURRENT_GENERATION(generation))
+                    {
+                        // This instance was reset and handed to another connection while the receive was pending.
+                        return;
+                    }
+
                     if (receiveResult != ReceiveResult.Success)
                     {
                         if (receiveResult == ReceiveResult.InvalidPacketSize)
@@ -600,13 +614,18 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         }
         finally
         {
-            if (Volatile.Read(ref _socketDetached) == 1 && _bufferDataLength > 0)
+            // A loop that outlived its connection must not touch the connection that now owns this pooled instance.
+            if (this.IS_CURRENT_GENERATION(generation))
             {
-                this.StolenData = new byte[_bufferDataLength];
-                Buffer.BlockCopy(_buffer!, 0, this.StolenData, 0, _bufferDataLength);
+                if (Volatile.Read(ref _socketDetached) == 1 && _bufferDataLength > 0)
+                {
+                    this.StolenData = new byte[_bufferDataLength];
+                    Buffer.BlockCopy(_buffer!, 0, this.StolenData, 0, _bufferDataLength);
+                }
+
+                this.CANCEL_RECEIVE_ONCE();
+                this.INVOKE_CLOSE_ONCE();
             }
-            this.CANCEL_RECEIVE_ONCE();
-            this.INVOKE_CLOSE_ONCE();
         }
     }
 
@@ -1104,6 +1123,12 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
 
         return false;
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> while this pooled instance still serves the connection a receive loop started for.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IS_CURRENT_GENERATION(int generation) => generation == Volatile.Read(ref _generation);
 
     [DebuggerStepThrough]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
