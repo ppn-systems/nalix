@@ -513,16 +513,47 @@ public abstract class TransportSession : IDisposable, ITransportSession
     /// Internal rather than private protected so extension code in this assembly can call it directly on
     /// a concrete session without widening the public API.
     /// </summary>
-    internal void StampSequenceIdIfUnset(IPacket packet)
+    internal void StampSequenceIdIfUnset(IPacket packet) => _ = this.StampSequenceId(packet);
+
+    /// <summary>
+    /// Reserves the next outbound <c>SequenceId</c> from this session's counter.
+    /// The value <c>0</c> (meaning "unset") is skipped when the counter wraps.
+    /// </summary>
+    /// <returns>A non-zero sequence id that no other caller of this session has been handed since the last wrap.</returns>
+    public ushort NextSequenceId()
     {
-        if (packet.Header.SequenceId != 0)
+        ushort seq;
+        do
         {
-            return;
+            seq = unchecked((ushort)Interlocked.Increment(ref _outboundSeq));
         }
+        while (seq == 0);
+
+        return seq;
+    }
+
+    /// <summary>
+    /// Stamps <paramref name="packet"/>'s <c>Header.SequenceId</c> from <see cref="NextSequenceId"/> if it is
+    /// <c>0</c>, and returns the value the packet carries afterwards. Idempotent: a packet that already carries a
+    /// non-zero SequenceId is left untouched, so the returned value is the one <c>SendAsync</c> will send with.
+    /// Use it to latch a correlation id before subscribing for the reply.
+    /// </summary>
+    /// <param name="packet">The packet to stamp.</param>
+    /// <returns>The packet's <c>SequenceId</c> after stamping.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="packet"/> is <see langword="null"/>.</exception>
+    public ushort StampSequenceId(IPacket packet)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
 
         PacketHeader header = packet.Header;
-        header.SequenceId = unchecked((ushort)Interlocked.Increment(ref _outboundSeq));
+        if (header.SequenceId != 0)
+        {
+            return header.SequenceId;
+        }
+
+        header.SequenceId = this.NextSequenceId();
         packet.Header = header;
+        return header.SequenceId;
     }
 
     /// <summary>
