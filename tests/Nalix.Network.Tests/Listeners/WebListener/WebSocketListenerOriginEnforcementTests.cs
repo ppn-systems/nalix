@@ -13,6 +13,7 @@ using Nalix.Hosting;
 using Nalix.Network.Connections;
 using Nalix.Network.Options;
 using Xunit;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Network.Tests.Listeners.WebListener;
 
@@ -109,12 +110,7 @@ public sealed class WebSocketListenerOriginEnforcementTests : IDisposable
         }
     }
 
-    private static ushort GetFreePort()
-    {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return (ushort)((IPEndPoint)socket.LocalEndPoint!).Port;
-    }
+    private static ushort GetFreePort() => (ushort)TestPorts.Next();
 
     public void Dispose()
     {

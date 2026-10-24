@@ -18,6 +18,7 @@ using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Handlers;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
+using Nalix.Tests.Shared;
 
 namespace Nalix.SDK.Tests.TestSupport;
 
@@ -59,28 +60,7 @@ internal static class TestEnvironment
     /// Returns a loopback port that is free for both TCP and UDP, so a server that listens on the same
     /// number for both protocols never collides with another process.
     /// </summary>
-    public static int GetFreePort()
-    {
-        for (int attempt = 0; attempt < 32; attempt++)
-        {
-            System.Net.Sockets.TcpListener tcp = new(IPAddress.Loopback, 0);
-            tcp.Start();
-            int port = ((IPEndPoint)tcp.LocalEndpoint).Port;
-            tcp.Stop();
-
-            try
-            {
-                using System.Net.Sockets.UdpClient udp = new(new IPEndPoint(IPAddress.Loopback, port));
-                return port;
-            }
-            catch (System.Net.Sockets.SocketException)
-            {
-                // The UDP side of this port is taken; pick another one.
-            }
-        }
-
-        throw new InvalidOperationException("Could not find a port that is free for both TCP and UDP.");
-    }
+    public static int GetFreePort() => TestPorts.Next();
 
     public static string GetServerPublicKey()
     {

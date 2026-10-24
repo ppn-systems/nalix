@@ -13,6 +13,7 @@ using Nalix.Runtime.Dispatching;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Nalix.SDK.Transport.Extensions;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Network.Tests.Hosting;
 
@@ -207,12 +208,5 @@ public sealed class NetworkApplicationEndToEndTests
         }
     }
 
-    private static int GetFreePort()
-    {
-        System.Net.Sockets.TcpListener l = new(IPAddress.Loopback, 0);
-        l.Start();
-        int port = ((IPEndPoint)l.LocalEndpoint).Port;
-        l.Stop();
-        return port;
-    }
+    private static int GetFreePort() => TestPorts.Next();
 }

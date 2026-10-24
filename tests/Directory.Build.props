@@ -39,6 +39,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Shared\TestRuntimeBootstrap.cs" Link="TestSupport\TestRuntimeBootstrap.cs" />
   </ItemGroup>
 
+  <!-- Collision-free loopback ports for the test assemblies that open sockets (they run in parallel processes on CI). -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Nalix.Network.Tests' Or '$(MSBuildProjectName)' == 'Nalix.Integration.Tests' Or '$(MSBuildProjectName)' == 'Nalix.Runtime.Tests' Or '$(MSBuildProjectName)' == 'Nalix.SDK.Tests' Or '$(MSBuildProjectName)' == 'Nalix.Hosting.Tests'">
+    <Compile Include="$(MSBuildThisFileDirectory)Shared\TestPorts.cs" Link="TestSupport\TestPorts.cs" />
+  </ItemGroup>
+
   <!-- Source generator for [Packet] auto-registration -->
   <ItemGroup Condition="'$(MSBuildProjectName)' != 'Nalix.Analyzers.Tests'">
     <ProjectReference Include="$(MSBuildThisFileDirectory)..\analyzers\Nalix.Analyzers.Generators\Nalix.Analyzers.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible" />

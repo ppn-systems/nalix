@@ -25,6 +25,7 @@ using Nalix.Hosting;
 using Nalix.Network.Options;
 using Nalix.Framework.Options;
 using Nalix.Integration.Tests.TestSupport;
+using Nalix.Tests.Shared;
 
 namespace Nalix.Integration.Tests.WebSocket;
 
@@ -84,12 +85,7 @@ public sealed class WebSocketTransportTests : IDisposable
         public TestWebSocketListener(ushort port, string path, IProtocol protocol, IConnectionHub hub, IConnectionGuard guard) : base(port, path, protocol, hub, guard) { }
     }
 
-    private static ushort GetFreePort()
-    {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return (ushort)((IPEndPoint)socket.LocalEndPoint!).Port;
-    }
+    private static ushort GetFreePort() => (ushort)TestPorts.Next();
 
     [Fact]
     public async Task Session_WhenSendingMessage_EchoesMessage()

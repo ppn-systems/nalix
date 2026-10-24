@@ -71,7 +71,7 @@ public sealed class SocketConnectionFuzzTests
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
         TransportAsyncCallback.ResetStatistics();
 
-        connection.MessageProcessing += (_, args) => args.Lease?.Dispose();
+        connection.MessageProcessing += (_, _) => { };
 
         connection.TCP.BeginReceive();
 
@@ -126,7 +126,6 @@ public sealed class SocketConnectionFuzzTests
         TaskCompletionSource<bool> secondFrameObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try
             {
                 ushort opCode = args.Lease is { } lease && lease.Length >= 2
                     ? BinaryPrimitives.ReadUInt16LittleEndian(lease.Span[..2])
@@ -137,7 +136,6 @@ public sealed class SocketConnectionFuzzTests
                     secondFrameObserved.TrySetResult(true);
                 }
             }
-            finally { args.Lease?.Dispose(); }
         };
 
         connection.TCP.BeginReceive();
@@ -172,8 +170,7 @@ public sealed class SocketConnectionFuzzTests
         TaskCompletionSource<int> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) =>
         {
-            try { processObserved.TrySetResult(args.Lease?.Length ?? -1); }
-            finally { args.Lease?.Dispose(); }
+            { processObserved.TrySetResult(args.Lease?.Length ?? -1); }
         };
 
         connection.TCP.BeginReceive();
@@ -198,7 +195,7 @@ public sealed class SocketConnectionFuzzTests
         TransportAsyncCallback.ResetStatistics();
 
         TaskCompletionSource<bool> closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        connection.MessageProcessing += (_, args) => args.Lease?.Dispose();
+        connection.MessageProcessing += (_, _) => { };
         connection.ConnectionClosed += (_, _) => closed.TrySetResult(true);
 
         connection.TCP.BeginReceive();
@@ -233,17 +230,12 @@ public sealed class SocketConnectionFuzzTests
         connection.MessageProcessing += (_, args) =>
         {
             int n = System.Threading.Interlocked.Increment(ref callCount);
-            try
             {
                 if (n == 1)
                 {
                     throw new InvalidOperationException("simulated faulty opcode handler");
                 }
                 secondObserved.TrySetResult(args.Lease?.Length ?? -1);
-            }
-            finally
-            {
-                args.Lease?.Dispose();
             }
         };
 
