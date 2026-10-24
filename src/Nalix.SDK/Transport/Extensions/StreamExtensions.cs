@@ -78,7 +78,7 @@ public static class StreamExtensions
         // `await foreach` simply never completes.
         if (client is TransportSession session)
         {
-            session.StampSequenceIdIfUnset(request);
+            _ = session.StampSequenceId(request);
         }
 
         ushort expectedSeqId = request.Header.SequenceId;

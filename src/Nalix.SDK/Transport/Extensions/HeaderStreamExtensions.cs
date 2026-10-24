@@ -198,7 +198,7 @@ public static class HeaderStreamExtensions
         // replies that went out stamped with a different id by SendAsync.
         if (client is TransportSession session)
         {
-            session.StampSequenceIdIfUnset(request);
+            _ = session.StampSequenceId(request);
         }
 
         return request.Header.SequenceId;

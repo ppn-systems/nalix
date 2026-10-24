@@ -127,7 +127,7 @@ public static class RequestExtensions
 
         if (client is TransportSession session)
         {
-            session.StampSequenceIdIfUnset(request);
+            _ = session.StampSequenceId(request);
         }
 
         ushort expectedSeqId = request.Header.SequenceId;
@@ -215,7 +215,7 @@ public static class RequestExtensions
 
         if (client is TransportSession session)
         {
-            session.StampSequenceIdIfUnset(request);
+            _ = session.StampSequenceId(request);
         }
 
         ushort expectedSeqId = request.Header.SequenceId;

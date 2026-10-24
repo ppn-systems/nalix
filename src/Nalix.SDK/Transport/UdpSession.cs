@@ -296,7 +296,7 @@ public class UdpSession : TransportSession
     public override async Task SendAsync(IPacket packet, bool? encrypt = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(packet);
-        this.StampSequenceIdIfUnset(packet);
+        _ = this.StampSequenceId(packet);
 
         using BufferLease lease = BufferLease.Rent(packet.Length);
         int written = packet.Serialize(lease.SpanFull);
