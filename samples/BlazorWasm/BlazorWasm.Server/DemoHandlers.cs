@@ -30,7 +30,7 @@ public static class DemoHandlers
         response.ServerUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         // The SDK's RequestAsync<T> on the client resolves with this packet.
-        await context.Sender.SendAsync(response).ConfigureAwait(false);
+        await context.Sender.ReplyAsync(response).ConfigureAwait(false);
     }
 
     /// <summary>

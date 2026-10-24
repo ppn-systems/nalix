@@ -138,7 +138,8 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
     {
         base.Activate(cancellationToken);
 
-        if (_recurringHandle != null && _recurringHandle.IsRunning)
+        // IsRunning is only true while a sweep callback executes, so it cannot tell whether the job is scheduled.
+        if (_recurringHandle != null)
         {
             return;
         }
@@ -153,7 +154,7 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
 
         // Start the WebSocket handshake timeout sweeper (fire and forget, as requested)
         _recurringHandle = InstanceManager.Instance.GetOrCreateInstance<TaskManager>().ScheduleRecurring(
-            name: $"{TaskNaming.Tags.WebSocket}.{TaskNaming.Tags.Service}.{_config.Port}",
+            name: $"{TaskNaming.Tags.WebSocket}.{TaskNaming.Tags.Service}.{_port}",
             interval: TimeSpan.FromSeconds(1),
             work: _ => { this.SWEEP_WS_HANDSHAKE_TIMEOUTS(); return ValueTask.CompletedTask; }
         );
@@ -164,9 +165,11 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
     {
         base.Deactivate(cancellationToken);
 
-        if (_recurringHandle?.IsRunning == true)
+        // Disposing the handle only cancels it; CancelRecurring also frees the name so the listener can be
+        // activated again (or another listener can take the same port) without a duplicate-name error.
+        if (_recurringHandle != null)
         {
-            _recurringHandle.Dispose();
+            InstanceManager.Instance.GetOrCreateInstance<TaskManager>().CancelRecurring(_recurringHandle.Name);
             _recurringHandle = null;
         }
 

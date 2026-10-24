@@ -59,7 +59,9 @@ internal sealed class PooledAcceptContext : IPoolable
                     // Ignore
                 }
             }
-            s_pool.Return(context);
+
+            // The task was already cancelled, and BeginAcceptAsync's caller returns this context on cancellation.
+            // Returning it here as well put it in the pool twice, so two listeners shared one SAEA.
         }
     };
 
@@ -244,16 +246,24 @@ internal sealed class PooledAcceptContext : IPoolable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ResetForPool()
     {
+        bool acceptInFlight = _isAsyncPending;
         _isAsyncPending = false;
         if (_args != null)
         {
             _args.Completed -= AsyncAcceptCompleted;
             _args.UserToken = null;
-            _args.AcceptSocket = null;
 
-            if (_args is PooledSocketAsyncEventArgs pooled)
+            // A cancelled caller can return this context while the OS still owns the SAEA (the accept only
+            // completes once the listener socket closes). Pooling it now would hand another listener an args
+            // instance that throws "an asynchronous socket operation is already in progress", so abandon it.
+            if (!acceptInFlight)
             {
-                s_pool.Return(pooled);
+                _args.AcceptSocket = null;
+
+                if (_args is PooledSocketAsyncEventArgs pooled)
+                {
+                    s_pool.Return(pooled);
+                }
             }
 
             _args = null;

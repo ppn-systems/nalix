@@ -35,8 +35,9 @@ public static class HelloHandlers
         HelloResponsePacket response = lease.Value;
         response.Message = 1; // "Hello from Nalix!"
 
-        // Send the response back to the client via the pipeline-aware sender.
+        // Reply via the pipeline-aware sender. ReplyAsync copies the request SequenceId, which the
+        // client's RequestAsync uses to match the response (SendAsync would leave it at 0).
         // Works identically for TCP, UDP, and WebSocket.
-        await context.Sender.SendAsync(response).ConfigureAwait(false);
+        await context.Sender.ReplyAsync(response).ConfigureAwait(false);
     }
 }

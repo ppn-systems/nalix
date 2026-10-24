@@ -19,6 +19,6 @@
 		</None>
 		<None Include="$(MSBuildProjectDirectory)\README.md" Pack="true" PackagePath="" Condition="Exists('$(MSBuildProjectDirectory)\README.md') AND '$(Configuration)' != 'Debug'" />
 		<None Include="..\..\README.md" Pack="true" PackagePath="" Condition="!Exists('$(MSBuildProjectDirectory)\README.md') AND Exists('..\..\README.md') AND '$(Configuration)' != 'Debug'" />
-		<None Include="..\..\docs\assets\nalix.png" Pack="true" PackagePath="\" Condition="Exists('..\..\docs\assets\nalix.png') AND '$(Configuration)' != 'Debug'" />
+		<None Include="..\..\assets\nalix.png" Pack="true" PackagePath="\" Condition="Exists('..\..\assets\nalix.png') AND '$(Configuration)' != 'Debug'" />
 	</ItemGroup>
 </Project>
