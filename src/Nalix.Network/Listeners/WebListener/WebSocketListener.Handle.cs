@@ -134,9 +134,9 @@ public abstract partial class WebSocketListenerBase
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            lock (_wsUpgradeLock)
+            if (!this.TryDetachOwnedWsUpgradeContext(state, args))
             {
-                this.DetachWsUpgradeContext(state);
+                return;
             }
             this.Metrics.RECORD_ERROR();
             this.ReleaseWsUpgradeContext(state, args, success: false);
@@ -149,15 +149,15 @@ public abstract partial class WebSocketListenerBase
         }
     }
 
-    private void OnWebSocketReadCompleted(object? sender, SocketAsyncEventArgs args)
+    internal void OnWebSocketReadCompleted(object? sender, SocketAsyncEventArgs args)
     {
         WebSocketUpgradeContext state = (WebSocketUpgradeContext)args.UserToken!;
 
         if (args.SocketError != SocketError.Success || args.BytesTransferred == 0)
         {
-            lock (_wsUpgradeLock)
+            if (!this.TryDetachOwnedWsUpgradeContext(state, args))
             {
-                this.DetachWsUpgradeContext(state);
+                return;
             }
             this.Metrics.RECORD_ERROR();
             this.ReleaseWsUpgradeContext(state, args, success: false);
@@ -174,9 +174,9 @@ public abstract partial class WebSocketListenerBase
 
         if (result.IsMalformed)
         {
-            lock (_wsUpgradeLock)
+            if (!this.TryDetachOwnedWsUpgradeContext(state, args))
             {
-                this.DetachWsUpgradeContext(state);
+                return;
             }
             this.Metrics.RECORD_ERROR();
             this.SEND_STATIC_RESPONSE(state, args, BadRequestResponse);
@@ -188,9 +188,9 @@ public abstract partial class WebSocketListenerBase
 
         if (result.IsHeaderComplete && (result.ContentLength < 0 || totalRequiredBytes > maxAllowedBytes))
         {
-            lock (_wsUpgradeLock)
+            if (!this.TryDetachOwnedWsUpgradeContext(state, args))
             {
-                this.DetachWsUpgradeContext(state);
+                return;
             }
             this.Metrics.RECORD_ERROR();
             this.SEND_STATIC_RESPONSE(state, args, PayloadTooLargeResponse);
@@ -202,9 +202,9 @@ public abstract partial class WebSocketListenerBase
             // If incomplete, check if we've exceeded the max request size
             if (state.BytesReceived >= maxAllowedBytes)
             {
-                lock (_wsUpgradeLock)
+                if (!this.TryDetachOwnedWsUpgradeContext(state, args))
                 {
-                    this.DetachWsUpgradeContext(state);
+                    return;
                 }
                 this.Metrics.RECORD_ERROR();
                 this.ReleaseWsUpgradeContext(state, args, success: false);
@@ -222,9 +222,9 @@ public abstract partial class WebSocketListenerBase
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                lock (_wsUpgradeLock)
+                if (!this.TryDetachOwnedWsUpgradeContext(state, args))
                 {
-                    this.DetachWsUpgradeContext(state);
+                    return;
                 }
                 this.Metrics.RECORD_ERROR();
                 this.ReleaseWsUpgradeContext(state, args, success: false);
@@ -239,9 +239,9 @@ public abstract partial class WebSocketListenerBase
             out bool isOptionsPreflight,
             out bool methodNotAllowed))
         {
-            lock (_wsUpgradeLock)
+            if (!this.TryDetachOwnedWsUpgradeContext(state, args))
             {
-                this.DetachWsUpgradeContext(state);
+                return;
             }
 
             if (isOptionsPreflight)
@@ -261,9 +261,9 @@ public abstract partial class WebSocketListenerBase
 
         if (!result.IsValid)
         {
-            lock (_wsUpgradeLock)
+            if (!this.TryDetachOwnedWsUpgradeContext(state, args))
             {
-                this.DetachWsUpgradeContext(state);
+                return;
             }
             this.Metrics.RECORD_ERROR();
             this.SEND_STATIC_RESPONSE(state, args, NotFoundResponse);
@@ -271,14 +271,14 @@ public abstract partial class WebSocketListenerBase
         }
 
         // Handshake parsed successfully!
-        lock (_wsUpgradeLock)
+        if (!this.TryDetachOwnedWsUpgradeContext(state, args))
         {
-            this.DetachWsUpgradeContext(state);
+            return;
         }
 
         // Validate path
         string requestPath = Encoding.UTF8.GetString(result.Path);
-        if (!requestPath.StartsWith(_path, StringComparison.OrdinalIgnoreCase))
+        if (!IsPathMatch(requestPath, _path))
         {
             this.Metrics.RECORD_ERROR();
             this.ReleaseWsUpgradeContext(state, args, success: false);
@@ -438,6 +438,26 @@ public abstract partial class WebSocketListenerBase
         this.ReleaseWsUpgradeContext(state, args, success: false);
     }
 
+    /// <summary>
+    /// Case-insensitive match of the request path against the configured path: exact, or the
+    /// configured path followed by <c>/</c> or <c>?</c> (any prefix when it already ends with <c>/</c>).
+    /// </summary>
+    private static bool IsPathMatch(string requestPath, string path)
+    {
+        if (!requestPath.StartsWith(path, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (requestPath.Length == path.Length || path.EndsWith('/'))
+        {
+            return true;
+        }
+
+        char next = requestPath[path.Length];
+        return next is '/' or '?';
+    }
+
     private static bool ContainsRequestedSubProtocol(ReadOnlySpan<byte> requested, string configured)
     {
         ReadOnlySpan<char> expected = configured.AsSpan().Trim();
@@ -500,11 +520,38 @@ public abstract partial class WebSocketListenerBase
         return true;
     }
 
-    private void DetachWsUpgradeContext(WebSocketUpgradeContext state)
+    /// <summary>
+    /// Detaches <paramref name="state"/> under <c>_wsUpgradeLock</c> on a completion/error path.
+    /// Returns <see langword="false"/> when the handshake sweep or <c>CLEANUP_WS_UPGRADES</c>
+    /// detached it first: that side then owns the context (socket close, limiter slot), so the
+    /// caller must not touch the context again. The caller still owns <paramref name="args"/>
+    /// (the sweep never touches it), so it is returned to the receive-args pool here.
+    /// </summary>
+    private bool TryDetachOwnedWsUpgradeContext(WebSocketUpgradeContext state, SocketAsyncEventArgs args)
+    {
+        lock (_wsUpgradeLock)
+        {
+            if (this.DetachWsUpgradeContext(state))
+            {
+                return true;
+            }
+        }
+
+        args.UserToken = null;
+        _wsReceiveArgsPool.Push(args);
+        return false;
+    }
+
+    /// <summary>
+    /// Unlinks <paramref name="state"/> from the pending-upgrade list. Must be called under
+    /// <c>_wsUpgradeLock</c>. Returns <see langword="true"/> only if this call removed it, which
+    /// makes the caller the single owner of the context.
+    /// </summary>
+    private bool DetachWsUpgradeContext(WebSocketUpgradeContext state)
     {
         if (state.RemovedFromList)
         {
-            return;
+            return false;
         }
 
         state.RemovedFromList = true;
@@ -529,9 +576,10 @@ public abstract partial class WebSocketListenerBase
 
         state.Next = null;
         state.Prev = null;
+        return true;
     }
 
-    private void EnqueueWsUpgradeContext(WebSocketUpgradeContext state)
+    internal void EnqueueWsUpgradeContext(WebSocketUpgradeContext state)
     {
         state.Next = null;
         state.Prev = _wsUpgradeTail;
@@ -574,8 +622,14 @@ public abstract partial class WebSocketListenerBase
     }
 
     private void SWEEP_WS_HANDSHAKE_TIMEOUTS()
+        => this.CloseChainOutsideLock(this.DETACH_TIMED_OUT_WS_UPGRADES(Stopwatch.GetTimestamp()));
+
+    /// <summary>
+    /// Detaches every context whose handshake started more than the configured timeout before
+    /// <paramref name="now"/> and returns them as a local chain linked via <c>.Next</c>.
+    /// </summary>
+    internal WebSocketUpgradeContext? DETACH_TIMED_OUT_WS_UPGRADES(long now)
     {
-        long now = Stopwatch.GetTimestamp();
 
         // Detach timed-out contexts into a local chain (reusing their own .Next pointer --
         // zero extra allocation) while holding the lock (fast: pointer-chasing only), then
@@ -598,7 +652,7 @@ public abstract partial class WebSocketListenerBase
                     break;
                 }
 
-                this.DetachWsUpgradeContext(current);
+                _ = this.DetachWsUpgradeContext(current);
 
                 if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
                 {
@@ -613,18 +667,23 @@ public abstract partial class WebSocketListenerBase
             }
         }
 
-        this.CloseChainOutsideLock(toClose);
+        return toClose;
     }
 
-    private void CLEANUP_WS_UPGRADES()
+    internal void CLEANUP_WS_UPGRADES()
     {
-        WebSocketUpgradeContext? toClose;
+        WebSocketUpgradeContext? toClose = null;
 
+        // Detach each context (marking RemovedFromList) so a racing completion path sees
+        // that cleanup owns it and leaves it alone.
         lock (_wsUpgradeLock)
         {
-            toClose = _wsUpgradeHead;
-            _wsUpgradeHead = null;
-            _wsUpgradeTail = null;
+            while (_wsUpgradeHead is { } current)
+            {
+                _ = this.DetachWsUpgradeContext(current);
+                current.Next = toClose;
+                toClose = current;
+            }
         }
 
         this.CloseChainOutsideLock(toClose);
@@ -643,7 +702,7 @@ public abstract partial class WebSocketListenerBase
     /// the devops static-response close paths -- otherwise every swept/timed-out handshake leaks
     /// its slot permanently.
     /// </remarks>
-    private void CloseChainOutsideLock(WebSocketUpgradeContext? head)
+    internal void CloseChainOutsideLock(WebSocketUpgradeContext? head)
     {
         WebSocketUpgradeContext? current = head;
         while (current != null)
