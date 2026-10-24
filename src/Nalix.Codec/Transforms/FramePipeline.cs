@@ -161,7 +161,11 @@ public static class FramePipeline
             Span<byte> tempRegion = tempArr.AsSpan(0, decryptedSize);
 
             // 1. Decrypt directly into tempRegion
-            if (!EnvelopeCipher.TryDecrypt(secret, srcSpan[FrameTransformer.Offset..], tempRegion, null, algorithm, out int decLen, out seq, out _))
+            // AAD comes from the received header before any flag is cleared (step 6).
+            Span<byte> aad = stackalloc byte[FrameTransformer.Offset];
+            FrameTransformer.WriteHeaderAad(srcSpan, aad);
+
+            if (!EnvelopeCipher.TryDecrypt(secret, srcSpan[FrameTransformer.Offset..], tempRegion, aad, algorithm, out int decLen, out seq, out _))
             {
                 return false;
             }
@@ -309,17 +313,21 @@ public static class FramePipeline
 
             // 5. Encrypt the compressed block, or the raw payload when compression did not pay off
             //    (maxFinalSize is sized from maxCompSize >= payloadSize, so the raw payload fits too).
-            ReadOnlySpan<byte> plaintext = compressedWins ? tempRegion[..compLen] : srcSpan[FrameTransformer.Offset..];
-            EnvelopeCipher.Encrypt(secret, plaintext, finalRegion, null, seq, algorithm, out int encLen);
-
-            // [SECURITY] 5.5: Clear intermediate compressed data from the memory pool
-            tempRegion[..compLen].Clear();
-
-            // 6. Copy header once and set flags
+            //    The header is written with its final on-wire flags first, because it is the AEAD
+            //    associated data and must match what the receiver authenticates.
             srcSpan[..FrameTransformer.Offset].CopyTo(destFull[..FrameTransformer.Offset]);
 
             ref PacketHeader header = ref destFull.AsHeaderRef();
             header.Flags |= compressedWins ? PacketFlags.COMPRESSED | PacketFlags.ENCRYPTED : PacketFlags.ENCRYPTED;
+
+            Span<byte> aad = stackalloc byte[FrameTransformer.Offset];
+            FrameTransformer.WriteHeaderAad(destFull, aad);
+
+            ReadOnlySpan<byte> plaintext = compressedWins ? tempRegion[..compLen] : srcSpan[FrameTransformer.Offset..];
+            EnvelopeCipher.Encrypt(secret, plaintext, finalRegion, aad, seq, algorithm, out int encLen);
+
+            // [SECURITY] 5.5: Clear intermediate compressed data from the memory pool
+            tempRegion[..compLen].Clear();
 
             // 7. Finalize length
             singleLease.CommitLength(FrameTransformer.Offset + encLen);
