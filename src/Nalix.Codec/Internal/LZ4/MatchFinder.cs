@@ -9,8 +9,6 @@ using Nalix.Codec.LZ4;
 #if DEBUG
 using System.Diagnostics;
 
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Codec.Tests")]
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Codec.Benchmarks")]
 #endif
 
 namespace Nalix.Codec.Internal.LZ4;

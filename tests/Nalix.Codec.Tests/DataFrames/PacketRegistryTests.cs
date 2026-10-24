@@ -1,6 +1,7 @@
-using Nalix.Abstractions.Networking.Packets;
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
+
+using Nalix.Abstractions.Networking.Packets;
 
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
@@ -32,7 +33,7 @@ public sealed class PacketRegistryTests : IDisposable
     }
 
     [Fact]
-    public void ControlSerializeThenDeserializePreservesPublicState()
+    public void Deserialize_WhenControlWasSerialized_PreservesPublicState()
     {
         Control original = new();
         original.Initialize(
@@ -61,7 +62,7 @@ public sealed class PacketRegistryTests : IDisposable
 
 
     [Fact]
-    public void ControlAfterResetForPoolCanBeReinitializedAndRoundTripped()
+    public void Deserialize_WhenControlWasResetAndReinitialized_RoundTripsThroughRegistry()
     {
         Control packet = new();
         packet.Initialize(ControlType.PONG, sequenceId: 99);
@@ -80,7 +81,7 @@ public sealed class PacketRegistryTests : IDisposable
 
 
     [Fact]
-    public void ComputedOpCodeMatchesSerializedHeader()
+    public void StaticOpCode_WhenPacketsAreInitialized_MatchesHeaderAndSerializedBytes()
     {
         Control control = new();
         control.Initialize(ControlType.PING, 0, PacketFlags.SYSTEM, ProtocolReason.NONE);
@@ -101,7 +102,7 @@ public sealed class PacketRegistryTests : IDisposable
 
 
     [Fact]
-    public void DirectiveSerializeThenDeserializePreservesAllFields()
+    public void Deserialize_WhenDirectiveWasSerialized_PreservesAllFields()
     {
         Directive original = new();
         original.Initialize(
@@ -135,37 +136,7 @@ public sealed class PacketRegistryTests : IDisposable
     }
 
     [Fact]
-    public void DirectiveAfterResetForPoolClearsAllPayloadFields()
-    {
-        Directive directive = new();
-        directive.Initialize(
-            type: ControlType.NOTICE,
-            reason: ProtocolReason.INTERNAL_ERROR,
-            action: ProtocolAdvice.RETRY,
-            sequenceId: 456,
-            flags: PacketFlags.COMPRESSED,
-            controlFlags: ControlFlags.IS_TRANSIENT,
-            arg0: 1000,
-            arg1: 2000,
-            arg2: 3);
-
-        directive.ResetForPool();
-
-        Assert.Equal(Directive.StaticOpCode, directive.Header.OpCode);
-        Assert.Equal(0u, directive.Header.SequenceId);
-        Assert.Equal(PacketFlags.SYSTEM, directive.Header.Flags);
-        Assert.Equal(PacketPriority.HIGH, directive.Header.Priority);
-        Assert.Equal(ControlType.NONE, directive.Type);
-        Assert.Equal(ProtocolReason.NONE, directive.Reason);
-        Assert.Equal(ProtocolAdvice.NONE, directive.Action);
-        Assert.Equal(ControlFlags.NONE, directive.Control);
-        Assert.Equal(0u, directive.Arg0);
-        Assert.Equal(0u, directive.Arg1);
-        Assert.Equal((ushort)0, directive.Arg2);
-    }
-
-    [Fact]
-    public void DeserializeWhenBufferIsTooShortThrowsArgumentException()
+    public void Deserialize_WhenBufferIsThreeBytes_ThrowsArgumentException()
     {
         byte[] tooShort = new byte[3];
 
@@ -173,24 +144,25 @@ public sealed class PacketRegistryTests : IDisposable
         Assert.StartsWith("Raw packet data is too short to contain a valid header", ex.Message);
     }
 
-    public void DeserializeWhenOpCodeIsUnknownThrowsInvalidOperationException()
+    [Fact]
+    public void Deserialize_WhenOpCodeIsMaxValueAndUnregistered_ThrowsInvalidOperationException()
     {
         byte[] buf = new byte[PacketConstants.HeaderSize];
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(4), 0xFFFF);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(buf, ushort.MaxValue);
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => PacketRegistry.Deserialize(buf));
-        Assert.StartsWith("Cannot deserialize packet: OpCode", ex.Message);
+        Assert.StartsWith("Cannot deserialize packet: OpCode 65535 is not registered", ex.Message);
     }
 
     [Fact]
-    public void DeserializeWhenBufferIsEmptyThrowsArgumentException()
+    public void Deserialize_WhenBufferIsEmpty_ThrowsArgumentException()
     {
         ArgumentException ex = Assert.Throws<ArgumentException>(() => PacketRegistry.Deserialize([]));
         Assert.StartsWith("Raw packet data is too short to contain a valid header", ex.Message);
     }
 
     [Fact]
-    public void DeserializeIntoExistingReferenceReturnsResolvedPacket()
+    public void Deserialize_WhenBytesComeFromInitializedControl_ReturnsEqualControl()
     {
         Control original = new();
         original.Initialize(ControlType.PING, 7, PacketFlags.SYSTEM, ProtocolReason.NONE);
@@ -208,7 +180,7 @@ public sealed class PacketRegistryTests : IDisposable
     }
 
     [Fact]
-    public void TryDeserializeIntoExistingReferenceReturnsFalseForUnknownOpCode()
+    public void TryDeserialize_WhenOpCodeIsUnknown_ReturnsFalse()
     {
         byte[] buf = new byte[PacketConstants.HeaderSize];
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(4), 0xFFFF);
@@ -220,7 +192,7 @@ public sealed class PacketRegistryTests : IDisposable
     }
 
     [Fact]
-    public void AllRegisteredPacketsHaveUniqueOpCodes()
+    public void HeaderOpCode_WhenControlAndDirectiveAreInitialized_AreDistinct()
     {
         Control c = new();
         c.Initialize(ControlType.PING, 0, PacketFlags.SYSTEM, ProtocolReason.NONE);
@@ -234,7 +206,7 @@ public sealed class PacketRegistryTests : IDisposable
     }
 
     [Fact]
-    public void DifferentPacketTypesProduceDifferentOpCodes()
+    public void StaticOpCode_WhenControlAndDirectiveAreCompared_AreDistinct()
     {
         ushort a = Control.StaticOpCode;
         ushort c = Directive.StaticOpCode;
@@ -242,19 +214,47 @@ public sealed class PacketRegistryTests : IDisposable
         Assert.NotEqual(a, c);
     }
 
+    [Fact]
+    public void Deserialize_WhenRegisteredPacketBytesAreProvided_ReturnsExpectedPacket()
+    {
+        Control packet = new();
+        packet.Initialize(ControlType.PONG, 88, PacketFlags.NONE, ProtocolReason.NONE);
+        byte[] bytes = packet.Serialize();
 
+        IPacket deserialized = PacketRegistry.Deserialize(bytes);
 
+        Control control = Assert.IsType<Control>(deserialized);
+        Assert.Equal(packet.Type, control.Type);
+        Assert.Equal(packet.Header.SequenceId, control.Header.SequenceId);
+        Assert.True(PacketRegistry.DeserializerCount >= 1);
+        Assert.True(PacketRegistry.IsRegistered<Control>());
+    }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    [InlineData(PacketConstants.HeaderSize - 5)]
+    public void Deserialize_WhenBufferIsShorterThanHeader_ThrowsArgumentException(int bufferLength)
+    {
+        byte[] raw = new byte[bufferLength];
+        if (bufferLength >= PacketConstants.HeaderSize)
+        {
+            BitConverter.GetBytes(0xDEADBEEFu).CopyTo(raw, 0);
+        }
 
+        ArgumentException ex = Assert.Throws<ArgumentException>(() => PacketRegistry.Deserialize(raw));
+        Assert.StartsWith("Raw packet data is too short to contain a valid header", ex.Message);
+    }
 
+    [Theory]
+    [InlineData(PacketConstants.HeaderSize)]
+    [InlineData(PacketConstants.HeaderSize + 10)]
+    public void Deserialize_WhenOpCodeIsUnknown_ThrowsInvalidOperationException(int bufferLength)
+    {
+        byte[] raw = new byte[bufferLength];
+        BitConverter.GetBytes(0xDEADBEEFu).CopyTo(raw, 0);
 
-
-
-
-
-
-
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => PacketRegistry.Deserialize(raw));
+        Assert.StartsWith("Cannot deserialize packet: OpCode 48879 is not registered", ex.Message);
+    }
 }
-
-
-

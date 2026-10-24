@@ -7,11 +7,6 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Nalix.Abstractions.Primitives;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Codec.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Codec.Benchmarks")]
-#endif
-
 namespace Nalix.Codec.Serialization.Internal.Types;
 
 #pragma warning disable IDE0072 // Populate switch

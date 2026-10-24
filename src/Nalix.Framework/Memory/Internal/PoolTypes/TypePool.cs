@@ -6,12 +6,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using Nalix.Abstractions;
 
-
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Framework.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Framework.Benchmarks")]
-#endif
-
 namespace Nalix.Framework.Memory.Internal.PoolTypes;
 
 /// <summary>

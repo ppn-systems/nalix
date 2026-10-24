@@ -4,6 +4,7 @@
 using FluentAssertions;
 using Nalix.Abstractions.Serialization;
 using Nalix.Codec.Serialization;
+using Nalix.Codec.Tests.TestSupport;
 
 namespace Nalix.Codec.Tests.Serialization;
 
@@ -93,7 +94,7 @@ public sealed class EnumFormatterAutoRegistrationTests
 
         byte[] bytes = LiteSerializer.Serialize(original);
 
-        EnumWrapperDto deserialized = LiteSerializerTestHelper.RoundTrip(original);
+        EnumWrapperDto deserialized = LiteSerializerRoundTrip.RoundTrip(original);
 
         deserialized.Direct.Should().Be(TestStatus.Active);
         deserialized.Nullable.Should().Be(TestStatus.Inactive);
@@ -125,7 +126,7 @@ public sealed class EnumFormatterAutoRegistrationTests
             Tuple = (TestStatus.None, "", null)
         };
 
-        EnumWrapperDto deserialized = LiteSerializerTestHelper.RoundTrip(original);
+        EnumWrapperDto deserialized = LiteSerializerRoundTrip.RoundTrip(original);
 
         deserialized.Direct.Should().Be(TestStatus.None);
         deserialized.Nullable.Should().BeNull();
@@ -153,7 +154,7 @@ public sealed class EnumFormatterAutoRegistrationTests
             Tuple = (TestStatus.None, "empty", null)
         };
 
-        EnumWrapperDto deserialized = LiteSerializerTestHelper.RoundTrip(original);
+        EnumWrapperDto deserialized = LiteSerializerRoundTrip.RoundTrip(original);
 
         deserialized.Array.Should().BeEmpty();
         deserialized.List.Should().BeEmpty();
@@ -168,7 +169,7 @@ public sealed class EnumFormatterAutoRegistrationTests
     // ══════════════════════════════════════════════════════════════════════
 
     [Fact]
-    public void FormatterProvider_Get_ListOfTestEnum_ResolvesWithoutManualRegistration()
+    public void Get_WhenListOfEnum_ResolvesWithoutManualRegistration()
     {
         IFormatter<List<TestStatus>> formatter = null!;
         Action act = () => formatter = FormatterProvider.Get<List<TestStatus>>();
@@ -178,7 +179,7 @@ public sealed class EnumFormatterAutoRegistrationTests
     }
 
     [Fact]
-    public void FormatterProvider_Get_DictionaryStringTestEnum_ResolvesWithoutManualRegistration()
+    public void Get_WhenDictionaryOfEnum_ResolvesWithoutManualRegistration()
     {
         IFormatter<Dictionary<string, TestStatus>> formatter = null!;
         Action act = () => formatter = FormatterProvider.Get<Dictionary<string, TestStatus>>();
@@ -188,7 +189,7 @@ public sealed class EnumFormatterAutoRegistrationTests
     }
 
     [Fact]
-    public void FormatterProvider_Get_TestEnumArray_ResolvesWithoutManualRegistration()
+    public void Get_WhenEnumArray_ResolvesWithoutManualRegistration()
     {
         IFormatter<TestStatus[]> formatter = null!;
         Action act = () => formatter = FormatterProvider.Get<TestStatus[]>();
@@ -198,7 +199,7 @@ public sealed class EnumFormatterAutoRegistrationTests
     }
 
     [Fact]
-    public void FormatterProvider_Get_NullableTestEnum_ResolvesWithoutManualRegistration()
+    public void Get_WhenNullableEnum_ResolvesWithoutManualRegistration()
     {
         IFormatter<TestStatus?> formatter = null!;
         Action act = () => formatter = FormatterProvider.Get<TestStatus?>();
@@ -208,7 +209,7 @@ public sealed class EnumFormatterAutoRegistrationTests
     }
 
     [Fact]
-    public void FormatterProvider_Get_QueueOfTestEnum_ResolvesWithoutManualRegistration()
+    public void Get_WhenQueueOfEnum_ResolvesWithoutManualRegistration()
     {
         IFormatter<Queue<TestStatus>> formatter = null!;
         Action act = () => formatter = FormatterProvider.Get<Queue<TestStatus>>();
@@ -218,7 +219,7 @@ public sealed class EnumFormatterAutoRegistrationTests
     }
 
     [Fact]
-    public void FormatterProvider_Get_StackOfTestEnum_ResolvesWithoutManualRegistration()
+    public void Get_WhenStackOfEnum_ResolvesWithoutManualRegistration()
     {
         IFormatter<Stack<TestStatus>> formatter = null!;
         Action act = () => formatter = FormatterProvider.Get<Stack<TestStatus>>();
@@ -228,7 +229,7 @@ public sealed class EnumFormatterAutoRegistrationTests
     }
 
     [Fact]
-    public void FormatterProvider_Get_HashSetOfTestEnum_ResolvesWithoutManualRegistration()
+    public void Get_WhenHashSetOfEnum_ResolvesWithoutManualRegistration()
     {
         IFormatter<HashSet<TestStatus>> formatter = null!;
         Action act = () => formatter = FormatterProvider.Get<HashSet<TestStatus>>();

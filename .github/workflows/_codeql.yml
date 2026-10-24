@@ -81,17 +81,6 @@ jobs:
           languages: csharp
           build-mode: manual
 
-      - name: Decode signing key
-        shell: bash
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: |
-          if [ -n "$SIGNING_KEY" ]; then
-            echo "$SIGNING_KEY" | base64 -d > "$GITHUB_WORKSPACE/src/Nalix.snk"
-          else
-            echo "SIGNING_KEY is not set. Skipping signing key creation."
-          fi
-
       - name: Restore & build source
         run: |
           dotnet restore src/Nalix.sln

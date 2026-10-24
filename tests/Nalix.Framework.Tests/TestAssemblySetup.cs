@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -19,32 +22,3 @@ internal static class TestAssemblySetup
         Directories.SetBasePathOverride(testDir);
     }
 }
-
-[CollectionDefinition("Sequential Pooling Tests", DisableParallelization = true)]
-public sealed class SequentialPoolingTestCollection;
-
-[CollectionDefinition("ObjectPoolDiagnostics", DisableParallelization = true)]
-public sealed class ObjectPoolDiagnosticsCollection;
-
-[CollectionDefinition("ReturnValidation", DisableParallelization = true)]
-public sealed class ReturnValidationCollection;
-
-[CollectionDefinition("TypePoolPhase1", DisableParallelization = true)]
-public sealed class TypePoolPhase1Collection;
-
-[CollectionDefinition("ClockTests", DisableParallelization = true)]
-public sealed class ClockTestCollection;
-
-
-
-
-
-
-
-
-
-
-
-
-
-

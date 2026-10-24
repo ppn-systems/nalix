@@ -14,7 +14,7 @@ namespace Nalix.Codec.Tests.Serialization;
 public sealed class RuntimeObservationSerializationTests
 {
     [Fact]
-    public void RuntimeObservation_Should_Have_Formatter()
+    public void Get_WhenTypeIsRuntimeObservation_ResolvesFormatter()
     {
         Exception? caught = Record.Exception(() =>
         {
@@ -31,7 +31,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void RuntimeObservation_Should_Roundtrip_Through_Codec()
+    public void Deserialize_WhenRuntimeObservationWasSerialized_PreservesAllFields()
     {
         RuntimeObservation source = CreateRuntimeObservationTestPacket();
 
@@ -52,7 +52,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void RuntimeObservation_Should_Serialize_Into_Span()
+    public void Serialize_WhenDestinationIsSpan_WritesReportedLength()
     {
         RuntimeObservation source = CreateRuntimeObservationTestPacket();
 
@@ -70,7 +70,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void RuntimeObservation_Should_Have_Valid_Client_Opcode()
+    public void StaticOpCode_WhenRuntimeObservationIsCreated_MatchesProtocolOpCode()
     {
         RuntimeObservation packet = RuntimeObservation.Create();
 
@@ -85,7 +85,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void RuntimeObservation_Should_Have_Populated_StaticSize()
+    public void StaticSize_WhenRuntimeObservationSchemaIsBuilt_IsPopulated()
     {
         int staticSize = PacketSchema<RuntimeObservation>.StaticSize;
 
@@ -96,14 +96,14 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void Control_Should_Have_Formatter_For_Comparison()
+    public void Get_WhenTypeIsControl_ResolvesFormatter()
     {
         IFormatter<Control> formatter = FormatterProvider.Get<Control>();
         Assert.NotNull(formatter);
     }
 
     [Fact]
-    public void Control_Should_Roundtrip_For_Comparison()
+    public void Deserialize_WhenControlWasSerialized_PreservesPublicState()
     {
         using Control source = Control.Create();
         source.Initialize(ControlType.PING, sequenceId: 42, flags: PacketFlags.SYSTEM, reasonCode: ProtocolReason.NONE);
@@ -121,7 +121,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void Control_Opcode_Should_Be_Valid_For_Comparison()
+    public void StaticOpCode_WhenControlIsCreated_MatchesProtocolOpCode()
     {
         using Control packet = Control.Create();
 
@@ -134,7 +134,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void Both_Formatters_Should_Resolve_In_Same_Process()
+    public void Get_WhenRuntimeObservationAndControlAreRequested_BothResolve()
     {
         IFormatter<RuntimeObservation>? roFormatter = null;
         IFormatter<Control>? ctrlFormatter = null;
@@ -155,7 +155,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void RuntimeObservation_Length_Should_Match_Serialized_Byte_Count()
+    public void Length_WhenRuntimeObservationIsSerialized_MatchesByteCount()
     {
         RuntimeObservation packet = CreateRuntimeObservationTestPacket();
         int reportedLength = packet.Length;
@@ -164,7 +164,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void RuntimeObservation_Empty_ObservationData_Length_Should_Be_Consistent()
+    public void Length_WhenObservationDataIsEmpty_MatchesByteCount()
     {
         RuntimeObservation packet = RuntimeObservation.Create();
         packet.Initialize(RuntimeObservationStage.REQUEST, RuntimeObservationTarget.DISPATCH);
@@ -174,7 +174,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void RuntimeObservation_Should_Serialize_Via_LiteSerializer()
+    public void Serialize_WhenUsingLiteSerializer_ProducesBytes()
     {
         RuntimeObservation source = CreateRuntimeObservationTestPacket();
         byte[] bytes = LiteSerializer.Serialize(source);
@@ -183,7 +183,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void RuntimeObservation_Request_Should_Roundtrip_With_Empty_ObservationData()
+    public void Deserialize_WhenRequestHasEmptyObservationData_PreservesFields()
     {
         RuntimeObservation source = RuntimeObservation.Create();
         source.Initialize(RuntimeObservationStage.REQUEST, RuntimeObservationTarget.TASKS);
@@ -199,7 +199,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void ObservabilityAccess_Should_Have_Formatter()
+    public void Get_WhenTypeIsObservabilityAccess_ResolvesFormatter()
     {
         Exception? caught = Record.Exception(() =>
         {
@@ -216,7 +216,7 @@ public sealed class RuntimeObservationSerializationTests
     }
 
     [Fact]
-    public void ObservabilityAccess_Should_Roundtrip()
+    public void Deserialize_WhenObservabilityAccessWasSerialized_PreservesStage()
     {
         ObservabilityAccess source = ObservabilityAccess.Create();
         source.Initialize(ObservabilityAccessStage.REQUEST, reason: ProtocolReason.NONE, accessKey: default);
@@ -239,7 +239,7 @@ public sealed class RuntimeObservationSerializationTests
     /// 4-byte length-prefix. A static-size-only bug would report a shorter length.
     /// </summary>
     [Fact]
-    public void RuntimeObservation_With_NonEmpty_ObservationData_Length_Should_Include_Dynamic_Payload()
+    public void Length_WhenObservationDataIsNonEmpty_IncludesDynamicPayload()
     {
         byte[] payload = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -292,7 +292,7 @@ public sealed class RuntimeObservationSerializationTests
     /// serialized output match the payload.
     /// </summary>
     [Fact]
-    public void RuntimeObservation_With_NonEmpty_ObservationData_Serialized_Byte_Count_Should_Match_Length()
+    public void Serialize_WhenObservationDataIsNonEmpty_ByteCountMatchesLength()
     {
         byte[] payload = [10, 20, 30, 40, 50];
 
@@ -353,7 +353,7 @@ public sealed class RuntimeObservationSerializationTests
     /// payload bytes survive serialization and deserialization.
     /// </summary>
     [Fact]
-    public void RuntimeObservation_With_NonEmpty_ObservationData_Should_Roundtrip()
+    public void Deserialize_WhenObservationDataIsNonEmpty_PreservesPayload()
     {
         byte[] payload = [1, 3, 5, 7, 9, 11];
 
@@ -416,7 +416,7 @@ public sealed class RuntimeObservationSerializationTests
     /// regression is specific to variable-size source-generated metadata.
     /// </summary>
     [Fact]
-    public void Control_FixedSize_Length_Matches_Serialized_Byte_Count_As_Comparison()
+    public void Length_WhenFixedAndVariableSizePacketsAreCompared_MatchSerializedByteCounts()
     {
         // Control is fixed-size; always works.
         using Control control = Control.Create();
@@ -457,7 +457,7 @@ public sealed class RuntimeObservationSerializationTests
     [InlineData(16)]
     [InlineData(256)]
     [InlineData(1024)]
-    public void RuntimeObservation_Length_Should_Scale_With_ObservationData_Size(int payloadSize)
+    public void Length_WhenObservationDataSizeVaries_ScalesWithPayload(int payloadSize)
     {
         byte[] payload = new byte[payloadSize];
         for (int i = 0; i < payloadSize; i++)
@@ -499,7 +499,7 @@ public sealed class RuntimeObservationSerializationTests
     /// expected values, masking the real bug.
     /// </summary>
     [Fact]
-    public void RuntimeObservation_StaticSize_Should_Be_14()
+    public void StaticSize_WhenRuntimeObservationSchemaIsBuilt_IsFourteenBytes()
     {
         int staticSize = PacketSchema<RuntimeObservation>.StaticSize;
 

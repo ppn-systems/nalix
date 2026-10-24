@@ -308,6 +308,12 @@ public sealed partial class PacketDispatchOptions<TPacket>
     /// Executes a resolved handler with a pooled packet context and returns the context
     /// to the object pool afterward.
     /// </summary>
+    /// <remarks>
+    /// This method takes ownership of <paramref name="packet"/> as soon as it is called: the packet is released
+    /// exactly once when the pooled context is returned (or immediately if the context cannot be initialized).
+    /// Callers must not dispose the packet again, because a pooled packet that is disposed twice can be handed to
+    /// a second renter while the first one is still using it.
+    /// </remarks>
     /// <param name="descriptor">Resolved handler descriptor.</param>
     /// <param name="packet">Incoming packet.</param>
     /// <param name="connection">Source connection.</param>
@@ -340,6 +346,13 @@ public sealed partial class PacketDispatchOptions<TPacket>
 #pragma warning disable CA1849 // Non-async rollback path
             context.Dispose();
 #pragma warning restore CA1849
+
+            // The context never took ownership, so release the packet here (see remarks).
+            if (packet is IDisposable disposablePacket)
+            {
+                disposablePacket.Dispose();
+            }
+
             throw;
         }
 

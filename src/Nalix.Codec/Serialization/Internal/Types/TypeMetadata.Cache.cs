@@ -8,11 +8,6 @@ using System.Runtime.CompilerServices;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Serialization;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Codec.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Codec.Benchmarks")]
-#endif
-
 namespace Nalix.Codec.Serialization.Internal.Types;
 
 internal static partial class TypeMetadata

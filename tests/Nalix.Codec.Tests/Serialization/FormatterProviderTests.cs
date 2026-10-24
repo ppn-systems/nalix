@@ -10,7 +10,7 @@ namespace Nalix.Codec.Tests.Serialization;
 public sealed class FormatterProviderTests
 {
     [Fact]
-    public void GetWhenCalledRepeatedlyReturnsSameCachedFormatterInstance()
+    public void Get_WhenCalledRepeatedly_ReturnsSameCachedInstance()
     {
         IFormatter<int> first = FormatterProvider.Get<int>();
         IFormatter<int> second = FormatterProvider.Get<int>();
@@ -19,7 +19,7 @@ public sealed class FormatterProviderTests
     }
 
     [Fact]
-    public void GetResolvesCommonCollectionAndTupleFormatters()
+    public void Get_WhenCommonCollectionAndTupleTypes_ResolvesFormatters()
     {
         IFormatter<int[]> arrayFormatter = FormatterProvider.Get<int[]>();
         IFormatter<int?[]> nullableArrayFormatter = FormatterProvider.Get<int?[]>();
@@ -49,10 +49,10 @@ public sealed class FormatterProviderTests
     }
 
     [Fact]
-    public void GetWhenMemoryElementTypeIsManagedThrowsSerializationFailureException() => _ = Assert.Throws<SerializationFailureException>(FormatterProvider.Get<Memory<string>>);
+    public void Get_WhenMemoryElementTypeIsManaged_ThrowsSerializationFailureException() => _ = Assert.Throws<SerializationFailureException>(FormatterProvider.Get<Memory<string>>);
 
     [Fact]
-    public void RegisterOverridesFormatterCacheForTargetType()
+    public void Register_WhenFormatterProvided_OverridesCachedFormatter()
     {
         StubFormatter formatter = new();
 
@@ -66,7 +66,7 @@ public sealed class FormatterProviderTests
 
 
     [Fact]
-    public void RegisterComplexWhenTypeIsUnsupportedThrowsSerializationFailureException()
+    public void RegisterComplex_WhenTypeIsUnsupported_ThrowsSerializationFailureException()
     {
         _ = Assert.Throws<SerializationFailureException>(() =>
             FormatterProvider.RegisterComplex<IUnsupported>(new UnsupportedFormatter()));

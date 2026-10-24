@@ -709,14 +709,9 @@ public sealed class PacketDispatchChannel
              */
             ValueTask pending = this.Options.ExecuteResolvedHandlerAsync(in handler, packet, connection, isReliable, encryptedOnWire, ct);
 
-            // Fast-path: handler completed synchronously
+            // Fast-path: handler completed synchronously. The packet context already released the packet.
             if (pending.IsCompletedSuccessfully)
             {
-                if (packet is IDisposable disposable)
-                {
-                    disposable.Dispose();
-                }
-
                 lease.Dispose();
                 return ValueTask.CompletedTask;
             }
@@ -725,7 +720,7 @@ public sealed class PacketDispatchChannel
             // The handler returned an incomplete task (e.g. awaited I/O).
             // To prevent blocking the DispatchWorkerLoop, we attach a pooled continuation via UnsafeOnCompleted.
             DispatchContinuation workItem = ObjectPoolManager.Shared.Get<DispatchContinuation>();
-            workItem.Initialize(connection, lease, packet, pending.AsTask(), ct);
+            workItem.Initialize(connection, lease, pending.AsTask(), ct);
 
             return ValueTask.CompletedTask;
         }
@@ -754,12 +749,7 @@ public sealed class PacketDispatchChannel
             }
         }
 
-        // 5. Cleanup for synchronous errors/cancellation
-        if (packet is IDisposable disposableSync)
-        {
-            disposableSync.Dispose();
-        }
-
+        // 5. Cleanup for synchronous errors/cancellation (the packet was already released by its context)
         lease.Dispose();
         return ValueTask.CompletedTask;
     }

@@ -16,7 +16,7 @@ namespace Nalix.Framework.Tests;
 /// <summary>
 /// Verifies the correctness of the <see cref="ReportRegistry"/> class.
 /// </summary>
-[Collection("Sequential Pooling Tests")]
+[Collection(TestCollections.SequentialPooling)]
 public sealed class ReportRegistryTests : IDisposable
 {
     private readonly ReportRegistry _registry = ReportRegistry.Instance;
@@ -31,8 +31,8 @@ public sealed class ReportRegistryTests : IDisposable
         _registry.Clear();
     }
 
-    [Fact(DisplayName = "Register and Get should successfully map key and type to reportable instance")]
-    public void RegisterAndGetShouldSuccessfullyMapKeyAndType()
+    [Fact]
+    public void Get_AfterRegister_ReturnsInstanceForKeyAndType()
     {
         var fake = new FakeReportable("telemetry data");
         _registry.Register<IReportable>(NetworkTransport.TCP, fake);
@@ -44,8 +44,8 @@ public sealed class ReportRegistryTests : IDisposable
         Assert.Null(resolvedUdp);
     }
 
-    [Fact(DisplayName = "Unregister should successfully remove registered instance")]
-    public void UnregisterShouldRemoveInstance()
+    [Fact]
+    public void Unregister_WhenInstanceRegistered_RemovesInstance()
     {
         var fake = new FakeReportable("telemetry data");
         _registry.Register<IReportable>(NetworkTransport.TCP, fake);
@@ -57,8 +57,8 @@ public sealed class ReportRegistryTests : IDisposable
         Assert.Null(resolved);
     }
 
-    [Fact(DisplayName = "Clear should empty all registrations")]
-    public void ClearShouldEmptyAllRegistrations()
+    [Fact]
+    public void Clear_WhenRegistrationsExist_EmptiesAllRegistrations()
     {
         var fake1 = new FakeReportable("1");
         var fake2 = new FakeReportable("2");
@@ -72,8 +72,8 @@ public sealed class ReportRegistryTests : IDisposable
         Assert.Null(_registry.Get<IReportable>(NetworkTransport.UDP));
     }
 
-    [Fact(DisplayName = "WriteReportData and GenerateReport should format telemetry successfully")]
-    public void WriteReportDataAndGenerateReportShouldFormatTelemetry()
+    [Fact]
+    public void GenerateReport_WhenInstanceRegistered_FormatsTextAndJson()
     {
         var fake = new FakeReportable("metrics content");
         _registry.Register<IReportable>(NetworkTransport.TCP, fake);
@@ -91,8 +91,8 @@ public sealed class ReportRegistryTests : IDisposable
         Assert.Contains("TCP", jsonReport);
     }
 
-    [Fact(DisplayName = "Registering task manager in InstanceManager should automatically index it in ReportRegistry")]
-    public void RegisteringITaskManagerAutoIndexesInReportRegistry()
+    [Fact]
+    public void AutoIndex_WhenTaskManagerRegistered_IndexesItByTelemetryTarget()
     {
         var manager = new InstanceManager();
         var taskManager = new Nalix.Framework.Tasks.TaskManager();
@@ -111,8 +111,8 @@ public sealed class ReportRegistryTests : IDisposable
         }
     }
 
-    [Fact(DisplayName = "Registering BufferPoolManager concrete type should auto index in ReportRegistry")]
-    public void RegisteringBufferPoolManagerConcreteAutoIndexes()
+    [Fact]
+    public void AutoIndex_WhenBufferPoolManagerRegistered_IndexesItByTelemetryTarget()
     {
         var manager = new InstanceManager();
         var bufferManager = new Nalix.Framework.Memory.Buffers.BufferPoolManager();
@@ -131,8 +131,8 @@ public sealed class ReportRegistryTests : IDisposable
         }
     }
 
-    [Fact(DisplayName = "Registering ObjectPoolManager concrete type should auto index in ReportRegistry")]
-    public void RegisteringObjectPoolManagerConcreteAutoIndexes()
+    [Fact]
+    public void AutoIndex_WhenObjectPoolManagerRegistered_IndexesItByTelemetryTarget()
     {
         var manager = new InstanceManager();
         var objectManager = new Nalix.Framework.Memory.Objects.ObjectPoolManager();
@@ -151,8 +151,8 @@ public sealed class ReportRegistryTests : IDisposable
         }
     }
 
-    [Fact(DisplayName = "Registering different rate limiters in InstanceManager should automatically index them without collision")]
-    public void RegisteringRateLimitersAutoIndexesWithoutCollision()
+    [Fact]
+    public void AutoIndex_WhenRateLimitersRegistered_IndexesWithoutCollision()
     {
         var manager = new InstanceManager();
         var gateMock = new ConcurrencyGate();
@@ -197,8 +197,8 @@ public sealed class ReportRegistryTests : IDisposable
         public void WriteReportData(Utf8JsonWriter writer) {}
     }
 
-    [Fact(DisplayName = "WriteReportData<T> should serialize only registered instances of the specified type")]
-    public void WriteReportDataGenericShouldSerializeOnlySpecifiedType()
+    [Fact]
+    public void WriteReportData_WhenFilteredByType_SerializesOnlyThatType()
     {
         var listener = new FakeTestListener("listener metrics");
         var protocol = new FakeTestProtocol("protocol metrics");
@@ -262,4 +262,3 @@ public sealed class ReportRegistryTests : IDisposable
         public string GenerateReport() => $"Data: {Data}";
     }
 }
-

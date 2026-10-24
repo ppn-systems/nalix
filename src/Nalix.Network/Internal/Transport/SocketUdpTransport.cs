@@ -20,10 +20,6 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Connections;
 using Nalix.Network.Options;
 
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-[assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]
-
 namespace Nalix.Network.Internal.Transport;
 
 /// <summary>

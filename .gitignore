@@ -79,3 +79,7 @@ research/
 /WsTest
 /scratch.cs
 /.scratch
+
+# Test run output
+TestResults/
+test_results.txt

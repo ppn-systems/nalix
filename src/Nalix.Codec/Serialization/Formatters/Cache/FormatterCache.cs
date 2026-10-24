@@ -2,10 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 #if DEBUG
-using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("Nalix.Framework.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Framework.Benchmarks")]
 #endif
 
 namespace Nalix.Codec.Serialization.Formatters.Cache;

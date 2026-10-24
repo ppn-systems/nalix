@@ -9,11 +9,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using Nalix.Abstractions.Networking;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-#endif
-
 namespace Nalix.Network.Internal.Connections;
 
 /// <summary>

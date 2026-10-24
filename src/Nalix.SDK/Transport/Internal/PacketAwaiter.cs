@@ -7,10 +7,6 @@ using System.Threading.Tasks;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 
-#if DEBUG
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.SDK.Tests")]
-#endif
-
 namespace Nalix.SDK.Transport.Internal;
 
 /// <summary>

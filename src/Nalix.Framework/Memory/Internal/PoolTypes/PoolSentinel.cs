@@ -5,11 +5,6 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
-#if DEBUG
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Framework.Tests")]
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Framework.Benchmarks")]
-#endif
-
 namespace Nalix.Framework.Memory.Internal.PoolTypes;
 
 /// <summary>

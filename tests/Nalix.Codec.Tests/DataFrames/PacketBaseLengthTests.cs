@@ -1,3 +1,6 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
 using System.Diagnostics;
 using System.Text;
 using Nalix.Abstractions.Networking.Packets;
@@ -14,7 +17,7 @@ public sealed partial class PacketBaseLengthTests
     [InlineData("xin chao")]
     [InlineData("Xin chao Viet Nam")]
     [InlineData("xin chao \u4f60\u597d")]
-    public void LengthWhenPacketContainsStringMatchesSerializedByteCount(string text)
+    public void Length_WhenPacketContainsString_MatchesSerializedByteCount(string text)
     {
         StringPacket packet = new()
         {
@@ -37,7 +40,7 @@ public sealed partial class PacketBaseLengthTests
     }
 
     [Fact]
-    public void LengthWhenPacketContainsNestedPacketMatchesSerializedByteCount()
+    public void Length_WhenPacketContainsNestedPacket_MatchesSerializedByteCount()
     {
         ParentPacket packet = new()
         {
@@ -60,7 +63,7 @@ public sealed partial class PacketBaseLengthTests
     }
 
     [Fact]
-    public void SerializeWhenBufferIsSmallerThanDynamicLengthThrowsArgumentException()
+    public void Serialize_WhenBufferIsSmallerThanDynamicLength_ThrowsArgumentException()
     {
         StringPacket packet = new()
         {
@@ -75,7 +78,7 @@ public sealed partial class PacketBaseLengthTests
     }
 
     [Fact]
-    public void LengthWhenStringUsesSerializeDynamicSizeAttributeMatchesSerializedByteCount()
+    public void Length_WhenStringUsesDynamicSizeAttribute_MatchesSerializedByteCount()
     {
         DynamicHintStringPacket packet = new()
         {
@@ -92,7 +95,7 @@ public sealed partial class PacketBaseLengthTests
     }
 
     [Fact]
-    public void LengthWhenPacketContainsListMatchesSerializedByteCount()
+    public void Length_WhenPacketContainsList_MatchesSerializedByteCount()
     {
         ListPacket packet = new()
         {
@@ -109,7 +112,7 @@ public sealed partial class PacketBaseLengthTests
     }
 
     [Fact]
-    public void LengthWhenPacketContainsDictionaryMatchesSerializedByteCount()
+    public void Length_WhenPacketContainsDictionary_MatchesSerializedByteCount()
     {
         DictionaryPacket packet = new()
         {
@@ -131,7 +134,7 @@ public sealed partial class PacketBaseLengthTests
     }
 
     [Fact]
-    public void LengthWhenPacketContainsNullDictionaryMatchesSerializedByteCount()
+    public void Length_WhenPacketContainsNullDictionary_MatchesSerializedByteCount()
     {
         DictionaryPacket packet = new()
         {
@@ -148,7 +151,7 @@ public sealed partial class PacketBaseLengthTests
     }
 
     [Fact]
-    public void LengthWhenPacketContainsLargeStringDictionaryMatchesSerializedByteCount()
+    public void Length_WhenPacketContainsLargeStringDictionary_MatchesSerializedByteCount()
     {
         StringDictionaryPacket packet = new()
         {

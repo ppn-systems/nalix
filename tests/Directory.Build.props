@@ -34,6 +34,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Runtime bootstrap shared by the test assemblies that exercise Nalix.Network (module initializer, no test code). -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Nalix.Network.Tests' Or '$(MSBuildProjectName)' == 'Nalix.Integration.Tests' Or '$(MSBuildProjectName)' == 'Nalix.Runtime.Tests' Or '$(MSBuildProjectName)' == 'Nalix.SDK.Tests'">
+    <Compile Include="$(MSBuildThisFileDirectory)Shared\TestRuntimeBootstrap.cs" Link="TestSupport\TestRuntimeBootstrap.cs" />
+  </ItemGroup>
+
   <!-- Source generator for [Packet] auto-registration -->
   <ItemGroup Condition="'$(MSBuildProjectName)' != 'Nalix.Analyzers.Tests'">
     <ProjectReference Include="$(MSBuildThisFileDirectory)..\analyzers\Nalix.Analyzers.Generators\Nalix.Analyzers.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible" />

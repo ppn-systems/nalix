@@ -6,7 +6,6 @@
 // and Symmetric (header || nonce || ciphertext) formats.
 // Header + nonce SHOULD be included in AEAD AAD.
 
-
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 //
@@ -19,11 +18,6 @@ using System;
 using System.Runtime.CompilerServices;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Security;
-
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Framework.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Framework.Benchmarks")]
-#endif
 
 namespace Nalix.Codec.Security.Internal;
 

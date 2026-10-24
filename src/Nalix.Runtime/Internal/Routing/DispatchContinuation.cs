@@ -26,7 +26,6 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
     private readonly Action _onCompleted;
     private IConnection? _connection;
     private IBufferLease? _lease;
-    private IPacket? _packet;
     private Task? _pendingTask;
     private CancellationToken _ct;
 
@@ -42,13 +41,10 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
     public void Initialize(
         IConnection connection,
         [Borrowed] IBufferLease lease,
-        IPacket packet, Task pendingTask, CancellationToken ct)
+        Task pendingTask, CancellationToken ct)
     {
         _connection = connection;
         _lease = lease;
-#pragma warning disable NALIX076 // Packet context must not escape handler scope
-        _packet = packet;
-#pragma warning restore NALIX076 // Packet context must not escape handler scope
         _pendingTask = pendingTask;
         _ct = ct;
 
@@ -61,7 +57,6 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
     {
         IConnection? connection = _connection;
         IBufferLease? lease = _lease;
-        IPacket? packet = _packet;
         Task? pending = _pendingTask;
         CancellationToken ct = _ct;
 
@@ -102,12 +97,7 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
         }
         finally
         {
-            // Guaranteed release for async path
-            if (packet is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-
+            // Guaranteed release for async path (the packet is released by its context)
             lease.Dispose();
 
             // Return this object to the pool
@@ -122,7 +112,6 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
     {
         _ct = default;
         _lease = null;
-        _packet = null;
         _connection = null;
         _pendingTask = null;
     }

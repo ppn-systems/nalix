@@ -5,11 +5,6 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-#endif
-
 namespace Nalix.Network.Internal.Security;
 
 /// <summary>

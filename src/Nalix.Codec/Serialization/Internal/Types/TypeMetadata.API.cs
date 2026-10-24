@@ -8,11 +8,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using System.Runtime.CompilerServices;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Codec.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Codec.Benchmarks")]
-#endif
-
 namespace Nalix.Codec.Serialization.Internal.Types;
 
 /// <summary>

@@ -1,38 +1,82 @@
-# Test Guide
+# Nalix Tests
 
-Thư mục `tests/` chứa toàn bộ automated tests của Nalix và được tổ chức theo từng nhóm trách nhiệm:
+Automated tests for the Nalix networking framework (.NET 10, xUnit v3). The conventions every test must follow
+are in [AGENTS.md](AGENTS.md); this guide covers how to run and extend the suite.
 
-- `Nalix.Framework.Tests`: unit tests cho `Nalix.Common`, `Nalix.Framework`, và các hành vi runtime nền tảng.
-- `Nalix.Runtime.Pipeline.Tests`: tests cho `Nalix.Runtime.Pipeline`.
-- `Nalix.Analyzers.Tests`: kiểm thử analyzer/code fix.
+## Layout
 
-## Chạy test
+| Project | Covers |
+| :--- | :--- |
+| `Nalix.Abstractions.Tests` | Contracts, primitives, attribute keys |
+| `Nalix.Environment.Tests` | Configuration, memory leases, fragments, sequencing, random |
+| `Nalix.Codec.Tests` | Serialization, packets, LZ4, transforms |
+| `Nalix.Framework.Tests` | Cryptography, pools, tasks, identifiers, injection |
+| `Nalix.Runtime.Tests` | Dispatch, middleware, handler compilation, throttling |
+| `Nalix.Network.Tests` | Listeners, connections, guards, transports, timing wheel |
+| `Nalix.SDK.Tests` | Client sessions, request/response, reconnect, resume |
+| `Nalix.Hosting.Tests` | Application builder, startup sequence, handler discovery |
+| `Nalix.Analyzers.Tests` | Roslyn analyzers, code fixes and source generators |
+| `Nalix.Integration.Tests` | End-to-end scenarios across several source projects |
 
-Chạy toàn bộ test:
+Each project mirrors the folder structure of the source project it tests, so
+`src/Nalix.Network/Internal/Security/SlidingWindow.cs` is covered by
+`tests/Nalix.Network.Tests/Internal/Security/SlidingWindowTests.cs`.
+`Shared/` holds source files linked into several test projects (not a test project itself).
+
+## Running
+
+The suite must pass in both configurations; CI runs both.
 
 ```powershell
-dotnet test .\tests\Nalix.Tests.sln
+# Everything
+dotnet test tests/Nalix.Tests.sln -c Release
+dotnet test tests/Nalix.Tests.sln -c Debug
+
+# One project
+dotnet test tests/Nalix.Network.Tests -c Release
+
+# One class or one test
+dotnet test tests/Nalix.Network.Tests -c Release --filter "FullyQualifiedName~SlidingWindowTests"
+dotnet test tests/Nalix.Network.Tests -c Release --filter "FullyQualifiedName~SlidingWindowTests.TryAdd_WhenKeyAlreadyPresent_ReturnsFalse"
 ```
 
-Chạy theo project:
+Build output goes to `build/bin/<Configuration>/<Project>/`. Test run output (`TestResults/`) is git-ignored.
+
+### Coverage
 
 ```powershell
-dotnet test .\tests\Nalix.Framework.Tests\Nalix.Framework.Tests.csproj
-dotnet test .\tests\Nalix.Network.Test\Nalix.Network.Tests.csproj
-dotnet test .\tests\Nalix.Analyzers.Tests\Nalix.Analyzers.Tests.csproj
+dotnet test tests/Nalix.Tests.sln -c Release --collect:"XPlat Code Coverage" --results-directory artifacts/coverage
 ```
 
-## Quy ước test
+CI publishes a coverage summary on the Linux/Release job.
 
-- Ưu tiên đặt tên theo mẫu `Method_State_Expectation`.
-- Mỗi test chỉ nên kiểm tra một hành vi công khai rõ ràng.
-- Dữ liệu lặp lại nên đưa vào helper hoặc `TheoryData<>` thay vì `object[]` thô.
-- Test không nên phụ thuộc thứ tự chạy hoặc trạng thái còn sót lại từ test khác.
-- Khi test runtime cần dependency chung, hãy dùng shared config trong [tests/Directory.Build.props](/E:/Cs/Nalix/tests/Directory.Build.props).
+## Continuous integration
 
-## Khi thêm test mới
+`CI` (`.github/workflows/ci.yml`) detects which tier a change touches and runs only the affected jobs:
 
-- Thêm test vào đúng project theo domain.
-- Nếu test cần package dùng chung cho mọi test project, thêm vào [tests/Directory.Build.props](/E:/Cs/Nalix/tests/Directory.Build.props) thay vì lặp lại từng `.csproj`.
-- Nếu chỉ một project cần package riêng, khai báo ngay trong `.csproj` của project đó.
-- Ưu tiên smoke test nhỏ, deterministic, và dễ đọc trước khi thêm scenario phức tạp.
+| Job | Configuration | OS |
+| :--- | :--- | :--- |
+| Core | Release | Linux, Windows |
+| Core | Debug | Linux |
+| Extensions | Release | Linux |
+
+`CI OK` is the single required status check. Test builds are never strong-name signed (a signed assembly cannot
+grant `InternalsVisibleTo` by simple name), so CI does not decode the signing key for test runs.
+
+## Writing a test
+
+1. Find (or create) the test project and the folder that mirrors the source file.
+2. Create `<Subject>Tests.cs` with `namespace Nalix.<Project>.Tests.<Folder>;` and a `public sealed class`.
+3. Name methods `Method_State_Expectation`.
+4. If the test touches process-wide state (configuration, instance manager, pools, clocks), join a collection from
+   the project's `TestCollections.cs` and restore the state afterwards.
+5. Run the project in Debug and Release.
+
+## Troubleshooting
+
+- **A test passes alone but fails in the full run** — it depends on state another test leaks or changes. See
+  "Process-wide state" in [AGENTS.md](AGENTS.md).
+- **`CS0122` on an internal member in Release** — the member is compiled only in Debug builds. Wrap that single test
+  in `#if DEBUG` with a comment naming the source member (see "Debug and Release" in [AGENTS.md](AGENTS.md)).
+- **`CS0122` on every internal member, or `CS1726`** — the build is strong-name signed (`SignAssembly=true`), which
+  turns off the `InternalsVisibleTo` grant. Build tests with `-p:SignAssembly=false`.

@@ -26,7 +26,7 @@ public sealed class BufferLeaseHeadroomTests
     }
 
     [Fact]
-    public void TryGetSegmentWithHeader_ReturnsHeaderPlusPayload_WithoutTouchingPayload()
+    public void TryGetSegmentWithHeader_WhenHeadroomReserved_ReturnsHeaderPlusPayload()
     {
         using BufferLease lease = BufferLease.Rent(8, zeroOnDispose: false, headroom: BufferLease.TransportHeadroom);
         byte[] payload = [9, 8, 7];
@@ -44,7 +44,7 @@ public sealed class BufferLeaseHeadroomTests
     }
 
     [Fact]
-    public void TryGetSegmentWithHeader_FailsWithoutReservedHeadroom()
+    public void TryGetSegmentWithHeader_WithoutReservedHeadroom_ReturnsFalse()
     {
         using BufferLease plain = BufferLease.Rent(8);
         plain.CommitLength(4);
@@ -82,7 +82,7 @@ public sealed class BufferLeaseHeadroomTests
     }
 
     [Fact]
-    public void Rent_WithNegativeHeadroom_Throws()
+    public void Rent_WithNegativeHeadroom_ThrowsArgumentOutOfRangeException()
     {
         Action act = () => BufferLease.Rent(8, zeroOnDispose: false, headroom: -1);
         _ = act.Should().Throw<ArgumentOutOfRangeException>();

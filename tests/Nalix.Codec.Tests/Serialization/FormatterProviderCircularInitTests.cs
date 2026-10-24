@@ -59,7 +59,7 @@ public sealed class FormatterProviderCircularInitTests
     /// <see cref="TypeInitializationException"/> from circular init.
     /// </summary>
     [Fact]
-    public void Get_Object_ThrowsSerializationFailureException_NotTypeInitialization()
+    public void Get_WhenTypeIsObject_ThrowsSerializationFailureException()
     {
         // The call must not cause a TypeInitializationException (circular init).
         // It may throw SerializationFailureException because there is no formatter
@@ -80,7 +80,7 @@ public sealed class FormatterProviderCircularInitTests
     /// <c>object[]</c> is pre-registered via <c>ReferenceArrayFormatter&lt;object&gt;</c>.
     /// </summary>
     [Fact]
-    public void Get_ObjectArray_DoesNotThrow_TypeInitialization()
+    public void Get_WhenTypeIsObjectArray_ResolvesWithoutCircularInit()
     {
         IFormatter<object[]> formatter = FormatterProvider.Get<object[]>();
 
@@ -92,7 +92,7 @@ public sealed class FormatterProviderCircularInitTests
     /// without triggering circular static initialization.
     /// </summary>
     [Fact]
-    public void Get_ListOfObject_DoesNotThrow_TypeInitialization()
+    public void Get_WhenTypeIsListOfObject_ResolvesWithoutCircularInit()
     {
         IFormatter<List<object>> formatter = FormatterProvider.Get<List<object>>();
 
@@ -119,7 +119,7 @@ public sealed class FormatterProviderCircularInitTests
     /// String arrays must serialize and deserialize correctly after the fix.
     /// </summary>
     [Fact]
-    public void StringArray_RoundTripsCorrectly()
+    public void SerializeDeserialize_WhenStringArray_RoundTripsValues()
     {
         string[] input = ["hello", "world", null!, ""];
 
@@ -138,7 +138,7 @@ public sealed class FormatterProviderCircularInitTests
     /// Primitive arrays must serialize and deserialize correctly after the fix.
     /// </summary>
     [Fact]
-    public void IntArray_RoundTripsCorrectly()
+    public void SerializeDeserialize_WhenIntArray_RoundTripsValues()
     {
         int[] input = [1, 2, 3, 42];
 
@@ -153,7 +153,7 @@ public sealed class FormatterProviderCircularInitTests
     /// <c>List&lt;string&gt;</c> must serialize and deserialize correctly.
     /// </summary>
     [Fact]
-    public void ListOfString_RoundTripsCorrectly()
+    public void SerializeDeserialize_WhenListOfString_RoundTripsValues()
     {
         List<string> input = ["alpha", "beta", "gamma"];
 

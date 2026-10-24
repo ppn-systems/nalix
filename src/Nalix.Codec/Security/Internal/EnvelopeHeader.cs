@@ -18,10 +18,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Nalix.Abstractions.Security;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Framework.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Framework.Benchmarks")]
-#endif
 namespace Nalix.Codec.Security.Internal;
 
 [System.Diagnostics.DebuggerNonUserCode]

@@ -89,22 +89,34 @@ jobs:
           echo "core=$core extensions=$extensions workflows=$workflows"
           { echo "core=$core"; echo "extensions=$extensions"; echo "workflows=$workflows"; } >> "$GITHUB_OUTPUT"
 
+  # The suite must be green in both configurations: Release is what ships, Debug compiles extra validation and
+  # diagnostics. Linux covers both; Windows adds Release only to keep runner minutes down.
   core:
-    name: Core (${{ matrix.os }})
+    name: Core (${{ matrix.os }}, ${{ matrix.configuration }})
     needs: [changes]
     if: needs.changes.outputs.core == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            configuration: Release
+            coverage: true
+          - os: ubuntu-latest
+            configuration: Debug
+            coverage: false
+          - os: windows-latest
+            configuration: Release
+            coverage: false
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:
       os: ${{ matrix.os }}
+      configuration: ${{ matrix.configuration }}
       project: src/Nalix.sln
       test: tests/Nalix.Tests.sln
       deploy: false
-      coverage: false
+      coverage: ${{ matrix.coverage }}
 
   extensions:
     name: Extension (${{ matrix.name }})

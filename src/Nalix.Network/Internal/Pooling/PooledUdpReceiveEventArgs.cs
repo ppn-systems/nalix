@@ -12,11 +12,6 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Environment.Configuration;
 using Nalix.Network.Options;
 
-#if DEBUG
-[assembly: InternalsVisibleTo("Nalix.Network.Tests")]
-[assembly: InternalsVisibleTo("Nalix.Network.Benchmarks")]
-#endif
-
 namespace Nalix.Network.Internal.Pooling;
 
 /// <summary>

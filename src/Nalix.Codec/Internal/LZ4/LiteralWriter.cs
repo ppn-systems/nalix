@@ -6,11 +6,6 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Nalix.Codec.Internal.Memory;
 
-#if DEBUG
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Codec.Tests")]
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Nalix.Codec.Benchmarks")]
-#endif
-
 namespace Nalix.Codec.Internal.LZ4;
 
 /// <summary>
