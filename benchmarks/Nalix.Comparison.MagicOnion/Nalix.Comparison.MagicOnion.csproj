@@ -18,6 +18,8 @@
   <ItemGroup>
     <PackageReference Include="MagicOnion.Server" Version="7.11.0" />
     <PackageReference Include="MagicOnion.Client" Version="7.11.0" />
+    <!-- MagicOnion 7.11.0 resolves MessagePack 3.1.7 (GHSA-qhrr-8q5h-9q3h, fixed in 3.1.9). -->
+    <PackageReference Include="MessagePack" Version="3.1.12" />
     <PackageReference Include="Grpc.AspNetCore.Server" Version="2.84.0" />
     <PackageReference Include="Grpc.Net.Client" Version="2.84.0" />
   </ItemGroup>
