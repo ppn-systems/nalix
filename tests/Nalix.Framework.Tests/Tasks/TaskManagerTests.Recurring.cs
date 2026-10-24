@@ -252,16 +252,19 @@ public sealed partial class TaskManagerTests
                 new WorkerOptions { Tag = "batch-test", RetainFor = TimeSpan.Zero });
         }
 
-        await Task.Delay(250).ConfigureAwait(false);
+        // The aggregated message is written by a pool task that waits 100 ms before flushing, so wait for it
+        // instead of assuming it is there after a fixed delay (a busy thread pool can delay it for much longer).
+        await TaskManagerTestHost.WaitUntilAsync(() => AggregatedStartLogs(events).Sum(AggregatedStartCount) >= 4, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
         lock (events)
         {
-            var dispatcherLogs = events.Where(ev => ev.Key == DiagnosticsEvents.Tasks.Dispatcher).ToList();
-            var batchLog = dispatcherLogs.FirstOrDefault(ev => ev.Value is DiagnosticLog log && log.Message.Contains("workers-started") && log.Message.Contains("group-batch-test"));
-            Assert.NotNull(batchLog.Value);
-            var log = (DiagnosticLog)batchLog.Value!;
+            List<DiagnosticLog> batchLogs = AggregatedStartLogs(events);
+            Assert.NotEmpty(batchLogs);
+            Assert.Equal(4, batchLogs.Sum(AggregatedStartCount));
+            Assert.True(batchLogs.Count < 4, "The four worker starts must be reported as an aggregate, not one message per worker.");
+
+            DiagnosticLog log = batchLogs[0];
             Assert.Contains("group=group-batch-test", log.Message);
-            Assert.Contains("count=4", log.Message);
             Assert.Contains("priority=normal", log.Message);
             Assert.Contains("tag=batch-test", log.Message);
 
@@ -270,6 +273,25 @@ public sealed partial class TaskManagerTests
         }
 
         await TaskManagerTestHost.WaitUntilAsync(() => manager.GetWorkers(runningOnly: false, group: "group-batch-test").Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+    }
+
+    private static List<DiagnosticLog> AggregatedStartLogs(List<KeyValuePair<string, object?>> events)
+    {
+        lock (events)
+        {
+            return [.. events
+                .Where(ev => ev.Key == DiagnosticsEvents.Tasks.Dispatcher && ev.Value is DiagnosticLog)
+                .Select(ev => (DiagnosticLog)ev.Value!)
+                .Where(log => log.Message.Contains("workers-started", StringComparison.Ordinal) && log.Message.Contains("group=group-batch-test", StringComparison.Ordinal))];
+        }
+    }
+
+    private static int AggregatedStartCount(DiagnosticLog log)
+    {
+        const string Marker = "count=";
+        int start = log.Message.IndexOf(Marker, StringComparison.Ordinal) + Marker.Length;
+        int end = log.Message.IndexOf(' ', start);
+        return int.Parse(log.Message.AsSpan(start, end - start), System.Globalization.CultureInfo.InvariantCulture);
     }
 
     [Fact]
