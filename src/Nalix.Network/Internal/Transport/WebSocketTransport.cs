@@ -280,23 +280,28 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
     private async Task RECEIVE_LOOP_ASYNC(CancellationToken cancellationToken = default)
     {
+        // This transport is pooled: after Dispose() it can be re-initialized for another connection while this loop is
+        // still unwinding. Work only with the owner and socket this loop started with, never with the fields.
+        WebSocketConnection owner = _owner;
+        WebSocket webSocket = _webSocket;
+
         // Allocate a buffer matching FragmentOptions.MaxChunkSize (typically 1.4KB) to eliminate 64KB per-connection bloat.
         int length = GET_RECEIVE_BUFFER_SIZE();
         byte[] buffer = BufferLease.ByteArrayPool.Rent(length);
 
         try
         {
-            while (!cancellationToken.IsCancellationRequested && _webSocket.State == WebSocketState.Open && !_owner.IsDisposed)
+            while (!cancellationToken.IsCancellationRequested && webSocket.State == WebSocketState.Open && !owner.IsDisposed)
             {
-                WebSocketReceiveResult result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
+                WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
                     break;
                 }
 
-                _owner.AddBytesReceived(result.Count);
-                _owner.UpdateLastPingTime();
+                owner.AddBytesReceived(result.Count);
+                owner.UpdateLastPingTime();
 
                 if (result.EndOfMessage)
                 {
@@ -315,12 +320,12 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
                     BufferLease lease = BufferLease.CopyFrom(new ReadOnlySpan<byte>(buffer, 0, result.Count));
                     lease.IsReliable = true;
 
-                    _owner.TriggerProcessEvent(lease);
+                    owner.TriggerProcessEvent(lease);
                 }
                 else
                 {
                     // Slow path: the message is larger than the buffer, we need to assemble it
-                    await this.HANDLE_LARGE_MESSAGE_ASYNC(buffer, result.Count, cancellationToken).ConfigureAwait(false);
+                    await this.HANDLE_LARGE_MESSAGE_ASYNC(owner, webSocket, buffer, result.Count, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -342,11 +347,12 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         finally
         {
             BufferLease.ByteArrayPool.Return(buffer);
-            _owner.Disconnect("Receive loop exited");
+            owner.Disconnect("Receive loop exited");
         }
     }
 
-    private async Task HANDLE_LARGE_MESSAGE_ASYNC(byte[] initialBuffer, int initialBytes, CancellationToken cancellationToken)
+    private async Task HANDLE_LARGE_MESSAGE_ASYNC(
+        WebSocketConnection owner, WebSocket webSocket, byte[] initialBuffer, int initialBytes, CancellationToken cancellationToken)
     {
         if (initialBytes > _options.MaxMessageSize)
         {
@@ -374,7 +380,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
             WebSocketReceiveResult result;
             do
             {
-                result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
+                result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
                     return;
@@ -407,7 +413,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
                 buffer.AsSpan(0, result.Count).CopyTo(payload.AsSpan(written));
                 written = nextWritten;
-                _owner.AddBytesReceived(result.Count);
+                owner.AddBytesReceived(result.Count);
 
             } while (!result.EndOfMessage);
 
@@ -419,7 +425,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
             BufferLease lease = BufferLease.TakeOwnership(payload, 0, written);
             lease.IsReliable = true;
 
-            _owner.TriggerProcessEvent(lease);
+            owner.TriggerProcessEvent(lease);
 
             ownershipTransferred = true;
         }
