@@ -43,7 +43,7 @@ public static class EchoHandlers
     {
         using PacketScope<EchoResponsePacket> lease = PacketFactory<EchoResponsePacket>.Acquire();
         lease.Value.Data = context.Packet.Data;
-        await context.Sender.SendAsync(lease.Value).ConfigureAwait(false);
+        await context.Sender.ReplyAsync(lease.Value).ConfigureAwait(false);
     }
 }
 
@@ -57,6 +57,6 @@ public static class EchoEncryptedHandlers
     {
         using PacketScope<EchoResponsePacket> lease = PacketFactory<EchoResponsePacket>.Acquire();
         lease.Value.Data = context.Packet.Data;
-        await context.Sender.SendAsync(lease.Value, forceEncrypt: true).ConfigureAwait(false);
+        await context.Sender.ReplyAsync(lease.Value).ConfigureAwait(false);
     }
 }
