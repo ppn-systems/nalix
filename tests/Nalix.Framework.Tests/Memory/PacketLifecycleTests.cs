@@ -59,8 +59,13 @@ public sealed class PacketLifecycleTests : IDisposable
         Assert.Equal(0L, (long)_manager.GetTypeInfo<Control>()["Outstanding"]);
         Assert.Equal(1L, (long)_manager.GetTypeInfo<Control>()["TotalReturns"]);
 
-        // Second disposal should be a no-op
+        // A second disposal never returns the packet again. Release builds ignore it; Debug builds report it, because
+        // a stale second owner could otherwise put a packet that another thread has rented back into the pool.
+#if DEBUG
+        Assert.Throws<InvalidOperationException>(packet.Dispose);
+#else
         packet.Dispose();
+#endif
         Assert.Equal(0L, (long)_manager.GetTypeInfo<Control>()["Outstanding"]);
         Assert.Equal(1L, (long)_manager.GetTypeInfo<Control>()["TotalReturns"]); // Should NOT be 2
     }
