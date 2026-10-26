@@ -168,7 +168,7 @@ public sealed partial class Connection :
         get
         {
             ConnectionBacking backing = Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(Connection));
-            return backing.Attributes ??= ObjectMap<AttributeKey, object>.Rent();
+            return ConnectionAttributeMaps.GetOrCreate(ref backing.Attributes);
         }
     }
 

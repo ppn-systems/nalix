@@ -5,6 +5,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
@@ -30,9 +31,7 @@ public static partial class ConnectionExtensions
             return state;
         }
 
-        RuntimeConnectionState newState = new();
-        connection.Attributes[ConnectionAttributes.RuntimeState] = newState;
-        return newState;
+        return GetOrAddState(connection, ConnectionAttributes.RuntimeState, new RuntimeConnectionState());
     }
 
     /// <summary>
@@ -45,9 +44,37 @@ public static partial class ConnectionExtensions
             return state;
         }
 
-        ConnectionSequenceState newState = new();
-        connection.Attributes[ConnectionAttributes.SequenceState] = newState;
-        return newState;
+        return GetOrAddState(connection, ConnectionAttributes.SequenceState, new ConnectionSequenceState());
+    }
+
+    // Adds the state only when the key is still free: two threads that both missed it above share the first one stored,
+    // so neither loses what the other wrote into it (for example the handshake slot).
+    private static T GetOrAddState<T>(IConnection connection, AttributeKey key, T candidate)
+        where T : class
+    {
+        while (true)
+        {
+            if (connection.Attributes.TryGetValue(key, out object? existing))
+            {
+                if (existing is T typed)
+                {
+                    return typed;
+                }
+
+                connection.Attributes[key] = candidate;
+                return candidate;
+            }
+
+            try
+            {
+                connection.Attributes.Add(key, candidate);
+                return candidate;
+            }
+            catch (ArgumentException)
+            {
+                // Another thread stored the state first; read it on the next pass.
+            }
+        }
     }
 
     /// <summary>

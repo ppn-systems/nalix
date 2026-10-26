@@ -144,7 +144,7 @@ public sealed class WebSocketConnection :
         get
         {
             ConnectionBacking backing = Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(WebSocketConnection));
-            return backing.Attributes ??= ObjectMap<AttributeKey, object>.Rent();
+            return ConnectionAttributeMaps.GetOrCreate(ref backing.Attributes);
         }
     }
 
