@@ -19,6 +19,7 @@ using Nalix.Environment.Time;
 using Nalix.Framework.Identifiers;
 using Nalix.Framework.Injection;
 using Nalix.Framework.Memory.Objects;
+using Nalix.Network.Internal.Connections;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
 using Nalix.Network.Options;
@@ -217,7 +218,7 @@ public sealed class PassthroughConnection :
     public INetworkEndpoint NetworkEndpoint { get; }
 
     /// <inheritdoc />
-    public IObjectMap<AttributeKey, object> Attributes => _attributes ??= ObjectMap<AttributeKey, object>.Rent();
+    public IObjectMap<AttributeKey, object> Attributes => ConnectionAttributeMaps.GetOrCreate(ref _attributes);
 
     /// <inheritdoc />
     public ConcurrentDictionary<ushort, object> RateLimitCache { get; } = new();
