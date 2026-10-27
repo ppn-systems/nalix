@@ -22,6 +22,16 @@ internal sealed class BufferWriter : IBufferWriter<byte>, IDisposable
     public BufferWriter(int initialCapacity) => _buffer = BufferLease.ByteArrayPool.Rent(initialCapacity <= 0 ? 256 : initialCapacity);
 
     /// <summary>
+    /// Gets the bytes written so far.
+    /// </summary>
+    public ReadOnlySpan<byte> WrittenSpan => _buffer.AsSpan(0, _index);
+
+    /// <summary>
+    /// Discards the written bytes while keeping the rented buffer for reuse.
+    /// </summary>
+    public void Clear() => _index = 0;
+
+    /// <summary>
     /// Advances the current index by the specified count.
     /// </summary>
     /// <param name="count">The number of bytes written.</param>

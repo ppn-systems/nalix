@@ -15,14 +15,15 @@ namespace Nalix.Observability.Contracts;
 /// Represents a packet used to request and return runtime observation data.
 /// </summary>
 /// <remarks>
-/// A request identifies a <see cref="RuntimeObservationTarget"/>. A response carries serialized
-/// observation data for that target, or a <see cref="ProtocolReason"/> when the request cannot be served.
+/// A request selects one or more <see cref="RuntimeObservationTargets"/>. A response echoes the targets it
+/// actually wrote and carries a single UTF-8 JSON object keyed by <see cref="RuntimeObservationSections"/>,
+/// or a <see cref="ProtocolReason"/> when the request cannot be served.
 /// </remarks>
 [Packet]
 [ExcludeFromCodeCoverage]
 [GenerateFormatterAttribute]
 [SerializePackable(SerializeLayout.Explicit)]
-[DebuggerDisplay("RUNTIME_OBSERVATION Stage={Stage}, Target={Target}, Reason={Reason}")]
+[DebuggerDisplay("RUNTIME_OBSERVATION Stage={Stage}, Targets={Targets}, Reason={Reason}")]
 public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>, IPacketValidatable, IPacketStaticOpcode
 {
     /// <inheritdoc/>
@@ -35,10 +36,10 @@ public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>,
     public RuntimeObservationStage Stage { get; set; }
 
     /// <summary>
-    /// Gets or sets the runtime subsystem targeted by the observation request.
+    /// Gets or sets the requested subsystems, or on a response the subsystems present in the payload.
     /// </summary>
     [SerializeOrder(1)]
-    public RuntimeObservationTarget Target { get; set; }
+    public RuntimeObservationTargets Targets { get; set; }
 
     /// <summary>
     /// Gets or sets the protocol reason returned by the responder.
@@ -47,13 +48,24 @@ public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>,
     public ProtocolReason Reason { get; set; }
 
     /// <summary>
-    /// Gets or sets the serialized observation payload returned by a response.
+    /// Gets or sets the server wall-clock time, in Unix milliseconds, at which the payload was sampled.
     /// </summary>
     [SerializeOrder(3)]
+    public long SampledAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the UTF-8 JSON observation payload returned by a response.
+    /// </summary>
+    [SerializeOrder(4)]
     public ReadOnlyMemory<byte> ObservationData { get; set; } = ReadOnlyMemory<byte>.Empty;
 
     [SerializeIgnore]
     private BufferLease? _lease;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RuntimeObservation"/> class.
+    /// </summary>
+    public RuntimeObservation() => this.ResetForPool();
 
     /// <summary>
     /// Associates a rented buffer lease with the packet and transfers ownership to the packet.
@@ -71,32 +83,27 @@ public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>,
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RuntimeObservation"/> class.
-    /// </summary>
-    public RuntimeObservation() => this.ResetForPool();
-
-    /// <summary>
     /// Initializes the packet fields for a runtime observation exchange.
     /// </summary>
     /// <param name="stage">The observation lifecycle stage represented by the packet.</param>
-    /// <param name="target">The runtime subsystem targeted by the packet.</param>
+    /// <param name="targets">The subsystems requested, or written by a response.</param>
     /// <param name="reason">The protocol reason for a response, or <see cref="ProtocolReason.NONE"/> for a request.</param>
-    /// <param name="ObservationData">The serialized observation data supplied by a response.</param>
-    /// <param name="flags">The packet flags to apply.</param>
+    /// <param name="sampledAt">The server sampling time in Unix milliseconds; zero for a request.</param>
+    /// <param name="observationData">The JSON observation payload supplied by a response.</param>
     public void Initialize(
         RuntimeObservationStage stage,
-        RuntimeObservationTarget target,
+        RuntimeObservationTargets targets,
         ProtocolReason reason = ProtocolReason.NONE,
-        ReadOnlyMemory<byte> ObservationData = default,
-        PacketFlags flags = PacketFlags.SYSTEM)
+        long sampledAt = 0,
+        ReadOnlyMemory<byte> observationData = default)
     {
-
         this.Priority = PacketPriority.HIGH;
-        this.Flags = flags;
+        this.Flags = PacketFlags.SYSTEM;
         this.Stage = stage;
-        this.Target = target;
+        this.Targets = targets;
         this.Reason = reason;
-        this.ObservationData = ObservationData;
+        this.SampledAt = sampledAt;
+        this.ObservationData = observationData;
     }
 
     /// <summary>
@@ -109,8 +116,9 @@ public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>,
         this.Priority = PacketPriority.HIGH;
         this.Flags = PacketFlags.SYSTEM;
         this.Stage = RuntimeObservationStage.NONE;
-        this.Target = RuntimeObservationTarget.NONE;
+        this.Targets = RuntimeObservationTargets.NONE;
         this.Reason = ProtocolReason.NONE;
+        this.SampledAt = 0;
         this.ObservationData = ReadOnlyMemory<byte>.Empty;
         _lease?.Dispose();
         _lease = null;
@@ -125,14 +133,12 @@ public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>,
     {
         bool isValid = this.Stage switch
         {
-            RuntimeObservationStage.REQUEST => this.Target != RuntimeObservationTarget.NONE,
-            RuntimeObservationStage.RESPONSE => this.Target != RuntimeObservationTarget.NONE &&
-                                               (this.Reason != ProtocolReason.NONE || !this.ObservationData.IsEmpty),
+            RuntimeObservationStage.REQUEST => this.Targets != RuntimeObservationTargets.NONE,
+            RuntimeObservationStage.RESPONSE => this.Reason != ProtocolReason.NONE || !this.ObservationData.IsEmpty,
             RuntimeObservationStage.NONE or _ => false
         };
 
-        failureReason = isValid ? null : $"Invalid fields provided for runtime observation stage {this.Stage}.";
+        failureReason = isValid ? null : "Invalid fields provided for runtime observation stage.";
         return isValid;
     }
 }
-
