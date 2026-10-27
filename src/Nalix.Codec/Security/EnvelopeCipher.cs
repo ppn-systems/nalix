@@ -329,6 +329,13 @@ public static class EnvelopeCipher
             return false;
         }
 
+        // The nonce length is attacker-controlled; the primitives throw on a wrong size, so reject it here.
+        if (env.AeadType != CipherSuiteType.None && env.NonceLen != GetNonceLength(env.AeadType))
+        {
+            error = CipherError.InvalidNonceLength;
+            return false;
+        }
+
         switch (env.AeadType)
         {
             case CipherSuiteType.Salsa20:
