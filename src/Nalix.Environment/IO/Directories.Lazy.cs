@@ -154,6 +154,22 @@ public static partial class Directories
         }
     }
 
+    /// <summary>
+    /// Resolves the temporary directory. The shared system temp root (for example <c>/tmp</c> inside a container) is
+    /// never used directly: the directory is hardened to private permissions and purged of old files, which must
+    /// only ever happen to a directory owned by Nalix, so a <c>nalix</c> subdirectory is used instead.
+    /// </summary>
+    private static string RESOLVE_TEMP_PATH()
+    {
+        string path = RESOLVE_OR_ENV("NALIX_TEMP_PATH", "/tmp", Path.Join("data", "tmp"));
+        string trimmed = Path.TrimEndingDirectorySeparator(path);
+
+        return string.Equals(trimmed, "/tmp", StringComparison.Ordinal) ||
+               string.Equals(trimmed, Path.TrimEndingDirectorySeparator(Path.GetTempPath()), StringComparison.Ordinal)
+            ? Path.Join(trimmed, "nalix")
+            : path;
+    }
+
     // ---------- Lazies for each directory ----------
 
     private static Lazy<string> DataPathLazy = new(() => ENSURE_AND_HARDEN(RESOLVE_OR_ENV("NALIX_DATA_PATH", "/data", "data")));
@@ -174,7 +190,7 @@ public static partial class Directories
 
     private static Lazy<string> TempPathLazy = new(() =>
     {
-        string path = RESOLVE_OR_ENV("NALIX_TEMP_PATH", "/tmp", Path.Join("data", "tmp"));
+        string path = RESOLVE_TEMP_PATH();
         _ = ENSURE_AND_HARDEN(path, UnixDirPerms.Private700);
 
         int days = 7;
@@ -243,7 +259,7 @@ public static partial class Directories
 
             TempPathLazy = new(() =>
             {
-                string path = RESOLVE_OR_ENV("NALIX_TEMP_PATH", "/tmp", Path.Join("data", "tmp"));
+                string path = RESOLVE_TEMP_PATH();
                 _ = ENSURE_AND_HARDEN(path, UnixDirPerms.Private700);
                 int days = 7;
                 string? envDaysStr = GET_ENV("NALIX_TEMP_RETENTION_DAYS");
