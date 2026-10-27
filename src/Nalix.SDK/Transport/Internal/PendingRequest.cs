@@ -245,10 +245,23 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     private void OnTimeout()
     {
         // Timer.Change(Infinite) cannot cancel a callback that is already queued, so this may run for a
-        // previous use of the pooled instance. The timer never fires before the deadline set at arming.
+        // previous use of the pooled instance (deadline not reached yet) or after the request settled
+        // (deadline cleared). A callback that fires early relative to our clock (timer granularity differs
+        // between platforms) must never lose the timeout, so re-arm for the remaining time instead of dropping it.
         long deadline = Volatile.Read(ref _deadline);
-        if (deadline == 0 || System.Environment.TickCount64 < deadline)
+        if (deadline == 0)
         {
+            return;
+        }
+
+        long remaining = deadline - System.Environment.TickCount64;
+        if (remaining > 0)
+        {
+            if (Volatile.Read(ref _completed) == 0)
+            {
+                _ = _timeoutTimer.Change(remaining, Timeout.Infinite);
+            }
+
             return;
         }
 

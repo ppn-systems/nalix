@@ -61,6 +61,27 @@ public sealed class PendingRequestTests
     }
 
     [Fact]
+    public async Task OnTimeout_WhenTimerFiresBeforeDeadline_StillTimesOutAtDeadline()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+
+        PendingRequest<Control> request = PendingRequest<Control>.Rent(session, _ => false);
+        request.Subscribe();
+        ValueTask<Control> task = request.WaitAsync(300, CancellationToken.None);
+
+        // Simulate a timer that fires early relative to our clock (coarse timer granularity).
+        typeof(PendingRequest<Control>).GetMethod("OnTimeout", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(request, null);
+
+        Assert.False(task.IsCompleted);
+
+        TimeoutException ex = await Assert.ThrowsAsync<TimeoutException>(async () => await task.AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Contains("within 300 ms", ex.Message, StringComparison.Ordinal);
+        request.Return(wasAwaited: true);
+    }
+
+    [Fact]
     public async Task OnTimeout_WhenTimerFiresAfterReturnAndRerent_DoesNotTimeOutNewRequest()
     {
         using RaisableFakeSession session = new();
