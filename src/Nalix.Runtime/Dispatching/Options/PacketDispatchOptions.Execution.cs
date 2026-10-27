@@ -378,10 +378,9 @@ public sealed partial class PacketDispatchOptions<TPacket>
         PacketContext<TPacket> context, ValueTask<object?> pending, CancellationToken token)
     {
         // Fast path: if the handler already completed, avoid an allocation and return the result directly.
-        token.ThrowIfCancellationRequested();
-
         if (pending.IsCompletedSuccessfully)
         {
+            token.ThrowIfCancellationRequested();
             return pending.Result;
         }
 
@@ -390,9 +389,10 @@ public sealed partial class PacketDispatchOptions<TPacket>
             return await pending.ConfigureAwait(false);
         }
 
-        // Slow path: keep a handle on the real handler. When the token fires first (timeout / shutdown) the
-        // dispatch pipeline stops waiting, but the handler body is still running and still reads this context;
-        // ExecuteResolvedHandlerAsync waits on PendingHandler before the context and packet lease are recycled.
+        // Slow path: keep a handle on the real handler BEFORE honoring cancellation. When the token fires first
+        // (timeout / shutdown) the dispatch pipeline stops waiting, but the handler body is still running and
+        // still reads this context; ExecuteResolvedHandlerAsync waits on PendingHandler before the context and
+        // packet lease are recycled. WaitAsync throws immediately if the token is already cancelled.
         Task<object?> handlerTask = pending.AsTask();
         context.PendingHandler = handlerTask;
 
