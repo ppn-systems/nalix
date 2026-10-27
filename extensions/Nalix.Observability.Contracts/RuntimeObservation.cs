@@ -134,7 +134,8 @@ public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>,
         bool isValid = this.Stage switch
         {
             RuntimeObservationStage.REQUEST => this.Targets != RuntimeObservationTargets.NONE,
-            RuntimeObservationStage.RESPONSE => this.Reason != ProtocolReason.NONE || !this.ObservationData.IsEmpty,
+            RuntimeObservationStage.HISTORY_REQUEST => !this.ObservationData.IsEmpty,
+            RuntimeObservationStage.RESPONSE or RuntimeObservationStage.HISTORY_RESPONSE => this.Reason != ProtocolReason.NONE || !this.ObservationData.IsEmpty,
             RuntimeObservationStage.NONE or _ => false
         };
 
