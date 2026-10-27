@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using Nalix.Hosting;
+using Nalix.Observability.Internal.History;
 
 namespace Nalix.Observability;
 
@@ -11,7 +12,7 @@ namespace Nalix.Observability;
 public static class ObservabilityApplicationBuilderExtensions
 {
     /// <summary>
-    /// Registers the observability access and runtime observation handlers.
+    /// Registers the observability handlers with default options (history recording on).
     /// </summary>
     /// <param name="builder">The application builder.</param>
     /// <param name="privateKeyPath">
@@ -19,10 +20,28 @@ public static class ObservabilityApplicationBuilderExtensions
     /// </param>
     /// <returns>The builder instance for chaining.</returns>
     public static INetworkApplicationBuilder UseObservability(this INetworkApplicationBuilder builder, string? privateKeyPath = null)
+        => builder.UseObservability(options => options.PrivateKeyPath = privateKeyPath);
+
+    /// <summary>
+    /// Registers the observability handlers and, unless disabled, starts recording metric history to disk.
+    /// </summary>
+    /// <param name="builder">The application builder.</param>
+    /// <param name="configure">Configures key location and history recording.</param>
+    /// <returns>The builder instance for chaining.</returns>
+    public static INetworkApplicationBuilder UseObservability(this INetworkApplicationBuilder builder, Action<ObservabilityOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
 
-        ObservabilityKey.Load(privateKeyPath ?? ObservabilityKey.DefaultPath);
+        ObservabilityOptions options = new();
+        configure(options);
+
+        ObservabilityKey.Load(options.PrivateKeyPath ?? ObservabilityKey.DefaultPath);
+
+        if (options.HistoryEnabled)
+        {
+            HistoryRecorder.Start(options);
+        }
 
         _ = builder.MapHandlers<ObservabilityAccessHandlers>();
         _ = builder.MapHandlers<RuntimeObservationHandlers>();
