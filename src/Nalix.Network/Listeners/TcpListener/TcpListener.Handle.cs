@@ -156,17 +156,15 @@ public abstract partial class TcpListenerBase
         {
             // Order of importance:
             // 1. Configure socket OPTIONS first (it may throw if the socket is invalid).
-            // 2. Return the context to the pool (only after step 1 is successful).
-            // 3. Create a connection wrapper and subscribe events.
+            // 2. Create a connection wrapper and subscribe events.
+            // 3. Return the context to the pool (only once everything above has succeeded).
             //
             // WHY doesn't try/finally be used to return the context?
-            // If InitializeOptions throw -> caller (ProcessAcceptedSocket/CreateConnectionAsync)
-            // It still holds the reference socket and will close it itself in its catch block.
-            // If the return context is here when throw -> caller doesn't know the context has been returned ->
-            // double-return bug: context returned twice -> pool corrupted.
+            // On every failure path (null result or throw) the caller (ProcessAcceptedSocket/CreateConnectionAsync/
+            // accept callback) still owns the context and returns it itself. Returning it here as well
+            // put the same instance in the pool twice, so two accept workers shared one SAEA.
             if (!this.InitializeOptions(socket))
             {
-                _pool.Return(context);
                 try
                 {
                     if (socket.RemoteEndPoint is IPEndPoint ip)
@@ -180,10 +178,6 @@ public abstract partial class TcpListenerBase
                 this.Metrics.RECORD_ERROR();
                 return null;
             }
-
-            // Context only needs to return immediately during the accept — phase after the socket has been claimed.
-            // This pool slot will be reused for the next accept without waiting.
-            _pool.Return(context);
 
             connection = new(socket, _protocol.OpCodeExtractor, _timing);
 
@@ -210,6 +204,10 @@ public abstract partial class TcpListenerBase
                 // - TimingWheel: O(1) tick, shared wheel for all connections -> much more efficient.
                 _timing.Register(connection);
             }
+
+            // Ownership of the context ends here: the socket has been claimed and the slot can be reused.
+            // Any earlier failure leaves the context with the caller.
+            _pool.Return(context);
 
             return connection;
         }
