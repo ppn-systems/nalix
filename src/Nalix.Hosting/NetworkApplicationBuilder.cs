@@ -101,6 +101,8 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
         InstanceManager.Instance.Register<ILogger>(logger);
         _state.Logger = logger;
 
+        // A previous UseLogger call left a subscribed channel behind; drop it so each event is logged once.
+        Bootstrap.DiagnosticChannel?.Dispose();
         Bootstrap.DiagnosticChannel = new DiagnosticChannel(logger);
         Bootstrap.DiagnosticChannel.Subscribe();
 
