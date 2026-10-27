@@ -60,7 +60,7 @@ public static class ResumeExtensions
 
         try
         {
-            SessionResume response = await PacketAwaiter.AwaitAsync<SessionResume>(
+            using SessionResume response = await PacketAwaiter.AwaitAsync<SessionResume>(
                 session,
                 predicate: packet => packet.Stage == SessionResumeStage.RESPONSE,
                 timeoutMs: session.Options.ResumeTimeoutMillis,
