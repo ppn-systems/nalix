@@ -270,7 +270,18 @@ public partial class TaskManager
             worker.MarkScheduled(); // Mark even for fast-start so wait time is 0
         }
 
-        this.START_WORKER_EXECUTION(worker);
+        try
+        {
+            this.START_WORKER_EXECUTION(worker);
+        }
+        catch
+        {
+            // Start failed before the worker body owned the global permit: return it and drop the worker.
+            this.RELEASE_GLOBAL_GATE();
+            _ = _workers.TryRemove(worker.Id, out _);
+            throw;
+        }
+
         return true;
     }
 
@@ -839,9 +850,9 @@ public partial class TaskManager
 
         // Cap the exponential growth so a broken recurring job does not disappear forever.
         int pow = Math.Min(_options.BackoffMaxPower, s.ConsecutiveFailures - n);
-        int baseMs = (int)_options.BackoffBaseInterval.TotalMilliseconds << pow;
-        int cap = (int)Math.Max(1, s.Options.BackoffCap.TotalMilliseconds);
-        int maxDelay = Math.Min(baseMs, cap);
+        long baseMs = (long)_options.BackoffBaseInterval.TotalMilliseconds << pow;
+        int cap = (int)Math.Clamp(s.Options.BackoffCap.TotalMilliseconds, 1, int.MaxValue - 1);
+        int maxDelay = (int)Math.Min(baseMs, cap);
 
         // Full jitter avoids synchronized retries when many jobs fail at the same time.
         // Each retry gets a random delay inside the capped exponential window instead
@@ -879,8 +890,13 @@ public partial class TaskManager
             def = Volatile.Read(ref _concurrencyDeficiency);
         }
 
-        // No deficiency, return the permit to the global pool
-        _ = _globalConcurrencyGate.Release();
+        // No deficiency, return the permit to the global pool. The gate is disposed by Dispose()
+        // while workers may still be finishing, so a late release must be a no-op.
+        try
+        {
+            _ = _globalConcurrencyGate.Release();
+        }
+        catch (ObjectDisposedException) when (_disposed) { }
     }
 
 

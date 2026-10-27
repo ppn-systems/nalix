@@ -401,7 +401,7 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
 
                 if (metrics.LifetimeReservoir != null)
                 {
-                    int index = Interlocked.Increment(ref metrics.ReservoirIndex) % metrics.LifetimeReservoir.Length;
+                    int index = (int)((uint)Interlocked.Increment(ref metrics.ReservoirIndex) % (uint)metrics.LifetimeReservoir.Length);
                     metrics.LifetimeReservoir[index] = elapsedTicks;
                 }
             }
@@ -485,26 +485,13 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             return false;
         }
 
-        Type type = typeof(T);
-        if (_poolDict.TryGetValue(type, out ObjectPool? pool))
+        // GetOrCreatePool is race-safe (TryAdd) and records peak/metrics; the capacity is then applied
+        // to the per-type pool so 0 is honoured and a concurrently created pool is not overwritten.
+        ObjectPool pool = this.GetOrCreatePool<T>();
+        if (!pool.SetMaxCapacity<T>(maxCapacity))
         {
-            return pool.SetMaxCapacity<T>(maxCapacity);
+            return false;
         }
-
-        pool = new ObjectPool(maxCapacity, _threadCacheDepth);
-        _poolDict[type] = pool;
-
-        // Update peak pool count (use Interlocked to avoid races)
-        int currentCount = _poolDict.Count;
-        int observed;
-        do
-        {
-            observed = _peakPoolCount;
-            if (currentCount <= observed)
-            {
-                break;
-            }
-        } while (Interlocked.CompareExchange(ref _peakPoolCount, currentCount, observed) != observed);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Memory.PoolExpanded))
         {

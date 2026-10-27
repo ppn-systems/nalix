@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using Nalix.Framework.Memory.Objects;
+using Nalix.Framework.Options;
 
 namespace Nalix.Framework.Tests.Memory.Objects;
 
@@ -52,5 +53,22 @@ public sealed class ObjectMapTests
         Assert.True(removedByKey);
         Assert.True(removedByPair);
         Assert.Empty(map);
+    }
+
+    [Fact]
+    public void Return_WhenReturnedTwice_DoesNotHandOutSameInstanceTwice()
+    {
+        ObjectPoolManager manager = new(new ObjectPoolOptions { EnableObjectTrimming = false });
+        ObjectMap<int, int> map = manager.Get<ObjectMap<int, int>>();
+
+        manager.Return(map);
+        manager.Return(map);
+
+        // The first Get preallocates the pool, so drain well past it to reach the returned instance.
+        HashSet<object> seen = new(ReferenceEqualityComparer.Instance);
+        for (int i = 0; i < 1024; i++)
+        {
+            Assert.True(seen.Add(manager.Get<ObjectMap<int, int>>()), "The same pooled instance was handed out twice.");
+        }
     }
 }

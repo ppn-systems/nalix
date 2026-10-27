@@ -359,7 +359,7 @@ public sealed partial class TaskManager : ITaskManager, IDisposable
         options ??= new RecurringOptions();
 #pragma warning disable CA2000 // Ownership is transferred to RecurringState and disposed after its loop stops.
         CancellationTokenSource cts = new();
-        RecurringState st = new(name, interval, options, cts);
+        RecurringState st = new(name, interval, options, cts) { Owner = this };
 #pragma warning restore CA2000
 
         if (!_recurring.TryAdd(name, st))

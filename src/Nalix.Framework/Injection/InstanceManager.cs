@@ -299,6 +299,12 @@ public sealed partial class InstanceManager : SingletonBase<InstanceManager>, IR
                 return Unsafe.As<T>(existing);
             }
 
+            // Cached instances stay readable after Lockdown, but creating new ones is not permitted.
+            if (Interlocked.CompareExchange(ref _isLocked, 0, 0) != 0)
+            {
+                throw new InvalidOperationException("InstanceManager is locked. Dynamic instance creation is not permitted.");
+            }
+
             _ = Interlocked.Increment(ref _instanceCreationCount);
             return Unsafe.As<T>(this.GET_OR_CREATE_INSTANCE_SLOW(typeof(T), args));
         }
@@ -469,6 +475,10 @@ public sealed partial class InstanceManager : SingletonBase<InstanceManager>, IR
                     }
                 }
             }
+
+            // Invalidate L1 thread-static slots after the cache entries are gone so readers cannot
+            // keep serving the removed instance (mirrors Register/ClearInternal).
+            _ = Interlocked.Increment(ref s_slotsInvalidated);
         } // _mutationLock
 
         if (!removedAny)

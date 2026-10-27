@@ -39,7 +39,7 @@ namespace Nalix.Framework.Memory.Objects;
 /// </item>
 /// </list>
 /// </remarks>
-public sealed class ObjectMap<TKey, TValue> : IObjectMap<TKey, TValue>
+public sealed class ObjectMap<TKey, TValue> : IObjectMap<TKey, TValue>, IPoolStateTracked
 #if NET7_0_OR_GREATER
     where TKey : notnull
 #else
@@ -57,6 +57,11 @@ public sealed class ObjectMap<TKey, TValue> : IObjectMap<TKey, TValue>
     /// The underlying thread-safe dictionary.
     /// </summary>
     private readonly ConcurrentDictionary<TKey, TValue> _dict = new(1, 8);
+
+    /// <summary>
+    /// Pool ownership marker (0 = rented, 1 = stored in a pool) used by the pool to reject duplicate returns.
+    /// </summary>
+    private int _poolState;
 
     #endregion Fields
 
@@ -183,6 +188,9 @@ public sealed class ObjectMap<TKey, TValue> : IObjectMap<TKey, TValue>
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ResetForPool() => _dict.Clear();
+
+    /// <inheritdoc/>
+    ref int IPoolStateTracked.PoolState => ref _poolState;
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

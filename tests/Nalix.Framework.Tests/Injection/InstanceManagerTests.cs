@@ -225,6 +225,34 @@ public sealed class InstanceManagerTests : IDisposable
         Assert.Null(instance.S);
     }
 
+    [Fact]
+    public void RemoveInstance_WhenInterfaceSlotWasReadOnSameThread_InvalidatesInterfaceSlot()
+    {
+        TestService service = new("svc-removed");
+
+        _manager.Register(service);
+        Assert.Same(service, _manager.GetExistingInstance<ITestService>());
+
+        _ = _manager.RemoveInstance(typeof(TestService));
+
+        Assert.Null(_manager.GetExistingInstance<ITestService>());
+    }
+
+    [Fact]
+    public void GetOrCreateInstance_WhenLockedAndTypeNotCached_Throws()
+    {
+        _manager.Lockdown();
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => _manager.GetOrCreateInstance<LockdownProbe>());
+
+        Assert.Contains("locked", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(_manager.HasInstance<LockdownProbe>());
+    }
+
+    private sealed class LockdownProbe
+    {
+    }
+
     private sealed class DisposableCounter : IDisposable
     {
         private int _disposed;
