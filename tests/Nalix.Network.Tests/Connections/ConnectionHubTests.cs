@@ -1,7 +1,9 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -148,6 +150,32 @@ public sealed class ConnectionHubTests
 
         reclaimed.Should().BeTrue("Session secret should be zeroed after store failure.");
         attempted.Snapshot.Attributes.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RegisterConnection_WhenTransportCloseDispatchIsInFlight_DoesNotLeaveClosedConnectionRegistered()
+    {
+        using ConnectionHub hub = new();
+        using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
+        using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
+
+        using ManualResetEventSlim handlerEntered = new(false);
+        using ManualResetEventSlim releaseHandler = new(false);
+        connection.ConnectionClosed += (_, _) =>
+        {
+            handlerEntered.Set();
+            releaseHandler.Wait(TimeSpan.FromSeconds(10));
+        };
+
+        connection.OnTransportClosed();
+        handlerEntered.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+
+        // The close snapshot of the handler list is already taken: the hub's own handler can no longer fire.
+        hub.RegisterConnection(connection);
+        releaseHandler.Set();
+
+        SpinWait.SpinUntil(() => connection.IsDisposed, TimeSpan.FromSeconds(10)).Should().BeTrue();
+        hub.Count.Should().Be(0, "a connection that finished closing must not stay registered forever");
     }
 
     private sealed class ConnectedSocketScope : IDisposable

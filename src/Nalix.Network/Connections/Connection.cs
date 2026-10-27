@@ -138,6 +138,19 @@ public sealed partial class Connection :
     /// <inheritdoc/>
     public bool IsDisposed => _disposed || Volatile.Read(ref _backing) is null;
 
+    /// <summary>
+    /// Gets a value indicating whether the close of this connection has been signaled, i.e. the
+    /// <see cref="ConnectionClosed"/> invocation list has been (or is about to be) snapshotted.
+    /// </summary>
+    internal bool IsCloseSignaled
+    {
+        get
+        {
+            ConnectionBacking? backing = Volatile.Read(ref _backing);
+            return backing is null || Volatile.Read(ref backing.CloseSignaled) != 0;
+        }
+    }
+
     /// <inheritdoc/>
     public bool IsUdpCreated => this.UdpTransport is not null;
 
