@@ -128,7 +128,6 @@ public sealed class IniConfig : IDisposable
         }
 
         // Use case-insensitive keys for sections
-        _path = path;
         _iniData = new(StringComparer.Ordinal);
         _valueCache = new(StringComparer.Ordinal);
         _comments = new(StringComparer.Ordinal);
