@@ -455,8 +455,8 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             return false;
         }
 
-        ConnectionState state = this.GetOrCreateState(connection);
-        if (!state.IsActive)
+        ConnectionState? state = this.GetOrCreateState(connection);
+        if (state is null || !state.IsActive)
         {
             return false;
         }
@@ -700,7 +700,7 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ConnectionState GetOrCreateState(IConnection connection)
+    private ConnectionState? GetOrCreateState(IConnection connection)
     {
         int index = RuntimeHelpers.GetHashCode(connection) & _stateMask;
 
@@ -718,11 +718,12 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
                 continue;
             }
 
-            if (Volatile.Read(ref node.Removed) != 0 &&
-                Interlocked.CompareExchange(ref node.Removed, 0, 1) == 1)
+            if (Volatile.Read(ref node.Removed) != 0)
             {
-                existingState.Reactivate();
-                _ = Interlocked.Increment(ref _activeConnections);
+                // RemoveConnection is tearing this node down (it flips Removed, deactivates and clears the
+                // node as one step under the mutation lock). Never resurrect it here; fall through to the
+                // locked slow path, which sees either the untouched node or the finished tombstone.
+                break;
             }
 
             return existingState;
@@ -735,23 +736,24 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private ConnectionState CreateOrReuseState(IConnection connection, int index)
+    private ConnectionState? CreateOrReuseState(IConnection connection, int index)
     {
         lock (_stateMutationLock)
         {
+            // A connection is disposed before the hub raises ConnectionUnregistered, so once RemoveConnection
+            // has finished (it holds this lock) a push that is still in flight lands here with a disposed
+            // connection. Creating state for it would orphan a node nobody will ever remove.
+            if (connection.IsDisposed)
+            {
+                return null;
+            }
+
             Node? tombstone = null;
             for (Node? node = _stateBuckets[index]; node is not null; node = node.Next)
             {
                 // Another thread may have created a live node for this connection meanwhile.
                 if (ReferenceEquals(node.Connection, connection) && node.State is ConnectionState live)
                 {
-                    if (Volatile.Read(ref node.Removed) != 0 &&
-                        Interlocked.CompareExchange(ref node.Removed, 0, 1) == 1)
-                    {
-                        live.Reactivate();
-                        _ = Interlocked.Increment(ref _activeConnections);
-                    }
-
                     return live;
                 }
 
@@ -815,25 +817,40 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
             return;
         }
 
-        if (!this.TryFindNode(connection, out Node? node) || node is null)
-        {
-            return;
-        }
+        ConnectionState? state;
 
-        if (Interlocked.Exchange(ref node.Removed, 1) != 0)
+        // Flip Removed, deactivate and clear the node as ONE step under the mutation lock so no concurrent
+        // push can observe (or revive) a half-removed node. Break the tombstone node's strong references to
+        // the closed connection graph so it retains no ConnectionState, Connection, SocketConnection, or
+        // Socket, and can be recycled in place by CreateOrReuseState. Clear Connection first (stops new
+        // readers matching), then State — the mirror of the publish order on reuse.
+        lock (_stateMutationLock)
         {
-            return;
-        }
+            if (!this.TryFindNode(connection, out Node? node) || node is null)
+            {
+                return;
+            }
 
-        ConnectionState? state = node.State;
-        if (state is null || !state.TryDeactivate())
-        {
-            return;
+            if (Interlocked.Exchange(ref node.Removed, 1) != 0)
+            {
+                return;
+            }
+
+            state = node.State;
+            bool deactivated = state is not null && state.TryDeactivate();
+
+            node.Connection = null;
+            node.State = null;
+
+            if (!deactivated)
+            {
+                return;
+            }
         }
 
         DecrementNonNegative(ref _activeConnections);
 
-        if (state.TryReleaseReady())
+        if (state!.TryReleaseReady())
         {
             DecrementNonNegative(ref _readyConnections);
         }
@@ -842,16 +859,6 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
         if (drained > 0)
         {
             DecrementNonNegative(ref _packetCount.Value, drained);
-        }
-
-        // Break the tombstone node's strong references to the closed connection graph so it
-        // retains no ConnectionState, Connection, SocketConnection, or Socket. Serialize with
-        // CreateOrReuseState so this node can later be recycled in place. Clear Connection first
-        // (stops new readers matching), then State — the mirror of the publish order on reuse.
-        lock (_stateMutationLock)
-        {
-            node.Connection = null;
-            node.State = null;
         }
     }
 
@@ -1237,9 +1244,6 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
         #endregion Properties
 
         #region APIs
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-        public void Reactivate() => _ = Interlocked.Exchange(ref _activeFlag, 1);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public bool TryDeactivate() => Interlocked.Exchange(ref _activeFlag, 0) == 1;

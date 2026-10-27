@@ -56,9 +56,8 @@ public sealed class PacketDispatchChannel
     private int _wakeCursor;
 
     private int _running;
-    private int _activeLoops;
+    private LoopGeneration _loops = new();
     private int _dispatchLoops;
-    private long _idleWorkers;
     private long _deserializationErrors;
     private long _totalDropped;
 
@@ -117,11 +116,13 @@ public sealed class PacketDispatchChannel
             linkedToken = _cts.Token;
         }
 
-        _ = Interlocked.Exchange(ref _idleWorkers, 0);
         _ = Interlocked.Exchange(ref _wakeSignals, 0);
         _ = Interlocked.Exchange(ref _wakeReadSignals, 0);
 
-        Volatile.Write(ref _activeLoops, 0);
+        // Each activation counts its own workers. Workers of a previous activation exit asynchronously after
+        // Deactivate(); if they shared one counter they could drive it to zero and switch the new activation off.
+        LoopGeneration generation = new();
+        Volatile.Write(ref _loops, generation);
 
         int[]? affinityCores = ParseProcessorAffinities(this.Options.Drain.DispatchProcessorAffinities);
 
@@ -151,7 +152,7 @@ public sealed class PacketDispatchChannel
 
         for (int i = 0; i < _dispatchLoops; i++)
         {
-            _ = Interlocked.Increment(ref _activeLoops);
+            _ = Interlocked.Increment(ref generation.Active);
 
             int loopIndex = i;
             _workerHandle[i] = InstanceManager.Instance.GetOrCreateInstance<TaskManager>().ScheduleWorker(
@@ -164,7 +165,7 @@ public sealed class PacketDispatchChannel
                     // allow .NET's thread pool to optimize the execution of the async state machine.
                     // NOTE: If DispatchProcessorAffinities is configured, this worker will be 
                     // upgraded to a dedicated OS thread for core pinning.
-                    await this.DispatchWorkerLoopAsync(ctx, ct, loopIndex).ConfigureAwait(false);
+                    await this.DispatchWorkerLoopAsync(ctx, ct, loopIndex, generation).ConfigureAwait(false);
                 },
                 options: new WorkerOptions
                 {
@@ -320,7 +321,7 @@ public sealed class PacketDispatchChannel
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"DispatchLoops        : {_dispatchLoops}");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"WakeSignals          : {Interlocked.Read(ref _wakeSignals)}");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"WakeReads            : {Interlocked.Read(ref _wakeReadSignals)}");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"IdleWorkers          : {Volatile.Read(ref _idleWorkers)}");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"IdleWorkers          : {this.IdleWorkers}");
         _ = sb.AppendLine();
 
         _ = sb.AppendLine("---------------------------------------------------------------------");
@@ -385,7 +386,7 @@ public sealed class PacketDispatchChannel
         writer.WriteNumber("ReadyConnections", _dispatch.ReadyConnections);
         writer.WriteNumber("WakeSignals", Interlocked.Read(ref _wakeSignals));
         writer.WriteNumber("WakeReads", Interlocked.Read(ref _wakeReadSignals));
-        writer.WriteNumber("IdleWorkers", Volatile.Read(ref _idleWorkers));
+        writer.WriteNumber("IdleWorkers", this.IdleWorkers);
         writer.WriteString("PacketRegistryType", nameof(PacketRegistry));
 
         Span<int> priorities = stackalloc int[(int)PacketPriority.URGENT + 1];
@@ -462,7 +463,7 @@ public sealed class PacketDispatchChannel
 
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
-    private async ValueTask DispatchWorkerLoopAsync(IWorkerContext ctx, CancellationToken ct, int index)
+    private async ValueTask DispatchWorkerLoopAsync(IWorkerContext ctx, CancellationToken ct, int index, LoopGeneration generation)
     {
         // WORK-STEALING / ACTOR-MAILBOX LOOP.
         // Each worker claims an entire connection's mailbox (session),
@@ -546,7 +547,7 @@ public sealed class PacketDispatchChannel
                 }
 
                 // Signal that this worker is about to go idle.
-                _ = Interlocked.Increment(ref _idleWorkers);
+                _ = Interlocked.Increment(ref generation.Idle);
 
                 try
                 {
@@ -593,7 +594,7 @@ public sealed class PacketDispatchChannel
                 finally
                 {
                     // Whether we were woken or found work, we are no longer idle.
-                    DecrementNonNegative(ref _idleWorkers);
+                    DecrementNonNegative(ref generation.Idle);
                 }
 
                 ctx.Beat();
@@ -613,7 +614,9 @@ public sealed class PacketDispatchChannel
         }
         finally
         {
-            if (Interlocked.Decrement(ref _activeLoops) == 0)
+            // Only the last worker of the CURRENT activation may mark the dispatcher as stopped.
+            if (Interlocked.Decrement(ref generation.Active) == 0 &&
+                ReferenceEquals(Volatile.Read(ref _loops), generation))
             {
                 Volatile.Write(ref _running, 0);
             }
@@ -760,8 +763,8 @@ public sealed class PacketDispatchChannel
     private void RequestWake()
     {
         // Fast exit when nobody is parked (the common case under sustained load).
-        // _idleWorkers is incremented (full fence) before a worker re-checks the ready queues.
-        if (Volatile.Read(ref _idleWorkers) <= 0)
+        // the generation Idle counter is incremented (full fence) before a worker re-checks the ready queues.
+        if (this.IdleWorkers <= 0)
         {
             return;
         }
@@ -822,4 +825,27 @@ public sealed class PacketDispatchChannel
     }
 
     #endregion IDisposable
+
+    #region Types
+
+    /// <summary>
+    /// Counts the live and the parked (idle) dispatch workers of a single <see cref="Activate"/> call. Both counters
+    /// are per activation because workers of a previous activation keep updating them while they wind down.
+    /// </summary>
+    private sealed class LoopGeneration
+    {
+        public int Active;
+        public long Idle;
+    }
+
+    private long IdleWorkers
+    {
+        get
+        {
+            LoopGeneration generation = Volatile.Read(ref _loops);
+            return Interlocked.Read(ref generation.Idle);
+        }
+    }
+
+    #endregion Types
 }

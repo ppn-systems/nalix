@@ -24,7 +24,7 @@ using Xunit;
 namespace Nalix.Runtime.Tests.Internal.Routing;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
-public sealed class DispatchChannelTests
+public sealed partial class DispatchChannelTests
 {
     #region Test Case 1: Strict In-Order Delivery
 
@@ -734,7 +734,7 @@ public sealed class DispatchChannelTests
 
     private sealed class FakeConnection : IConnection
     {
-        public bool IsDisposed => false;
+        public bool IsDisposed { get; set; }
         public bool IsUdpCreated => false;
         public ulong ConnectionId => 0;
         public string? UserId { get; set; }
