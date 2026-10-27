@@ -48,15 +48,20 @@ public sealed class SequenceCounter : ISequenceCounter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public uint Next()
     {
-        ulong state = Interlocked.Add(ref _packedState, 1UL << 32);
-        uint seq = (uint)(state >> 32);
-
-        if (seq == 0)
+        // CAS loop that refuses to advance past uint.MaxValue. A plain Interlocked.Add would carry out of
+        // the high word, wrapping the stored sequence to 0 so later calls would reissue 1, 2, ... (nonce reuse).
+        ulong state;
+        do
         {
-            throw new CipherException("Sequence counter overflow. Key rotation is required to prevent nonce reuse.");
+            state = Volatile.Read(ref _packedState);
+            if ((uint)(state >> 32) == uint.MaxValue)
+            {
+                throw new CipherException("Sequence counter overflow. Key rotation is required to prevent nonce reuse.");
+            }
         }
+        while (Interlocked.CompareExchange(ref _packedState, state + (1UL << 32), state) != state);
 
-        return seq;
+        return (uint)(state >> 32) + 1;
     }
 
     /// <summary>

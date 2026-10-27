@@ -25,6 +25,18 @@ public sealed class SequenceCounterAdversarialTests
         _ = Assert.Throws<CipherException>(() => counter.Next());
     }
 
+    [Fact]
+    public void Next_AfterOverflowThrew_KeepsThrowingInsteadOfReissuingSequences()
+    {
+        SequenceCounter counter = new(uint.MaxValue - 1);
+
+        _ = counter.Next();
+        _ = Assert.Throws<CipherException>(() => counter.Next());
+        _ = Assert.Throws<CipherException>(() => counter.Next());
+        _ = Assert.Throws<CipherException>(() => counter.Next());
+        Assert.Equal(uint.MaxValue, counter.Current());
+    }
+
     /// <summary>
     /// Regression test: <see cref="SequenceCounter.ResumeFrom"/> must never wrap when
     /// <c>lastKnownSeq + safetyGap</c> exceeds <see cref="uint.MaxValue"/>. A wrap would resume
