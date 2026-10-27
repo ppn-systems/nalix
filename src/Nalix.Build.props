@@ -8,8 +8,8 @@
 
 		<!-- Package metadata -->
 		<Product>Nalix® .NET</Product>
-		<Authors>PPN Corporation</Authors>
-		<Company>PPN Corporation</Company>
+		<Authors>PPN Systems</Authors>
+		<Company>PPN Systems</Company>
 		<RepositoryType>git</RepositoryType>
 		<NeutralLanguage>en-US</NeutralLanguage>
 	</PropertyGroup>
@@ -20,8 +20,8 @@
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 		<RepositoryUrl>https://github.com/ppn-systems/Nalix</RepositoryUrl>
 		<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-		<PackageProjectUrl>https://github.com/ppn-systems/Nalix</PackageProjectUrl>
-		<Copyright>Copyright (c) 2025-2026 PPN Corporation. All rights reserved.</Copyright>
+		<PackageProjectUrl>https://docs.ppnsys.com</PackageProjectUrl>
+		<Copyright>Copyright (c) 2025-2026 PPN Systems. All rights reserved.</Copyright>
 	</PropertyGroup>
 
 	<PropertyGroup Label="Assembly Properties">
