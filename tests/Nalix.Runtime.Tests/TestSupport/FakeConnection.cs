@@ -37,7 +37,7 @@ internal sealed class FakeConnection : IConnection
 
     public bool ExcludeFromIdleTimeout { get; set; }
 
-    public IOpCodeExtractor PacketClassifier { get; } = new SimpleOpCodeExtractor();
+    public IOpCodeExtractor PacketClassifier { get; set; } = new SimpleOpCodeExtractor();
 
     public INetworkEndpoint NetworkEndpoint { get; } = new FakeEndpoint();
 

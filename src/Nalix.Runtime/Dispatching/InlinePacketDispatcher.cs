@@ -32,6 +32,7 @@ public sealed class InlinePacketDispatcher
     : PacketDispatcherBase<IPacket>, IPacketDispatch, IActivatable
 {
     private static readonly Internal.Diagnostics.ThrottleKey s_keyExecute = new("dispatch.execute");
+    private static readonly Internal.Diagnostics.ThrottleKey s_keyExecutePrep = new("dispatch.execute_prep");
 
     private int _running;
     private long _deserializationErrors;
@@ -91,6 +92,29 @@ public sealed class InlinePacketDispatcher
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private ValueTask ExecutePacketAsync(IConnection connection, IBufferLease lease, CancellationToken ct)
+    {
+        try
+        {
+            return this.ExecutePacketCoreAsync(connection, lease, ct);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            // Preparing the packet (opcode extraction, handler lookup, deserialization) runs on a thread-pool work
+            // item with a retained lease. A malformed frame must not leak the lease or escape as an unhandled exception.
+            connection.IncrementErrorCount();
+            connection.ThrottledDiagnosticError(
+                DiagnosticsEvents.Internal.Error,
+                s_keyExecutePrep,
+                "RT.InlinePacketDispatcher:ExecutePacketAsync",
+                $"prepare-error ep={connection.NetworkEndpoint}",
+                ex);
+            lease.Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private ValueTask ExecutePacketCoreAsync(IConnection connection, IBufferLease lease, CancellationToken ct)
     {
         // 1. Read the packet header directly from the raw span to determine routing
         bool isReliable = lease.IsReliable;
