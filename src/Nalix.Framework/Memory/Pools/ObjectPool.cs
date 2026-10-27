@@ -356,15 +356,9 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
             return false;
         }
 
-        Type type = typeof(T);
-        if (_typePools.TryGetValue(type, out TypePool? typePool))
-        {
-            typePool.SetMaxCapacity(maxCapacity);
-            return true;
-        }
-
-        // Create a new pool with the specified capacity
-        _typePools[type] = new TypePool(maxCapacity);
+        // GetOrAdd keeps a concurrently created TypePool (and objects already in it) instead of overwriting it.
+        TypePool typePool = _typePools.GetOrAdd(typeof(T), static (_, capacity) => new TypePool(capacity), maxCapacity);
+        typePool.SetMaxCapacity(maxCapacity);
         return true;
     }
 

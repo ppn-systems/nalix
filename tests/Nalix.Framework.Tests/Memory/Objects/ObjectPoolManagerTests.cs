@@ -1,7 +1,9 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Framework.Options;
 using Nalix.Framework.Tests.TestSupport;
@@ -333,5 +335,35 @@ public sealed class ObjectPoolManagerTests
         Dictionary<string, object> info = manager.GetTypeInfo<TestPoolable>();
 
         Assert.Equal(4, info["AvailableCount"]);
+    }
+
+    [Fact]
+    public void SetMaxCapacity_WhenPoolNotCreatedAndCapacityIsZero_HonoursZero()
+    {
+        ObjectPoolManager manager = new(new ObjectPoolOptions { DefaultMaxPoolSize = 1024 });
+
+        bool set = manager.SetMaxCapacity<TestPoolable>(0);
+        Dictionary<string, object> info = manager.GetTypeInfo<TestPoolable>();
+
+        Assert.True(set);
+        Assert.Equal(0, Convert.ToInt32(info["MaxCapacity"], System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void Return_WhenLifetimeReservoirIndexWrapsNegative_DoesNotThrow()
+    {
+        ObjectPoolManager manager = new(new ObjectPoolOptions { EnableDiagnostics = true });
+        TestPoolable first = manager.Get<TestPoolable>();
+
+        // Simulate ~2^31 diagnostic returns: the next Interlocked.Increment lands in the negative range.
+        object metricsDict = typeof(ObjectPoolManager)
+            .GetField("_metricsDict", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(manager)!;
+        object metrics = ((IDictionary)metricsDict)[typeof(TestPoolable)]!;
+        metrics.GetType().GetField("ReservoirIndex")!.SetValue(metrics, int.MinValue);
+
+        Exception? ex = Record.Exception(() => manager.Return(first));
+
+        Assert.Null(ex);
     }
 }
