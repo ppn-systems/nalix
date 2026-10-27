@@ -51,11 +51,6 @@ public static class XxHash32
     public static uint Compute(ReadOnlySpan<byte> data, uint seed = 0)
     {
         int len = data.Length;
-        if (len == 0)
-        {
-            return seed + PRIME32_5;
-        }
-
         ref byte src = ref MemoryMarshal.GetReference(data);
         int i = 0;
         uint h;
@@ -71,7 +66,7 @@ public static class XxHash32
             {
                 int limit = len - 15;
 
-                while (i <= limit - 16)
+                while (i < limit)
                 {
                     Vector128<uint> block = Vector128.LoadUnsafe(ref src, (uint)i).AsUInt32();
 
