@@ -174,9 +174,10 @@ public static partial class SystemControlHandlers
         }
 
         CipherSuiteType requestedCipher = (CipherSuiteType)packet.Reason;
+        // Only authenticated (AEAD) suites may be negotiated: the plain stream ciphers carry no integrity
+        // protection and the AEAD envelope engine rejects them, so accepting one would only weaken or break the session.
         if ((ushort)packet.Reason > byte.MaxValue ||
-            requestedCipher == CipherSuiteType.None ||
-            !Enum.IsDefined(requestedCipher))
+            requestedCipher is not (CipherSuiteType.Chacha20Poly1305 or CipherSuiteType.Salsa20Poly1305))
         {
             connection.Disconnect("Invalid or disallowed cipher suite requested.");
             return default;

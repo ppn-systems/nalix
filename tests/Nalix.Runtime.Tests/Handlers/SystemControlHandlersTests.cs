@@ -78,6 +78,35 @@ public sealed class SystemControlHandlersTests
         }
     }
 
+    [Theory]
+    [InlineData(CipherSuiteType.Salsa20)]
+    [InlineData(CipherSuiteType.Chacha20)]
+    public async Task HandleAsync_WithCipherUpdateToNonAeadSuite_DisconnectsWithoutUpdatingAlgorithm(CipherSuiteType requested)
+    {
+        using FakeConnection connection = new()
+        {
+            Algorithm = CipherSuiteType.Chacha20Poly1305,
+            Level = PermissionLevel.ESTABLISHED
+        };
+        ConnectionRuntimeStateAccessor.SetHandshakeEstablished(connection, true);
+
+        Control packet = new();
+        packet.Initialize(ControlType.CIPHER_UPDATE, sequenceId: 1, reasonCode: (ProtocolReason)requested);
+
+        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, reliable: true, encryptedOnWire: true);
+        try
+        {
+            await SystemControlHandlers.HandleAsync(context);
+
+            connection.Disconnected.Should().BeTrue("a non-AEAD suite carries no integrity protection and must be refused");
+            connection.Algorithm.Should().Be(CipherSuiteType.Chacha20Poly1305, "algorithm must not be downgraded to a non-AEAD suite");
+        }
+        finally
+        {
+            context.Dispose();
+        }
+    }
+
     [Fact]
     public async Task HandleAsync_WithUnencryptedSessionRekey_DisconnectsWithoutSendingKeyAgreement()
     {
