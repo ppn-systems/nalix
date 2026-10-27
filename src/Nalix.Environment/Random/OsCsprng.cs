@@ -277,7 +277,7 @@ internal static partial class OsCsprng
         int total = 0;
         while (total < b.Length)
         {
-            int r = RandomAccess.Read(handle, b[total..], -1); // -1 means don't seek (appropriate for devices)
+            int r = RandomAccess.Read(handle, b[total..], 0); // RandomAccess rejects negative offsets; the offset is ignored for character devices
             if (r <= 0)
             {
                 throw new CipherException("OS CSPRNG unavailable (/dev/urandom returned 0 bytes).");
