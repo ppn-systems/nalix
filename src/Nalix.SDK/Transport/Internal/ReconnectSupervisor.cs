@@ -24,6 +24,10 @@ internal sealed class ReconnectSupervisor
 
     private volatile TaskCompletionSource<bool>? _readyTcs;
 
+    // Set when a disconnect is swallowed because a reconnect loop is already in flight, so the loop
+    // knows the connection it just established (or is still re-authenticating) has been lost again.
+    private int _disconnectDuringAttempt;
+
     public ReconnectSupervisor(TransportSession session)
     {
         _session = session;
@@ -64,7 +68,8 @@ internal sealed class ReconnectSupervisor
         TaskCompletionSource<bool> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
         if (Interlocked.CompareExchange(ref _readyTcs, tcs, null) is not null)
         {
-            // A reconnect loop is already in flight.
+            // A reconnect loop is already in flight; make it re-check before publishing ready.
+            Volatile.Write(ref _disconnectDuringAttempt, 1);
             return;
         }
 
@@ -100,6 +105,7 @@ internal sealed class ReconnectSupervisor
                 }
 
                 ProtocolReason reason;
+                Volatile.Write(ref _disconnectDuringAttempt, 0);
                 _session.EnterDeferReady();
                 try
                 {
@@ -120,6 +126,14 @@ internal sealed class ReconnectSupervisor
                 finally
                 {
                     _session.ExitDeferReady();
+                }
+
+                if (Volatile.Read(ref _disconnectDuringAttempt) != 0 || !_session.IsConnected)
+                {
+                    // The connection dropped while the resume/re-auth callbacks were running (and the
+                    // drop was swallowed); publishing ready now would hand out a dead session.
+                    attempt = 0;
+                    continue;
                 }
 
                 _readyTcs = null;
