@@ -39,6 +39,12 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
 
     #region Properties
 
+    /// <summary>
+    /// Gets or sets the handler task that may still be running after the dispatch pipeline stopped waiting for it
+    /// (for example after a timeout). The context must not be returned to the pool until it completes.
+    /// </summary>
+    internal Task? PendingHandler { get; set; }
+
     /// <inheritdoc/>
     public bool IsReliable
     {
@@ -259,6 +265,7 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
             this.Attributes = default!;
             this.Connection = default!;
             this.CancellationToken = default;
+            this.PendingHandler = null;
 
             this.Sender.ResetForPool();
 

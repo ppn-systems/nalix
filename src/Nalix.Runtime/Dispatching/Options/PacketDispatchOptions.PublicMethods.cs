@@ -381,7 +381,33 @@ public sealed partial class PacketDispatchOptions<TPacket>
         {
             await using (pooledContext.ConfigureAwait(false))
             {
-                await operation.ConfigureAwait(false);
+                try
+                {
+                    await operation.ConfigureAwait(false);
+                }
+                finally
+                {
+                    // A timeout / shutdown can end the pipeline while the handler body is still running and
+                    // still reading this context. Do not recycle the context (or release the packet lease the
+                    // caller disposes after us) until the handler itself has finished.
+                    Task? handler = pooledContext.PendingHandler;
+                    if (handler is not null)
+                    {
+                        await ObserveAbandonedHandlerAsync(handler).ConfigureAwait(false);
+                    }
+                }
+            }
+        }
+
+        static async ValueTask ObserveAbandonedHandlerAsync(Task handler)
+        {
+            try
+            {
+                await handler.ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+            {
+                // The pipeline already stopped waiting (or surfaced this fault); only observe it here.
             }
         }
     }

@@ -262,7 +262,7 @@ public sealed partial class PacketDispatchOptions<TPacket>
         IPacket? responsePacket = null;
         try
         {
-            object? result = await AwaitHandlerResultAsync(handlerResult, ct).ConfigureAwait(false);
+            object? result = await AwaitHandlerResultAsync(context, handlerResult, ct).ConfigureAwait(false);
 
             if (!context.SkipOutbound && result is not null)
             {
@@ -374,7 +374,8 @@ public sealed partial class PacketDispatchOptions<TPacket>
 
     private static async ValueTask AwaitHandlerCompletionAsync(ValueTask pending) => await pending.ConfigureAwait(false);
 
-    private static async ValueTask<object?> AwaitHandlerResultAsync(ValueTask<object?> pending, CancellationToken token)
+    private static async ValueTask<object?> AwaitHandlerResultAsync(
+        PacketContext<TPacket> context, ValueTask<object?> pending, CancellationToken token)
     {
         // Fast path: if the handler already completed, avoid an allocation and return the result directly.
         token.ThrowIfCancellationRequested();
@@ -384,8 +385,18 @@ public sealed partial class PacketDispatchOptions<TPacket>
             return pending.Result;
         }
 
-        return await CancellableValueTaskSource<object?>.Await(pending, token)
-                                                         .ConfigureAwait(false);
+        if (!token.CanBeCanceled)
+        {
+            return await pending.ConfigureAwait(false);
+        }
+
+        // Slow path: keep a handle on the real handler. When the token fires first (timeout / shutdown) the
+        // dispatch pipeline stops waiting, but the handler body is still running and still reads this context;
+        // ExecuteResolvedHandlerAsync waits on PendingHandler before the context and packet lease are recycled.
+        Task<object?> handlerTask = pending.AsTask();
+        context.PendingHandler = handlerTask;
+
+        return await handlerTask.WaitAsync(token).ConfigureAwait(false);
     }
 
     private static async ValueTask AwaitReturnAsync(ValueTask pending, CancellationToken token)
