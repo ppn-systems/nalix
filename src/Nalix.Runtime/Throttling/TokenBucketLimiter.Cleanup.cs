@@ -136,7 +136,6 @@ public sealed partial class TokenBucketLimiter
         KeyValuePair<INetworkEndpoint, EndpointState> kv,
         long now, long staleTicks, Shard shard)
     {
-        bool shouldRemove;
         EndpointState state = kv.Value;
 
         if (now - state.LastSeenSw <= staleTicks)
@@ -146,23 +145,37 @@ public sealed partial class TokenBucketLimiter
 
         lock (state.Lock)
         {
-            shouldRemove = (now - state.LastSeenSw) > staleTicks;
-        }
+            if ((now - state.LastSeenSw) <= staleTicks)
+            {
+                return false;
+            }
 
-        if (!shouldRemove)
+            // Staleness check and removal are one step under the state lock, so a request that is evaluating this
+            // state either finishes first (and refreshes LastSeenSw) or sees Retired afterwards.
+            return this.TRY_RETIRE_ENDPOINT(kv, shard);
+        }
+    }
+
+    /// <summary>
+    /// Removes exactly <paramref name="kv"/> from its shard and marks the state retired.
+    /// The caller must hold <c>kv.Value.Lock</c>.
+    /// </summary>
+    /// <remarks>
+    /// The state is intentionally NOT returned to the pool: a request that looked it up just before the removal may
+    /// still hold a reference, and recycling it for another endpoint would let that request spend the other
+    /// endpoint's tokens. Retired states are simply collected by the GC.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TRY_RETIRE_ENDPOINT(KeyValuePair<INetworkEndpoint, EndpointState> kv, Shard shard)
+    {
+        if (!shard.Map.TryRemove(kv))
         {
             return false;
         }
 
-        // Only proceed if truly stale
-        if (shard.Map.TryRemove(kv.Key, out EndpointState? evictedState))
-        {
-            s_pool.Return(evictedState);
-            _ = Interlocked.Decrement(ref _totalEndpointCount);
-            return true;
-        }
-
-        return false;
+        Volatile.Write(ref kv.Value.Retired, 1);
+        _ = Interlocked.Decrement(ref _totalEndpointCount);
+        return true;
     }
 
     /// <summary>
@@ -244,29 +257,21 @@ public sealed partial class TokenBucketLimiter
                     }
 
                     EndpointState state = kv.Value;
-                    bool shouldEvict = false;
+                    bool evicted = false;
 
                     lock (state.Lock)
                     {
                         bool isBlocked = state.HardBlockedUntilSw > now;
                         if (!isBlocked)
                         {
-                            if (pass == 0)
-                            {
-                                shouldEvict = (now - state.LastSeenSw) > thresholdTicks;
-                            }
-                            else
-                            {
-                                shouldEvict = true;
-                            }
+                            bool shouldEvict = pass != 0 || (now - state.LastSeenSw) > thresholdTicks;
+                            evicted = shouldEvict && this.TRY_RETIRE_ENDPOINT(kv, shard);
                         }
                     }
 
-                    if (shouldEvict && shard.Map.TryRemove(kv.Key, out EndpointState? evictedState))
+                    if (evicted)
                     {
-                        s_pool.Return(evictedState);
                         removed++;
-                        _ = Interlocked.Decrement(ref _totalEndpointCount);
 
                         if (removed >= count)
                         {

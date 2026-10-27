@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -170,25 +171,35 @@ public sealed partial class TokenBucketLimiter : IDisposable, IAsyncDisposable, 
             EndpointState? cached = scopedKey.CachedState;
             if (cached != null && cached.Generation == scopedKey.CachedGeneration && Volatile.Read(ref cached.LastSeenSw) != 0)
             {
-                return this.EVALUATE_RATE_LIMIT(cached, now);
+                if (this.TRY_EVALUATE_RATE_LIMIT(cached, now, out RateLimitDecision cachedDecision))
+                {
+                    return cachedDecision;
+                }
             }
         }
 
         Shard shard = this.SELECT_SHARD(key);
 
-        EndpointState? state = this.GET_OR_CREATE_ENDPOINT_STATE(key, shard, now, out bool limitReached);
-        if (limitReached || state == null)
+        while (true)
         {
-            return this.CREATE_LIMIT_REACHED_DECISION();
-        }
+            EndpointState? state = this.GET_OR_CREATE_ENDPOINT_STATE(key, shard, now, out bool limitReached);
+            if (limitReached || state == null)
+            {
+                return this.CREATE_LIMIT_REACHED_DECISION();
+            }
 
-        if (key is PolicyRateLimiter.ScopedEndpoint newScopedKey)
-        {
-            newScopedKey.CachedState = state;
-            newScopedKey.CachedGeneration = state.Generation;
-        }
+            if (key is PolicyRateLimiter.ScopedEndpoint newScopedKey)
+            {
+                newScopedKey.CachedState = state;
+                newScopedKey.CachedGeneration = state.Generation;
+            }
 
-        return this.EVALUATE_RATE_LIMIT(state, now);
+            // A state retired by the cleanup between the lookup and the lock is looked up again.
+            if (this.TRY_EVALUATE_RATE_LIMIT(state, now, out RateLimitDecision decision))
+            {
+                return decision;
+            }
+        }
     }
 
     /// <summary>
@@ -220,25 +231,35 @@ public sealed partial class TokenBucketLimiter : IDisposable, IAsyncDisposable, 
             EndpointState? cached = scopedKey.CachedState;
             if (cached != null && cached.Generation == scopedKey.CachedGeneration && Volatile.Read(ref cached.LastSeenSw) != 0)
             {
-                return this.EVALUATE_RATE_LIMIT(cached, now, in policy);
+                if (this.TRY_EVALUATE_RATE_LIMIT(cached, now, in policy, out RateLimitDecision cachedDecision))
+                {
+                    return cachedDecision;
+                }
             }
         }
 
         Shard shard = this.SELECT_SHARD(key);
 
-        EndpointState? state = this.GET_OR_CREATE_ENDPOINT_STATE(key, shard, now, out bool limitReached, in policy);
-        if (limitReached || state == null)
+        while (true)
         {
-            return this.CREATE_LIMIT_REACHED_DECISION();
-        }
+            EndpointState? state = this.GET_OR_CREATE_ENDPOINT_STATE(key, shard, now, out bool limitReached, in policy);
+            if (limitReached || state == null)
+            {
+                return this.CREATE_LIMIT_REACHED_DECISION();
+            }
 
-        if (key is PolicyRateLimiter.ScopedEndpoint newScopedKey)
-        {
-            newScopedKey.CachedState = state;
-            newScopedKey.CachedGeneration = state.Generation;
-        }
+            if (key is PolicyRateLimiter.ScopedEndpoint newScopedKey)
+            {
+                newScopedKey.CachedState = state;
+                newScopedKey.CachedGeneration = state.Generation;
+            }
 
-        return this.EVALUATE_RATE_LIMIT(state, now, in policy);
+            // A state retired by the cleanup between the lookup and the lock is looked up again.
+            if (this.TRY_EVALUATE_RATE_LIMIT(state, now, in policy, out RateLimitDecision decision))
+            {
+                return decision;
+            }
+        }
     }
 
     #endregion Public API
@@ -434,10 +455,14 @@ public sealed partial class TokenBucketLimiter : IDisposable, IAsyncDisposable, 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void REMOVE_NEWLY_ADDED_ENDPOINT(INetworkEndpoint key, Shard shard)
     {
-        if (shard.Map.TryRemove(key, out EndpointState? state))
+        // Another request may already have fetched this state from the map, so retire it (under its lock)
+        // instead of pooling it; see TRY_RETIRE_ENDPOINT.
+        if (shard.Map.TryGetValue(key, out EndpointState? state))
         {
-            s_pool.Return(state);
-            _ = Interlocked.Decrement(ref _totalEndpointCount);
+            lock (state.Lock)
+            {
+                _ = this.TRY_RETIRE_ENDPOINT(new KeyValuePair<INetworkEndpoint, EndpointState>(key, state), shard);
+            }
         }
     }
 
@@ -458,10 +483,18 @@ public sealed partial class TokenBucketLimiter : IDisposable, IAsyncDisposable, 
     #region Rate Limit Evaluation
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private RateLimitDecision EVALUATE_RATE_LIMIT(EndpointState state, long now)
+    private bool TRY_EVALUATE_RATE_LIMIT(EndpointState state, long now, out RateLimitDecision decision)
     {
         lock (state.Lock)
         {
+            // The cleanup removes (and retires) a state under this same lock, so once we hold it a
+            // non-retired state is guaranteed to still belong to its endpoint.
+            if (Volatile.Read(ref state.Retired) != 0)
+            {
+                decision = default;
+                return false;
+            }
+
             /*
              * HIGH-PRECISION TOKEN BUCKET (NANOSECOND RESOLUTION):
              * Instead of storing whole tokens, we store 'MicroTokens' (MicroBalance).
@@ -474,7 +507,8 @@ public sealed partial class TokenBucketLimiter : IDisposable, IAsyncDisposable, 
             // Step 1: Check hard lockout first (set when users repeatedly exceed soft limits)
             if (this.IS_HARD_BLOCKED(state, now, out RateLimitDecision blockedDecision))
             {
-                return blockedDecision;
+                decision = blockedDecision;
+                return true;
             }
 
             // Step 2: Refill tokens based on nanoseconds elapsed since last packet from this IP
@@ -483,34 +517,45 @@ public sealed partial class TokenBucketLimiter : IDisposable, IAsyncDisposable, 
             // Step 3: Check if we have at least one whole token (TokenScale units)
             if (this.CAN_CONSUME_TOKEN(state))
             {
-                return this.CONSUME_TOKEN_AND_CREATE_DECISION(state);
+                decision = this.CONSUME_TOKEN_AND_CREATE_DECISION(state);
+                return true;
             }
 
             // Step 4: No tokens left - apply penalty or block
-            return this.HANDLE_INSUFFICIENT_TOKENS(state, now);
+            decision = this.HANDLE_INSUFFICIENT_TOKENS(state, now);
+            return true;
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private RateLimitDecision EVALUATE_RATE_LIMIT(EndpointState state, long now, in RateLimitPolicy policy)
+    private bool TRY_EVALUATE_RATE_LIMIT(EndpointState state, long now, in RateLimitPolicy policy, out RateLimitDecision decision)
     {
         lock (state.Lock)
         {
+            if (Volatile.Read(ref state.Retired) != 0)
+            {
+                decision = default;
+                return false;
+            }
+
             state.LastSeenSw = now;
 
             if (this.IS_HARD_BLOCKED(state, now, out RateLimitDecision blockedDecision, in policy))
             {
-                return blockedDecision;
+                decision = blockedDecision;
+                return true;
             }
 
             this.REFILL_TOKENS(now, state, in policy);
 
             if (this.CAN_CONSUME_TOKEN(state, in policy))
             {
-                return this.CONSUME_TOKEN_AND_CREATE_DECISION(state, in policy);
+                decision = this.CONSUME_TOKEN_AND_CREATE_DECISION(state, in policy);
+                return true;
             }
 
-            return this.HANDLE_INSUFFICIENT_TOKENS(state, now, in policy);
+            decision = this.HANDLE_INSUFFICIENT_TOKENS(state, now, in policy);
+            return true;
         }
     }
 
