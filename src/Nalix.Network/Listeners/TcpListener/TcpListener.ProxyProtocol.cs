@@ -279,7 +279,7 @@ public abstract partial class TcpListenerBase
             ? new IPEndPoint(parsedEndpoint.ToIPAddress(), parsedEndpoint.Port)
             : null;
 
-        AcceptResult result = default;
+        AcceptResult result = new(AcceptConnectionResult.Failed, null);
 
         try
         {
