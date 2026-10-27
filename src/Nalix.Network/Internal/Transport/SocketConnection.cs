@@ -64,6 +64,9 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         _connectionOwner = owner as Connection;
         _endpointString = owner.NetworkEndpoint.ToString() ?? "Unknown";
 
+        // ResetForPool zeroes this; a recycled instance must not look idle since the epoch.
+        this.LastPingTime = Clock.UnixMillisecondsNow();
+
         _buffer ??= BufferLease.ByteArrayPool.Rent(s_fragmentOptions.MinReceiveBufferSize);
     }
 
