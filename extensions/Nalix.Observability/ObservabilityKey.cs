@@ -12,7 +12,9 @@ namespace Nalix.Observability;
 /// </summary>
 /// <remarks>
 /// The key file contains one 64-character hex key; blank lines and lines starting with <c>#</c> are ignored.
-/// A missing or unreadable key file is replaced by a freshly generated key so the server never runs keyless.
+/// A missing key file is created with a freshly generated key. An existing file that cannot be read or holds
+/// no valid key is left untouched and a random in-memory key is used instead, so the server never runs keyless
+/// but access stays closed until the file is fixed.
 /// </remarks>
 public static class ObservabilityKey
 {

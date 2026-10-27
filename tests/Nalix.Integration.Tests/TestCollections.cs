@@ -13,7 +13,13 @@ public static class TestCollections
 {
     /// <summary>Tests that read or mutate the shared network option instances in ConfigurationManager.</summary>
     public const string NetworkConfig = "NetworkConfigTests";
+
+    /// <summary>Tests that replace the process-wide observability key or the shared report registry.</summary>
+    public const string ObservabilityState = "ObservabilityStateTests";
 }
 
 [CollectionDefinition(TestCollections.NetworkConfig)]
 public sealed class NetworkConfigCollection;
+
+[CollectionDefinition(TestCollections.ObservabilityState, DisableParallelization = true)]
+public sealed class ObservabilityStateCollection;
