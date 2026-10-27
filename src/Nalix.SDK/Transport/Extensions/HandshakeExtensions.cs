@@ -82,7 +82,11 @@ public static class HandshakeExtensions
 
             TaskCompletionSource<IPacket> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
             using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(session.Options.ConnectTimeoutMillis);
+            if (session.Options.ConnectTimeoutMillis > 0)
+            {
+                cts.CancelAfter(session.Options.ConnectTimeoutMillis);
+            }
+
             using CancellationTokenRegistration reg = cts.Token.Register(() => tcs.TrySetCanceled(cts.Token));
 #pragma warning disable CS0618
             IDisposable subChallenge = session.OnOnce<SessionChallenge>(
