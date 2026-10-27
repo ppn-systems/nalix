@@ -50,6 +50,23 @@ public sealed class SocketConnectionRecycleTests
         winner.Should().NotBeSameAs(newOwnerClosed.Task, "a stale receive loop must not report the new owner of a recycled instance as closed");
     }
 
+    [Fact]
+    public async Task Initialize_AfterResetForPool_SeedsLastPingTimeWithTheCurrentTime()
+    {
+        using SocketPair pair = await SocketPair.CreateAsync();
+        using SocketPair recycledPair = await SocketPair.CreateAsync();
+        using Connection owner = new(pair.Server, new StubOpCodeExtractor());
+
+        SocketConnection pooled = new();
+        pooled.Initialize(pair.Server, owner);
+        pooled.ResetForPool();
+
+        long before = Nalix.Environment.Time.Clock.UnixMillisecondsNow();
+        pooled.Initialize(recycledPair.Server, owner);
+
+        pooled.LastPingTime.Should().BeGreaterThanOrEqualTo(before, "an idle-timeout check must not see a recycled connection as idle since 1970");
+    }
+
     private sealed class StubOpCodeExtractor : IOpCodeExtractor
     {
         public ushort Extract(ReadOnlySpan<byte> payload) => 0;

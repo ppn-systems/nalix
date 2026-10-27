@@ -1,7 +1,6 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Nalix.Abstractions;
@@ -264,7 +263,9 @@ internal struct LocalPool<T> where T : class, IPoolable, new()
             // Busy items will fallback to global pool upon Return()
         }
 
-        ArrayPool<T>.Shared.Return(items, clearArray: true);
+        // The slot array is intentionally NOT returned to ArrayPool: an Acquire() that won its slot CAS
+        // just before Destroy() may still read items[i], and a recycled array would be cleared or
+        // refilled by another connection's pool.
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -288,7 +289,7 @@ internal struct LocalPool<T> where T : class, IPoolable, new()
         T[]? arr = null;
         try
         {
-            arr = ArrayPool<T>.Shared.Rent(Size);
+            arr = new T[Size];
             for (int i = 0; i < Size; i++)
             {
                 arr[i] = _globalPool.Get<T>();
@@ -309,7 +310,6 @@ internal struct LocalPool<T> where T : class, IPoolable, new()
                         _globalPool.Return(arr[i]);
                     }
                 }
-                ArrayPool<T>.Shared.Return(arr, clearArray: true);
             }
             Volatile.Write(ref _initLock, 0);
             throw;

@@ -449,6 +449,15 @@ public sealed partial class ConnectionHub : IConnectionHub
                     new DiagnosticLog("NW.ConnectionHub:RegisterConnection", $"register id={connection.ConnectionId:X16} total={_registry.Count}"));
             }
 
+            // The close may have been signaled before our ConnectionClosed handler was added (the handler list
+            // is snapshotted at signal time), in which case nothing would ever unregister this connection.
+            // The handler is added before TryAdd and the flag is read after it, so a close signaled later
+            // is guaranteed to reach OnClientDisconnected.
+            if (connection is Connection concrete && concrete.IsCloseSignaled)
+            {
+                _ = this.TryUnregisterCore(connection);
+            }
+
             if (measureLatency)
             {
                 string latency = scope.GetElapsedMilliseconds().ToString("0.000", CultureInfo.InvariantCulture);

@@ -78,6 +78,7 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
     /// Metrics for monitoring
     /// </summary>
     private int _globalConnections;
+    private int _passthroughConnections;
     private long _totalConnectionAttempts;
     private long _totalRejections;
     private long _totalCleanedEntries;
@@ -304,8 +305,18 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
     /// <returns>True if connection is allowed; false if limit exceeded.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if limiter is disposed.</exception>
     /// <exception cref="ArgumentNullException">Thrown if IPEndPoint is null.</exception>"
+    public bool TryAccept(IPEndPoint endPoint) => this.TryAcceptCore(endPoint, passthrough: false);
+
+    /// <summary>
+    /// Same checks as <see cref="TryAccept(IPEndPoint)"/>, but the connection is counted against a separate
+    /// passthrough budget (same size as the global limit) so connectionless UDP sources, which are trivially
+    /// spoofable, cannot exhaust the global budget used for real TCP/WebSocket connections.
+    /// Pair with <see cref="OnConnectionClosed"/> using a <see cref="Connections.PassthroughConnection"/>.
+    /// </summary>
+    internal bool TryAcceptPassthrough(IPEndPoint endPoint) => this.TryAcceptCore(endPoint, passthrough: true);
+
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    public bool TryAccept(IPEndPoint endPoint)
+    private bool TryAcceptCore(IPEndPoint endPoint, bool passthrough)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, nameof(ConnectionGuard));
         ArgumentNullException.ThrowIfNull(endPoint);
@@ -328,20 +339,22 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
             return false;
         }
 
+        ref int counter = ref (passthrough ? ref _passthroughConnections : ref _globalConnections);
+
         if (_maxGlobalConnections > -1)
         {
             while (true)
             {
-                int current = Volatile.Read(ref _globalConnections);
+                int current = Volatile.Read(ref counter);
                 if (current >= _maxGlobalConnections)
                 {
                     _ = Interlocked.Increment(ref _totalRejections);
                     return false;
                 }
-                if (Interlocked.CompareExchange(ref _globalConnections, current + 1, current) == current)
+                if (Interlocked.CompareExchange(ref counter, current + 1, current) == current)
                 {
                     int newTotal = current + 1;
-                    if (newTotal > Volatile.Read(ref _peakGlobalConnections))
+                    if (!passthrough && newTotal > Volatile.Read(ref _peakGlobalConnections))
                     {
                         int currentPeak;
                         while (newTotal > (currentPeak = Volatile.Read(ref _peakGlobalConnections)))
@@ -375,7 +388,7 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
                 _ = this.TRY_RELEASE_CONNECTION_SLOT(key, now);
                 if (_maxGlobalConnections > -1)
                 {
-                    _ = Interlocked.Decrement(ref _globalConnections);
+                    _ = Interlocked.Decrement(ref counter);
                 }
                 _ = Interlocked.Increment(ref _totalRejections);
                 return false;
@@ -386,7 +399,7 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
         {
             if (_maxGlobalConnections > -1)
             {
-                _ = Interlocked.Decrement(ref _globalConnections);
+                _ = Interlocked.Decrement(ref counter);
             }
 
             _ = Interlocked.Increment(ref _totalRejections);
@@ -575,7 +588,7 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
 
         if (_maxGlobalConnections > -1)
         {
-            _ = Interlocked.Decrement(ref _globalConnections);
+            _ = Interlocked.Decrement(ref (args.Connection is Connections.PassthroughConnection ? ref _passthroughConnections : ref _globalConnections));
         }
 
         DateTime now = Clock.NowUtc();

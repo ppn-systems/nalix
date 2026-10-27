@@ -302,12 +302,14 @@ internal sealed class PooledSocketReceiveContext : IPoolable, IDisposable, IValu
 
         // Wait for the in-flight operation to finish. Five seconds is generous;
         // a real teardown should cancel the socket first so the OS aborts the op.
-        if (Volatile.Read(ref _activeOps) != 0 || Volatile.Read(ref _consumerAwaitPending) != 0)
+        // Only the kernel operation matters here. A consumer whose continuation has not run yet (_consumerAwaitPending)
+        // does not touch the SAEA, and the Reset() below bumps the source version so its stale token is rejected.
+        if (Volatile.Read(ref _activeOps) != 0)
         {
             long start = Stopwatch.GetTimestamp();
             SpinWait sw = new();
 
-            while (Volatile.Read(ref _activeOps) != 0 || Volatile.Read(ref _consumerAwaitPending) != 0)
+            while (Volatile.Read(ref _activeOps) != 0)
             {
                 if (Stopwatch.GetElapsedTime(start).TotalSeconds > 5)
                 {

@@ -280,6 +280,9 @@ public sealed partial class ConnectionGuard
             }
         }
 
+        // Per-endpoint slots include passthrough pseudo-connections, which have their own counter.
+        actualTotal -= Volatile.Read(ref _passthroughConnections);
+
         int reported = Volatile.Read(ref _globalConnections);
         int drift = reported - actualTotal;
         if (Math.Abs(drift) > 5)

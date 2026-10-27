@@ -99,4 +99,34 @@ public sealed class UdpPassthroughListenerTests
 
         listenerHandlerCount.Should().Be(1, "OnConnectionClosed must only be subscribed once when the connection is created");
     }
+
+    [Fact]
+    public void ProcessDatagram_FromManyDistinctSources_DoesNotConsumeSharedGlobalConnectionBudget()
+    {
+        using ConfigurationOptionsScope<ConnectionGuardOptions> guardScope = new();
+        guardScope.Options.MaxConnections = 3;
+
+        IProtocol protocol = Substitute.For<IProtocol>();
+        protocol.OpCodeExtractor.Returns(s_testOpCodeExtractor);
+        IConnectionHub hub = Substitute.For<IConnectionHub>();
+        using ConnectionGuard guard = new(new ConnectionQuotaOptions { ExemptLoopback = false });
+
+        using UdpPassthroughListener listener = new(0, protocol, hub, guard);
+        using Socket dummySocket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        dummySocket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+
+        typeof(UdpListenerBase).GetField("_socket", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(listener, dummySocket);
+        MethodInfo processDatagram = typeof(UdpPassthroughListener).GetMethod("ProcessDatagram", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        // Spoofed sources: one datagram each from many distinct addresses.
+        for (int i = 0; i < 10; i++)
+        {
+            BufferLease lease = BufferLease.CopyFrom([1, 2, 3, 4, 5, 6]);
+            processDatagram.Invoke(listener, [lease, new IPEndPoint(new IPAddress([(byte)(20 + i), 1, 1, 1]), 19000)]);
+        }
+
+        // A real TCP client must still be admitted by the same guard.
+        guard.TryAccept(new IPEndPoint(IPAddress.Parse("8.8.8.8"), 40000))
+            .Should().BeTrue("passthrough pseudo-connections must not exhaust the TCP global connection budget");
+    }
 }

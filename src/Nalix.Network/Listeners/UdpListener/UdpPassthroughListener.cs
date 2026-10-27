@@ -182,7 +182,7 @@ public sealed class UdpPassthroughListener : UdpListenerBase
     [MethodImpl(MethodImplOptions.NoInlining)]
     private PassthroughConnection? GetOrCreateConnection(IPEndPoint ipEndPoint, BufferLease lease)
     {
-        if (_connGuard is not null && !_connGuard.TryAccept(ipEndPoint))
+        if (_connGuard is not null && !(_connGuard is ConnectionGuard guard ? guard.TryAcceptPassthrough(ipEndPoint) : _connGuard.TryAccept(ipEndPoint)))
         {
             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
             {

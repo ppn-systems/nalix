@@ -65,6 +65,17 @@ public sealed class SlidingWindowTests
     }
 
     [Fact]
+    public void TryCheck_WhenForwardJumpExceedsWindowSize_AdvancesAndKeepsAcceptingNewPackets()
+    {
+        object window = CreateWindow(windowSize: 512);
+
+        InvokeTryCheck(window, 0).Should().BeTrue();
+        InvokeTryCheck(window, 1000).Should().BeTrue("a burst loss larger than the window is still a forward jump");
+        InvokeTryCheck(window, 1001).Should().BeTrue("the window must have advanced instead of treating 1000 as too old");
+        InvokeTryCheck(window, 1000).Should().BeFalse("1000 is now a replay");
+    }
+
+    [Fact]
     public void TryCheck_WhenOldPacketReplayedAfterHalfRingAdvance_RejectsWithoutPoisoningMaxSeen()
     {
         object window = CreateWindow(windowSize: 1024);

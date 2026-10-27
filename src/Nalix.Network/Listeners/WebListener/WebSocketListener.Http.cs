@@ -106,7 +106,12 @@ public abstract partial class WebSocketListenerBase
     {
         try
         {
-            _ = state.Socket?.Send(response, SocketFlags.None);
+            if (state.Socket is { } socket)
+            {
+                // Same 1s bound as the handshake response: a peer that stopped reading must not pin this thread.
+                socket.SendTimeout = 1000;
+                _ = socket.Send(response, SocketFlags.None);
+            }
         }
         catch { }
 
@@ -201,6 +206,8 @@ public abstract partial class WebSocketListenerBase
         {
             if (state.Socket != null)
             {
+                // Same 1s bound as the handshake response: a peer that stopped reading must not pin this thread.
+                state.Socket.SendTimeout = 1000;
                 ReadOnlySpan<byte> bodySpan = writer.WrittenSpan;
                 ReadOnlySpan<byte> contentType = writer.ContentType.IsEmpty
                     ? "text/plain; charset=utf-8"u8

@@ -475,4 +475,29 @@ public sealed class ConnectionGuardTests
         bool verifyResult = Nalix.Codec.Security.ProofOfWork.VerifySolution(nonce.AsSpan(), 12, 189525343, 822522449546468353, mac.AsSpan(), solution);
         verifyResult.Should().BeTrue();
     }
+
+    [Fact]
+    public void TryAccept_WhenSubnetExceedsWindowLimitWithinOneWindow_RejectsTheExcessSource()
+    {
+        ConnectionQuotaOptions options = new()
+        {
+            MaxSubnetConnectionsPerWindow = 100,
+            MaxConnectionsPerSubnet = 1000,
+            ConnectionRateWindow = TimeSpan.FromMinutes(10)
+        };
+        using ConnectionGuard guard = new(options);
+
+        bool lastAccepted = true;
+        for (int i = 1; i <= 101; i++)
+        {
+            IPEndPoint endpoint = new(IPAddress.Parse($"11.22.33.{i}"), 40000);
+            lastAccepted = guard.TryAccept(endpoint);
+            if (lastAccepted)
+            {
+                guard.Release(endpoint);
+            }
+        }
+
+        lastAccepted.Should().BeFalse("101 distinct sources in one /24 within one window exceed MaxSubnetConnectionsPerWindow = 100");
+    }
 }
