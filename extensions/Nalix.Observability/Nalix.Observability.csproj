@@ -10,6 +10,10 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Nalix.Observability.Contracts\Nalix.Observability.Contracts.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Nalix.Integration.Tests" />
+	</ItemGroup>
 	
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Nalix.Hosting\Nalix.Hosting.csproj" />

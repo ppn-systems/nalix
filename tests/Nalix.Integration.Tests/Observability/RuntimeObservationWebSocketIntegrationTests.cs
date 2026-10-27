@@ -143,7 +143,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             AppendComparisonInfo(diagnostics);
 
             // -- 4. Send ObservabilityAccess --
-            Bytes32 adminKey = ObservabilityAccessHandlers.AdminKey;
+            Bytes32 adminKey = ObservabilityKey.Current;
 
             ObservabilityAccess accessRequest = PacketBase<ObservabilityAccess>.Create();
             accessRequest.Initialize(
@@ -193,7 +193,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             RuntimeObservation runtimeRequest = PacketBase<RuntimeObservation>.Create();
             runtimeRequest.Initialize(
                 RuntimeObservationStage.REQUEST,
-                RuntimeObservationTarget.INSTANCES,
+                RuntimeObservationTargets.INSTANCES,
                 ProtocolReason.NONE);
 
             diagnostics.AppendLine();
@@ -205,7 +205,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             bool validateResult = runtimeRequest.Validate(out string? valReason);
             diagnostics.AppendLine($"  Validate                   = {validateResult} ({valReason ?? "ok"})");
             diagnostics.AppendLine($"  Stage                      = {runtimeRequest.Stage}");
-            diagnostics.AppendLine($"  Target                     = {runtimeRequest.Target}");
+            diagnostics.AppendLine($"  Target                     = {runtimeRequest.Targets}");
             diagnostics.AppendLine($"  Reason                     = {runtimeRequest.Reason}");
             diagnostics.AppendLine($"  ObservationData.Length     = {runtimeRequest.ObservationData.Length}");
             diagnostics.AppendLine($"  OpCode                     = 0x{runtimeRequest.OpCode:X4}");
@@ -214,7 +214,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             // Required pre-send assertions.
             Assert.True(validateResult, valReason);
             Assert.Equal(RuntimeObservationStage.REQUEST, runtimeRequest.Stage);
-            Assert.NotEqual(RuntimeObservationTarget.NONE, runtimeRequest.Target);
+            Assert.NotEqual(RuntimeObservationTargets.NONE, runtimeRequest.Targets);
             Assert.Equal(0, runtimeRequest.ObservationData.Length);
             Assert.Equal(RuntimeObservation.StaticOpCode, runtimeRequest.OpCode);
             Assert.True(runtimeRequest.Length >= PacketSchema<RuntimeObservation>.StaticSize,
@@ -288,7 +288,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             diagnostics.AppendLine();
             diagnostics.AppendLine("-- RuntimeObservation response --");
             diagnostics.AppendLine($"  Response.Stage               = {runtimeResponse.Stage}");
-            diagnostics.AppendLine($"  Response.Target              = {runtimeResponse.Target}");
+            diagnostics.AppendLine($"  Response.Targets              = {runtimeResponse.Targets}");
             diagnostics.AppendLine($"  Response.Reason              = {runtimeResponse.Reason}");
             diagnostics.AppendLine($"  Response.ObservationData.Length = {runtimeResponse.ObservationData.Length}");
             diagnostics.AppendLine($"  Response.OpCode              = 0x{runtimeResponse.OpCode:X4}");
@@ -307,7 +307,14 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
 
             // All boundaries passed.
             Assert.Equal(RuntimeObservationStage.RESPONSE, runtimeResponse.Stage);
-            Assert.Equal(RuntimeObservationTarget.INSTANCES, runtimeResponse.Target);
+            Assert.True(runtimeResponse.Targets.HasFlag(RuntimeObservationTargets.INSTANCES),
+                $"Response.Targets = {runtimeResponse.Targets} does not include INSTANCES.");
+            Assert.True(runtimeResponse.SampledAt > 0, "Response.SampledAt was not stamped by the server.");
+            using (System.Text.Json.JsonDocument payload = System.Text.Json.JsonDocument.Parse(runtimeResponse.ObservationData))
+            {
+                Assert.True(payload.RootElement.TryGetProperty(RuntimeObservationSections.Instances, out _),
+                    "Response payload has no Instances section.");
+            }
 
             // Assert handler was invoked at least once on the server.
             Assert.True(

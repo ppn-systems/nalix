@@ -1,29 +1,26 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System.Security.Cryptography;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
-using Nalix.Abstractions.Primitives;
 using Nalix.Abstractions.Security;
 using Nalix.Codec.Pooling;
-using Nalix.Environment.IO;
 using Nalix.Observability.Contracts;
 
 namespace Nalix.Observability;
 
 /// <summary>
-/// Handles authentication and administrative access requests for observability.
+/// Grants supervisor permission to connections that present the administrative observability key.
 /// </summary>
 [PacketHandler("Nalix.ObservabilityAccess")]
 public sealed class ObservabilityAccessHandlers
 {
     /// <summary>
-    /// Handles an incoming administrative access request and upgrades the connection's permission level if authorized.
+    /// Validates the access key and upgrades the connection's permission level when it matches.
     /// </summary>
     /// <param name="context">The packet context containing the request packet and connection state.</param>
-    /// <returns>A value task representing the response packet containing the result and permission level.</returns>
+    /// <returns>The access response.</returns>
     [PacketEncryption(true)]
     [ReservedOpcodePermitted]
     [PacketPermission(PermissionLevel.NONE)]
@@ -32,185 +29,26 @@ public sealed class ObservabilityAccessHandlers
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (context.Packet.Stage != ObservabilityAccessStage.REQUEST || !context.Packet.Validate(out _))
+        ObservabilityAccess request = context.Packet;
+        if (request.Stage != ObservabilityAccessStage.REQUEST || !request.Validate(out _))
         {
-            return CREATE_RESPONSE(ProtocolReason.MALFORMED_PACKET);
+            return RESPOND(ProtocolReason.MALFORMED_PACKET, PermissionLevel.NONE);
         }
 
-        if (context.Packet.AccessKey != AdminKey)
+        // Bytes32 equality is constant-time, so the comparison leaks no key prefix through timing.
+        if (request.AccessKey != ObservabilityKey.Current)
         {
-            return CREATE_RESPONSE(ProtocolReason.UNAUTHORIZED);
+            return RESPOND(ProtocolReason.UNAUTHORIZED, PermissionLevel.NONE);
         }
 
         context.Connection.Level = PermissionLevel.SUPERVISOR;
-
-        return CREATE_RESPONSE(ProtocolReason.NONE, PermissionLevel.SUPERVISOR);
+        return RESPOND(ProtocolReason.NONE, PermissionLevel.SUPERVISOR);
     }
 
-    #region APIs
-
-    /// <summary>
-    /// Initializes the observability access handlers by loading the default administrative key.
-    /// </summary>
-    public static void Initialize()
+    private static ValueTask<ObservabilityAccess> RESPOND(ProtocolReason reason, PermissionLevel level)
     {
-        if (Volatile.Read(ref s_isInitialized) != 0)
-        {
-            return;
-        }
-
-        lock (s_initLock)
-        {
-            if (Volatile.Read(ref s_isInitialized) != 0)
-            {
-                return;
-            }
-
-            LOAD_PRIVATE_KEY(Path.Combine(Directories.ConfigurationDirectory, "observability.private"));
-            Volatile.Write(ref s_isInitialized, 1);
-        }
+        ObservabilityAccess response = PacketFactory<ObservabilityAccess>.Acquire().Value;
+        response.Initialize(ObservabilityAccessStage.RESPONSE, reason, level);
+        return ValueTask.FromResult(response);
     }
-
-    /// <summary>
-    /// Sets a custom path for the administrative private key and initializes it.
-    /// </summary>
-    /// <param name="path">The absolute path to the private key file.</param>
-    public static void SetPrivateKeyPath(string path)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        lock (s_initLock)
-        {
-            LOAD_PRIVATE_KEY(path);
-            Volatile.Write(ref s_isInitialized, 1);
-        }
-    }
-
-    #endregion APIs
-
-    #region Properties
-
-    /// <summary>
-    /// Gets the administrative access key.
-    /// </summary>
-    public static Bytes32 AdminKey
-    {
-        get
-        {
-            if (Volatile.Read(ref s_isInitialized) == 0)
-            {
-                Initialize();
-            }
-            return s_adminKey;
-        }
-    }
-
-    #endregion Properties
-
-    #region Private Methods
-
-    private static ValueTask<ObservabilityAccess> CREATE_RESPONSE(ProtocolReason reason, PermissionLevel AccessLevel = PermissionLevel.NONE)
-    {
-        PacketScope<ObservabilityAccess> lease = PacketFactory<ObservabilityAccess>.Acquire();
-
-        try
-        {
-            ObservabilityAccess response = lease.Value;
-            response.Initialize(ObservabilityAccessStage.RESPONSE, reason, AccessLevel);
-            return ValueTask.FromResult(response);
-        }
-        catch
-        {
-            lease.Dispose();
-            throw;
-        }
-    }
-
-    [System.Diagnostics.CodeAnalysis.SuppressMessage(
-        "Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort file access and fallback generation logic must not throw to ensure system availability.")]
-    private static void LOAD_PRIVATE_KEY(string keyPath)
-    {
-        try
-        {
-            _ = Directory.CreateDirectory(Path.GetDirectoryName(keyPath)!);
-        }
-        catch
-        {
-            // Ignore directory creation failures
-        }
-
-        if (!File.Exists(keyPath))
-        {
-            byte[] rawBytes = RandomNumberGenerator.GetBytes(Bytes32.Size);
-            string hexStr = Convert.ToHexString(rawBytes).ToLowerInvariant();
-            _ = Directories.TryWriteNewFile(keyPath, hexStr, isPrivate: true);
-            s_adminKey = new Bytes32(rawBytes);
-            return;
-        }
-
-        try
-        {
-            string? hex = null;
-            string[] lines = File.ReadAllLines(keyPath);
-
-            for (int i = lines.Length - 1; i >= 0; i--)
-            {
-                string line = lines[i];
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    continue;
-                }
-
-                string trimmed = line.Trim();
-                if (trimmed.StartsWith('#'))
-                {
-                    continue;
-                }
-
-                hex = trimmed;
-                break;
-            }
-
-            Bytes32 parsedKey = Bytes32.Zero;
-            bool parseSuccess = false;
-            if (!string.IsNullOrWhiteSpace(hex) && hex.Trim().Length == 64)
-            {
-                try
-                {
-                    parsedKey = Bytes32.Parse(hex.Trim());
-                    parseSuccess = true;
-                }
-                catch
-                {
-                    // Ignore parse error and trigger regeneration
-                }
-            }
-
-            if (!parseSuccess)
-            {
-                byte[] rawBytes = RandomNumberGenerator.GetBytes(Bytes32.Size);
-                string hexStr = Convert.ToHexString(rawBytes).ToLowerInvariant();
-                _ = Directories.TryWriteNewFile(keyPath, hexStr, isPrivate: true);
-                s_adminKey = new Bytes32(rawBytes);
-                return;
-            }
-
-            s_adminKey = parsedKey;
-        }
-        catch
-        {
-            s_adminKey = new Bytes32(RandomNumberGenerator.GetBytes(Bytes32.Size));
-        }
-    }
-
-    #endregion Private Methods
-
-    #region Fields
-
-    private static int s_isInitialized;
-    private static readonly Lock s_initLock = new();
-    private static Bytes32 s_adminKey = Bytes32.Zero;
-
-    #endregion Fields
 }
-

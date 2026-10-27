@@ -23,9 +23,9 @@ public sealed class RuntimeObservationSdkSendTests
         RuntimeObservation packet = RuntimeObservation.Create();
         packet.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.INSTANCES,
+            RuntimeObservationTargets.INSTANCES,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
 
         int reportedLength = packet.Length;
 
@@ -87,9 +87,9 @@ public sealed class RuntimeObservationSdkSendTests
         RuntimeObservation packet = RuntimeObservation.Create();
         packet.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.DISPATCH,
+            RuntimeObservationTargets.DISPATCH,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
 
         int reportedLength = packet.Length;
         int expectedLength = PacketSchema<RuntimeObservation>.StaticSize + payload.Length;
@@ -129,16 +129,16 @@ public sealed class RuntimeObservationSdkSendTests
         RuntimeObservation packet = RuntimeObservation.Create();
         packet.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.INSTANCES,
+            RuntimeObservationTargets.INSTANCES,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
 
         byte[] bytes = packet.Serialize();
         RuntimeObservation result = RuntimeObservation.Deserialize(bytes);
 
         Assert.NotNull(result);
         Assert.Equal(RuntimeObservationStage.RESPONSE, result.Stage);
-        Assert.Equal(RuntimeObservationTarget.INSTANCES, result.Target);
+        Assert.Equal(RuntimeObservationTargets.INSTANCES, result.Targets);
         Assert.True(payload.AsSpan().SequenceEqual(result.ObservationData.Span),
             string.Format(
                 "Roundtrip failed on desktop runtime.{0}  expected = {1}{0}  actual   = {2}",

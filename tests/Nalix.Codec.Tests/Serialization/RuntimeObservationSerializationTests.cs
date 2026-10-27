@@ -44,7 +44,7 @@ public sealed class RuntimeObservationSerializationTests
         Assert.NotNull(result);
         Assert.Equal(source.Header.OpCode, result.Header.OpCode);
         Assert.Equal(source.Stage, result.Stage);
-        Assert.Equal(source.Target, result.Target);
+        Assert.Equal(source.Targets, result.Targets);
         Assert.Equal(source.Reason, result.Reason);
         Assert.True(source.ObservationData.Span.SequenceEqual(result.ObservationData.Span),
             string.Format("ObservationData mismatch: expected {0} bytes, got {1} bytes.",
@@ -66,7 +66,7 @@ public sealed class RuntimeObservationSerializationTests
 
         Assert.NotNull(result);
         Assert.Equal(source.Stage, result.Stage);
-        Assert.Equal(source.Target, result.Target);
+        Assert.Equal(source.Targets, result.Targets);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class RuntimeObservationSerializationTests
     public void Length_WhenObservationDataIsEmpty_MatchesByteCount()
     {
         RuntimeObservation packet = RuntimeObservation.Create();
-        packet.Initialize(RuntimeObservationStage.REQUEST, RuntimeObservationTarget.DISPATCH);
+        packet.Initialize(RuntimeObservationStage.REQUEST, RuntimeObservationTargets.DISPATCH);
         int reportedLength = packet.Length;
         byte[] bytes = packet.Serialize();
         Assert.Equal(bytes.Length, reportedLength);
@@ -186,14 +186,14 @@ public sealed class RuntimeObservationSerializationTests
     public void Deserialize_WhenRequestHasEmptyObservationData_PreservesFields()
     {
         RuntimeObservation source = RuntimeObservation.Create();
-        source.Initialize(RuntimeObservationStage.REQUEST, RuntimeObservationTarget.TASKS);
+        source.Initialize(RuntimeObservationStage.REQUEST, RuntimeObservationTargets.TASKS);
 
         byte[] bytes = source.Serialize();
         RuntimeObservation result = RuntimeObservation.Deserialize(bytes);
 
         Assert.NotNull(result);
         Assert.Equal(RuntimeObservationStage.REQUEST, result.Stage);
-        Assert.Equal(RuntimeObservationTarget.TASKS, result.Target);
+        Assert.Equal(RuntimeObservationTargets.TASKS, result.Targets);
         Assert.Equal(ProtocolReason.NONE, result.Reason);
         Assert.True(result.ObservationData.IsEmpty);
     }
@@ -246,11 +246,11 @@ public sealed class RuntimeObservationSerializationTests
         RuntimeObservation packet = RuntimeObservation.Create();
         packet.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.INSTANCES,
+            RuntimeObservationTargets.INSTANCES,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
 
-        // Expected: Header(6) + Stage(1) + Target(1) + Reason(2) + LengthPrefix(4) + Payload(8) = 22
+        // Expected: Header(6) + Stage(1) + Targets(4) + Reason(2) + SampledAt(8) + LengthPrefix(4) + Payload(8) = 33
         int expectedMinLength = PacketSchema<RuntimeObservation>.StaticSize + payload.Length;
 
         try
@@ -299,9 +299,9 @@ public sealed class RuntimeObservationSerializationTests
         RuntimeObservation packet = RuntimeObservation.Create();
         packet.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.INSTANCES,
+            RuntimeObservationTargets.INSTANCES,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
 
         int reportedLength = packet.Length;
         byte[] serialized = packet.Serialize();
@@ -360,9 +360,9 @@ public sealed class RuntimeObservationSerializationTests
         RuntimeObservation source = RuntimeObservation.Create();
         source.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.INSTANCES,
+            RuntimeObservationTargets.INSTANCES,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
 
         byte[] bytes = source.Serialize();
         RuntimeObservation result = RuntimeObservation.Deserialize(bytes);
@@ -371,7 +371,7 @@ public sealed class RuntimeObservationSerializationTests
         {
             Assert.NotNull(result);
             Assert.Equal(source.Stage, result.Stage);
-            Assert.Equal(source.Target, result.Target);
+            Assert.Equal(source.Targets, result.Targets);
             Assert.Equal(source.Reason, result.Reason);
             Assert.Equal(source.Header.OpCode, result.Header.OpCode);
             Assert.False(result.ObservationData.IsEmpty,
@@ -392,18 +392,18 @@ public sealed class RuntimeObservationSerializationTests
             Assert.Fail(string.Format(
                 "FAIL: RuntimeObservation roundtrip.{0}" +
                 "  source.Stage      = {1}{0}" +
-                "  source.Target     = {2}{0}" +
+                "  source.Targets     = {2}{0}" +
                 "  source.Reason     = {3}{0}" +
                 "  source.Data.Len   = {4}{0}" +
                 "  result?.Stage     = {5}{0}" +
-                "  result?.Target    = {6}{0}" +
+                "  result?.Targets    = {6}{0}" +
                 "  result?.Reason    = {7}{0}" +
                 "  result?.Data.Len  = {8}{0}" +
                 "  payload hex       = {9}{0}" +
                 "  Exception:{0}{10}",
                 System.Environment.NewLine,
-                source.Stage, source.Target, source.Reason, source.ObservationData.Length,
-                result?.Stage, result?.Target, result?.Reason, result?.ObservationData.Length,
+                source.Stage, source.Targets, source.Reason, source.ObservationData.Length,
+                result?.Stage, result?.Targets, result?.Reason, result?.ObservationData.Length,
                 FormatHex(payload),
                 FormatExceptionChain(ex)));
         }
@@ -431,9 +431,9 @@ public sealed class RuntimeObservationSerializationTests
         RuntimeObservation ro = RuntimeObservation.Create();
         ro.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.DISPATCH,
+            RuntimeObservationTargets.DISPATCH,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
 
         byte[] roBytes = ro.Serialize();
 
@@ -468,9 +468,9 @@ public sealed class RuntimeObservationSerializationTests
         RuntimeObservation packet = RuntimeObservation.Create();
         packet.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.DISPATCH,
+            RuntimeObservationTargets.DISPATCH,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
 
         int expectedLength = PacketSchema<RuntimeObservation>.StaticSize + payloadSize;
         byte[] serialized = packet.Serialize();
@@ -493,18 +493,18 @@ public sealed class RuntimeObservationSerializationTests
 
     /// <summary>
     /// Verifies that the <see cref="PacketSchema{RuntimeObservation}.StaticSize"/>
-    /// is the expected static overhead: Header(6) + Stage(1) + Target(1) +
-    /// Reason(2) + LengthPrefix(4) = 14.
+    /// is the expected static overhead: Header(6) + Stage(1) + Targets(4) +
+    /// Reason(2) + SampledAt(8) + LengthPrefix(4) = 25.
     /// If this value is wrong, all dynamic-length tests will produce incorrect
     /// expected values, masking the real bug.
     /// </summary>
     [Fact]
-    public void StaticSize_WhenRuntimeObservationSchemaIsBuilt_IsFourteenBytes()
+    public void StaticSize_WhenRuntimeObservationSchemaIsBuilt_IsTwentyFiveBytes()
     {
         int staticSize = PacketSchema<RuntimeObservation>.StaticSize;
 
-        // Header(6) + Stage(1) + Target(1) + Reason(2) + LengthPrefix(4) = 14
-        Assert.Equal(14, staticSize);
+        // Header(6) + Stage(1) + Targets(4) + Reason(2) + SampledAt(8) + LengthPrefix(4) = 25
+        Assert.Equal(25, staticSize);
     }
 
     // =====================================================================
@@ -518,9 +518,9 @@ public sealed class RuntimeObservationSerializationTests
             Encoding.UTF8.GetBytes("{\"dispatch\":{\"queue_depth\":42,\"processed\":1000}}"));
         packet.Initialize(
             RuntimeObservationStage.RESPONSE,
-            RuntimeObservationTarget.DISPATCH,
+            RuntimeObservationTargets.DISPATCH,
             ProtocolReason.NONE,
-            payload);
+            observationData: payload);
         return packet;
     }
 

@@ -1,21 +1,30 @@
-# Nalix.Observability.Handlers
+# Nalix.Observability
 
-Backend handlers for Nalix observability.
+Server-side observability for Nalix applications. Pairs with the [n12d dashboard](https://github.com/ppn-systems/n12d).
 
-## What It Handles
+## Protocol
 
-- `ObservabilityAccessHandlers`: validates the admin key and grants supervisor permission.
-- `RuntimeObservationHandlers`: returns JSON report data for supported runtime targets.
+| Opcode | Packet | Permission | Purpose |
+| :--- | :--- | :--- | :--- |
+| `0x00FF` | `ObservabilityAccess` | `NONE` | Presents the 32-byte admin key; grants `SUPERVISOR` on match. |
+| `0x00FE` | `RuntimeObservation` | `SUPERVISOR` | Samples every subsystem selected by the `RuntimeObservationTargets` mask in one round-trip. |
 
-## Example Use
+A `RuntimeObservation` response carries one UTF-8 JSON object whose top-level keys are the
+`RuntimeObservationSections` names (`Process`, `Dispatch`, `Tasks`, …). Subsystems not registered on the
+server are omitted, and the response's `Targets` lists only the sections actually written. `SampledAt` is the
+server time in Unix milliseconds; the `Process` section reports cumulative counters (CPU time, allocations,
+GC counts) so clients compute rates from consecutive samples.
+
+Both packets are encrypted; large payloads are compressed by the frame pipeline automatically.
+
+## Usage
 
 ```csharp
 using Nalix.Hosting;
-using Nalix.Observability.Handlers;
+using Nalix.Observability;
 
 NetworkApplication host = NetworkApplication.CreateBuilder()
-    .MapHandlers<ObservabilityAccessHandlers>()
-    .MapHandlers<RuntimeObservationHandlers>()
+    .UseObservability()                       // or .UseObservability("/etc/myapp/observability.private")
     .ListenWebSocket<DefaultProtocol>()
         .OnPort(57207)
         .WithPath("/ws/")
@@ -23,4 +32,5 @@ NetworkApplication host = NetworkApplication.CreateBuilder()
     .Build();
 ```
 
-The private key file should contain one 64-character hex key. If the default key file is missing, the handler generates one at startup.
+The key file holds one 64-character hex key (`#` comments allowed). When it is missing, a key is generated and
+written there with private file permissions. Read the active key in code through `ObservabilityKey.Current`.

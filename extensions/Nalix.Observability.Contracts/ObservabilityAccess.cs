@@ -63,22 +63,19 @@ public sealed partial class ObservabilityAccess : PacketBase<ObservabilityAccess
     /// </summary>
     /// <param name="stage">The access lifecycle stage represented by the packet.</param>
     /// <param name="reason">The protocol reason for a response, or <see cref="ProtocolReason.NONE"/> for a request.</param>
-    /// <param name="AccessLevel">The permission level granted by a successful response.</param>
+    /// <param name="accessLevel">The permission level granted by a successful response.</param>
     /// <param name="accessKey">The administrative access key supplied by a request.</param>
-    /// <param name="flags">The packet flags to apply.</param>
     public void Initialize(
         ObservabilityAccessStage stage,
         ProtocolReason reason = ProtocolReason.NONE,
-        PermissionLevel AccessLevel = PermissionLevel.NONE,
-        Bytes32 accessKey = default,
-        PacketFlags flags = PacketFlags.SYSTEM)
+        PermissionLevel accessLevel = PermissionLevel.NONE,
+        Bytes32 accessKey = default)
     {
-
         this.Priority = PacketPriority.URGENT;
-        this.Flags = flags;
+        this.Flags = PacketFlags.SYSTEM;
         this.Stage = stage;
         this.Reason = reason;
-        this.AccessLevel = AccessLevel;
+        this.AccessLevel = accessLevel;
         this.AccessKey = accessKey;
     }
 
@@ -111,7 +108,7 @@ public sealed partial class ObservabilityAccess : PacketBase<ObservabilityAccess
             ObservabilityAccessStage.NONE or _ => false
         };
 
-        failureReason = isValid ? null : $"Invalid fields provided for observability access stage {this.Stage}.";
+        failureReason = isValid ? null : "Invalid fields provided for observability access stage.";
         return isValid;
     }
 }
