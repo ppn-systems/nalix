@@ -22,6 +22,17 @@ public sealed class IniConfigTests : IDisposable
     }
 
     [Fact]
+    public void FilePath_WhenConstructedWithRelativePath_IsAbsolute()
+    {
+        string relative = Path.GetRelativePath(Directory.GetCurrentDirectory(), _path);
+
+        using IniConfig config = new IniConfig(relative);
+
+        Assert.True(Path.IsPathRooted(config.FilePath));
+        Assert.Equal(Path.GetFullPath(_path), config.FilePath);
+    }
+
+    [Fact]
     public void Reload_WhenCalledRepeatedly_DoesNotAccumulateComments()
     {
         using IniConfig config = new IniConfig(_path);
