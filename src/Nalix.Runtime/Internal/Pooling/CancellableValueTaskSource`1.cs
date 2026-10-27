@@ -52,6 +52,7 @@ internal sealed class CancellableValueTaskSource<T> : IValueTaskSource<T>, IPool
 
     private short _token;
     private int _resultSet;
+    private int _owners;
     private ManualResetValueTaskSourceCore<T> _core;
     private CancellationTokenRegistration _cancellationReg;
 
@@ -78,6 +79,7 @@ internal sealed class CancellableValueTaskSource<T> : IValueTaskSource<T>, IPool
     {
         this.IsActive = true;
         _resultSet = 0;
+        _owners = 2;
         _core.Reset();
         _token = _core.Version;
     }
@@ -164,8 +166,9 @@ internal sealed class CancellableValueTaskSource<T> : IValueTaskSource<T>, IPool
         }
         finally
         {
-            // Trả về pool bất kể kết quả — đây là điểm duy nhất return
-            s_pool.Return(this);
+            // Consumer side is done. The instance is shared with AwaitTaskAsync (which may still be
+            // pending after a cancel/timeout), so it only goes back to the pool once both sides released it.
+            this.Release();
         }
     }
 
@@ -217,12 +220,35 @@ internal sealed class CancellableValueTaskSource<T> : IValueTaskSource<T>, IPool
                 _core.SetResult(result);
             }
         }
-        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        catch (Exception ex)
         {
+            // Always complete the awaiter (even for fatal exceptions) so it can never hang.
             if (Interlocked.CompareExchange(ref _resultSet, 1, 0) == 0)
             {
                 _core.SetException(ex);
             }
+
+            if (!ExceptionClassifier.IsNonFatal(ex))
+            {
+                throw;
+            }
+        }
+        finally
+        {
+            // Producer side is done; never touch _core after this point.
+            this.Release();
+        }
+    }
+
+    /// <summary>
+    /// Releases one of the two owners (consumer / producer). The last one returns the instance to the pool,
+    /// so a late completion of an abandoned operation can never reach a re-rented instance.
+    /// </summary>
+    private void Release()
+    {
+        if (Interlocked.Decrement(ref _owners) == 0)
+        {
+            s_pool.Return(this);
         }
     }
 
