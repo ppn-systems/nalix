@@ -222,6 +222,43 @@ public sealed partial class TaskManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ScheduleWorker_WhenGroupLimitConflicts_DoesNotLeakGlobalPermits()
+    {
+        using TaskManager manager = this.CreateManager(new TaskManagerOptions
+        {
+            CleanupInterval = TimeSpan.FromSeconds(5),
+            DynamicAdjustmentEnabled = false,
+            MaxWorkers = 3
+        });
+        TaskCompletionSource<bool> release = TaskManagerTestHost.CreateCompletionSource<bool>();
+
+        _ = manager.ScheduleWorker(
+            "worker.conflict.first",
+            "g",
+            async (ctx, ct) => { try { _ = await release.Task.WaitAsync(ct).ConfigureAwait(false); } catch (OperationCanceledException) { } },
+            new WorkerOptions { GroupConcurrencyLimit = 2 });
+
+        for (int i = 0; i < 2; i++)
+        {
+            _ = Assert.Throws<InvalidOperationException>(() => manager.ScheduleWorker(
+                "worker.conflict.bad",
+                "g",
+                (_, _) => ValueTask.CompletedTask,
+                new WorkerOptions { GroupConcurrencyLimit = 3 }));
+        }
+
+        TaskCompletionSource<bool> ran = TaskManagerTestHost.CreateCompletionSource<bool>();
+        _ = manager.ScheduleWorker("worker.conflict.plain", "plain", (_, _) =>
+        {
+            _ = ran.TrySetResult(true);
+            return ValueTask.CompletedTask;
+        });
+
+        _ = await ran.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _ = release.TrySetResult(true);
+    }
+
+    [Fact]
     public async Task ScheduleWorker_WhenHigherPriorityIsQueued_StartsBeforeLowerPriority()
     {
         using TaskManager manager = this.CreateManager(new TaskManagerOptions

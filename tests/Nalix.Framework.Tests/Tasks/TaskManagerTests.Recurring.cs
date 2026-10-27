@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Concurrency;
@@ -348,5 +349,71 @@ public sealed partial class TaskManagerTests
         public void OnNext(T value) => _onNext(value);
         public void OnError(Exception error) { }
         public void OnCompleted() { }
+    }
+
+    [Fact]
+    public void Dispose_WhenRecurringHandleWasDisposed_DoesNotThrow()
+    {
+        TaskManager manager = this.CreateManager();
+        IRecurringHandle handle = manager.ScheduleRecurring(
+            "recurring.disposed.handle",
+            TimeSpan.FromSeconds(1),
+            _ => ValueTask.CompletedTask,
+            new RecurringOptions { Jitter = TimeSpan.Zero, NonReentrant = false });
+
+        handle.Dispose();
+
+        Exception? ex = Record.Exception(manager.Dispose);
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void CancelRecurring_WhenRecurringHandleWasDisposed_DoesNotThrow()
+    {
+        using TaskManager manager = this.CreateManager();
+        IRecurringHandle handle = manager.ScheduleRecurring(
+            "recurring.disposed.cancel",
+            TimeSpan.FromSeconds(1),
+            _ => ValueTask.CompletedTask,
+            new RecurringOptions { Jitter = TimeSpan.Zero, NonReentrant = false });
+
+        handle.Dispose();
+
+        Exception? ex = Record.Exception(() => manager.CancelRecurring("recurring.disposed.cancel"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task RecurringBackoff_WhenShiftedBaseOverflowsInt_DoesNotThrow()
+    {
+        using TaskManager manager = this.CreateManager(new TaskManagerOptions
+        {
+            CleanupInterval = TimeSpan.FromSeconds(5),
+            DynamicAdjustmentEnabled = false,
+            BackoffBaseInterval = TimeSpan.FromHours(1),
+            BackoffMaxPower = 16
+        });
+
+        // 3_600_000 ms << 16 wraps to a negative int, which used to reach Csprng.GetInt32 as a negative bound.
+        IRecurringHandle handle = manager.ScheduleRecurring(
+            "recurring.backoff.overflow",
+            TimeSpan.FromHours(1),
+            _ => ValueTask.CompletedTask,
+            new RecurringOptions { Jitter = TimeSpan.Zero, NonReentrant = false, FailuresBeforeBackoff = 1 });
+
+        Type stateType = handle.GetType();
+        MethodInfo markFailure = stateType.GetMethod("MarkFailure", BindingFlags.Public | BindingFlags.Instance)!;
+        for (int i = 0; i < 20; i++)
+        {
+            _ = markFailure.Invoke(handle, null);
+        }
+
+        MethodInfo backoff = typeof(TaskManager).GetMethod("RECURRING_BACKOFF_ASYNC", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        using CancellationTokenSource cts = new(TimeSpan.FromMilliseconds(200));
+
+        Exception? ex = await Record.ExceptionAsync(async () =>
+            await ((ValueTask)backoff.Invoke(manager, [handle, cts.Token])!).ConfigureAwait(false));
+
+        Assert.Null(ex);
     }
 }

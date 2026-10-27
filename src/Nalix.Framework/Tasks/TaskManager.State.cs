@@ -294,6 +294,9 @@ public partial class TaskManager
         // overrun does not overlap with the next scheduled tick.
         public readonly SemaphoreSlim Gate = new(1, 1);
 
+        // Owning manager, set once the state is registered; lets handle disposal unregister it.
+        public TaskManager? Owner;
+
         // The running task reference is tracked only for diagnostics and cleanup.
         public Task? Task;
 
@@ -406,14 +409,32 @@ public partial class TaskManager
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public void Cancel() => this.CancellationTokenSource.Cancel();
+        public void Cancel()
+        {
+            try
+            {
+                this.CancellationTokenSource.Cancel();
+            }
+            catch (ObjectDisposedException) { }
+        }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         void IDisposable.Dispose()
         {
-            this.Cancel();
-            this.CancellationTokenSource.Dispose();
-            Gate.Dispose();
+            // While registered, route through the owner so the entry leaves _recurring and the
+            // CTS/Gate are disposed only after the loop observed cancellation.
+            TaskManager? owner = this.Owner;
+            if (owner is not null
+                && owner._recurring.TryGetValue(this.Name, out RecurringState? current)
+                && ReferenceEquals(current, this))
+            {
+                owner.CancelRecurring(this.Name);
+            }
+            else
+            {
+                this.Cancel();
+            }
+
             this.IsPaused = false;
         }
 
