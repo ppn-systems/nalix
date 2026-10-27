@@ -193,17 +193,31 @@ public sealed class InMemorySessionStore : ISessionStore, IWorker, IReportable
             }
         }
 
-        foreach (KeyValuePair<ulong, SessionEntry> kvp in _store)
+        // Nothing has expired yet: drop the sessions closest to expiring (the oldest ones), never an
+        // arbitrary entry, so a flood of new sessions cannot push out long-lived valid ones first.
+        while (_store.Count >= maxSessions)
         {
-            if (_store.Count < maxSessions)
+            KeyValuePair<ulong, SessionEntry> oldest = default;
+            bool found = false;
+
+            foreach (KeyValuePair<ulong, SessionEntry> kvp in _store)
+            {
+                if (!found || kvp.Value.Snapshot.ExpiresAtUnixMilliseconds < oldest.Value.Snapshot.ExpiresAtUnixMilliseconds)
+                {
+                    oldest = kvp;
+                    found = true;
+                }
+            }
+
+            if (!found)
             {
                 return;
             }
 
-            if (((ICollection<KeyValuePair<ulong, SessionEntry>>)_store).Remove(kvp))
+            if (((ICollection<KeyValuePair<ulong, SessionEntry>>)_store).Remove(oldest))
             {
                 _ = Interlocked.Increment(ref _totalExpired);
-                kvp.Value.Return();
+                oldest.Value.Return();
             }
         }
     }
