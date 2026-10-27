@@ -67,6 +67,14 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     private int _completed;
     private int _subscribed;
 
+    // Bumped on every Rent and Return so callbacks that began for a previous use of this pooled
+    // instance can tell they are stale.
+    private int _generation;
+
+    // Environment.TickCount64 at which the current use times out; 0 when no timer is armed. A stale
+    // timer callback (queued before Return, run after a re-Rent) fires before the new deadline.
+    private long _deadline;
+
     private PendingRequest()
     {
         _core.RunContinuationsAsynchronously = true;
@@ -89,6 +97,8 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
             pending = new PendingRequest<TPkt>();
         }
 
+        pending._deadline = 0;
+        _ = Interlocked.Increment(ref pending._generation);
         pending._session = session;
         pending._directSession = session is TransportSession { HasDirectPendingDispatch: true } direct ? direct : null;
         pending._predicate = predicate;
@@ -107,6 +117,8 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     /// </summary>
     internal void Return(bool wasAwaited)
     {
+        _ = Interlocked.Increment(ref _generation);
+        Volatile.Write(ref _deadline, 0);
         this.Unsubscribe();
         _ = _timeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
         _ctRegistration.Dispose();
@@ -212,6 +224,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
         if (timeoutMs > 0 && Volatile.Read(ref _completed) == 0)
         {
+            Volatile.Write(ref _deadline, System.Environment.TickCount64 + timeoutMs);
             _ = _timeoutTimer.Change(timeoutMs, Timeout.Infinite);
         }
 
@@ -231,6 +244,14 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
     private void OnTimeout()
     {
+        // Timer.Change(Infinite) cannot cancel a callback that is already queued, so this may run for a
+        // previous use of the pooled instance. The timer never fires before the deadline set at arming.
+        long deadline = Volatile.Read(ref _deadline);
+        if (deadline == 0 || System.Environment.TickCount64 < deadline)
+        {
+            return;
+        }
+
         if (Interlocked.Exchange(ref _completed, 1) == 0)
         {
             int timeoutMs = _timeoutMs;
@@ -258,6 +279,10 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
         {
             return;
         }
+
+        // The session invokes observers outside its lock, so this request may be returned and re-rented while
+        // the predicate runs. Remember which use of the instance this frame was dispatched to.
+        int generation = Volatile.Read(ref _generation);
 
         ref readonly PacketHeader header = ref buffer.Span.AsHeaderRef();
         if (header.OpCode != _opcode)
@@ -298,7 +323,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
                 // Only the first arriving thread hands the packet to the caller; the caller then
                 // owns it, which is why it is not disposed on this path.
-                if (Interlocked.Exchange(ref _completed, 1) != 0)
+                if (Volatile.Read(ref _generation) != generation || Interlocked.Exchange(ref _completed, 1) != 0)
                 {
                     return;
                 }
