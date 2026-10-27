@@ -150,7 +150,7 @@ public sealed partial class ConnectionGuard
             try
             {
                 entry.SpinLock.Enter(ref trimLockTaken);
-                this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks);
+                this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks, maxAttempts);
 
                 long decayWindowTicks = _banCountDecayWindowTicks;
                 if (entry.BanCount > 0 && entry.LastBanTimeTicks > 0)
@@ -184,7 +184,7 @@ public sealed partial class ConnectionGuard
                     entry.SpinLock.Enter(ref lockTaken);
 
                     entry.RecentConnectionTimestamps.Enqueue(nowTicks);
-                    this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks);
+                    this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks, maxAttempts);
 
                     long lastAccept = entry.LastAcceptTimeTicks;
                     long gap = (nowTicks - lastAccept) / TimeSpan.TicksPerMillisecond;
@@ -516,7 +516,7 @@ public sealed partial class ConnectionGuard
             try
             {
                 entry.SpinLock.Enter(ref trimLockTaken);
-                this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks);
+                this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks, maxAttempts);
 
                 long decayWindowTicks = _banCountDecayWindowTicks;
                 if (entry.BanCount > 0 && entry.LastBanTimeTicks > 0)
@@ -552,7 +552,7 @@ public sealed partial class ConnectionGuard
 
                     // Track connection attempts during ban to evaluate sustained spamming
                     entry.RecentConnectionTimestamps.Enqueue(nowTicks);
-                    this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks);
+                    this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks, maxAttempts);
 
                     long lastAccept = entry.LastAcceptTimeTicks;
                     long gap = (nowTicks - lastAccept) / TimeSpan.TicksPerMillisecond;
@@ -710,8 +710,9 @@ public sealed partial class ConnectionGuard
     /// <summary>Removes timestamps outside the rate-window.</summary>
     /// <param name="timestamps"></param>
     /// <param name="nowTicks"></param>
+    /// <param name="limit">The attempt limit the queue is compared against; the queue is capped at four times this value.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void TRIM_OLD_TIMESTAMPS(System.Collections.Generic.Queue<long> timestamps, long nowTicks)
+    private void TRIM_OLD_TIMESTAMPS(System.Collections.Generic.Queue<long> timestamps, long nowTicks, int limit)
     {
         long cutoff = nowTicks - _windowTicks;
 
@@ -720,7 +721,7 @@ public sealed partial class ConnectionGuard
             _ = timestamps.Dequeue();
         }
 
-        int hardCap = _config.MaxConnectionsPerWindow * 4;
+        int hardCap = (int)Math.Min((long)limit * 4, int.MaxValue);
         while (timestamps.Count > hardCap)
         {
             _ = timestamps.Dequeue();
@@ -813,7 +814,7 @@ public sealed partial class ConnectionGuard
                 }
             }
 
-            this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, now.Ticks);
+            this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, now.Ticks, Math.Max(_config.MaxConnectionsPerWindow, _proxyConfig.MaxAttemptsPerTrustedProxyWindow));
         }
         finally
         {

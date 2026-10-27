@@ -106,7 +106,7 @@ public sealed partial class ConnectionGuard
                     continue;
                 }
 
-                this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks);
+                this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks, maxAttempts);
 
                 if (entry.RecentConnectionTimestamps.Count >= maxAttempts)
                 {
@@ -190,7 +190,7 @@ public sealed partial class ConnectionGuard
                     continue;
                 }
 
-                this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks);
+                this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, nowTicks, maxAttempts);
 
                 if (entry.RecentConnectionTimestamps.Count >= maxAttempts)
                 {
@@ -264,7 +264,7 @@ public sealed partial class ConnectionGuard
                 entry.RecentConnectionTimestamps.Clear();
             }
 
-            this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, now.Ticks);
+            this.TRIM_OLD_TIMESTAMPS(entry.RecentConnectionTimestamps, now.Ticks, _config.MaxSubnetConnectionsPerWindow);
         }
         finally
         {
