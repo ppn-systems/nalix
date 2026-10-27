@@ -182,7 +182,8 @@ public static class Keccak256
 
         // ── One-shot fast-path ────────────────────────────────────────────────────
         // Entire payload fits in one rate block -> no absorb loop, just pad + permute.
-        if (data.Length <= RateBytes)
+        // Strictly smaller: a full 136-byte block has no room for the pad byte in the stack block.
+        if (data.Length < RateBytes)
         {
             OneShotFastPath(data, output);
             return;
@@ -226,7 +227,7 @@ public static class Keccak256
     #region One-Shot Fast Path
 
     /// <summary>
-    /// Handles inputs whose length is ≤ <see cref="RateBytes"/> (136 bytes).
+    /// Handles inputs whose length is &lt; <see cref="RateBytes"/> (136 bytes).
     /// Pads inline into a stack-allocated block, calls <see cref="AbsorbBlock"/>
     /// (which selects the widest available SIMD path), then squeezes.
     /// Zero heap allocation.
@@ -248,9 +249,9 @@ public static class Keccak256
         // BUG FIX #1: Keccak-256 (Ethereum) uses 0x01, not 0x06 (SHA3/FIPS 202).
         block[data.Length] = PadDomain; // 0x01
 
-        // BUG FIX #2: when data fills the block exactly (data.Length == RateBytes),
-        // the pad byte and the final 0x80 land on the same position -> 0x01 | 0x80 = 0x81.
-        // The |= handles both the normal case and the overlap case correctly.
+        // BUG FIX #2: when data.Length == RateBytes - 1 the pad byte and the final 0x80 land on the
+        // same position -> 0x01 | 0x80 = 0x81. The |= handles both the normal and the overlap case.
+        // Inputs of RateBytes or more never reach this path (they use the sponge).
         block[RateBytes - 1] |= PadFinal; // 0x80
 
         // BUG FIX #3 (perf): call AbsorbBlock so the SIMD dispatch is shared.
