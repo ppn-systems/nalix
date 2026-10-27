@@ -58,9 +58,11 @@ internal sealed class SlidingWindow
             int forward = unchecked((ushort)(seq - currentMax));
 
             // 16-bit modular comparison:
-            // Bound forward jump to the replay window size so that a delayed/replayed packet
+            // A forward jump may exceed the window size (burst loss); otherwise the window would never
+            // advance and every later datagram would be rejected as too old until the sequence wraps.
+            // The jump is still bounded to a quarter of the ring so that a delayed/replayed packet
             // after >32768 newer packets cannot be misinterpreted as a forward jump.
-            int maxForwardJump = Math.Min(_windowSize, SequenceHalfRange / 2);
+            int maxForwardJump = SequenceHalfRange / 2;
             if (forward != 0 && forward <= maxForwardJump)
             {
                 // Advance window
