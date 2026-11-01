@@ -13,6 +13,7 @@ using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Internal.Compilation;
 using Nalix.Runtime.Middleware;
 using Nalix.Runtime.Routing;
+using Nalix.Runtime.Tests.TestSupport;
 using Xunit;
 
 namespace Nalix.Runtime.Tests.Audit;
@@ -81,6 +82,39 @@ public sealed class PipelineAuditTests
         middleware.Invocations.Should().Be(
             1,
             "AlwaysExecute middleware must run after the handler even when it throws");
+    }
+
+    private static ValueTask<object?> ThrowAfterYieldAsync() => Yield();
+
+    private static async ValueTask<object?> Yield()
+    {
+        await Task.Yield();
+        throw new InvalidOperationException("handler-boom-async");
+    }
+
+    /// <summary>
+    /// Guard (not a repro, expected to PASS): an async handler that throws after yielding is converted to a FAIL
+    /// control reply by <c>AwaitHandlerAndRespondAsync</c>, so the exception never reaches the pipeline and the
+    /// OutboundAlways stage still runs. This bounds RT-01 to synchronous handler throws.
+    /// </summary>
+    [Fact]
+    public async Task RT01_Guard_AlwaysExecuteOutboundMiddleware_RunsWhenAsyncHandlerThrows()
+    {
+        MiddlewarePipeline<IPacket> pipeline = new();
+        PacketDispatchOptions<IPacket> dispatch = new();
+        AlwaysOutboundMiddleware middleware = new();
+        pipeline.Use(middleware);
+
+        // Async dispatch sends a FAIL control reply, which needs a connection on the context.
+        PacketContext<IPacket> ctx = PacketContextFactory.Create<IPacket>(new Nalix.Codec.ProtocolFrames.SessionResume(), new FakeConnection());
+        PacketHandler<IPacket> handler = new(0x0001, default, null, "AsyncThrowingHandler", typeof(void),
+            (_, _) => ThrowAfterYieldAsync(), null);
+
+        await pipeline.ExecuteAsync(ctx, dispatch, handler, CancellationToken.None);
+
+        middleware.Invocations.Should().Be(
+            1,
+            "OutboundAlways middleware runs after an async handler failure (converted to a FAIL reply)");
     }
 
     /// <summary>
