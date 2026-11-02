@@ -8,12 +8,14 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Nalix.Abstractions.Middleware;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Framework.Injection;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Internal.Compilation;
 using Nalix.Runtime.Middleware;
 using Nalix.Runtime.Routing;
+using Nalix.Runtime.Tests.TestSupport;
 using Xunit;
 
 namespace Nalix.Runtime.Tests.Middleware;
@@ -22,14 +24,15 @@ public sealed class MiddlewarePipelineTests
 {
     private static MiddlewarePipeline<IPacket> CreatePipeline() => new();
     private static PacketDispatchOptions<IPacket> CreateDispatch() => new();
-    private static PacketContext<IPacket> CreateContext()
-    {
-        ObjectPoolManager pool = InstanceManager.Instance.GetOrCreateInstance<ObjectPoolManager>();
-        return pool.Get<PacketContext<IPacket>>();
-    }
+    private static PacketContext<IPacket> CreateContext() =>
+        PacketContextFactory.Create<IPacket>(new Nalix.Codec.ProtocolFrames.SessionResume(), new FakeConnection());
     private static PacketHandler<IPacket> CreateHandler(Func<PacketContext<IPacket>, ValueTask<object?>> invoker)
     {
-        return new PacketHandler<IPacket>(0x0001, default, null, "TestHandler", typeof(void),
+        PacketMetadata metadata = new(
+            new PacketOpcodeAttribute(0x0001), timeout: null,
+            permission: new PacketPermissionAttribute(PermissionLevel.NONE),
+            encryption: null, rateLimit: null, transport: null);
+        return new PacketHandler<IPacket>(0x0001, metadata, null, "TestHandler", typeof(void),
             (obj, ctx) => invoker(ctx), null);
     }
     private static PacketHandler<IPacket> CreateNoopHandler() => CreateHandler(_ => default);

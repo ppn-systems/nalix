@@ -4,6 +4,7 @@
 using System;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Internal.Compilation;
 
@@ -28,7 +29,7 @@ internal static class PacketHandlerFactory
         PacketMetadata metadata = new(
             opCode: new PacketOpcodeAttribute((ushort)1),
             timeout: timeout,
-            permission: null,
+            permission: new PacketPermissionAttribute(PermissionLevel.NONE),
             encryption: encryption,
             rateLimit: null,
             transport: null);

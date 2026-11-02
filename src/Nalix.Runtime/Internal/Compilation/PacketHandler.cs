@@ -116,7 +116,8 @@ internal readonly struct PacketHandler<TPacket>(
         // SEC-77: Enforce permission policy by default on the hot path.
         // Middleware is still recommended for logging and more complex policies,
         // but this provides a fail-closed baseline in the dispatcher itself.
-        if (Metadata.Permission is { } permission &&
+        // A handler without [PacketPermission] has no authorization policy and is denied.
+        if (Metadata.Permission is not { } permission ||
             !IsAuthorized(context.Connection.Level, permission))
         {
             denyReason = ProtocolReason.UNAUTHORIZED;
