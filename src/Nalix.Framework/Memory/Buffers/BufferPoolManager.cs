@@ -43,6 +43,13 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     /// <summary>Minimum number of tracked sentinels before the tracker is pruned of returned buffers.</summary>
     private const int SENTINEL_PRUNE_MIN = 512;
 
+    // Double-return guard: buffers currently held by the shared pool, held by weak reference.
+    // Slots are reused, so tracking allocates only the first time a slot is filled.
+    private const int FREE_TRACK_SIZE = 1024; // must be a power of two
+    private const int FREE_TRACK_PROBES = 8;
+    private readonly WeakReference<byte[]>?[] _freeTrack = new WeakReference<byte[]>?[FREE_TRACK_SIZE];
+    private readonly Lock _freeTrackLock = new();
+
     /// <summary>Gets the largest buffer size. Returns 0 as sizing is dynamically managed by ArrayPool.</summary>
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Architectural interface alignment")]
     public int MaxBufferSize => 0;
@@ -76,6 +83,7 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     public byte[] Rent(int minimumLength = 256)
     {
         byte[] array = _pool.Rent(minimumLength);
+        UntrackFree(array);
         _ = Interlocked.Increment(ref _rentCount);
         _ = Interlocked.Add(ref _totalBytesRented, array.Length);
 
@@ -106,6 +114,65 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
         }
     }
 
+    /// <summary>
+    /// Records a buffer as pooled. Returns <c>false</c> if it is already pooled (a double return).
+    /// Buffers that find no free slot are not tracked and are pooled as before.
+    /// </summary>
+    private bool TrackFree(byte[] array)
+    {
+        int start = RuntimeHelpers.GetHashCode(array);
+
+        lock (_freeTrackLock)
+        {
+            int firstEmpty = -1;
+            for (int probe = 0; probe < FREE_TRACK_PROBES; probe++)
+            {
+                int index = (start + probe) & (FREE_TRACK_SIZE - 1);
+                WeakReference<byte[]>? slot = _freeTrack[index];
+
+                if (slot is not null && slot.TryGetTarget(out byte[]? tracked))
+                {
+                    if (ReferenceEquals(tracked, array))
+                    {
+                        return false;
+                    }
+                }
+                else if (firstEmpty < 0)
+                {
+                    firstEmpty = index;
+                }
+            }
+
+            if (firstEmpty >= 0)
+            {
+                WeakReference<byte[]> slot = _freeTrack[firstEmpty] ??= new WeakReference<byte[]>(array);
+                slot.SetTarget(array);
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>Removes a buffer from the pooled set when it is handed out.</summary>
+    private void UntrackFree(byte[] array)
+    {
+        int start = RuntimeHelpers.GetHashCode(array);
+
+        lock (_freeTrackLock)
+        {
+            for (int probe = 0; probe < FREE_TRACK_PROBES; probe++)
+            {
+                WeakReference<byte[]>? slot = _freeTrack[(start + probe) & (FREE_TRACK_SIZE - 1)];
+
+                if (slot is not null && slot.TryGetTarget(out byte[]? tracked) && ReferenceEquals(tracked, array))
+                {
+                    slot.SetTarget(null!);
+                    return;
+                }
+            }
+        }
+    }
+
     private void PruneSentinelTrackerLocked()
     {
         ConcurrentBag<WeakReference<BufferSentinel>> kept = new();
@@ -133,6 +200,12 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     public void Return(byte[]? array, bool arrayClear = false)
     {
         if (array is null)
+        {
+            return;
+        }
+
+        // Reject a double return before anything else: the buffer may already belong to another renter.
+        if (!TrackFree(array))
         {
             return;
         }
