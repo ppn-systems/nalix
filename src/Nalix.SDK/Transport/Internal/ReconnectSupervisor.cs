@@ -28,6 +28,10 @@ internal sealed class ReconnectSupervisor
     // knows the connection it just established (or is still re-authenticating) has been lost again.
     private int _disconnectDuringAttempt;
 
+    // Serializes "record a drop" (OnDisconnected) against "publish ready" (ReconnectLoopAsync), so a drop
+    // cannot be recorded in the gap between the loop's final connectivity check and the ready publish.
+    private readonly Lock _gate = new();
+
     public ReconnectSupervisor(TransportSession session)
     {
         _session = session;
@@ -65,18 +69,28 @@ internal sealed class ReconnectSupervisor
             return;
         }
 
+        // Any application disconnect issued from here on must stop the loop, even though it may not raise OnDisconnected.
+        long startEpoch = _session.IntentionalDisconnectEpoch;
         TaskCompletionSource<bool> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (Interlocked.CompareExchange(ref _readyTcs, tcs, null) is not null)
+        lock (_gate)
         {
-            // A reconnect loop is already in flight; make it re-check before publishing ready.
-            Volatile.Write(ref _disconnectDuringAttempt, 1);
-            return;
+            if (Interlocked.CompareExchange(ref _readyTcs, tcs, null) is not null)
+            {
+                // A reconnect loop is already in flight; make it re-check before publishing ready.
+                Volatile.Write(ref _disconnectDuringAttempt, 1);
+                return;
+            }
         }
 
-        _ = this.ReconnectLoopAsync(tcs);
+        _ = this.ReconnectLoopAsync(tcs, startEpoch);
     }
 
-    private async Task ReconnectLoopAsync(TaskCompletionSource<bool> tcs)
+    // A DisconnectAsync() during backoff is recorded on the epoch only. A session with no live socket never
+    // raises OnDisconnected for it, and DisconnectAsync() consumes the flag itself, so the loop must compare epochs.
+    private bool IsStopRequested(long startEpoch) =>
+        !_session.Options.AutoReconnectEnabled || _session.IntentionalDisconnectEpoch != startEpoch;
+
+    private async Task ReconnectLoopAsync(TaskCompletionSource<bool> tcs, long startEpoch)
     {
         int attempt = 0;
         int maxAttempts = _session.Options.ReconnectMaxAttempts;
@@ -85,7 +99,7 @@ internal sealed class ReconnectSupervisor
 
         while (maxAttempts <= 0 || attempt < maxAttempts)
         {
-            if (!_session.Options.AutoReconnectEnabled)
+            if (this.IsStopRequested(startEpoch))
             {
                 break;
             }
@@ -99,7 +113,7 @@ internal sealed class ReconnectSupervisor
             {
                 await Task.Delay(delay).ConfigureAwait(false);
 
-                if (!_session.Options.AutoReconnectEnabled)
+                if (this.IsStopRequested(startEpoch))
                 {
                     break;
                 }
@@ -128,15 +142,21 @@ internal sealed class ReconnectSupervisor
                     _session.ExitDeferReady();
                 }
 
-                if (Volatile.Read(ref _disconnectDuringAttempt) != 0 || !_session.IsConnected)
+                lock (_gate)
                 {
-                    // The connection dropped while the resume/re-auth callbacks were running (and the
-                    // drop was swallowed); publishing ready now would hand out a dead session.
-                    attempt = 0;
-                    continue;
+                    // IsConnected must be read before the flag: reading it can itself record a drop.
+                    bool connected = _session.IsConnected;
+                    if (Volatile.Read(ref _disconnectDuringAttempt) != 0 || !connected || _session.IntentionalDisconnectEpoch != startEpoch)
+                    {
+                        // The connection dropped while the resume/re-auth callbacks were running (and the
+                        // drop was swallowed); publishing ready now would hand out a dead session.
+                        attempt = 0;
+                        continue;
+                    }
+
+                    _readyTcs = null;
                 }
 
-                _readyTcs = null;
                 _ = tcs.TrySetResult(true);
                 _session.NotifyReady();
                 return;
@@ -156,8 +176,12 @@ internal sealed class ReconnectSupervisor
         }
 
         _readyTcs = null;
-        _ = tcs.TrySetException(_session.Options.AutoReconnectEnabled
-            ? new TimeoutException($"Auto-reconnect gave up after {attempt} attempt(s).")
-            : new OperationCanceledException("Auto-reconnect stopped: AutoReconnectEnabled was disabled."));
+
+        bool stoppedByApp = _session.IntentionalDisconnectEpoch != startEpoch;
+        _ = tcs.TrySetException(stoppedByApp
+            ? new OperationCanceledException("Auto-reconnect stopped: DisconnectAsync() was called.")
+            : _session.Options.AutoReconnectEnabled
+                ? new TimeoutException($"Auto-reconnect gave up after {attempt} attempt(s).")
+                : new OperationCanceledException("Auto-reconnect stopped: AutoReconnectEnabled was disabled."));
     }
 }

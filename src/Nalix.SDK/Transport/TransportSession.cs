@@ -64,6 +64,7 @@ public abstract class TransportSession : IDisposable, ITransportSession
     public Func<CancellationToken, Task>? OnResumedAsync { get; set; }
 
     private int _intentionalDisconnect;
+    private long _intentionalDisconnectEpoch;
     private int _suppressDisconnectCount;
     private int _deferReadyCount;
     private int _negotiationDepth;
@@ -332,7 +333,11 @@ public abstract class TransportSession : IDisposable, ITransportSession
     /// Called by concrete sessions from their public <c>DisconnectAsync()</c> entry point only —
     /// never from internal fault-handling paths.
     /// </summary>
-    internal void MarkIntentionalDisconnect() => Interlocked.Exchange(ref _intentionalDisconnect, 1);
+    internal void MarkIntentionalDisconnect()
+    {
+        Interlocked.Exchange(ref _intentionalDisconnect, 1);
+        _ = Interlocked.Increment(ref _intentionalDisconnectEpoch);
+    }
 
     /// <summary>
     /// Consumes (reads and clears) the intentional-disconnect flag. Used by
@@ -340,6 +345,13 @@ public abstract class TransportSession : IDisposable, ITransportSession
     /// raise should start a reconnect loop.
     /// </summary>
     internal bool ConsumeIntentionalDisconnect() => Interlocked.Exchange(ref _intentionalDisconnect, 0) == 1;
+
+    /// <summary>
+    /// Gets a counter that advances on every application-initiated disconnect. Unlike the consumable flag,
+    /// it is never cleared, so <see cref="Internal.ReconnectSupervisor"/> can tell that a disconnect was
+    /// issued during its backoff even when no socket was live and <c>DisconnectAsync()</c> already consumed the flag.
+    /// </summary>
+    internal long IntentionalDisconnectEpoch => Volatile.Read(ref _intentionalDisconnectEpoch);
 
     /// <summary>
     /// Gets a value indicating whether public <see cref="OnDisconnected"/> notifications are currently
