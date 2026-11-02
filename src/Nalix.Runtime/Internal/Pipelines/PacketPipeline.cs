@@ -204,6 +204,22 @@ internal static class PacketPipeline
     private static async ValueTask SEND_UDP_ASYNC(IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease current, CancellationToken ct)
     {
         int dataLen = current.Length;
+
+        // Append the tag in place when the lease has tail room. The lease belongs to this send (a per-connection
+        // clone, or a single-use serialized lease), so writing past Length does not affect other senders.
+        if (current.Capacity >= dataLen + UdpMacTagSize)
+        {
+            Span<byte> full = current.SpanFull;
+            uint inPlaceHash = XxHash32.Compute(full[..dataLen]);
+            uint inPlaceTag = XxHash32.Compute(connection.Secret.AsSpan(), seed: inPlaceHash);
+            BinaryPrimitives.WriteUInt32LittleEndian(full.Slice(dataLen, UdpMacTagSize), inPlaceTag);
+
+            current.CommitLength(dataLen + UdpMacTagSize);
+
+            await transport.SendAsyncCore(current.Memory, ct).ConfigureAwait(false);
+            return;
+        }
+
         BufferLease signedLease = BufferLease.Rent(dataLen + UdpMacTagSize);
         try
         {
