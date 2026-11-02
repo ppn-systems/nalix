@@ -73,17 +73,7 @@ internal static class ServiceRegistrar
             }
         }
 
-        if (InstanceManager.Instance.GetExistingInstance<SessionPersistenceObserver>() == null)
-        {
-            IConnectionHub? hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>();
-            if (hub is not null)
-            {
-#pragma warning disable CA2000 // Dispose objects before losing scope
-                SessionPersistenceObserver observer = new(hub, service);
-#pragma warning restore CA2000 // Dispose objects before losing scope
-                InstanceManager.Instance.Register<SessionPersistenceObserver>(observer);
-            }
-        }
+        WireSessionPersistenceObserver();
     }
 
     public static void RegisterGroups()
@@ -98,16 +88,50 @@ internal static class ServiceRegistrar
             InstanceManager.Instance.Register<IConnectionGroupRegistry>(registry);
         }
 
-        if (InstanceManager.Instance.GetExistingInstance<GroupMembershipObserver>() == null)
+        WireGroupMembershipObserver();
+    }
+
+    /// <summary>
+    /// Creates the session persistence observer once both the session service and a connection hub exist.
+    /// Safe to call repeatedly; it is a no-op until the hub is registered.
+    /// </summary>
+    public static void WireSessionPersistenceObserver()
+    {
+        ISessionService? service = InstanceManager.Instance.GetExistingInstance<ISessionService>();
+        if (service == null || InstanceManager.Instance.GetExistingInstance<SessionPersistenceObserver>() != null)
         {
-            IConnectionHub? hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>();
-            if (hub is not null)
-            {
+            return;
+        }
+
+        IConnectionHub? hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>();
+        if (hub is not null)
+        {
 #pragma warning disable CA2000 // Dispose objects before losing scope
-                GroupMembershipObserver observer = new(hub, registry);
+            SessionPersistenceObserver observer = new(hub, service);
 #pragma warning restore CA2000 // Dispose objects before losing scope
-                InstanceManager.Instance.Register<GroupMembershipObserver>(observer);
-            }
+            InstanceManager.Instance.Register<SessionPersistenceObserver>(observer);
+        }
+    }
+
+    /// <summary>
+    /// Creates the group membership observer once both the group registry and a connection hub exist.
+    /// Safe to call repeatedly; it is a no-op until the hub is registered.
+    /// </summary>
+    public static void WireGroupMembershipObserver()
+    {
+        IConnectionGroupRegistry? registry = InstanceManager.Instance.GetExistingInstance<IConnectionGroupRegistry>();
+        if (registry == null || InstanceManager.Instance.GetExistingInstance<GroupMembershipObserver>() != null)
+        {
+            return;
+        }
+
+        IConnectionHub? hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>();
+        if (hub is not null)
+        {
+#pragma warning disable CA2000 // Dispose objects before losing scope
+            GroupMembershipObserver observer = new(hub, registry);
+#pragma warning restore CA2000 // Dispose objects before losing scope
+            InstanceManager.Instance.Register<GroupMembershipObserver>(observer);
         }
     }
 

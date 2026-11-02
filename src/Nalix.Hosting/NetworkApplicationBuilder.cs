@@ -456,6 +456,11 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
 
             ServiceRegistrar.RegisterLogger(_state);
             ServiceRegistrar.RegisterConnectionHub(_state);
+
+            // UseSessions()/UseGroups() run before the default hub exists, so their observers are wired here.
+            ServiceRegistrar.WireSessionPersistenceObserver();
+            ServiceRegistrar.WireGroupMembershipObserver();
+
             ServiceRegistrar.RegisterConnectionGuard(_state);
             ServiceRegistrar.RegisterBufferPoolManager(_state);
             ServiceRegistrar.RegisterObjectPoolManager(_state);
