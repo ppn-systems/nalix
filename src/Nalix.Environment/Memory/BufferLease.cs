@@ -18,6 +18,16 @@ namespace Nalix.Environment.Memory;
 /// Represents an owned lease of a pooled byte[] rented from <see cref="IBufferPoolManager"/>.
 /// Supports slice ownership (start + length) to enable zero-copy handoffs.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <b>Warning:</b> lease instances are pooled and reused. After the last <see cref="Dispose"/>,
+/// the same <see cref="BufferLease"/> object may be handed out again by a later <c>Rent</c>.
+/// Never keep or use a reference to a lease after disposing it, and never call
+/// <see cref="Dispose"/> more than once per reference you own (use <see cref="Retain"/> for
+/// additional owners). A stale <see cref="Dispose"/> on a reused instance releases the buffer
+/// of its new owner and can corrupt or leak data across connections.
+/// </para>
+/// </remarks>
 [DebuggerNonUserCode]
 [DebuggerDisplay("BufferLease Start={_start}, Len={Length}, Cap={Capacity}, Detached={_detached != 0}")]
 public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
@@ -469,7 +479,15 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     /// Releases a reference. When the count reaches zero and not detached, returns the array to <see cref="IBufferPoolManager"/>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Double-dispose is tolerated and becomes a debug-only diagnostic instead of throwing.
+    /// </para>
+    /// <para>
+    /// <b>Warning:</b> that tolerance only holds while the instance has not been rented again.
+    /// Once this lease is returned to the pool it may be reused, so a second <see cref="Dispose"/>
+    /// through a stale reference releases the buffer owned by the new holder. Call
+    /// <see cref="Dispose"/> exactly once per owned reference and drop the reference afterwards.
+    /// </para>
     /// </remarks>
     [StackTraceHidden]
     [DebuggerStepThrough]
