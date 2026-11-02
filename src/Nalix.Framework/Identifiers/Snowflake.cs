@@ -210,8 +210,9 @@ public readonly partial struct Snowflake : ISnowflake
     /// Creates a new <see cref="Snowflake"/> with the specified type and machine identifier.
     /// </summary>
     /// <param name="type">The identifier type.</param>
-    /// <param name="machineId">The machine identifier. Defaults to 1 if not specified.</param>
+    /// <param name="machineId">The machine identifier, in the range 0-1023. Defaults to 1 if not specified.</param>
     /// <returns>A new <see cref="Snowflake"/> instance with a timestamp-based value.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="machineId"/> is greater than 1023.</exception>
     /// <remarks>
     /// This method generates a unique identifier by combining the current Unix timestamp (in seconds)
     /// with the provided type and machine ID. The timestamp ensures temporal uniqueness.
@@ -227,6 +228,9 @@ public readonly partial struct Snowflake : ISnowflake
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Snowflake NewId(SnowflakeType type, ushort machineId = 1)
     {
+        // The machine ID occupies 10 bits; reject out-of-range values instead of silently masking them.
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(machineId, (ushort)0x3FF);
+
         lock (s_genLock)
         {
             uint now = Clock.UnixSecondsNowUInt32();

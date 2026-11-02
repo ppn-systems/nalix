@@ -35,7 +35,13 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     // Leak detection
     private ConcurrentBag<WeakReference<BufferSentinel>> _sentinelTracker = new();
     private readonly ConditionalWeakTable<byte[], BufferSentinel> _activeSentinels = new();
+    private readonly Lock _sentinelTrackerLock = new();
+    private int _trackedSentinels;
+    private int _sentinelPruneAt = SENTINEL_PRUNE_MIN;
     private int _disposed;
+
+    /// <summary>Minimum number of tracked sentinels before the tracker is pruned of returned buffers.</summary>
+    private const int SENTINEL_PRUNE_MIN = 512;
 
     /// <summary>Gets the largest buffer size. Returns 0 as sizing is dynamically managed by ArrayPool.</summary>
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Architectural interface alignment")]
@@ -77,10 +83,46 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
         {
             BufferSentinel sentinel = new(array, _config.EnableBufferLeakStackTrace);
             _activeSentinels.Add(array, sentinel);
-            _sentinelTracker.Add(new WeakReference<BufferSentinel>(sentinel));
+            TrackSentinel(sentinel);
         }
 
         return array;
+    }
+
+    /// <summary>
+    /// Adds a sentinel to the leak tracker, pruning returned or collected entries once the tracker grows past its threshold.
+    /// </summary>
+    private void TrackSentinel(BufferSentinel sentinel)
+    {
+        lock (_sentinelTrackerLock)
+        {
+            if (_trackedSentinels >= _sentinelPruneAt)
+            {
+                PruneSentinelTrackerLocked();
+            }
+
+            _sentinelTracker.Add(new WeakReference<BufferSentinel>(sentinel));
+            _trackedSentinels++;
+        }
+    }
+
+    private void PruneSentinelTrackerLocked()
+    {
+        ConcurrentBag<WeakReference<BufferSentinel>> kept = new();
+        int survivors = 0;
+
+        foreach (WeakReference<BufferSentinel> weakRef in _sentinelTracker)
+        {
+            if (weakRef.TryGetTarget(out BufferSentinel? sentinel) && !sentinel.IsReturned)
+            {
+                kept.Add(weakRef);
+                survivors++;
+            }
+        }
+
+        _sentinelTracker = kept;
+        _trackedSentinels = survivors;
+        _sentinelPruneAt = System.Math.Max(SENTINEL_PRUNE_MIN, survivors * 2);
     }
 
     /// <summary>Returns a buffer to the appropriate pool.</summary>

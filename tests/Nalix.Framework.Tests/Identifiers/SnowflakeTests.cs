@@ -123,7 +123,7 @@ public sealed class SnowflakeTests
     public void NewId_WithTypeAndMachineId_RoundTripsThroughBytes()
     {
         // NewId(type, machineId) uses SecureRandom for Value; we just check round-trip
-        Snowflake id = Snowflake.NewId((SnowflakeType)0x11, machineId: 0x2222);
+        Snowflake id = Snowflake.NewId((SnowflakeType)0x11, machineId: 0x222);
         Span<byte> buf = stackalloc byte[8];
         Assert.True(id.TryWriteBytes(buf, out _));
         Snowflake back = Snowflake.FromBytes(buf);

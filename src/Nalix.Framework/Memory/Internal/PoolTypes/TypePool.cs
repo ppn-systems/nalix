@@ -32,10 +32,13 @@ internal class TypePool(int maxCapacity)
     private int _maxCapacity = maxCapacity;
 
     /// <summary>
-    /// Preallocated fixed-slot array. Once constructed, the reference never changes;
-    /// individual slots are atomically swapped between null and non-null.
+    /// Fixed-slot array. Individual slots are atomically swapped between null and non-null.
+    /// The reference only changes when <see cref="SetMaxCapacity"/> grows the pool.
     /// </summary>
-    private readonly IPoolable?[] _slots = new IPoolable?[maxCapacity > 0 ? maxCapacity : 1];
+    private IPoolable?[] _slots = new IPoolable?[maxCapacity > 0 ? maxCapacity : 1];
+
+    /// <summary>Serializes slot-array growth; hot-path readers never take this lock.</summary>
+    private readonly Lock _growLock = new();
 
     /// <summary>
     /// Conservative count of objects in the pool.
@@ -82,10 +85,35 @@ internal class TypePool(int maxCapacity)
 
         int oldCapacity = Interlocked.Exchange(ref _maxCapacity, maxCapacity);
 
+        // Slots are sized at construction, so growing the capacity needs a larger slot array.
+        if (maxCapacity > _slots.Length)
+        {
+            this.GrowSlots(maxCapacity);
+        }
+
         // If the new capacity is less than the old one, trim the pool
         if (maxCapacity < oldCapacity)
         {
             _ = this.Trim(100); // Trim to exactly the max capacity
+        }
+    }
+
+    /// <summary>
+    /// Replaces the slot array with a larger one, copying existing slots. Runs only on capacity increases.
+    /// </summary>
+    private void GrowSlots(int newSize)
+    {
+        lock (_growLock)
+        {
+            IPoolable?[] current = _slots;
+            if (newSize <= current.Length)
+            {
+                return;
+            }
+
+            IPoolable?[] grown = new IPoolable?[newSize];
+            System.Array.Copy(current, grown, current.Length);
+            Volatile.Write(ref _slots, grown);
         }
     }
 
