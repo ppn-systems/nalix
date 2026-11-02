@@ -89,7 +89,10 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.InjectFieldCannotBeReadOnly,
             DiagnosticDescriptors.RequiredSymbolUnresolved,
             DiagnosticDescriptors.DuplicatePacketStaticOpCode,
-            DiagnosticDescriptors.PacketResetForPoolMissingMemberReset
+            DiagnosticDescriptors.PacketResetForPoolMissingMemberReset,
+            DiagnosticDescriptors.BufferLeaseReleasedTwice,
+            DiagnosticDescriptors.BufferLeaseUsedAfterRelease,
+            DiagnosticDescriptors.BorrowedBufferLeaseReleased
         ];
 
     public override void Initialize(AnalysisContext context)
@@ -167,6 +170,9 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             startContext.RegisterSyntaxNodeAction(
                 AnalyzeFieldDeclaration,
                 Microsoft.CodeAnalysis.CSharp.SyntaxKind.FieldDeclaration);
+
+            startContext.RegisterOperationBlockAction(
+                blockContext => AnalyzeLeaseOwnership(blockContext, symbols));
 
             startContext.RegisterOperationAction(
                 operationContext => AnalyzeContextEscape(operationContext, symbols),
@@ -2028,7 +2034,10 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
                 // Heuristic: check if the lease is disposed, used in a using block, 
                 // passed to a next delegate, or returned in any form.
                 // Also consider passing to a constructor as 'potentially owned' by the new object.
+                // Storing the lease in a field, property or slot also hands off ownership.
                 bool isDisposed = code.Contains($"{name}.Dispose()")
+                                || code.Contains($"{name}?.Dispose()")
+                                || Regex.IsMatch(code, $@"[^=!<>]=\s*{name}\s*;")
                                 || code.Contains($"using (var {name}")
                                 || code.Contains($"using var {name}")
                                 || (code.Contains($"new ") && code.Contains(name)) // Passed to constructor

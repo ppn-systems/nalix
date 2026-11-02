@@ -616,4 +616,31 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Manual implementations of ResetForPool() on packet types must reset all mutable instance fields and auto-properties (unless annotated with [SkipClean]) to prevent cross-request data leaks when instances are reused from the object pool.");
+
+    public static readonly DiagnosticDescriptor BufferLeaseReleasedTwice = new(
+        id: "NALIX108",
+        title: "IBufferLease released more than once",
+        messageFormat: "'{0}' is released again here, but it was already {1}; pooled leases are reused, so a second release frees the buffer of another owner",
+        category: "Lifecycle",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "An IBufferLease must be released exactly once per owned reference, either by Dispose() or by passing it to a parameter that takes ownership (a parameter not marked [Borrowed]). Lease instances are pooled, so a stale second release can return a buffer that now belongs to a different lease. Call Retain() when an additional owner is intended.");
+
+    public static readonly DiagnosticDescriptor BufferLeaseUsedAfterRelease = new(
+        id: "NALIX109",
+        title: "IBufferLease used after release",
+        messageFormat: "'{0}' is used here after it was {1}; the lease may already belong to another owner",
+        category: "Lifecycle",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "After Dispose() or after passing an IBufferLease to a parameter that takes ownership (not marked [Borrowed]), the caller no longer owns the lease. Pooled lease instances are reused, so later reads or writes can touch another owner's buffer.");
+
+    public static readonly DiagnosticDescriptor BorrowedBufferLeaseReleased = new(
+        id: "NALIX110",
+        title: "Borrowed IBufferLease is released or stored",
+        messageFormat: "'{0}' is marked [Borrowed] but is {1}; the caller still owns this lease",
+        category: "Lifecycle",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "A [Borrowed] IBufferLease is owned by the caller. The method must not dispose it, pass it to a parameter that takes ownership, or store it in a field or property that is not itself marked [Borrowed]. Mark the target [Borrowed], call Retain() for a new owner, or remove [Borrowed] if ownership is really transferred.");
 }

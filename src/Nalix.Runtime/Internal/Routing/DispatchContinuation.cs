@@ -40,7 +40,7 @@ internal sealed class DispatchContinuation : IThreadPoolWorkItem, IPoolable, IDi
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Initialize(
         IConnection connection,
-        [Borrowed] IBufferLease lease,
+        IBufferLease lease,
         Task pendingTask, CancellationToken ct)
     {
         _connection = connection;
