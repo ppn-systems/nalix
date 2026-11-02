@@ -128,7 +128,7 @@ public sealed partial class ConnectionGuard
                 try
                 {
                     kvp.Value.SpinLock.Enter(ref lockTaken);
-                    shouldRemove = SHOULD_REMOVE_ENTRY(kvp.Value, cutoff);
+                    shouldRemove = SHOULD_REMOVE_ENTRY(kvp.Value, cutoff, _banCountDecayWindowTicks);
                 }
                 finally
                 {
@@ -155,7 +155,7 @@ public sealed partial class ConnectionGuard
                     {
                         entry.SpinLock.Enter(ref lockTaken);
                         // Double check under lock to prevent TOCTOU
-                        if (SHOULD_REMOVE_ENTRY(entry, cutoff))
+                        if (SHOULD_REMOVE_ENTRY(entry, cutoff, _banCountDecayWindowTicks))
                         {
                             entry.IsRemoved = true;
                             canRemove = true;
@@ -303,12 +303,23 @@ public sealed partial class ConnectionGuard
     /// will be reconsidered in the next cleanup cycle.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool SHOULD_REMOVE_ENTRY(ConnectionLimitEntry entry, DateTime cutoff)
+    private static bool SHOULD_REMOVE_ENTRY(ConnectionLimitEntry entry, DateTime cutoff, long decayWindowTicks)
     {
         long bannedUntil = Interlocked.Read(ref entry.BannedUntilTicks);
         if (bannedUntil > cutoff.Ticks)
         {
             return false;
+        }
+
+        // Keep escalation state only until the remaining ban tiers have decayed away (bounded retention).
+        int banCount = entry.BanCount;
+        if (banCount > 0)
+        {
+            long lastBanTicks = entry.LastBanTimeTicks;
+            if (lastBanTicks == 0 || cutoff.Ticks - lastBanTicks < banCount * decayWindowTicks)
+            {
+                return false;
+            }
         }
 
         // Read Info without lock — approximate check is fine for cleanup decisions.

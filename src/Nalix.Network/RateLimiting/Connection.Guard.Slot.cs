@@ -160,6 +160,8 @@ public sealed partial class ConnectionGuard
                     {
                         int decayTiers = (int)(elapsed / decayWindowTicks);
                         entry.BanCount = Math.Max(0, entry.BanCount - decayTiers);
+                        // Advance the decay clock by the tiers consumed so the same window is never subtracted again.
+                        entry.LastBanTimeTicks += decayTiers * decayWindowTicks;
                         if (entry.BanCount == 0)
                         {
                             entry.LastBanTimeTicks = 0;
@@ -526,6 +528,8 @@ public sealed partial class ConnectionGuard
                     {
                         int decayTiers = (int)(elapsed / decayWindowTicks);
                         entry.BanCount = Math.Max(0, entry.BanCount - decayTiers);
+                        // Advance the decay clock by the tiers consumed so the same window is never subtracted again.
+                        entry.LastBanTimeTicks += decayTiers * decayWindowTicks;
                         if (entry.BanCount == 0)
                         {
                             entry.LastBanTimeTicks = 0;
