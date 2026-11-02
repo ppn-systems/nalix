@@ -127,7 +127,8 @@ public static class HandshakeExtensions
                     throw new NetworkException($"Malformed ProofOfWorkChallenge packet: {challengeReason}");
                 }
 
-                long solution = ProofOfWorkSolver.SolveChallenge(challenge.Nonce.AsSpan(), challenge.Difficulty, challenge.TimestampTicks);
+                // Bounded by the same linked token as the handshake, so ConnectTimeoutMillis also bounds the solve.
+                long solution = ProofOfWorkSolver.SolveChallenge(challenge.Nonce.AsSpan(), challenge.Difficulty, challenge.TimestampTicks, cts.Token);
 
                 using ProofOfWorkProof proof = new();
                 proof.Initialize(challenge.Nonce, challenge.Difficulty, challenge.TimestampTicks, challenge.Mac, solution, flags: PacketFlags.SYSTEM);
