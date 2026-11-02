@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Tests.TestSupport;
@@ -114,7 +115,7 @@ public sealed class PacketDispatchChannelTests
         PacketMetadata metadata = new(
             new PacketOpcodeAttribute(opcode),
             timeout: null,
-            permission: null,
+            permission: new PacketPermissionAttribute(PermissionLevel.NONE),
             encryption: null,
             rateLimit: null,
             transport: null);

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
+using Nalix.Abstractions.Security;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Hosting;
@@ -29,6 +30,7 @@ public sealed class HandlerRegistrationTests : IDisposable
     {
         public static int ReceivedCount;
 
+        [PacketPermission(PermissionLevel.NONE)]
         [PacketOpcode(8888)]
         public void Handle(IPacketContext<HandlerScanPacket> context) => Interlocked.Increment(ref ReceivedCount);
     }
@@ -76,6 +78,7 @@ public sealed class HandlerRegistrationTests : IDisposable
     [Nalix.Abstractions.Injection.Injectable]
     public sealed class DupHandlerA
     {
+        [PacketPermission(PermissionLevel.NONE)]
         [PacketOpcode(7777)]
         public void Handle(IPacketContext<HandlerScanPacket> context) { }
     }
@@ -84,6 +87,7 @@ public sealed class HandlerRegistrationTests : IDisposable
     [Nalix.Abstractions.Injection.Injectable]
     public sealed class DupHandlerB
     {
+        [PacketPermission(PermissionLevel.NONE)]
         [PacketOpcode(7777)]
         public void Handle(IPacketContext<HandlerScanPacket> context) { }
     }

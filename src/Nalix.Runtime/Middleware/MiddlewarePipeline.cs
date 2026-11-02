@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
@@ -168,7 +169,17 @@ internal sealed class MiddlewarePipeline<TPacket> where TPacket : IPacket
         PipelineSnapshot snapshot = Volatile.Read(ref _snapshot);
         if (snapshot.IsEmpty)
         {
-            ValueTask handlerPending = dispatch.ExecuteTerminalHandler(descriptor, context, ct);
+            ValueTask handlerPending;
+            try
+            {
+                handlerPending = dispatch.ExecuteTerminalHandler(descriptor, context, ct);
+            }
+            catch
+            {
+                this.RECORD_EXECUTION(startTicks);
+                throw;
+            }
+
             if (handlerPending.IsCompletedSuccessfully)
             {
 #pragma warning disable CA1849 // Completed-success fast path; GetResult observes synchronous exceptions without blocking or allocating an async state machine.
@@ -667,7 +678,16 @@ internal sealed class MiddlewarePipeline<TPacket> where TPacket : IPacket
             CancellationTokenSource? linkedCts = CREATE_EXECUTION_TOKEN(inboundCt, _rootCt, out CancellationToken handlerCt);
 
             // Direct terminal handler invocation — no delegate allocation.
-            ValueTask handlerPending = _dispatch!.ExecuteTerminalHandler(_handler, _context!, handlerCt);
+            // A synchronous throw is converted to a faulted task so OutboundAlways still runs.
+            ValueTask handlerPending;
+            try
+            {
+                handlerPending = _dispatch!.ExecuteTerminalHandler(_handler, _context!, handlerCt);
+            }
+            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+            {
+                handlerPending = ValueTask.FromException(ex);
+            }
 
             if (handlerPending.IsCompletedSuccessfully)
             {
@@ -696,6 +716,7 @@ internal sealed class MiddlewarePipeline<TPacket> where TPacket : IPacket
                 PooledPipelineContext runner, ValueTask handler, CancellationToken handlerCt, CancellationTokenSource? linkedCts)
             {
                 OperationCanceledException? cancelled = null;
+                ExceptionDispatchInfo? failure = null;
                 try
                 {
                     try
@@ -708,9 +729,16 @@ internal sealed class MiddlewarePipeline<TPacket> where TPacket : IPacket
                         // completes so callers (e.g. TimeoutMiddleware) can observe and react to it.
                         cancelled = ex;
                     }
+                    catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+                    {
+                        // OutboundAlways must run for handler failures too; rethrow after it completes.
+                        failure = ExceptionDispatchInfo.Capture(ex);
+                    }
 
                     runner.SET_STAGE(PipelineStage.OutboundAlways);
                     await runner.RunAsync().ConfigureAwait(false);
+
+                    failure?.Throw();
 
                     if (cancelled is not null)
                     {

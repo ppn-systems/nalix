@@ -3,6 +3,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Security;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Codec.Pooling;
 
@@ -14,6 +15,7 @@ namespace Nalix.Integration.Tests.TestSupport;
 [PacketHandler("Integration.EndToEnd.Echo")]
 public static class EchoHandlers
 {
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(EchoPacket.OpCode)]
     public static async ValueTask HandleEchoAsync(IPacketContext<EchoPacket> context)
     {

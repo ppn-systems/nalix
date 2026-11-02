@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Security;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Codec.DataFrames;
@@ -45,9 +46,11 @@ public sealed class EchoController
     // two-parameter (packet, connection) shape is silently skipped — no diagnostic,
     // no handler registered — so every handler here uses the context-style shape.
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(VoidOpCode)]
     public void HandleVoid(IPacketContext<EchoPacket> context) => VoidInvoked = true;
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(ValueTaskOpCode)]
     public ValueTask HandleValueTask(IPacketContext<EchoPacket> context)
     {
@@ -55,6 +58,7 @@ public sealed class EchoController
         return ValueTask.CompletedTask;
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(TaskOpCode)]
     public Task HandleTask(IPacketContext<EchoPacket> context)
     {
@@ -62,6 +66,7 @@ public sealed class EchoController
         return Task.CompletedTask;
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(ValueTaskOfTOpCode)]
     public async ValueTask<EchoPacket> HandleValueTaskOfT(IPacketContext<EchoPacket> context)
     {
@@ -69,6 +74,7 @@ public sealed class EchoController
         return new EchoPacket { Header = new PacketHeader { OpCode = ValueTaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } };
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(TaskOfTOpCode)]
     public async Task<EchoPacket> HandleTaskOfT(IPacketContext<EchoPacket> context)
     {
@@ -76,6 +82,7 @@ public sealed class EchoController
         return new EchoPacket { Header = new PacketHeader { OpCode = TaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } };
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(ContextOpCode)]
     public async ValueTask<EchoPacket> HandleContext(IPacketContext<EchoPacket> context)
     {
@@ -84,6 +91,7 @@ public sealed class EchoController
         return new EchoPacket { Header = new PacketHeader { OpCode = ContextOpCode, SequenceId = context.Packet.Header.SequenceId } };
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(ThrowingOpCode)]
     public async ValueTask HandleThrowing(IPacketContext<EchoPacket> context)
     {
@@ -97,6 +105,7 @@ public sealed class EchoController
     // inside the iterator, exactly the shape that observed a cleared or reused pooled context before
     // the fix (the bridge context was returned to the pool the instant this method was CALLED, long
     // before the first yield ran).
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(StreamOpCode)]
     public static async IAsyncEnumerable<EchoPacket> HandleStream(IPacketContext<EchoPacket> context)
     {
@@ -105,24 +114,28 @@ public sealed class EchoController
         yield return new EchoPacket { Header = new PacketHeader { OpCode = StreamOpCode, SequenceId = requestSeq } };
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(SyncValueTaskOfTOpCode)]
     public ValueTask<EchoPacket> HandleSyncValueTaskOfT(IPacketContext<EchoPacket> context)
     {
         return new ValueTask<EchoPacket>(new EchoPacket { Header = new PacketHeader { OpCode = SyncValueTaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } });
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(SyncTaskOfTOpCode)]
     public Task<EchoPacket> HandleSyncTaskOfT(IPacketContext<EchoPacket> context)
     {
         return Task.FromResult(new EchoPacket { Header = new PacketHeader { OpCode = SyncTaskOfTOpCode, SequenceId = context.Packet.Header.SequenceId } });
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(SyncDirectValueOpCode)]
     public EchoPacket HandleSyncDirectValue(IPacketContext<EchoPacket> context)
     {
         return new EchoPacket { Header = new PacketHeader { OpCode = SyncDirectValueOpCode, SequenceId = context.Packet.Header.SequenceId } };
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(SyncThrowingOpCode)]
     public ValueTask HandleSyncThrowing(IPacketContext<EchoPacket> context)
     {
@@ -133,6 +146,7 @@ public sealed class EchoController
 
     // Legacy (packet, connection) two-parameter shape. See the comment above: the generator
     // silently skips this — no diagnostic, no registration — per PacketHandlerGenerator.cs:243.
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(TwoParamOpCode)]
     public void HandleTwoParam(EchoPacket packet, IConnection connection) => VoidInvoked = true;
 
@@ -143,6 +157,7 @@ public sealed class EchoController
     public IScopedEchoService? InjectedService { get; private set; }
     public IScopedEchoService2? InjectedService2 { get; private set; }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(FromScopeOpCode)]
     public async ValueTask<EchoPacket> HandleFromScope(
         IPacketContext<EchoPacket> context,
@@ -154,6 +169,7 @@ public sealed class EchoController
         return new EchoPacket { Header = new PacketHeader { OpCode = FromScopeOpCode, SequenceId = context.Packet.Header.SequenceId } };
     }
 
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(MultipleFromScopeOpCode)]
     public async ValueTask HandleMultipleFromScope(
         IPacketContext<EchoPacket> context,
