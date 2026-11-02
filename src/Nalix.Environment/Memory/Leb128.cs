@@ -139,7 +139,8 @@ public static class Leb128
                 byte b3 = p[3]; v |= (uint)(b3 & 0x7F) << 21; if ((b3 & 0x80) == 0) { value = v; bytesRead = 4; return true; }
                 byte b4 = p[4]; v |= (uint)(b4 & 0x7F) << 28;
 
-                if ((b4 & 0x80) != 0)
+                // 5th byte may carry only bits 0-3 (uint is 32-bit) and must not continue.
+                if ((b4 & 0xF0) != 0)
                 {
                     Throw.OverlongLeb128();
                 }
@@ -173,6 +174,13 @@ public static class Leb128
         while (cur < end)
         {
             byte b = *cur++;
+
+            // 5th byte (shift == 28) may carry only bits 0-3 and must not continue.
+            if (shift == 28 && (b & 0xF0) != 0)
+            {
+                Throw.OverlongLeb128();
+            }
+
             v |= (uint)(b & 0x7F) << shift;
 
             if ((b & 0x80) == 0)
