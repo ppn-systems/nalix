@@ -1074,9 +1074,12 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             {
                 tTimeout = $"new global::Nalix.Abstractions.Networking.Packets.PacketTimeoutAttribute((int){a.ConstructorArguments[0].Value})";
             }
-            else if (name == KnownNames.PacketPermissionAttributeMetadataName && a.ConstructorArguments.Length > 0)
+            else if (name == KnownNames.PacketPermissionAttributeMetadataName)
             {
-                tPermission = $"new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel){a.ConstructorArguments[0].Value})";
+                // A bare [PacketPermission] binds the parameterless ctor (default USER); it must still be forwarded.
+                tPermission = a.ConstructorArguments.Length > 0
+                    ? $"new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel){a.ConstructorArguments[0].Value})"
+                    : "new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute()";
             }
             else if (name == KnownNames.PacketEncryptionAttributeMetadataName && a.ConstructorArguments.Length > 0)
             {
