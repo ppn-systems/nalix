@@ -18,13 +18,17 @@ namespace Nalix.Observability.Contracts;
 /// A request selects one or more <see cref="RuntimeObservationTargets"/>. A response echoes the targets it
 /// actually wrote and carries a single UTF-8 JSON object keyed by <see cref="RuntimeObservationSections"/>,
 /// or a <see cref="ProtocolReason"/> when the request cannot be served.
+/// <para>A response never exceeds the server's payload budget (96 KiB by default, below the 128 KiB frame limit):
+/// a larger snapshot is streamed as several chunks (see <see cref="IsEndOfStream"/>), each with the sections it
+/// carries in <see cref="Targets"/>. A section too large on its own has its arrays capped and carries
+/// <c>"_truncated": true</c>.</para>
 /// </remarks>
 [Packet]
 [ExcludeFromCodeCoverage]
 [GenerateFormatterAttribute]
 [SerializePackable(SerializeLayout.Explicit)]
 [DebuggerDisplay("RUNTIME_OBSERVATION Stage={Stage}, Targets={Targets}, Reason={Reason}")]
-public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>, IPacketValidatable, IPacketStaticOpcode
+public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>, IPacketValidatable, IPacketStaticOpcode, IPacketStreamable
 {
     /// <inheritdoc/>
     public static ushort StaticOpCode => (ushort)ProtocolOpCode.RUNTIME_OBSERVATION;
@@ -54,9 +58,20 @@ public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>,
     public long SampledAt { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether this response is the last chunk of the reply.
+    /// </summary>
+    /// <remarks>
+    /// A live snapshot larger than the server's payload budget is streamed as several responses that share the
+    /// request's sequence id, each carrying a subset of the sections; consume them with the SDK's
+    /// <c>StreamAsync</c>. A reply that fits in one response is a single chunk with this flag set.
+    /// </remarks>
+    [SerializeOrder(4)]
+    public bool IsEndOfStream { get; set; }
+
+    /// <summary>
     /// Gets or sets the UTF-8 JSON observation payload returned by a response.
     /// </summary>
-    [SerializeOrder(4)]
+    [SerializeOrder(5)]
     public ReadOnlyMemory<byte> ObservationData { get; set; } = ReadOnlyMemory<byte>.Empty;
 
     [SerializeIgnore]
@@ -119,6 +134,7 @@ public sealed partial class RuntimeObservation : PacketBase<RuntimeObservation>,
         this.Targets = RuntimeObservationTargets.NONE;
         this.Reason = ProtocolReason.NONE;
         this.SampledAt = 0;
+        this.IsEndOfStream = false;
         this.ObservationData = ReadOnlyMemory<byte>.Empty;
         _lease?.Dispose();
         _lease = null;

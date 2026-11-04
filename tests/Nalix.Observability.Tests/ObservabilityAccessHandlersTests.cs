@@ -8,12 +8,11 @@ using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
 using Nalix.Abstractions.Security;
 using Nalix.Codec.DataFrames;
-using Nalix.Integration.Tests.TestSupport;
-using Nalix.Observability;
 using Nalix.Observability.Contracts;
+using Nalix.Observability.Tests.TestSupport;
 using NSubstitute;
 
-namespace Nalix.Integration.Tests.Observability;
+namespace Nalix.Observability.Tests;
 
 /// <summary>
 /// Verifies the access decisions made by <see cref="ObservabilityAccessHandlers"/>.

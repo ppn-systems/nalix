@@ -4,10 +4,10 @@
 using System.Text.Json;
 using Nalix.Abstractions.Networking;
 using Nalix.Framework;
-using Nalix.Integration.Tests.TestSupport;
 using Nalix.Observability.Internal;
+using Nalix.Observability.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests.Observability;
+namespace Nalix.Observability.Tests.Internal;
 
 /// <summary>
 /// Verifies that <see cref="TransportReport{T}"/> keys each registered transport's report by name.

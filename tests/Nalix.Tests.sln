@@ -47,6 +47,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Analyzers.Generators"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Hosting.Tests", "Nalix.Hosting.Tests\Nalix.Hosting.Tests.csproj", "{42183C3C-20C7-481A-B433-EBEC6B9ADCDC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Observability.Tests", "Nalix.Observability.Tests\Nalix.Observability.Tests.csproj", "{8515657E-1C07-4421-B62D-83D9CF4AB605}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -321,6 +323,18 @@ Global
 		{42183C3C-20C7-481A-B433-EBEC6B9ADCDC}.Release|x64.Build.0 = Release|Any CPU
 		{42183C3C-20C7-481A-B433-EBEC6B9ADCDC}.Release|x86.ActiveCfg = Release|Any CPU
 		{42183C3C-20C7-481A-B433-EBEC6B9ADCDC}.Release|x86.Build.0 = Release|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Debug|x64.Build.0 = Debug|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Debug|x86.Build.0 = Debug|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Release|x64.ActiveCfg = Release|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Release|x64.Build.0 = Release|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Release|x86.ActiveCfg = Release|Any CPU
+		{8515657E-1C07-4421-B62D-83D9CF4AB605}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

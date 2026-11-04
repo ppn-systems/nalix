@@ -6,11 +6,11 @@ using Nalix.Abstractions;
 using Nalix.Abstractions.Diagnostics;
 using Nalix.Environment.Memory;
 using Nalix.Framework;
-using Nalix.Integration.Tests.TestSupport;
 using Nalix.Observability.Contracts;
 using Nalix.Observability.Internal;
+using Nalix.Observability.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests.Observability;
+namespace Nalix.Observability.Tests.Internal;
 
 /// <summary>
 /// Verifies which sections <see cref="ObservationWriter"/> emits, which flags it reports, and that a faulty section is dropped alone.

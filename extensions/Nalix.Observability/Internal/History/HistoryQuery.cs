@@ -23,6 +23,21 @@ internal static class HistoryQuery
 
     private static readonly JsonWriterOptions s_options = new() { Indented = false, SkipValidation = true };
 
+    // Worst-case JSON bytes per bucket: one time value plus avg and max for every metric.
+    private const int BytesPerTime = 15;
+    private const int BytesPerValue = 13;
+
+    /// <summary>
+    /// Lowers <paramref name="points"/> so a series response for <paramref name="metricCount"/> metrics stays within
+    /// <paramref name="budget"/> bytes even in the worst case (every bucket filled with long numbers).
+    /// </summary>
+    public static int FitPoints(int points, int metricCount, int budget)
+    {
+        int perBucket = BytesPerTime + (Math.Max(1, metricCount) * 2 * BytesPerValue);
+        int fit = Math.Max(2, (budget - 1024 - (metricCount * 96)) / perBucket);
+        return Math.Clamp(points, 2, Math.Min(fit, MaxPoints));
+    }
+
     /// <summary>Parses a query; returns <see langword="false"/> for malformed JSON or an empty/inverted range.</summary>
     public static bool TryParse(ReadOnlySpan<byte> json, out long from, out long to, out int points, out List<string> metrics)
     {
@@ -93,8 +108,11 @@ internal static class HistoryQuery
         return to > from;
     }
 
-    /// <summary>Writes the catalog: recorded days overlapping the range and every metric recorded in them.</summary>
-    public static BufferLease Catalog(HistoryRecorder recorder, long from, long to)
+    /// <summary>
+    /// Writes the catalog: recorded days overlapping the range and the metrics recorded in them. Metric names are
+    /// listed until <paramref name="budget"/> would be exceeded; the response then carries <c>"truncated": true</c>.
+    /// </summary>
+    public static BufferLease Catalog(HistoryRecorder recorder, long from, long to, int budget = int.MaxValue)
     {
         using BufferWriter buffer = new(4 * 1024);
         using Utf8JsonWriter writer = new(buffer, s_options);
@@ -135,13 +153,30 @@ internal static class HistoryQuery
         }
 
         writer.WriteEndArray();
+        writer.Flush();
+
+        // Each name costs its length plus quotes and a comma; stop before the budget, keeping room to close.
+        long used = writer.BytesCommitted + 64;
+        bool truncated = false;
         writer.WriteStartArray(RuntimeObservationHistory.Metrics);
         foreach (string metric in metrics)
         {
+            used += metric.Length + 3;
+            if (used > budget)
+            {
+                truncated = true;
+                break;
+            }
+
             writer.WriteStringValue(metric);
         }
 
         writer.WriteEndArray();
+        if (truncated)
+        {
+            writer.WriteBoolean("truncated", true);
+        }
+
         writer.WriteEndObject();
         writer.Flush();
         return buffer.ExtractLease();

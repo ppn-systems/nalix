@@ -17,6 +17,14 @@ GC counts) so clients compute rates from consecutive samples.
 
 Both packets are encrypted; large payloads are compressed by the frame pipeline automatically.
 
+### Payload budget
+
+Every response stays under `ObservabilityOptions.MaxPayloadBytes` (96 KiB by default), below the 128 KiB transport
+frame limit. Sections are packed while they fit; the rest are left out of the response's `Targets` and the client
+asks for them in a follow-up request. A single section larger than the budget (long worker or instance lists) has its
+arrays capped and is marked `"_truncated": true`. History series lower their bucket count to fit, and a catalog cuts
+its metric list (`"truncated": true`).
+
 ## History
 
 Unless disabled, `UseObservability` also records numeric metrics to disk so a dashboard can browse past days:
