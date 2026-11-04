@@ -5,7 +5,7 @@ using System.Buffers;
 using System.Text.Json;
 using Nalix.Abstractions;
 
-namespace Nalix.Integration.Tests.TestSupport;
+namespace Nalix.Observability.Tests.TestSupport;
 
 /// <summary>
 /// Renders a reportable into a standalone JSON document for assertions.

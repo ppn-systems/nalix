@@ -11,10 +11,12 @@ namespace Nalix.Observability.Contracts;
 /// <para>Request: <c>{"from":ms,"to":ms,"points":600,"metrics":["Process.WorkingSetBytes", …]}</c>, times in Unix
 /// milliseconds. Omitting <c>metrics</c> (or sending an empty list) asks for the catalog instead.</para>
 /// <para>Catalog response: <c>{"interval":ms,"days":[{"date":"2026-10-27","from":ms,"to":ms,"samples":n,"bytes":n}],
-/// "metrics":["…"]}</c> — the recorded days overlapping the range and every metric name recorded in them.</para>
+/// "metrics":["…"],"truncated":true?}</c> — the recorded days overlapping the range and the metric names recorded in
+/// them; <c>truncated</c> is present when the names were cut to fit the payload budget.</para>
 /// <para>Series response: <c>{"from":ms,"to":ms,"step":ms,"t":[ms,…],"series":{"name":{"avg":[v|null,…],
 /// "max":[v|null,…]}}}</c>. The range is cut into at most <c>points</c> buckets of <c>step</c> milliseconds;
-/// <c>t</c> holds each bucket's start and a bucket without samples is <c>null</c>.</para>
+/// <c>t</c> holds each bucket's start and a bucket without samples is <c>null</c>. The server lowers <c>points</c>
+/// when needed so the response fits its payload budget; read the actual count from <c>t</c>.</para>
 /// <para>Metric names are dot paths of numeric report fields (<c>Connections.TotalConnections</c>) plus the derived
 /// <c>Process.CpuPercent</c>, <c>Process.AllocationBytesPerSecond</c> and <c>Process.GcPerSecond</c>.</para>
 /// </remarks>

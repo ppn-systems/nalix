@@ -3,10 +3,9 @@
 
 using System.Security.Cryptography;
 using Nalix.Abstractions.Primitives;
-using Nalix.Integration.Tests.TestSupport;
-using Nalix.Observability;
+using Nalix.Observability.Tests.TestSupport;
 
-namespace Nalix.Integration.Tests.Observability;
+namespace Nalix.Observability.Tests;
 
 /// <summary>
 /// Verifies how <see cref="ObservabilityKey"/> parses, creates and lazily loads its key file.

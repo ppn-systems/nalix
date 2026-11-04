@@ -4,9 +4,8 @@
 using System.Reflection;
 using System.Security.Cryptography;
 using Nalix.Abstractions.Primitives;
-using Nalix.Observability;
 
-namespace Nalix.Integration.Tests.TestSupport;
+namespace Nalix.Observability.Tests.TestSupport;
 
 /// <summary>
 /// Snapshots the process-wide observability key, hands out unique key-file paths and restores the snapshot on dispose.
