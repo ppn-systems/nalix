@@ -7,9 +7,13 @@ using Microsoft.Extensions.Logging;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Security;
+using Nalix.Codec.ProtocolFrames;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
+using Nalix.Environment.Extensions;
 using Nalix.Environment.Options;
 using Nalix.Hosting.Internal;
 using Nalix.Hosting.Internal.Exceptions;
@@ -147,9 +151,21 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
 
         try
         {
+            PacketFlags wireFlags = current.Span.AsHeaderRef().Flags;
+            ushort wireOpCode = current.Span.AsHeaderRef().OpCode;
+
             if (!FramePipeline.TryProcessInbound(ref current, args.Connection.Secret.AsSpan(), args.Connection.Algorithm, out seq))
             {
                 args.Connection.IncrementErrorCount();
+
+                if ((wireFlags & PacketFlags.ENCRYPTED) != 0)
+                {
+                    // An encrypted frame that fails AEAD authentication means the peer's keys or AAD
+                    // layout disagree with ours (or the frame was tampered with). Dropping it silently
+                    // leaves the client waiting for a timeout, so report it and close the connection.
+                    RejectUnauthenticatedFrame(args.Connection, wireOpCode, current.IsReliable);
+                    return;
+                }
 
                 _logger.DroppedInboundPacket();
                 return;
@@ -198,6 +214,34 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
                 current.Dispose();
             }
         }
+    }
+
+    private void RejectUnauthenticatedFrame(IConnection connection, ushort opCode, bool reliable)
+    {
+        string reason = connection.Secret.IsZero
+            ? "encrypted frame received before a session key was established"
+            : "AEAD authentication failed (wrong key, wrong AAD layout or tampered frame)";
+
+        _logger.UnauthenticatedFrame(opCode, reliable ? "TCP" : "UDP", reason);
+
+        if (!reliable)
+        {
+            // UDP datagrams can be spoofed; never tear down the session because of one.
+            return;
+        }
+
+        try
+        {
+            using Control error = new();
+            error.Initialize(ControlType.ERROR, reasonCode: ProtocolReason.DECRYPTION_FAILED, flags: PacketFlags.SYSTEM);
+            connection.TCP.Send(error.Serialize());
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            // Best effort: the connection is closed below regardless.
+        }
+
+        connection.Disconnect($"{ProtocolReason.DECRYPTION_FAILED}: {reason}");
     }
 
     #endregion Methods

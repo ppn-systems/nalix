@@ -117,5 +117,92 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
         }
     }
 
+    [Fact]
+    public void ProcessFrame_WhenEncryptedFrameFailsAuthentication_SendsDecryptionFailedAndDisconnects()
+    {
+        EnsurePoolConfigured();
+
+        IProtocol protocol = Substitute.For<IProtocol>();
+        DefaultFrameProcessor processor = new(NullLogger.Instance, protocol);
+
+        using System.Net.Sockets.TcpListener tcpListener = new(System.Net.IPAddress.Loopback, 0);
+        tcpListener.Start();
+        int port = ((System.Net.IPEndPoint)tcpListener.LocalEndpoint).Port;
+        using System.Net.Sockets.Socket clientSocket = new(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+        clientSocket.Connect(System.Net.IPAddress.Loopback, port);
+        using System.Net.Sockets.Socket serverSocket = tcpListener.AcceptSocket();
+        tcpListener.Stop();
+
+        using Connection connection = new(serverSocket, Substitute.For<Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor>());
+
+        Span<byte> serverSecret = stackalloc byte[32];
+        serverSecret.Fill(0x7A);
+        connection.Secret = new Bytes32(serverSecret);
+        connection.Algorithm = CipherSuiteType.Chacha20Poly1305;
+
+        bool closed = false;
+        connection.ConnectionClosed += (_, _) => closed = true;
+
+        Span<byte> wrongSecret = stackalloc byte[32];
+        wrongSecret.Fill(0x11);
+
+        MethodInfo acquireMethod = typeof(Connection).GetMethod("AcquireEventArgs", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        MethodInfo initMethod = typeof(ConnectionEventArgs).GetMethod(
+            "Initialize",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            [typeof(IBufferLease), typeof(IConnection)])!;
+
+        using (BufferLease plain = BufferLease.CopyFrom(new byte[PacketHeader.Size + 4]))
+        {
+            IBufferLease enc = FrameCipher.EncryptFrame(plain, wrongSecret, seq: 1u, CipherSuiteType.Chacha20Poly1305);
+            enc.IsReliable = true;
+            ConnectionEventArgs args = (ConnectionEventArgs)acquireMethod.Invoke(connection, null)!;
+            initMethod.Invoke(args, [enc, connection]);
+            try
+            {
+                processor.ProcessFrame(this, args);
+            }
+            finally
+            {
+                args.Dispose();
+            }
+        }
+
+        protocol.DidNotReceiveWithAnyArgs().ProcessMessage(default!, default!);
+        Assert.True(closed || connection.IsDisposed, "Connection must be closed after an AEAD authentication failure.");
+
+        // The client must receive an ERROR control frame carrying DECRYPTION_FAILED before the close.
+        clientSocket.ReceiveTimeout = 2000;
+        byte[] buf = new byte[256];
+        int total = 0;
+        try
+        {
+            int n;
+            while ((n = clientSocket.Receive(buf, total, buf.Length - total, System.Net.Sockets.SocketFlags.None)) > 0)
+            {
+                total += n;
+            }
+        }
+        catch (System.Net.Sockets.SocketException)
+        {
+        }
+
+        Assert.True(total > 0, "Expected an ERROR control frame before disconnect.");
+        ushort reason = (ushort)Nalix.Abstractions.Networking.Protocols.ProtocolReason.DECRYPTION_FAILED;
+        Assert.True(ContainsUInt16(buf.AsSpan(0, total), reason), "ERROR frame must carry DECRYPTION_FAILED.");
+    }
+
+    private static bool ContainsUInt16(ReadOnlySpan<byte> data, ushort value)
+    {
+        for (int i = 0; i + 1 < data.Length; i++)
+        {
+            if (System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(data[i..]) == value)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 }
