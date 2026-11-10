@@ -210,6 +210,7 @@ internal static class PacketPipeline
     /// Takes ownership of <paramref name="frames"/> (rented from <see cref="ArrayPool{T}.Shared"/>) and of the
     /// first <paramref name="count"/> leases in it.
     /// </summary>
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
     internal static async ValueTask ProcessAndSendBatchAsync(
         IConnection connection, IConnection.ITransport transport, IBufferLease[] frames, int count,
         bool needEncrypt, bool enableCompress, int minSizeToCompress, CancellationToken ct)

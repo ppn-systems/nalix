@@ -212,6 +212,52 @@ public sealed class ClientServerEndToEndTests : IDisposable
         await client.DisconnectAsync().WaitAsync(s_timeout);
     }
 
+    [Theory]
+    [InlineData(false, 2)]
+    // 300 padded replies exceed 64 KB, so the coalesced batch spans several socket writes.
+    [InlineData(false, 300)]
+    [InlineData(true, 2)]
+    [InlineData(true, 300)]
+    public async Task ReplyAsync_WithEncryptedBatch_DeliversEveryPacketInOrder(bool webSocket, int count)
+    {
+        ushort port = NextPort();
+        ushort webSocketPort = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: true, webSocketPort: webSocketPort);
+
+        using TransportSession client = webSocket
+            ? new WebSocketSession(CreateOptions(webSocketPort), new WebSocketTransportOptions { Path = WebSocketPath })
+            : new TcpSession(CreateOptions(port));
+        await client.ConnectAsync().WaitAsync(s_timeout);
+        await client.HandshakeAsync().AsTask().WaitAsync(s_timeout);
+
+        System.Collections.Generic.List<(int Sequence, string Text)> received = [];
+        TaskCompletionSource all = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using IDisposable subscription = client.On<EchoPacket>(packet =>
+        {
+            lock (received)
+            {
+                received.Add((packet.Sequence, packet.Text));
+                if (received.Count == count)
+                {
+                    _ = all.TrySetResult();
+                }
+            }
+        });
+
+        await client.SendAsync(new EchoBatchRequest { Count = count }, encrypt: true).WaitAsync(s_timeout);
+        await all.Task.WaitAsync(s_timeout);
+
+        // Every frame decrypted on the client, and the payloads show nothing was dropped or reordered.
+        Assert.Equal(Enumerable.Range(0, count).Select(static i => (i, EchoBatchRequest.TextFor(i))), received);
+
+        // The connection is still usable for ordinary request/response afterwards.
+        EchoPacket response = await client.RequestAsync<EchoPacket>(
+            new EchoPacket { Sequence = 1, Text = "after" }, s_request.WithEncrypt()).AsTask().WaitAsync(s_timeout);
+        Assert.Equal("AFTER", response.Text);
+
+        await client.DisconnectAsync().WaitAsync(s_timeout);
+    }
+
     [Fact]
     public async Task RequestAsync_WithTwoWebSocketPortsInOneApplication_ServesBoth()
     {

@@ -243,6 +243,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     /// Every frame is still its own WebSocket message. When the connection's stream supports it, all
     /// messages but the last are held back so the batch reaches the socket in one write.
     /// </remarks>
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
     async ValueTask IConnection.ITransport.SendAsyncCore(ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
     {
         CoalescingWriteStream? batcher = frames.Length > 1 ? _writeBatcher : null;

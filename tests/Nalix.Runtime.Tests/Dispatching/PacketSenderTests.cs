@@ -12,6 +12,8 @@ using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
 using Nalix.Abstractions.Security;
+using Nalix.Codec.Transforms;
+using Nalix.Environment.Memory;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Xunit;
@@ -107,6 +109,150 @@ public sealed class PacketSenderTests
         Assert.Equal(1, sender.Replied);
     }
 
+    [Fact]
+    public async Task SendAsync_WithEncryptedBatch_UsesConsecutiveSequencesAndEveryFrameDecrypts()
+    {
+        FakeConnection connection = CreateEncryptedConnection();
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket(), encrypted: true));
+
+        await sender.SendAsync<MarkerPacket>([new(1), new(2), new(3), new(4), new(5)]);
+
+        Assert.Equal(5, connection.FakeTcp.SentMessages.Count);
+        for (int i = 0; i < 5; i++)
+        {
+            IBufferLease frame = BufferLease.CopyFrom(connection.FakeTcp.SentMessages[i]);
+            IBufferLease original = frame;
+            try
+            {
+                Assert.True(FramePipeline.TryProcessInbound(ref frame, connection.Secret.AsSpan(), connection.Algorithm, out uint? seq));
+                Assert.Equal((uint)(i + 1), seq);
+                Assert.Equal(MarkerPacket.Size, frame.Length);
+                Assert.Equal((byte)(i + 1), frame.Span[^1]);
+            }
+            finally
+            {
+                if (!ReferenceEquals(frame, original))
+                {
+                    frame.Dispose();
+                }
+
+                original.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SendAsync_WithBatch_WhenPacketFailsToSerialize_SendsNothingAndNeverTakesLock()
+    {
+        FakeConnection connection = new();
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket()));
+
+        IPacket[] packets = [new MarkerPacket(1), new ThrowingPacket(), new MarkerPacket(3)];
+
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await sender.SendAsync<IPacket>(packets));
+
+        Assert.Empty(connection.FakeTcp.SentMessages);
+        Assert.Equal(0, connection.FakeTcp.LockAcquisitions);
+    }
+
+    [Fact]
+    public async Task SendAsync_WithBatch_WhenPacketIsNull_Throws()
+    {
+        FakeConnection connection = new();
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket()));
+
+        IPacket[] packets = [new MarkerPacket(1), null!];
+
+        _ = await Assert.ThrowsAsync<ArgumentNullException>(async () => await sender.SendAsync<IPacket>(packets));
+
+        Assert.Empty(connection.FakeTcp.SentMessages);
+    }
+
+    [Fact]
+    public async Task SendAsync_WithBatch_WhenTransformFailsMidBatch_SendsEarlierFramesThenThrowsAndReleasesLock()
+    {
+        FakeConnection connection = CreateEncryptedConnection();
+        // The cipher is read once per frame: the third frame finds none configured.
+        connection.AlgorithmReadsBeforeNone = 2;
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket(), encrypted: true));
+
+        _ = await Assert.ThrowsAnyAsync<Exception>(async () => await sender.SendAsync<MarkerPacket>([new(1), new(2), new(3), new(4)]));
+
+        Assert.Equal(2, connection.FakeTcp.SentMessages.Count);
+        Assert.Equal(1, connection.FakeTcp.LockAcquisitions);
+        Assert.Equal(1, connection.FakeTcp.LockReleases);
+    }
+
+    [Fact]
+    public async Task SendAsync_WithBatch_WhenSequenceApproachesOverflow_SendsPreparedFramesAndDisconnects()
+    {
+        FakeConnection connection = CreateEncryptedConnection();
+        ((FakeSequenceCounter)connection.FakeTcp.SendSequence).OverflowAfter = 2;
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket(), encrypted: true));
+
+        await sender.SendAsync<MarkerPacket>([new(1), new(2), new(3), new(4)]);
+
+        Assert.Equal(2, connection.FakeTcp.SentMessages.Count);
+        Assert.Equal(1, connection.Disconnects);
+        Assert.Equal(1, connection.FakeTcp.LockReleases);
+    }
+
+    [Fact]
+    public async Task SendAsync_WithBatch_OverUdp_SendsEveryDatagramWithItsTag()
+    {
+        FakeConnection connection = new() { FakeUdp = new FakeTransport() };
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket(), isReliable: false));
+
+        await sender.SendAsync<MarkerPacket>([new(1), new(2), new(3)]);
+
+        Assert.Empty(connection.FakeTcp.SentMessages);
+        Assert.Equal(3, connection.FakeUdp.SentMessages.Count);
+        for (int i = 0; i < 3; i++)
+        {
+            // Payload followed by the 4-byte datagram tag.
+            Assert.Equal(MarkerPacket.Size + sizeof(uint), connection.FakeUdp.SentMessages[i].Length);
+            Assert.Equal((byte)(i + 1), connection.FakeUdp.SentMessages[i][MarkerPacket.Size - 1]);
+        }
+    }
+
+    [Fact]
+    public async Task SendAsync_WithSinglePacketBatch_SendsIt()
+    {
+        FakeConnection connection = new();
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket()));
+
+        await sender.SendAsync<MarkerPacket>([new(7)]);
+
+        byte[] message = Assert.Single(connection.FakeTcp.SentMessages);
+        Assert.Equal((byte)7, message[^1]);
+    }
+
+    private static FakeConnection CreateEncryptedConnection()
+    {
+        byte[] key = new byte[32];
+        for (int i = 0; i < key.Length; i++)
+        {
+            key[i] = (byte)(i + 1);
+        }
+
+        return new FakeConnection { Secret = new Bytes32(key), Algorithm = CipherSuiteType.Chacha20Poly1305 };
+    }
+
+    private sealed class ThrowingPacket : IPacket
+    {
+        public int Length => 16;
+        public PacketHeader Header { get; set; }
+        public byte[] Serialize() => throw new InvalidOperationException("serialize failed");
+        public int Serialize(Span<byte> buffer) => throw new InvalidOperationException("serialize failed");
+    }
+
     private sealed class LoopingSender : IPacketSender
     {
         public int Sent { get; private set; }
@@ -132,9 +278,9 @@ public sealed class PacketSenderTests
         }
     }
 
-    private sealed class FakeContext(FakeConnection connection, TestPacket packet) : IPacketContext<TestPacket>
+    private sealed class FakeContext(FakeConnection connection, TestPacket packet, bool encrypted = false, bool isReliable = true) : IPacketContext<TestPacket>
     {
-        public bool IsReliable => true;
+        public bool IsReliable => isReliable;
         public bool EncryptedOnWire => false;
         public bool SkipOutbound => false;
         public TestPacket Packet => packet;
@@ -143,7 +289,7 @@ public sealed class PacketSenderTests
             opCode: new PacketOpcodeAttribute((ushort)1),
             timeout: null,
             permission: null,
-            encryption: null,
+            encryption: encrypted ? new PacketEncryptionAttribute() : null,
             rateLimit: null,
             transport: null);
         public IPacketSender Sender => null!;
@@ -161,7 +307,8 @@ public sealed class PacketSenderTests
         public bool IsValid(uint? receivedSeq, uint window = 0) => true;
         public void UpdateTo(uint receivedSeq) => _value = receivedSeq;
         public void ResumeFrom(uint lastKnownSeq, uint safetyGap = 1000) => _value = lastKnownSeq;
-        public bool IsApproachingOverflow(uint margin = 1_000_000) => false;
+        public uint OverflowAfter { get; set; } = uint.MaxValue;
+        public bool IsApproachingOverflow(uint margin = 1_000_000) => _value >= OverflowAfter;
     }
 
     private sealed class FakeTransport : IConnection.ITransport
@@ -218,13 +365,21 @@ public sealed class PacketSenderTests
         public ConcurrentDictionary<ushort, object> RateLimitCache { get; } = new();
         public Bytes32 Secret { get; set; }
         public PermissionLevel Level { get; set; }
-        public CipherSuiteType Algorithm { get; set; }
+        private CipherSuiteType _algorithm;
+        public int AlgorithmReadsBeforeNone { get; set; } = int.MaxValue;
+        public CipherSuiteType Algorithm
+        {
+            get => AlgorithmReadsBeforeNone-- > 0 ? _algorithm : CipherSuiteType.None;
+            set => _algorithm = value;
+        }
+        public FakeTransport? FakeUdp { get; init; }
+        public int Disconnects { get; private set; }
         public IConnection.ITransport TCP => FakeTcp;
-        public IConnection.ITransport? UDP => null;
+        public IConnection.ITransport? UDP => FakeUdp;
         public event EventHandler<IConnectionEventArgs>? ConnectionClosed;
         public event EventHandler<IConnectionEventArgs>? MessageProcessing;
         public event EventHandler<IConnectionEventArgs>? MessageProcessed;
-        public void Disconnect(string? reason = null) { }
+        public void Disconnect(string? reason = null) => Disconnects++;
         public void Dispose() => IsDisposed = true;
         public int ErrorCount => 0;
         public void IncrementErrorCount() { }

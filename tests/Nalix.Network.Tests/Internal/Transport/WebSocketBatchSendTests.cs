@@ -111,6 +111,144 @@ public sealed class WebSocketBatchSendTests
         _ = inner.ToArray().Should().Equal(1, 2, 3);
     }
 
+    [Fact]
+    public async Task SendAsyncCore_WithBatchOnClosedWebSocket_SendsNothing()
+    {
+        RecordingStream inner = new();
+        IConnection.ITransport transport = CreateTransport(inner, out WebSocketConnection connection);
+        await ((WebSocketTransport)transport).WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+        int writesAfterClose = inner.Writes;
+
+        await SendBatchAsync(transport, CreatePayloads(count: 3, length: 40));
+
+        _ = inner.Writes.Should().Be(writesAfterClose);
+        GC.KeepAlive(connection);
+    }
+
+    [Fact]
+    public async Task SendAsyncCore_WhenBatchIsInterrupted_StillWritesTheMessagesAlreadyHeldBack()
+    {
+        byte[][] payloads = CreatePayloads(count: 3, length: 40);
+
+        RecordingStream referenceInner = new();
+        IConnection.ITransport reference = CreateTransport(referenceInner, out _);
+        await reference.SendAsyncCore(payloads[0], CancellationToken.None);
+
+        RecordingStream inner = new();
+        IConnection.ITransport transport = CreateTransport(inner, out _);
+        IBufferLease[] frames =
+        [
+            BufferLease.CopyFrom(payloads[0]),
+            new ThrowingLease(),
+            BufferLease.CopyFrom(payloads[2]),
+        ];
+
+        try
+        {
+            Func<Task> send = () => transport.SendAsyncCore(new ReadOnlyMemory<IBufferLease>(frames), CancellationToken.None).AsTask();
+            _ = await send.Should().ThrowAsync<InvalidOperationException>();
+        }
+        finally
+        {
+            frames[0].Dispose();
+            frames[2].Dispose();
+        }
+
+        // The first message was held back when the second one failed; it must not stay stuck in the buffer.
+        _ = inner.ToArray().Should().Equal(referenceInner.ToArray());
+
+        // And the stream is no longer holding writes back.
+        await transport.SendAsyncCore(payloads[2], CancellationToken.None);
+        _ = inner.Writes.Should().Be(2);
+    }
+
+    [Fact]
+    public void Write_Synchronous_FollowsTheSameHoldBackRules()
+    {
+        RecordingStream inner = new();
+        using CoalescingWriteStream stream = new(inner);
+
+        stream.Write([1], 0, 1);
+        _ = inner.Writes.Should().Be(1);
+
+        stream.Cork();
+        stream.Write([2, 3], 0, 2);
+        stream.Write([4], 0, 1);
+        _ = inner.Writes.Should().Be(1);
+
+        stream.Uncork();
+        stream.Write([5], 0, 1);
+
+        _ = inner.Writes.Should().Be(2);
+        _ = inner.ToArray().Should().Equal(1, 2, 3, 4, 5);
+    }
+
+    [Fact]
+    public async Task WriteAsync_WhileCorkedPastBufferLimit_WritesThroughAndKeepsOrder()
+    {
+        RecordingStream inner = new();
+        await using CoalescingWriteStream stream = new(inner);
+        byte[] chunk = new byte[CoalescingWriteStream.MaxBufferedBytes / 2];
+        new Random(7).NextBytes(chunk);
+
+        stream.Cork();
+        await stream.WriteAsync(chunk);
+        _ = inner.Writes.Should().Be(0);
+
+        await stream.WriteAsync(chunk, 0, chunk.Length, CancellationToken.None);
+        _ = inner.Writes.Should().Be(1);
+        _ = inner.ToArray().Should().Equal([.. chunk, .. chunk]);
+    }
+
+    [Fact]
+    public async Task Read_PassesThroughToInnerStream()
+    {
+        using MemoryStream inner = new([9, 8, 7, 6]);
+        await using CoalescingWriteStream stream = new(inner);
+        byte[] buffer = new byte[2];
+
+        _ = stream.Read(buffer, 0, 1).Should().Be(1);
+        _ = (await stream.ReadAsync(buffer.AsMemory(1, 1))).Should().Be(1);
+        _ = buffer.Should().Equal(9, 8);
+        _ = (await stream.ReadAsync(buffer, 0, 2, CancellationToken.None)).Should().Be(2);
+        _ = buffer.Should().Equal(7, 6);
+    }
+
+    [Fact]
+    public async Task Dispose_WithHeldBackBytes_DisposesInnerStream()
+    {
+        RecordingStream inner = new();
+        CoalescingWriteStream stream = new(inner);
+        stream.Cork();
+        await stream.WriteAsync(new byte[] { 1 });
+
+        await stream.DisposeAsync();
+
+        _ = inner.Disposed.Should().BeTrue();
+        _ = inner.Writes.Should().Be(0);
+    }
+
+    private sealed class ThrowingLease : IBufferLease
+    {
+        public int Length => 40;
+        public bool IsReliable { get; set; }
+        public bool EncryptedOnWire { get; set; }
+        public int Capacity => 40;
+        public Span<byte> Span => throw new InvalidOperationException("lease failed");
+        public Span<byte> SpanFull => throw new InvalidOperationException("lease failed");
+        public ReadOnlyMemory<byte> Memory => throw new InvalidOperationException("lease failed");
+        public void Retain() { }
+        public void CommitLength(int length) { }
+        public bool ReleaseOwnership(out byte[]? buffer, out int start, out int length)
+        {
+            buffer = null;
+            start = 0;
+            length = 0;
+            return false;
+        }
+        public void Dispose() { }
+    }
+
     private static IConnection.ITransport CreateTransport(RecordingStream inner, out WebSocketConnection connection)
     {
         CoalescingWriteStream stream = new(inner);
@@ -164,6 +302,14 @@ public sealed class WebSocketBatchSendTests
         private readonly MemoryStream _written = new();
 
         public int Writes { get; private set; }
+
+        public bool Disposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            this.Disposed = true;
+            base.Dispose(disposing);
+        }
 
         public byte[] ToArray() => _written.ToArray();
 
