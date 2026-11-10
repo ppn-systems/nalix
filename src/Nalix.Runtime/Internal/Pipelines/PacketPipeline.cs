@@ -2,11 +2,14 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Codec.Transforms;
@@ -198,6 +201,98 @@ internal static class PacketPipeline
                     workingLease.Dispose();
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Batch form of <see cref="ProcessAndSendAsync"/>: holds the send lock once, reserves a sequence and
+    /// transforms every frame in order, then hands the whole batch to the transport so it can coalesce the writes.
+    /// Takes ownership of <paramref name="frames"/> (rented from <see cref="ArrayPool{T}.Shared"/>) and of the
+    /// first <paramref name="count"/> leases in it.
+    /// </summary>
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    internal static async ValueTask ProcessAndSendBatchAsync(
+        IConnection connection, IConnection.ITransport transport, IBufferLease[] frames, int count,
+        bool needEncrypt, bool enableCompress, int minSizeToCompress, CancellationToken ct)
+    {
+        try
+        {
+            if (transport == connection.UDP)
+            {
+                // Datagrams are signed and sent one by one; there is nothing to coalesce.
+                for (int i = 0; i < count; i++)
+                {
+                    await ProcessAndSendAsync(
+                        connection, transport, frames[i], needEncrypt, enableCompress, minSizeToCompress, ct, cloneLease: false).ConfigureAwait(false);
+                }
+
+                return;
+            }
+
+            IAsyncDisposable sendScope = await transport.AcquireSendLockAsync(ct).ConfigureAwait(false);
+            try
+            {
+                int prepared = 0;
+                ExceptionDispatchInfo? failure = null;
+
+                try
+                {
+                    for (; prepared < count; prepared++)
+                    {
+                        if (needEncrypt && transport.SendSequence.IsApproachingOverflow())
+                        {
+                            connection.Disconnect("Send sequence counter approaching overflow; reconnect required.");
+                            break;
+                        }
+
+                        uint? sequenceToUse = needEncrypt ? transport.NextSendSequence() : null;
+
+                        IBufferLease original = frames[prepared];
+                        IBufferLease current = original;
+
+                        FramePipeline.ProcessOutbound(
+                            ref current,
+                            enableCompress,
+                            minSizeToCompress,
+                            needEncrypt,
+                            connection.Secret.AsSpan(),
+                            sequenceToUse,
+                            connection.Algorithm);
+
+                        if (!ReferenceEquals(current, original))
+                        {
+                            frames[prepared] = current;
+                            original.Dispose();
+                        }
+                    }
+                }
+                catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+                {
+                    // Frames before the failing one already hold reserved sequences: send them, as a
+                    // loop of single sends would have, then surface the failure.
+                    failure = ExceptionDispatchInfo.Capture(ex);
+                }
+
+                if (prepared > 0)
+                {
+                    await transport.SendAsyncCore(new ReadOnlyMemory<IBufferLease>(frames, 0, prepared), ct).ConfigureAwait(false);
+                }
+
+                failure?.Throw();
+            }
+            finally
+            {
+                await sendScope.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            for (int i = 0; i < count; i++)
+            {
+                frames[i].Dispose();
+            }
+
+            ArrayPool<IBufferLease>.Shared.Return(frames, clearArray: true);
         }
     }
 

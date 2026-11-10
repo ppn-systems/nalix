@@ -79,7 +79,7 @@ public sealed class WebSocketConnection :
     {
     }
 
-    internal WebSocketConnection(WebSocket webSocket, IOpCodeExtractor packetClassifier, EndPoint remoteEndPoint, TimingWheel? timingWheel)
+    internal WebSocketConnection(WebSocket webSocket, IOpCodeExtractor packetClassifier, EndPoint remoteEndPoint, TimingWheel? timingWheel, Internal.Transport.CoalescingWriteStream? writeBatcher = null)
     {
         ArgumentNullException.ThrowIfNull(webSocket);
         ArgumentNullException.ThrowIfNull(remoteEndPoint);
@@ -99,7 +99,7 @@ public sealed class WebSocketConnection :
 
         // Transport owns WebSocket — ownership transfer
         _backing.WsTransport = s_pool.Get<WebSocketTransport>();
-        _backing.WsTransport.Initialize(this, webSocket);
+        _backing.WsTransport.Initialize(this, webSocket, writeBatcher);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
         {

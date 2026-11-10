@@ -45,6 +45,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     private ISequenceCounter _receiveSequence = null!;
 
     private WebSocket _webSocket = null!;
+    private CoalescingWriteStream? _writeBatcher;
     private SemaphoreSlim _sendLock = null!;
 #pragma warning disable CA2213 // Scoped wrapper over _sendLock; does not own standalone unmanaged resources
     private SendLockScope _sendLockScope = null!;
@@ -61,8 +62,9 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     {
     }
 
-    public void Initialize(WebSocketConnection owner, WebSocket webSocket)
+    public void Initialize(WebSocketConnection owner, WebSocket webSocket, CoalescingWriteStream? writeBatcher = null)
     {
+        _writeBatcher = writeBatcher;
         _sendSequence = new SequenceCounter();
         _receiveSequence = new SequenceCounter();
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
@@ -79,6 +81,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     {
         _owner = null!;
         _webSocket = null!;
+        _writeBatcher = null;
         _options = null!;
         _sendSequence = null!;
         _receiveSequence = null!;
@@ -233,6 +236,61 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         }
 
         return this.SEND_CORE_ASYNC(message, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Every frame is still its own WebSocket message. When the connection's stream supports it, all
+    /// messages but the last are held back so the batch reaches the socket in one write.
+    /// </remarks>
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    async ValueTask IConnection.ITransport.SendAsyncCore(ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
+    {
+        CoalescingWriteStream? batcher = frames.Length > 1 ? _writeBatcher : null;
+        int last = frames.Length - 1;
+
+        bool completed = false;
+
+        batcher?.Cork();
+        try
+        {
+            for (int i = 0; i <= last; i++)
+            {
+                if (_owner.IsDisposed || _webSocket.State != WebSocketState.Open)
+                {
+                    return;
+                }
+
+                if (i == last)
+                {
+                    batcher?.Uncork();
+                }
+
+                await this.SEND_CORE_ASYNC(frames.Span[i].Memory, cancellationToken).ConfigureAwait(false);
+            }
+
+            completed = true;
+        }
+        finally
+        {
+            if (batcher is not null)
+            {
+                batcher.Uncork();
+
+                if (!completed)
+                {
+                    // The batch stopped before its final write, which would have carried the held-back
+                    // messages (and anything the WebSocket itself wrote meanwhile, such as a close frame).
+                    try
+                    {
+                        await batcher.FlushPendingAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+                    {
+                    }
+                }
+            }
+        }
     }
 
     private async ValueTask SEND_CORE_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)

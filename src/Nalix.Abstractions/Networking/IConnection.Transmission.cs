@@ -109,6 +109,29 @@ public partial interface IConnection
             ArgumentNullException.ThrowIfNull(frame);
             return this.SendAsyncCore(frame.Memory, cancellationToken);
         }
+
+        /// <summary>
+        /// Writes <paramref name="frames"/> to the transport in order, without acquiring any additional send
+        /// lock. Same contract as <see cref="SendAsyncCore(IBufferLease, CancellationToken)"/> for each frame,
+        /// but a transport may coalesce the frames into fewer underlying writes. The wire format is unchanged:
+        /// the peer still receives each frame as its own message.
+        /// </summary>
+        /// <param name="frames">The frames to send. The caller keeps ownership and must keep them alive until the returned task completes.</param>
+        /// <param name="cancellationToken">A token to cancel the sending operation.</param>
+        ValueTask SendAsyncCore(ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken = default)
+        {
+            return frames.Length == 1
+                ? this.SendAsyncCore(frames.Span[0], cancellationToken)
+                : SEND_SEQUENTIAL_ASYNC(this, frames, cancellationToken);
+
+            static async ValueTask SEND_SEQUENTIAL_ASYNC(ITransport transport, ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
+            {
+                for (int i = 0; i < frames.Length; i++)
+                {
+                    await transport.SendAsyncCore(frames.Span[i], cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
     }
 
     /// <summary>

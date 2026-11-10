@@ -389,7 +389,11 @@ public abstract partial class WebSocketListenerBase
             }
 
             // Create a NetworkStream and wrap it in a WebSocket (ownsSocket: true so closing WS closes TCP socket immediately)
-            NetworkStream stream = new(socket, ownsSocket: true);
+            // The coalescing layer lets a batch of messages leave in one socket write (see WebSocketTransport).
+#pragma warning disable CA2000 // Owned by the coalescing stream, which the WebSocket disposes
+            NetworkStream networkStream = new(socket, ownsSocket: true);
+#pragma warning restore CA2000
+            Internal.Transport.CoalescingWriteStream stream = new(networkStream);
 
             WebSocket webSocket = WebSocket.CreateFromStream(stream, new WebSocketCreationOptions
             {
@@ -398,7 +402,7 @@ public abstract partial class WebSocketListenerBase
                 KeepAliveInterval = TimeSpan.FromSeconds(_wsconfig.KeepAliveIntervalSeconds)
             });
 
-            WebSocketConnection? connection = new(webSocket, _protocol.OpCodeExtractor, realEndPoint, _timing);
+            WebSocketConnection? connection = new(webSocket, _protocol.OpCodeExtractor, realEndPoint, _timing, stream);
             try
             {
                 connection.ConnectionClosed += this.HandleConnectionClose;

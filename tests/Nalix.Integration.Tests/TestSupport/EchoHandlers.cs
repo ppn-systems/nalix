@@ -28,4 +28,24 @@ public static class EchoHandlers
 
         await context.Sender.ReplyAsync(response).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Replies with a whole batch in one call, the way a handler streaming a page of rows would.
+    /// </summary>
+    [PacketEncryption]
+    [PacketPermission(PermissionLevel.NONE)]
+    [PacketOpcode(EchoBatchRequest.OpCode)]
+    public static async ValueTask HandleEchoBatchAsync(IPacketContext<EchoBatchRequest> context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        using PacketBatchScope<EchoPacket> batch = PacketFactory<EchoPacket>.AcquireBatch(context.Packet.Count);
+        for (int i = 0; i < batch.Count; i++)
+        {
+            batch[i].Sequence = i;
+            batch[i].Text = EchoBatchRequest.TextFor(i);
+        }
+
+        await context.Sender.ReplyAsync(batch.AsReadOnlySpan()).ConfigureAwait(false);
+    }
 }
