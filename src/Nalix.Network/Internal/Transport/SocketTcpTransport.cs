@@ -215,6 +215,41 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IPoolab
         }
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Frames that fit a single UInt16-prefixed frame are written into one buffer and sent with one socket
+    /// write per <see cref="SocketConnection.MaxBatchBytes"/>; any other batch is sent frame by frame.
+    /// </remarks>
+    ValueTask IConnection.ITransport.SendAsyncCore(ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
+    {
+        SocketConnection? socket = _socket;
+        if (socket is not null && frames.Length > 1 && socket.CanSendBatch(frames.Span))
+        {
+            return COMPLETE_SEND(socket.SendBatchAsync(frames, cancellationToken));
+        }
+
+        return SEND_SEQUENTIAL_ASYNC(this, frames, cancellationToken);
+
+        static async ValueTask SEND_SEQUENTIAL_ASYNC(IConnection.ITransport transport, ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
+        {
+            for (int i = 0; i < frames.Length; i++)
+            {
+                await transport.SendAsyncCore(frames.Span[i], cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        static async ValueTask COMPLETE_SEND(ValueTask<SocketConnection.SendResult> vt)
+        {
+            SocketConnection.SendResult result = await vt.ConfigureAwait(false);
+            if (result is not (SocketConnection.SendResult.Success
+                            or SocketConnection.SendResult.PeerClosed
+                            or SocketConnection.SendResult.Aborted))
+            {
+                throw Throw.GetSendFailed();
+            }
+        }
+    }
+
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ValueTask SEND_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken, bool acquireLock)

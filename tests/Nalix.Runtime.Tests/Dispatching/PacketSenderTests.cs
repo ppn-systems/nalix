@@ -35,6 +35,103 @@ public sealed class PacketSenderTests
         Assert.Equal((ushort)42, response.Header.SequenceId);
     }
 
+    [Fact]
+    public async Task SendAsync_WithBatch_SendsEveryPacketInOrder()
+    {
+        FakeConnection connection = new();
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket()));
+
+        MarkerPacket[] packets = [new(1), new(2), new(3), new(4)];
+
+        await sender.SendAsync<MarkerPacket>(packets);
+
+        Assert.Equal(4, connection.FakeTcp.SentMessages.Count);
+        for (int i = 0; i < packets.Length; i++)
+        {
+            Assert.Equal(MarkerPacket.Size, connection.FakeTcp.SentMessages[i].Length);
+            Assert.Equal((byte)(i + 1), connection.FakeTcp.SentMessages[i][^1]);
+        }
+    }
+
+    [Fact]
+    public async Task SendAsync_WithBatch_HoldsSendLockOnceForWholeBatch()
+    {
+        FakeConnection connection = new();
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket()));
+
+        await sender.SendAsync<MarkerPacket>([new(1), new(2), new(3)]);
+
+        Assert.Equal(1, connection.FakeTcp.LockAcquisitions);
+        Assert.Equal(1, connection.FakeTcp.LockReleases);
+    }
+
+    [Fact]
+    public async Task SendAsync_WithEmptyBatch_SendsNothing()
+    {
+        FakeConnection connection = new();
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, new TestPacket()));
+
+        await sender.SendAsync(ReadOnlySpan<MarkerPacket>.Empty);
+
+        Assert.Empty(connection.FakeTcp.SentMessages);
+    }
+
+    [Fact]
+    public async Task ReplyAsync_WithBatch_EchoesRequestSequenceIdOntoEveryResponse()
+    {
+        FakeConnection connection = new();
+        TestPacket request = new() { Header = new PacketHeader { SequenceId = 42 } };
+        PacketSender sender = new();
+        sender.Initialize(new FakeContext(connection, request));
+
+        MarkerPacket[] responses = [new(1), new(2), new(3)];
+
+        await sender.ReplyAsync<MarkerPacket>(responses);
+
+        Assert.All(responses, static r => Assert.Equal((ushort)42, r.Header.SequenceId));
+        Assert.Equal(3, connection.FakeTcp.SentMessages.Count);
+    }
+
+    [Fact]
+    public async Task SendAsync_WithBatch_OnDefaultInterfaceImplementation_SendsOneByOne()
+    {
+        LoopingSender sender = new();
+
+        await ((IPacketSender)sender).SendAsync<MarkerPacket>([new(1), new(2)]);
+        await ((IPacketSender)sender).ReplyAsync<MarkerPacket>([new(3)]);
+
+        Assert.Equal(2, sender.Sent);
+        Assert.Equal(1, sender.Replied);
+    }
+
+    private sealed class LoopingSender : IPacketSender
+    {
+        public int Sent { get; private set; }
+        public int Replied { get; private set; }
+        public void Initialize<TPacket>(IPacketContext<TPacket> context) where TPacket : IPacket { }
+        public void ResetForPool() { }
+        public ValueTask SendAsync(IPacket packet, CancellationToken ct = default) { Sent++; return ValueTask.CompletedTask; }
+        public ValueTask SendAsync(IPacket packet, bool forceEncrypt, CancellationToken ct = default) { Sent++; return ValueTask.CompletedTask; }
+        public ValueTask ReplyAsync(IPacket response, CancellationToken ct = default) { Replied++; return ValueTask.CompletedTask; }
+    }
+
+    private sealed class MarkerPacket(byte marker) : IPacket
+    {
+        public const int Size = 32;
+        public int Length => Size;
+        public PacketHeader Header { get; set; }
+        public byte[] Serialize() => throw new NotSupportedException();
+        public int Serialize(Span<byte> buffer)
+        {
+            buffer[..Size].Clear();
+            buffer[Size - 1] = marker;
+            return Size;
+        }
+    }
+
     private sealed class FakeContext(FakeConnection connection, TestPacket packet) : IPacketContext<TestPacket>
     {
         public bool IsReliable => true;
@@ -85,6 +182,24 @@ public sealed class PacketSenderTests
         }
         public void BeginReceive(CancellationToken cancellationToken = default) { }
         public void UseFraming(TransportFraming framing) { }
+
+        public int LockAcquisitions { get; private set; }
+        public int LockReleases { get; private set; }
+
+        public ValueTask<IAsyncDisposable> AcquireSendLockAsync(CancellationToken cancellationToken = default)
+        {
+            LockAcquisitions++;
+            return ValueTask.FromResult<IAsyncDisposable>(new Scope(this));
+        }
+
+        private sealed class Scope(FakeTransport owner) : IAsyncDisposable
+        {
+            public ValueTask DisposeAsync()
+            {
+                owner.LockReleases++;
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 
     private sealed class FakeConnection : IConnection

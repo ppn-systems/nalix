@@ -2,9 +2,11 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
@@ -111,6 +113,34 @@ public sealed class PacketSender : IPacketSender
         return this.SendAsync(response, ct);
     }
 
+    /// <inheritdoc/>
+    public ValueTask SendAsync<TPacket>(ReadOnlySpan<TPacket> packets, CancellationToken ct = default) where TPacket : IPacket
+    {
+        IConnection connection = this.GET_CONNECTION_OR_THROW();
+        IConnection.ITransport transport = GetTransport(connection, _attributes, _isReliable);
+
+        bool needEncrypt = _attributes.Encryption?.IsEncrypted ?? false;
+        CancellationToken safeToken = ct == default ? _token : ct;
+
+        return SEND_BATCH_CORE_ASYNC(connection, transport, packets, needEncrypt, safeToken);
+    }
+
+    /// <inheritdoc/>
+    public ValueTask ReplyAsync<TPacket>(ReadOnlySpan<TPacket> responses, CancellationToken ct = default) where TPacket : IPacket
+    {
+        for (int i = 0; i < responses.Length; i++)
+        {
+            TPacket response = responses[i];
+            ArgumentNullException.ThrowIfNull(response);
+
+            PacketHeader header = response.Header;
+            header.SequenceId = _requestSequenceId;
+            response.Header = header;
+        }
+
+        return this.SendAsync(responses, ct);
+    }
+
     #endregion APIs
 
     #region Private Methods
@@ -173,6 +203,48 @@ public sealed class PacketSender : IPacketSender
                 lease.Dispose();
             }
         }
+    }
+
+    private static ValueTask SEND_BATCH_CORE_ASYNC<TPacket>(
+        IConnection connection, IConnection.ITransport transport, ReadOnlySpan<TPacket> packets, bool needEncrypt, CancellationToken ct)
+        where TPacket : IPacket
+    {
+        if (packets.IsEmpty)
+        {
+            return default;
+        }
+
+        if (packets.Length == 1)
+        {
+            ArgumentNullException.ThrowIfNull(packets[0]);
+            return SEND_CORE_ASYNC(connection, transport, packets[0], needEncrypt, ct);
+        }
+
+        // Serialize every packet before the first await: the span cannot outlive this call.
+        IBufferLease[] frames = ArrayPool<IBufferLease>.Shared.Rent(packets.Length);
+        int serialized = 0;
+        try
+        {
+            for (; serialized < packets.Length; serialized++)
+            {
+                TPacket packet = packets[serialized];
+                ArgumentNullException.ThrowIfNull(packet);
+                frames[serialized] = PacketPipeline.Serialize(packet, zeroOnDispose: needEncrypt);
+            }
+        }
+        catch
+        {
+            for (int i = 0; i < serialized; i++)
+            {
+                frames[i].Dispose();
+            }
+
+            ArrayPool<IBufferLease>.Shared.Return(frames, clearArray: true);
+            throw;
+        }
+
+        return PacketPipeline.ProcessAndSendBatchAsync(
+            connection, transport, frames, packets.Length, needEncrypt, s_options.Enabled, s_options.MinSizeToCompress, ct);
     }
 
     private static IConnection.ITransport GetTransport(IConnection connection, PacketMetadata attributes, bool isReliable)
