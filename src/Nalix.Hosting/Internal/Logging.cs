@@ -14,6 +14,9 @@ internal static partial class Logging
     [LoggerMessage(Level = LogLevel.Trace, Message = "[NW.DefaultFrameProcessor:ProcessFrame] Dropped inbound packet due to decryption or decompression failure.")]
     public static partial void DroppedInboundPacket(this ILogger logger);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[NW.DefaultFrameProcessor:ProcessFrame] Rejected encrypted frame opcode=0x{OpCode:X4} on {Transport} transport: {Reason}.")]
+    public static partial void UnauthenticatedFrame(this ILogger logger, ushort opCode, string transport, string reason);
+
     [LoggerMessage(Level = LogLevel.Trace, Message = "[NW.DefaultFrameProcessor:ProcessFrame] Rejected inbound sequence on {Transport} transport: received={ReceivedSeq}, current={CurrentSeq}.")]
     public static partial void RejectedSequence(this ILogger logger, string transport, uint? receivedSeq, uint currentSeq);
 
