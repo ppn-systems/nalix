@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -175,7 +176,10 @@ public sealed class UdpPassthroughListener : UdpListenerBase
         }
 
         connection.ConnectionClosed -= this.OnConnectionClosed;
-        _ = _connections.TryRemove(connection.EndPointKey, out _);
+        // Remove only this instance. A disposed connection can still be in the map when a
+        // datagram from the same endpoint has already created its replacement; removing by key
+        // alone would orphan that replacement and leak its per-IP slot.
+        _ = _connections.TryRemove(new KeyValuePair<EndPoint, PassthroughConnection>(connection.EndPointKey, connection));
         _connGuard?.OnConnectionClosed(sender, args);
     }
 

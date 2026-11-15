@@ -129,4 +129,46 @@ public sealed class UdpPassthroughListenerTests
         guard.TryAccept(new IPEndPoint(IPAddress.Parse("8.8.8.8"), 40000))
             .Should().BeTrue("passthrough pseudo-connections must not exhaust the TCP global connection budget");
     }
+
+    [Fact]
+    public void ConnectionClosed_WhenReplacementCreatedDuringClose_KeepsReplacementRegistered()
+    {
+        IProtocol protocol = Substitute.For<IProtocol>();
+        protocol.OpCodeExtractor.Returns(s_testOpCodeExtractor);
+        IConnectionHub hub = Substitute.For<IConnectionHub>();
+        using ConnectionGuard guard = new(new ConnectionQuotaOptions { ExemptLoopback = true });
+
+        using UdpPassthroughListener listener = new(0, protocol, hub, guard);
+        using Socket dummySocket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        dummySocket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        typeof(UdpListenerBase).GetField("_socket", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(listener, dummySocket);
+
+        MethodInfo processDatagram = typeof(UdpPassthroughListener).GetMethod("ProcessDatagram", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo connectionsField = typeof(UdpPassthroughListener).GetField("_connections", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        FieldInfo connectionClosedField = typeof(PassthroughConnection).GetField("_connectionClosed", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var connections = (ConcurrentDictionary<EndPoint, PassthroughConnection>)connectionsField.GetValue(listener)!;
+
+        IPEndPoint clientEp = new(IPAddress.Loopback, 19001);
+
+        processDatagram.Invoke(listener, [BufferLease.CopyFrom([1, 2, 3, 4, 5, 6]), clientEp]);
+        connections.TryGetValue(clientEp, out PassthroughConnection? first).Should().BeTrue();
+
+        // Run a replacement-creating datagram before the listener's own close handler, i.e. in the window
+        // where the old connection is already disposed but still registered in the map.
+        PassthroughConnection? replacement = null;
+        EventHandler<IConnectionEventArgs> createReplacement = (_, _) =>
+        {
+            processDatagram.Invoke(listener, [BufferLease.CopyFrom([1, 2, 3, 4, 5, 6]), clientEp]);
+            connections.TryGetValue(clientEp, out replacement);
+        };
+        Delegate? existing = (Delegate?)connectionClosedField.GetValue(first);
+        connectionClosedField.SetValue(first, Delegate.Combine(createReplacement, existing));
+
+        first!.Dispose();
+
+        replacement.Should().NotBeNull();
+        replacement.Should().NotBeSameAs(first);
+        connections.TryGetValue(clientEp, out PassthroughConnection? tracked).Should().BeTrue();
+        tracked.Should().BeSameAs(replacement, "closing the old connection must not remove its replacement from the map");
+    }
 }

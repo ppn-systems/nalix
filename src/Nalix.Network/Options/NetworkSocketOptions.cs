@@ -95,10 +95,19 @@ public sealed partial class NetworkSocketOptions : ConfigurationLoader, IValidat
     public bool KeepAlive { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets whether the socket can reuse an address in TIME_WAIT state.
+    /// Gets or sets whether the TCP listener may reuse an address in TIME_WAIT state.
+    /// UDP uses <see cref="UdpReuseAddress"/> instead.
     /// </summary>
     [IniComment("Allow reuse of a local address in TIME_WAIT state (recommended: true)")]
     public bool ReuseAddress { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether the UDP listener may share its address with other sockets (SO_REUSEADDR).
+    /// Disabled by default: sharing lets another local process bind the same port and receive datagrams.
+    /// Ignored on Windows, where the UDP listener always uses exclusive address use.
+    /// </summary>
+    [IniComment("Allow another socket to share the UDP listener address (SO_REUSEADDR); unsafe on shared hosts, ignored on Windows (default: false)")]
+    public bool UdpReuseAddress { get; set; } = false;
 
     /// <summary>
     /// Gets or sets a value indicating whether the DualMode feature is enabled (for IPv6 sockets).
@@ -134,10 +143,12 @@ public sealed partial class NetworkSocketOptions : ConfigurationLoader, IValidat
     public int ProcessChannelDrainTimeout { get; set; } = 5000;
 
     /// <summary>
-    /// ReusePort allows multiple sockets to bind to the same port, which can be useful for load balancing and high availability scenarios.
+    /// Gets or sets whether the TCP listener may share its port with other sockets (SO_REUSEPORT on Linux).
+    /// Disabled by default: on Linux a process running under the same user can otherwise bind the same port
+    /// and receive a share of incoming connections. Enable only for an explicit multi-socket load-balancing setup.
     /// </summary>
-    [IniComment("Allow multiple sockets to bind to the same port for load balancing (default: true)")]
-    public bool ReusePort { get; set; } = true;
+    [IniComment("Allow multiple sockets to bind to the same port for load balancing; can let another local process of the same user share the port (default: false)")]
+    public bool ReusePort { get; set; } = false;
 
     /// <summary>
     /// TcpFastOpen enables the TCP Fast Open feature, which allows data to be sent during the initial connection handshake, reducing latency for subsequent connections.
