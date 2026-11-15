@@ -29,59 +29,29 @@ internal static class SerializationMember
                     continue;
                 }
 
-                // For properties, we check if they have the attribute or if they wrap an attributed field.
-                // For fields, we only check the field itself.
-                AttributeData? headerAttr = GetAttribute(member, KnownNames.SerializeHeaderAttributeName);
-                AttributeData? orderAttr = GetAttribute(member, KnownNames.SerializeOrderAttributeName);
-                AttributeData? dynamicAttr = GetAttribute(member, KnownNames.SerializeDynamicSizeAttributeName);
-
-                if (headerAttr is not null || orderAttr is not null || dynamicAttr is not null)
+                // Ignore rule: [SerializeIgnore] excludes a member, UNLESS the same member also explicitly carries
+                // [SerializeOrder]/[SerializeHeader]/[SerializeDynamicSize] (e.g. FrameBase.Header). Attributes inherited
+                // from a backing field never override [SerializeIgnore]. Keeping this rule keeps the wire layout stable.
+                if (IsIgnored(member) && !HasSerializationAttributeOnSelf(member))
                 {
-                    // If this is a private field, and there is a public property wrapping it that ALSO has an attribute,
-                    // we skip the field to avoid double counting.
-                    if (member is IFieldSymbol field && field.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
-                    {
-                        bool hasPublicWrapperWithAttribute = members.OfType<IPropertySymbol>().Any(p =>
-                            SymbolEqualityComparer.Default.Equals(p.Type, field.Type) &&
-                            (GetAttribute(p, KnownNames.SerializeOrderAttributeName) is not null ||
-                             GetAttribute(p, KnownNames.SerializeHeaderAttributeName) is not null ||
-                             GetAttribute(p, KnownNames.SerializeDynamicSizeAttributeName) is not null));
+                    continue;
+                }
 
-                        if (hasPublicWrapperWithAttribute)
-                        {
-                            continue;
-                        }
-                    }
+                // A private field that a property wraps is serialized through that property, not directly.
+                if (member is IFieldSymbol field && !IsPublicOrInternal(field) && FindWrapper(members, field) is not null)
+                {
+                    continue;
+                }
 
+                if (HasSerializationAttribute(member))
+                {
                     levelMembers.Add(member);
                     continue;
                 }
 
-                // If no explicit attribute, check if we should include it by default
-                bool isIgnored = member.GetAttributes().Any(static a => a.AttributeClass?.Name == KnownNames.SerializeIgnoreAttributeName);
-                if (isIgnored)
+                // Unattributed members are included by default when public or internal.
+                if (IsPublicOrInternal(member))
                 {
-                    continue;
-                }
-
-                if (member.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal)
-                {
-                    // Check if this property is a wrapper for a field that already has an attribute
-                    if (member is IPropertySymbol prop)
-                    {
-                        bool wrapperForAttributed = prop.ContainingType.GetMembers()
-                            .OfType<IFieldSymbol>()
-                            .Any(f => SymbolEqualityComparer.Default.Equals(f.Type, prop.Type) &&
-                                     (GetAttribute(f, KnownNames.SerializeOrderAttributeName) is not null ||
-                                      GetAttribute(f, KnownNames.SerializeHeaderAttributeName) is not null ||
-                                      GetAttribute(f, KnownNames.SerializeDynamicSizeAttributeName) is not null));
-
-                        if (wrapperForAttributed)
-                        {
-                            continue;
-                        }
-                    }
-
                     levelMembers.Add(member);
                 }
             }
@@ -113,25 +83,85 @@ internal static class SerializationMember
         return [.. headers, .. orderedPayload];
     }
 
+    private static bool IsPublicOrInternal(ISymbol member) =>
+        member.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal;
+
+    private static bool IsIgnored(ISymbol member)
+    {
+        if (HasAttributeNamed(member, KnownNames.SerializeIgnoreAttributeName))
+        {
+            return true;
+        }
+
+        return member is IPropertySymbol prop &&
+               GetBackingField(prop) is { } field &&
+               HasAttributeNamed(field, KnownNames.SerializeIgnoreAttributeName);
+    }
+
+    private static bool HasSerializationAttribute(ISymbol member) =>
+        GetAttribute(member, KnownNames.SerializeHeaderAttributeName) is not null ||
+        GetAttribute(member, KnownNames.SerializeOrderAttributeName) is not null ||
+        GetAttribute(member, KnownNames.SerializeDynamicSizeAttributeName) is not null;
+
+    private static bool HasSerializationAttributeOnSelf(ISymbol member) =>
+        FindAttribute(member, KnownNames.SerializeHeaderAttributeName) is not null ||
+        FindAttribute(member, KnownNames.SerializeOrderAttributeName) is not null ||
+        FindAttribute(member, KnownNames.SerializeDynamicSizeAttributeName) is not null;
+
+    private static bool HasAttributeNamed(ISymbol member, string attrName) =>
+        member.GetAttributes().Any(a => a.AttributeClass?.Name == attrName);
+
     private static AttributeData? GetAttribute(ISymbol member, string attrName)
     {
-        AttributeData? attr = member.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == attrName);
-        if (attr is not null)
+        AttributeData? attr = FindAttribute(member, attrName);
+        if (attr is not null || member is not IPropertySymbol prop)
         {
             return attr;
         }
 
-        if (member is IPropertySymbol prop)
+        // A property inherits the attribute of its own backing field only.
+        return GetBackingField(prop) is { } field ? FindAttribute(field, attrName) : null;
+    }
+
+    private static AttributeData? FindAttribute(ISymbol member, string attrName) =>
+        member.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == attrName);
+
+    /// <summary>
+    /// Returns the field that stores <paramref name="prop"/>'s value: the compiler's backing field for an
+    /// auto-property, or a manual wrapper's field named <c>_name</c> / <c>_camelName</c>. Never matches by type.
+    /// </summary>
+    private static IFieldSymbol? GetBackingField(IPropertySymbol prop)
+    {
+        string name = prop.Name;
+        string camel = char.ToLowerInvariant(name[0]) + name.Substring(1);
+
+        foreach (IFieldSymbol field in prop.ContainingType.GetMembers().OfType<IFieldSymbol>())
         {
-            // Try to find the attribute on a backing field
-            return prop.ContainingType.GetMembers()
-                .OfType<IFieldSymbol>()
-                .FirstOrDefault(f =>
-                    SymbolEqualityComparer.Default.Equals(f.Type, prop.Type) &&
-                    f.GetAttributes().Any(a => a.AttributeClass?.Name == attrName))
-                ?.GetAttributes()
-                .FirstOrDefault(a => a.AttributeClass?.Name == attrName);
+            if (field.IsStatic)
+            {
+                continue;
+            }
+
+            if (SymbolEqualityComparer.Default.Equals(field.AssociatedSymbol, prop) ||
+                field.Name == "_" + name || field.Name == "_" + camel)
+            {
+                return field;
+            }
         }
+
+        return null;
+    }
+
+    private static IPropertySymbol? FindWrapper(ImmutableArray<ISymbol> members, IFieldSymbol field)
+    {
+        foreach (ISymbol member in members)
+        {
+            if (member is IPropertySymbol prop && SymbolEqualityComparer.Default.Equals(GetBackingField(prop), field))
+            {
+                return prop;
+            }
+        }
+
         return null;
     }
 }
