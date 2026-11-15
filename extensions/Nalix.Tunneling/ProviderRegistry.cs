@@ -30,15 +30,25 @@ public sealed class ProviderRegistry
 
         if (_providers.TryAdd(channelId, (connection, sender)))
         {
-            // Bind lifecycle: remove from registry when connection closes in O(1) time
-            connection.ConnectionClosed += (s, e) =>
-            {
-                if (_providers.TryGetValue(channelId, out (IConnection Connection, IPacketSender Sender) existing) && existing.Connection == e.Connection)
-                {
-                    _ = _providers.TryRemove(channelId, out _);
-                }
-            };
+            // Bind lifecycle: release the channel when its owning connection closes
+            connection.ConnectionClosed += (s, e) => _ = this.TryUnregister(channelId, connection);
             return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Releases a channel, but only when it is currently owned by <paramref name="connection"/>.
+    /// </summary>
+    /// <returns><see langword="true"/> if the channel was released; otherwise <see langword="false"/>.</returns>
+    internal bool TryUnregister(ushort channelId, IConnection connection)
+    {
+        if (_providers.TryGetValue(channelId, out (IConnection Connection, IPacketSender Sender) existing) &&
+            existing.Connection == connection)
+        {
+            // Remove by key and value so a concurrent re-registration by another connection is never removed.
+            return _providers.TryRemove(new KeyValuePair<ushort, (IConnection Connection, IPacketSender Sender)>(channelId, existing));
         }
 
         return false;

@@ -6,6 +6,7 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Security;
 using Nalix.Codec.Pooling;
 
 namespace Nalix.Tunneling.Handlers;
@@ -31,6 +32,7 @@ public sealed class ConsumerHandler
         _providerRegistry = providerRegistry;
     }
 
+    [PacketPermission(PermissionLevel.USER)]
     [PacketOpcode(ProtocolOpCode.TUNNEL_CONNECT)]
     public async ValueTask HandleConnectAsync(IPacketContext<TunnelConnect> context)
     {
@@ -38,6 +40,13 @@ public sealed class ConsumerHandler
 
         ushort channelId = context.Packet.ChannelId;
         IConnection consumerConnection = context.Connection;
+
+        // One active tunnel per consumer connection.
+        if (_sessionRegistry.Contains(consumerConnection.ConnectionId))
+        {
+            await SendAsync(context, false, 4).ConfigureAwait(false); // 4 = AlreadyTunneling
+            return;
+        }
 
         // 1. Find the Provider for this channel
         if (!_providerRegistry.TryGetProvider(channelId, out IConnection? providerControlConnection, out IPacketSender? providerSender))
@@ -48,6 +57,18 @@ public sealed class ConsumerHandler
             }
 
             await SendAsync(context, false, 1).ConfigureAwait(false); // 1 = ChannelNotFound
+            return;
+        }
+
+        // Bound both established sessions and pending requests (each pending request forwards work to the provider).
+        if (_sessionRegistry.Count + _tunnelRegistry.PendingCount >= _options.MaxConcurrentTunnels)
+        {
+            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("[Tunneling.ConsumerHandler] consumer={ConnectionId} channel={ChannelId} error=tunnel-limit-reached", consumerConnection.ConnectionId, channelId);
+            }
+
+            await SendAsync(context, false, 3).ConfigureAwait(false); // 3 = TunnelLimitReached
             return;
         }
 
@@ -85,6 +106,12 @@ public sealed class ConsumerHandler
                 _logger.LogDebug(ex, "[Tunneling.ConsumerHandler] data-connection-timeout provider={ProviderId} channel={ChannelId}", providerControlConnection.ConnectionId, channelId);
             }
 
+            // Drop the pending entry so a late TUNNEL_READY cannot resolve it. If it already resolved, close the connection nobody will use.
+            if (!_tunnelRegistry.Remove(token))
+            {
+                DisconnectWhenResolved(providerTask);
+            }
+
             await SendAsync(context, false, 2).ConfigureAwait(false); // 2 = ProviderTimeout
             return;
         }
@@ -106,9 +133,16 @@ public sealed class ConsumerHandler
                 _logger.LogDebug(ex, "[Tunneling.ConsumerHandler] tunnel-session-start-error consumer={ConsumerId}", consumerConnection.ConnectionId);
             }
 
+            providerDataConnection.Disconnect("tunnel-session-start-failed");
             await session.DisposeAsync().ConfigureAwait(false);
         }
     }
+
+    private static void DisconnectWhenResolved(Task<IConnection> providerTask) => _ = providerTask.ContinueWith(
+        static t => t.Result.Disconnect("tunnel-request-timed-out"),
+        CancellationToken.None,
+        TaskContinuationOptions.OnlyOnRanToCompletion,
+        TaskScheduler.Default);
 
     private static async ValueTask SendAsync(IPacketContext<TunnelConnect> context, bool success, byte reason)
     {

@@ -30,4 +30,9 @@ Nalix.Traversal provides NAT traversal, STUN signaling, and UDP hole punching ca
 		<ProjectReference Include="..\..\src\Nalix.Hosting\Nalix.Hosting.csproj" />
 		<ProjectReference Include="..\..\src\Nalix.Runtime\Nalix.Runtime.csproj" />
 	</ItemGroup>
+	<!-- Source generator for [PacketHandler] handler registration -->
+	<ItemGroup>
+		<ProjectReference Include="..\..\analyzers\Nalix.Analyzers.Generators\Nalix.Analyzers.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" />
+	</ItemGroup>
+
 </Project>

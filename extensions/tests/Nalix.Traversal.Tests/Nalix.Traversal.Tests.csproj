@@ -13,6 +13,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Nalix.Abstractions\Nalix.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\src\Nalix.Codec\Nalix.Codec.csproj" />
+    <ProjectReference Include="..\..\..\src\Nalix.Framework\Nalix.Framework.csproj" />
+    <ProjectReference Include="..\..\..\src\Nalix.Runtime\Nalix.Runtime.csproj" />
     <ProjectReference Include="..\..\Nalix.Traversal\Nalix.Traversal.csproj" />
     <ProjectReference Include="..\..\Nalix.Traversal.Contracts\Nalix.Traversal.Contracts.csproj" />
   </ItemGroup>

@@ -26,4 +26,9 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
   </ItemGroup>
 
+  <!-- Source generator for [PacketHandler] handler registration -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\analyzers\Nalix.Analyzers.Generators\Nalix.Analyzers.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" />
+  </ItemGroup>
+
 </Project>

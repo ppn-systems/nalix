@@ -57,6 +57,8 @@
 		<InternalsVisibleTo Include="Nalix.Network.Tests" />
 		<InternalsVisibleTo Include="Nalix.Runtime.Tests" />
 		<InternalsVisibleTo Include="Nalix.SDK.Tests" />
+		<InternalsVisibleTo Include="Nalix.Tunneling.Tests" />
+		<InternalsVisibleTo Include="Nalix.Traversal.Tests" />
 		<InternalsVisibleTo Include="Nalix.Codec.Benchmarks" />
 		<InternalsVisibleTo Include="Nalix.Framework.Benchmarks" />
 		<InternalsVisibleTo Include="Nalix.Network.Benchmarks" />

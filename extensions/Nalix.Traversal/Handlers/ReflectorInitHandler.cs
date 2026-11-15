@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Security;
 using Nalix.Codec.Pooling;
 using Nalix.Runtime.Extensions;
 using Nalix.Traversal.Packets;
@@ -25,6 +26,7 @@ public sealed class ReflectorInitHandler
     /// <summary>
     /// Handles the Reflector request.
     /// </summary>
+    [PacketPermission(PermissionLevel.USER)]
     [PacketOpcode(ProtocolOpCode.TRAVERSAL_REFLECTOR_INIT)]
     public async ValueTask HandleAsync(IPacketContext<ReflectorInit> context)
     {
