@@ -174,6 +174,22 @@ We follow the [Microsoft C# Coding Conventions](https://docs.microsoft.com/en-us
 | **I**nterface Segregation | Prefer many client-specific interfaces over one general-purpose interface. |
 | **D**ependency Inversion | Depend on abstractions, not concretions. |
 
+### Public API Tracking
+
+Every NuGet-packaged project (`IsPackable=true`) is analyzed by `Microsoft.CodeAnalysis.PublicApiAnalyzers`, enabled centrally in `Directory.Build.targets`. Each such project has two files next to its `.csproj`:
+
+- `PublicAPI.Shipped.txt`: the public API of released versions.
+- `PublicAPI.Unshipped.txt`: public API added or changed since the last release.
+
+When you add, remove, or change a public member, the build reports `RS0016` (not in the declared API) or `RS0017` (declared but missing). To update:
+
+1. Build in `Release`: `dotnet build src/Nalix.sln -c Release`. Build the extension solutions too if you changed them.
+2. Apply the analyzer's code fix. It writes new members to `PublicAPI.Unshipped.txt`: `dotnet format analyzers <project>.csproj --diagnostics RS0016`. Remove `RS0017` entries from the file by hand.
+3. Review the diff. Removing or changing a shipped member is a breaking change: mark the commit with `!` or a `BREAKING CHANGE:` footer so the release is a major bump (see [Version Bump Rules](#version-bump-rules)).
+4. When a release ships, move the contents of `PublicAPI.Unshipped.txt` into `PublicAPI.Shipped.txt` and leave `#nullable enable` as the only line in `Unshipped`.
+
+Keep the `#nullable enable` line as the first line of both files. Members that exist only in `Debug` builds (for example under `#if DEBUG`) are not part of the released API and should not appear in `Shipped`.
+
 ---
 
 ## Pull Request Process

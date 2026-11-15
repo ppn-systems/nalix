@@ -1,0 +1,363 @@
+#nullable enable
+const Nalix.Runtime.DiagnosticsEvents.Internal.Critical = "Internal.Critical" -> string!
+const Nalix.Runtime.DiagnosticsEvents.Internal.Debug = "Internal.Debug" -> string!
+const Nalix.Runtime.DiagnosticsEvents.Internal.Error = "Internal.Error" -> string!
+const Nalix.Runtime.DiagnosticsEvents.Internal.Information = "Internal.Information" -> string!
+const Nalix.Runtime.DiagnosticsEvents.Internal.Trace = "Internal.Trace" -> string!
+const Nalix.Runtime.DiagnosticsEvents.Internal.Warning = "Internal.Warning" -> string!
+const Nalix.Runtime.DiagnosticsEvents.ListenerName = "Runtime" -> string!
+const Nalix.Runtime.Sessions.InMemorySessionStore.DefaultMaxSessions = 65536 -> int
+Nalix.Runtime.DiagnosticsEvents
+Nalix.Runtime.DiagnosticsEvents.Internal
+Nalix.Runtime.Dispatching.IDispatchChannel<TPacket>
+Nalix.Runtime.Dispatching.IDispatchChannel<TPacket>.Push(Nalix.Abstractions.Networking.IConnection! connection, Nalix.Abstractions.IBufferLease! raw) -> void
+Nalix.Runtime.Dispatching.IDispatchChannel<TPacket>.TotalPackets.get -> long
+Nalix.Runtime.Dispatching.IDispatchChannel<TPacket>.TryClaim(out Nalix.Runtime.Dispatching.IDispatchSession! session) -> bool
+Nalix.Runtime.Dispatching.IDispatchSession
+Nalix.Runtime.Dispatching.IDispatchSession.Connection.get -> Nalix.Abstractions.Networking.IConnection!
+Nalix.Runtime.Dispatching.IDispatchSession.TryDequeue(out Nalix.Abstractions.IBufferLease! raw) -> bool
+Nalix.Runtime.Dispatching.InlinePacketDispatcher
+Nalix.Runtime.Dispatching.InlinePacketDispatcher.Activate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Runtime.Dispatching.InlinePacketDispatcher.Deactivate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Runtime.Dispatching.InlinePacketDispatcher.Dispose() -> void
+Nalix.Runtime.Dispatching.InlinePacketDispatcher.GenerateReport() -> string!
+Nalix.Runtime.Dispatching.InlinePacketDispatcher.HandlePacket(Nalix.Abstractions.IBufferLease! lease, Nalix.Abstractions.Networking.IConnection! connection) -> void
+Nalix.Runtime.Dispatching.InlinePacketDispatcher.InlinePacketDispatcher(System.Action<Nalix.Runtime.Routing.PacketDispatchOptions<Nalix.Abstractions.Networking.Packets.IPacket!>!>? options = null) -> void
+Nalix.Runtime.Dispatching.InlinePacketDispatcher.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Runtime.Dispatching.IPacketDispatch
+Nalix.Runtime.Dispatching.IPacketDispatch.HandlePacket(Nalix.Abstractions.IBufferLease! lease, Nalix.Abstractions.Networking.IConnection! connection) -> void
+Nalix.Runtime.Dispatching.IPacketHandlerBuilder<TPacket>
+Nalix.Runtime.Dispatching.IPacketHandlerBuilder<TPacket>.RegisterHandler(ushort opCode, Nalix.Abstractions.Networking.Packets.PacketMetadata metadata, string! methodName, object? instance, System.Type! returnType, System.Type? expectedPacketType, System.Func<object?, Nalix.Runtime.Dispatching.PacketContext<TPacket>!, System.Threading.Tasks.ValueTask<object?>>! invoker) -> void
+Nalix.Runtime.Dispatching.IPacketHandlerCompiler
+Nalix.Runtime.Dispatching.IPacketHandlerCompiler.Build<TPacket>(Nalix.Runtime.Dispatching.IPacketHandlerBuilder<TPacket>! builder, System.Func<object!>! factory) -> void
+Nalix.Runtime.Dispatching.IPacketHandlerCompiler.InitializeDependencies() -> void
+Nalix.Runtime.Dispatching.PacketContext<TPacket>
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.Attributes.get -> Nalix.Abstractions.Networking.Packets.PacketMetadata
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.CancellationToken.get -> System.Threading.CancellationToken
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.Connection.get -> Nalix.Abstractions.Networking.IConnection!
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.Dispose() -> void
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.EncryptedOnWire.get -> bool
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.IsReliable.get -> bool
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.Packet.get -> TPacket
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.PacketContext() -> void
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.ResetForPool() -> void
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.Scope.get -> Nalix.Abstractions.Injection.IPacketScope!
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.Sender.get -> Nalix.Abstractions.Networking.Packets.IPacketSender!
+Nalix.Runtime.Dispatching.PacketContext<TPacket>.SkipOutbound.get -> bool
+Nalix.Runtime.Dispatching.PacketContextBridge
+Nalix.Runtime.Dispatching.PacketDispatchChannel
+Nalix.Runtime.Dispatching.PacketDispatchChannel.Activate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Runtime.Dispatching.PacketDispatchChannel.Deactivate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Runtime.Dispatching.PacketDispatchChannel.Dispose() -> void
+Nalix.Runtime.Dispatching.PacketDispatchChannel.GenerateReport() -> string!
+Nalix.Runtime.Dispatching.PacketDispatchChannel.HandlePacket(Nalix.Abstractions.IBufferLease! lease, Nalix.Abstractions.Networking.IConnection! connection) -> void
+Nalix.Runtime.Dispatching.PacketDispatchChannel.PacketDispatchChannel(System.Action<Nalix.Runtime.Routing.PacketDispatchOptions<Nalix.Abstractions.Networking.Packets.IPacket!>!>! options) -> void
+Nalix.Runtime.Dispatching.PacketDispatchChannel.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Runtime.Dispatching.PacketDispatcherBase<TPacket>
+Nalix.Runtime.Dispatching.PacketDispatcherBase<TPacket>.Options.get -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Dispatching.PacketDispatcherBase<TPacket>.PacketDispatcherBase(Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>! options) -> void
+Nalix.Runtime.Dispatching.PacketDispatcherBase<TPacket>.PacketDispatcherBase(System.Action<Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!>? configure = null) -> void
+Nalix.Runtime.Dispatching.PacketHandlerRegistry
+Nalix.Runtime.Dispatching.PacketScope
+Nalix.Runtime.Dispatching.PacketScope.Connection.get -> Nalix.Abstractions.Networking.IConnection!
+Nalix.Runtime.Dispatching.PacketScope.Dispose() -> void
+Nalix.Runtime.Dispatching.PacketScope.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Dispatching.PacketScope.GetOrAdd<T>(object! key, System.Func<T!>! factory) -> T!
+Nalix.Runtime.Dispatching.PacketScope.GetOrAdd<T>(System.Func<T!>! factory) -> T!
+Nalix.Runtime.Dispatching.PacketScope.GetRequiredService<T>() -> T!
+Nalix.Runtime.Dispatching.PacketScope.GetService<T>() -> T?
+Nalix.Runtime.Dispatching.PacketScope.PacketScope() -> void
+Nalix.Runtime.Dispatching.PacketScope.PacketScope(Nalix.Runtime.Routing.ScopedServiceRegistry! registry) -> void
+Nalix.Runtime.Dispatching.PacketScope.RegisterForDisposal(System.IAsyncDisposable! asyncDisposable) -> void
+Nalix.Runtime.Dispatching.PacketScope.RegisterForDisposal(System.IDisposable! disposable) -> void
+Nalix.Runtime.Dispatching.PacketScope.ResetForPool() -> void
+Nalix.Runtime.Dispatching.PacketSender
+Nalix.Runtime.Dispatching.PacketSender.Initialize<TPacket>(Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>! context) -> void
+Nalix.Runtime.Dispatching.PacketSender.ReplyAsync(Nalix.Abstractions.Networking.Packets.IPacket! response, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Dispatching.PacketSender.ReplyAsync<TPacket>(System.ReadOnlySpan<TPacket> responses, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Dispatching.PacketSender.ResetForPool() -> void
+Nalix.Runtime.Dispatching.PacketSender.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, bool forceEncrypt, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Dispatching.PacketSender.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Dispatching.PacketSender.SendAsync<TPacket>(System.ReadOnlySpan<TPacket> packets, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Extensions.ConnectionExtensions
+Nalix.Runtime.Extensions.ConnectionUserExtensions
+Nalix.Runtime.Extensions.ControlDirectiveOptions
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Arg0.get -> uint
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Arg0.init -> void
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Arg1.get -> uint
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Arg1.init -> void
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Arg2.get -> ushort
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Arg2.init -> void
+Nalix.Runtime.Extensions.ControlDirectiveOptions.ControlDirectiveOptions() -> void
+Nalix.Runtime.Extensions.ControlDirectiveOptions.ControlDirectiveOptions(Nalix.Abstractions.Networking.Protocols.ControlFlags Flags = Nalix.Abstractions.Networking.Protocols.ControlFlags.NONE, ushort SequenceId = 0, uint Arg0 = 0, uint Arg1 = 0, ushort Arg2 = 0) -> void
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Deconstruct(out Nalix.Abstractions.Networking.Protocols.ControlFlags Flags, out ushort SequenceId, out uint Arg0, out uint Arg1, out ushort Arg2) -> void
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Equals(Nalix.Runtime.Extensions.ControlDirectiveOptions other) -> bool
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Flags.get -> Nalix.Abstractions.Networking.Protocols.ControlFlags
+Nalix.Runtime.Extensions.ControlDirectiveOptions.Flags.init -> void
+Nalix.Runtime.Extensions.ControlDirectiveOptions.SequenceId.get -> ushort
+Nalix.Runtime.Extensions.ControlDirectiveOptions.SequenceId.init -> void
+Nalix.Runtime.Groups.GroupMembershipObserver
+Nalix.Runtime.Groups.GroupMembershipObserver.Dispose() -> void
+Nalix.Runtime.Groups.GroupMembershipObserver.GroupMembershipObserver(Nalix.Abstractions.Networking.IConnectionHub! hub, Nalix.Abstractions.Networking.IConnectionGroupRegistry! registry) -> void
+Nalix.Runtime.Groups.InMemoryGroupStore
+Nalix.Runtime.Groups.InMemoryGroupStore.AddToGroupAsync(string! groupName, Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Runtime.Groups.InMemoryGroupStore.GetGroupMembers(string! groupName) -> System.Collections.Generic.IReadOnlyCollection<Nalix.Abstractions.Networking.IConnection!>!
+Nalix.Runtime.Groups.InMemoryGroupStore.InMemoryGroupStore() -> void
+Nalix.Runtime.Groups.InMemoryGroupStore.RemoveFromAllGroupsAsync(Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Runtime.Groups.InMemoryGroupStore.RemoveFromGroupAsync(string! groupName, Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Runtime.Handlers.HandshakeHandlers
+Nalix.Runtime.Handlers.ProofOfWorkHandlers
+Nalix.Runtime.Handlers.SessionHandlers
+Nalix.Runtime.Handlers.SystemControlHandlers
+Nalix.Runtime.Handlers.SystemTimeSyncHandlers
+Nalix.Runtime.Middleware.PerMiddlewareMetrics
+Nalix.Runtime.Middleware.PerMiddlewareMetrics.MaxExecutionTicks.get -> long
+Nalix.Runtime.Middleware.PerMiddlewareMetrics.MiddlewareType.get -> System.Type!
+Nalix.Runtime.Middleware.PerMiddlewareMetrics.PerMiddlewareMetrics() -> void
+Nalix.Runtime.Middleware.PerMiddlewareMetrics.TotalErrors.get -> long
+Nalix.Runtime.Middleware.PerMiddlewareMetrics.TotalExecutions.get -> long
+Nalix.Runtime.Middleware.PerMiddlewareMetrics.TotalExecutionTicks.get -> long
+Nalix.Runtime.Middleware.PipelineMetrics
+Nalix.Runtime.Middleware.PipelineMetrics.ActiveExecutions.get -> long
+Nalix.Runtime.Middleware.PipelineMetrics.AverageExecutionTime.get -> System.TimeSpan
+Nalix.Runtime.Middleware.PipelineMetrics.MaxExecutionTicks.get -> long
+Nalix.Runtime.Middleware.PipelineMetrics.PipelineMetrics() -> void
+Nalix.Runtime.Middleware.PipelineMetrics.TotalErrors.get -> long
+Nalix.Runtime.Middleware.PipelineMetrics.TotalExecutions.get -> long
+Nalix.Runtime.Middleware.PipelineMetrics.TotalExecutionTicks.get -> long
+Nalix.Runtime.Middleware.Standard.PermissionMiddleware
+Nalix.Runtime.Middleware.Standard.PermissionMiddleware.InvokeAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Abstractions.Networking.Packets.IPacket!>! context, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! next) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Middleware.Standard.PermissionMiddleware.PermissionMiddleware() -> void
+Nalix.Runtime.Middleware.Standard.RateLimitMiddleware
+Nalix.Runtime.Middleware.Standard.RateLimitMiddleware.InvokeAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Abstractions.Networking.Packets.IPacket!>! context, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! next) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Middleware.Standard.RateLimitMiddleware.RateLimitMiddleware() -> void
+Nalix.Runtime.Middleware.Standard.RateLimitMiddleware.RateLimitMiddleware(Nalix.Runtime.Throttling.PolicyRateLimiter! policyRate, Nalix.Runtime.Throttling.TokenBucketLimiter! tokenBucket) -> void
+Nalix.Runtime.Middleware.Standard.TimeoutMiddleware
+Nalix.Runtime.Middleware.Standard.TimeoutMiddleware.InvokeAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Abstractions.Networking.Packets.IPacket!>! context, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! next) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Middleware.Standard.TimeoutMiddleware.TimeoutMiddleware() -> void
+Nalix.Runtime.Options.DirectiveGuardOptions
+Nalix.Runtime.Options.DirectiveGuardOptions.DefaultCooldownMs.get -> int
+Nalix.Runtime.Options.DirectiveGuardOptions.DefaultCooldownMs.set -> void
+Nalix.Runtime.Options.DirectiveGuardOptions.DirectiveGuardOptions() -> void
+Nalix.Runtime.Options.DirectiveGuardOptions.Validate() -> void
+Nalix.Runtime.Options.DispatchOptions
+Nalix.Runtime.Options.DispatchOptions.BlockTimeout.get -> System.TimeSpan
+Nalix.Runtime.Options.DispatchOptions.BlockTimeout.set -> void
+Nalix.Runtime.Options.DispatchOptions.BucketCountMultiplier.get -> int
+Nalix.Runtime.Options.DispatchOptions.BucketCountMultiplier.set -> void
+Nalix.Runtime.Options.DispatchOptions.DispatchOptions() -> void
+Nalix.Runtime.Options.DispatchOptions.DropPolicy.get -> Nalix.Abstractions.Security.DropPolicy
+Nalix.Runtime.Options.DispatchOptions.DropPolicy.set -> void
+Nalix.Runtime.Options.DispatchOptions.MaxBucketCount.get -> int
+Nalix.Runtime.Options.DispatchOptions.MaxBucketCount.set -> void
+Nalix.Runtime.Options.DispatchOptions.MaxPerConnectionQueue.get -> int
+Nalix.Runtime.Options.DispatchOptions.MaxPerConnectionQueue.set -> void
+Nalix.Runtime.Options.DispatchOptions.MinBucketCount.get -> int
+Nalix.Runtime.Options.DispatchOptions.MinBucketCount.set -> void
+Nalix.Runtime.Options.DispatchOptions.PriorityWeights.get -> string!
+Nalix.Runtime.Options.DispatchOptions.PriorityWeights.set -> void
+Nalix.Runtime.Options.DispatchOptions.Validate() -> void
+Nalix.Runtime.Options.PacketDrainOptions
+Nalix.Runtime.Options.PacketDrainOptions.Count.get -> int
+Nalix.Runtime.Options.PacketDrainOptions.Count.set -> void
+Nalix.Runtime.Options.PacketDrainOptions.DispatchProcessorAffinities.get -> string!
+Nalix.Runtime.Options.PacketDrainOptions.DispatchProcessorAffinities.set -> void
+Nalix.Runtime.Options.PacketDrainOptions.MaxDispatchLoops.get -> int
+Nalix.Runtime.Options.PacketDrainOptions.MaxDispatchLoops.set -> void
+Nalix.Runtime.Options.PacketDrainOptions.MaxDrainPerWake.get -> int
+Nalix.Runtime.Options.PacketDrainOptions.MaxDrainPerWake.set -> void
+Nalix.Runtime.Options.PacketDrainOptions.MaxDrainPerWakeMultiplier.get -> int
+Nalix.Runtime.Options.PacketDrainOptions.MaxDrainPerWakeMultiplier.set -> void
+Nalix.Runtime.Options.PacketDrainOptions.MinDispatchLoops.get -> int
+Nalix.Runtime.Options.PacketDrainOptions.MinDispatchLoops.set -> void
+Nalix.Runtime.Options.PacketDrainOptions.MinDrainPerWake.get -> int
+Nalix.Runtime.Options.PacketDrainOptions.MinDrainPerWake.set -> void
+Nalix.Runtime.Options.PacketDrainOptions.PacketDrainOptions() -> void
+Nalix.Runtime.Options.PacketDrainOptions.Validate() -> void
+Nalix.Runtime.Options.PacketDrainOptions.VirtualOpCodeOffset.get -> ushort
+Nalix.Runtime.Options.PacketDrainOptions.VirtualOpCodeOffset.set -> void
+Nalix.Runtime.Options.SessionStoreOptions
+Nalix.Runtime.Options.SessionStoreOptions.MinAttributesForPersistence.get -> int
+Nalix.Runtime.Options.SessionStoreOptions.MinAttributesForPersistence.set -> void
+Nalix.Runtime.Options.SessionStoreOptions.SessionStoreOptions() -> void
+Nalix.Runtime.Options.SessionStoreOptions.SessionTtl.get -> System.TimeSpan
+Nalix.Runtime.Options.SessionStoreOptions.SessionTtl.set -> void
+Nalix.Runtime.Options.SessionStoreOptions.Validate() -> void
+Nalix.Runtime.Options.TokenBucketOptions
+Nalix.Runtime.Options.TokenBucketOptions.AdaptiveThrottlingEnabled.get -> bool
+Nalix.Runtime.Options.TokenBucketOptions.AdaptiveThrottlingEnabled.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.CapacityTokens.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.CapacityTokens.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.CleanupIntervalSeconds.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.CleanupIntervalSeconds.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.CooldownResetSec.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.CooldownResetSec.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.HardLockoutSeconds.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.HardLockoutSeconds.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.InitialTokens.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.InitialTokens.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.MaxEvictionCapacity.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.MaxEvictionCapacity.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.MaxSoftViolations.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.MaxSoftViolations.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.MaxTrackedEndpoints.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.MaxTrackedEndpoints.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.MinReportCapacity.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.MinReportCapacity.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.RefillTokensPerSecond.get -> double
+Nalix.Runtime.Options.TokenBucketOptions.RefillTokensPerSecond.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.ShardCount.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.ShardCount.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.SoftViolationWindowSeconds.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.SoftViolationWindowSeconds.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.StaleEntrySeconds.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.StaleEntrySeconds.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.TokenBucketOptions() -> void
+Nalix.Runtime.Options.TokenBucketOptions.TokenScale.get -> int
+Nalix.Runtime.Options.TokenBucketOptions.TokenScale.set -> void
+Nalix.Runtime.Options.TokenBucketOptions.Validate() -> void
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.Drain.get -> Nalix.Runtime.Options.PacketDrainOptions!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.Metrics.get -> Nalix.Runtime.Middleware.PipelineMetrics
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.MiddlewareMetrics.get -> System.ReadOnlySpan<Nalix.Runtime.Middleware.PerMiddlewareMetrics>
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.PacketDispatchOptions() -> void
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithDispatchLoopCount(int? loopCount) -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithErrorHandling(System.Action<System.Exception!, ushort>! errorHandler) -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithErrorHandlingMiddleware(bool continueOnError, System.Action<System.Exception!, System.Type!>? errorHandler = null) -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithHandler(System.Type! controllerType) -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithHandler(System.Type! controllerType, System.Func<object!>! factory) -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithHandler<TController>() -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithHandler<TController>(System.Func<TController!>! factory) -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithHandler<TController>(TController! instance) -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>.WithMiddleware(Nalix.Abstractions.Middleware.IPacketMiddleware<TPacket>! middleware) -> Nalix.Runtime.Routing.PacketDispatchOptions<TPacket>!
+Nalix.Runtime.Routing.ScopedServiceRegistry
+Nalix.Runtime.Routing.ScopedServiceRegistry.Clear() -> void
+Nalix.Runtime.Routing.ScopedServiceRegistry.RegisterScoped(System.Type! serviceType, System.Func<Nalix.Abstractions.Injection.IPacketScope!, object!>! factory) -> void
+Nalix.Runtime.Routing.ScopedServiceRegistry.RegisterScoped<TService>(System.Func<Nalix.Abstractions.Injection.IPacketScope!, TService!>! factory) -> void
+Nalix.Runtime.Routing.ScopedServiceRegistry.ScopedServiceRegistry() -> void
+Nalix.Runtime.Routing.ScopedServiceRegistry.StrictScopes.get -> bool
+Nalix.Runtime.Routing.ScopedServiceRegistry.StrictScopes.set -> void
+Nalix.Runtime.Routing.ScopedServiceRegistry.TryGetFactory(System.Type! serviceType, out System.Func<Nalix.Abstractions.Injection.IPacketScope!, object!>? factory) -> bool
+Nalix.Runtime.Security.FileCertificateStore
+Nalix.Runtime.Security.FileCertificateStore.FileCertificateStore() -> void
+Nalix.Runtime.Security.FileCertificateStore.Load(string! path) -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Runtime.Security.FileCertificateStore.Save(string! path, Nalix.Abstractions.Primitives.Bytes32 privateKey, Nalix.Abstractions.Primitives.Bytes32 publicKey) -> void
+Nalix.Runtime.Sessions.DefaultSessionPersistencePolicy
+Nalix.Runtime.Sessions.DefaultSessionPersistencePolicy.DefaultSessionPersistencePolicy() -> void
+Nalix.Runtime.Sessions.DefaultSessionPersistencePolicy.ShouldPersist(Nalix.Abstractions.Networking.IConnection! connection) -> bool
+Nalix.Runtime.Sessions.InMemorySessionStore
+Nalix.Runtime.Sessions.InMemorySessionStore.ConsumeAsync(ulong sessionToken, System.Func<Nalix.Abstractions.Networking.Sessions.SessionEntry!, bool>? predicate = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Nalix.Abstractions.Networking.Sessions.SessionScope>
+Nalix.Runtime.Sessions.InMemorySessionStore.ExecuteAsync(Nalix.Abstractions.Concurrency.IWorkerContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Sessions.InMemorySessionStore.GenerateReport() -> string!
+Nalix.Runtime.Sessions.InMemorySessionStore.InMemorySessionStore() -> void
+Nalix.Runtime.Sessions.InMemorySessionStore.MaxSessions.get -> int
+Nalix.Runtime.Sessions.InMemorySessionStore.MaxSessions.set -> void
+Nalix.Runtime.Sessions.InMemorySessionStore.StoreAsync(Nalix.Abstractions.Networking.Sessions.SessionEntry! entry, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Sessions.InMemorySessionStore.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Runtime.Sessions.SessionFactory
+Nalix.Runtime.Sessions.SessionFactory.CreateSession(Nalix.Abstractions.Networking.IConnection! connection) -> Nalix.Abstractions.Networking.Sessions.SessionEntry!
+Nalix.Runtime.Sessions.SessionFactory.SessionFactory() -> void
+Nalix.Runtime.Sessions.SessionPersistenceObserver
+Nalix.Runtime.Sessions.SessionPersistenceObserver.Dispose() -> void
+Nalix.Runtime.Sessions.SessionPersistenceObserver.SessionPersistenceObserver(Nalix.Abstractions.Networking.IConnectionHub! hub, Nalix.Abstractions.Networking.Sessions.ISessionService! sessionService) -> void
+Nalix.Runtime.Sessions.SessionService
+Nalix.Runtime.Sessions.SessionService.ConsumeAsync(ulong sessionToken, System.Func<Nalix.Abstractions.Networking.Sessions.SessionEntry!, bool>? predicate = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Nalix.Abstractions.Networking.Sessions.SessionScope>
+Nalix.Runtime.Sessions.SessionService.Dispose() -> void
+Nalix.Runtime.Sessions.SessionService.GenerateReport() -> string!
+Nalix.Runtime.Sessions.SessionService.SaveSessionAsync(Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Sessions.SessionService.SessionService(Nalix.Abstractions.Networking.Sessions.ISessionFactory? factory = null, Nalix.Abstractions.Networking.Sessions.ISessionStore? store = null, Nalix.Abstractions.Networking.Sessions.ISessionPersistencePolicy? policy = null) -> void
+Nalix.Runtime.Sessions.SessionService.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Runtime.Throttling.PolicyRateLimiter
+Nalix.Runtime.Throttling.PolicyRateLimiter.Dispose() -> void
+Nalix.Runtime.Throttling.PolicyRateLimiter.Evaluate(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Abstractions.Networking.Packets.IPacket!>! context) -> Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision
+Nalix.Runtime.Throttling.PolicyRateLimiter.GenerateReport() -> string!
+Nalix.Runtime.Throttling.PolicyRateLimiter.PolicyRateLimiter() -> void
+Nalix.Runtime.Throttling.PolicyRateLimiter.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter
+Nalix.Runtime.Throttling.TokenBucketLimiter.Dispose() -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Nalix.Runtime.Throttling.TokenBucketLimiter.Evaluate(Nalix.Abstractions.Networking.INetworkEndpoint! key) -> Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision
+Nalix.Runtime.Throttling.TokenBucketLimiter.Evaluate(Nalix.Abstractions.Networking.INetworkEndpoint! key, in Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy policy) -> Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision
+Nalix.Runtime.Throttling.TokenBucketLimiter.GenerateReport() -> string!
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.Allowed.get -> bool
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.Allowed.init -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.Credit.get -> ushort
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.Credit.init -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.RateLimitDecision() -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.Reason.get -> Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitReason
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.Reason.init -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.RetryAfterMs.get -> int
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitDecision.RetryAfterMs.init -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.CapacityMicro.get -> long
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.Equals(Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy other) -> bool
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.HardLockoutSeconds.get -> int
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.MaxSoftViolations.get -> int
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.RateLimitPolicy() -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.RateLimitPolicy(int rps, double burst, int tokenScale, double swFreq, int hardLockoutSec, int maxSoftViolations) -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.RefillPerSecMicro.get -> long
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.RefillPerTick.get -> double
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.Rps.get -> int
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.TokenScale.get -> int
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitReason
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitReason.HardLockout = 2 -> Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitReason
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitReason.None = 0 -> Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitReason
+Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitReason.SoftThrottle = 1 -> Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitReason
+Nalix.Runtime.Throttling.TokenBucketLimiter.TokenBucketLimiter() -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.TokenBucketLimiter(Nalix.Runtime.Options.TokenBucketOptions? options = null) -> void
+Nalix.Runtime.Throttling.TokenBucketLimiter.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Runtime.Timekeeping.TimeSynchronizer
+Nalix.Runtime.Timekeeping.TimeSynchronizer.Activate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Runtime.Timekeeping.TimeSynchronizer.Deactivate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Runtime.Timekeeping.TimeSynchronizer.Dispose() -> void
+Nalix.Runtime.Timekeeping.TimeSynchronizer.FireAndForget.get -> bool
+Nalix.Runtime.Timekeeping.TimeSynchronizer.FireAndForget.set -> void
+Nalix.Runtime.Timekeeping.TimeSynchronizer.IsRunning.get -> bool
+Nalix.Runtime.Timekeeping.TimeSynchronizer.IsTimeSyncEnabled.get -> bool
+Nalix.Runtime.Timekeeping.TimeSynchronizer.IsTimeSyncEnabled.set -> void
+Nalix.Runtime.Timekeeping.TimeSynchronizer.Period.get -> System.TimeSpan
+Nalix.Runtime.Timekeeping.TimeSynchronizer.Period.set -> void
+Nalix.Runtime.Timekeeping.TimeSynchronizer.Restart() -> void
+Nalix.Runtime.Timekeeping.TimeSynchronizer.TimeSynchronized -> System.Action<long>?
+Nalix.Runtime.Timekeeping.TimeSynchronizer.TimeSynchronizer() -> void
+override Nalix.Runtime.Extensions.ControlDirectiveOptions.GetHashCode() -> int
+override Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.GetHashCode() -> int
+static Nalix.Runtime.DiagnosticsEvents.Write<T>(string! name, T payload) -> void
+static Nalix.Runtime.Dispatching.PacketContextBridge.Create<TConcrete, TBase>(Nalix.Runtime.Dispatching.PacketContext<TBase>! baseContext, TConcrete concretePacket) -> Nalix.Runtime.Dispatching.PacketContext<TConcrete>!
+static Nalix.Runtime.Dispatching.PacketContextBridge.Return<TConcrete>(Nalix.Runtime.Dispatching.PacketContext<TConcrete>! bridgeContext) -> void
+static Nalix.Runtime.Dispatching.PacketContextBridge.WrapStream<TConcrete, TChunk>(System.Collections.Generic.IAsyncEnumerable<TChunk>! source, Nalix.Runtime.Dispatching.PacketContext<TConcrete>! bridgeContext) -> System.Collections.Generic.IAsyncEnumerable<TChunk>!
+static Nalix.Runtime.Dispatching.PacketHandlerRegistry.Register(System.Type! controllerType, Nalix.Runtime.Dispatching.IPacketHandlerCompiler! compiler) -> void
+static Nalix.Runtime.Extensions.ConnectionExtensions.BroadcastAsync(this Nalix.Abstractions.Networking.IConnectionBroadcaster! hub, Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, bool enableEncrypt = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Nalix.Runtime.Extensions.ConnectionExtensions.GetHub(this Nalix.Abstractions.Networking.IConnection! connection) -> Nalix.Abstractions.Networking.IConnectionHub?
+static Nalix.Runtime.Extensions.ConnectionExtensions.MulticastAsync(this Nalix.Abstractions.Networking.IConnectionBroadcaster! hub, Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, bool enableEncrypt = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Nalix.Runtime.Extensions.ConnectionExtensions.MulticastExceptAsync(this Nalix.Abstractions.Networking.IConnectionBroadcaster! hub, Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, Nalix.Abstractions.Networking.IConnection! excludedConnection, Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, bool enableEncrypt = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Nalix.Runtime.Extensions.ConnectionExtensions.SendAsync(this Nalix.Abstractions.Networking.Packets.IPacketSender! sender, Nalix.Abstractions.Networking.Protocols.ControlType controlType, Nalix.Abstractions.Networking.Protocols.ProtocolReason reason, Nalix.Abstractions.Networking.Protocols.ProtocolAdvice action, Nalix.Runtime.Extensions.ControlDirectiveOptions options = default(Nalix.Runtime.Extensions.ControlDirectiveOptions)) -> System.Threading.Tasks.Task!
+static Nalix.Runtime.Extensions.ConnectionExtensions.SendAsync<TPacket>(this Nalix.Abstractions.Networking.IConnection! connection, TPacket packet, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, bool enableEncrypt = true, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+static Nalix.Runtime.Extensions.ConnectionUserExtensions.MapToUserAsync(this Nalix.Abstractions.Networking.IConnectionGroupRegistry! registry, string! userId, Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Nalix.Runtime.Extensions.ConnectionUserExtensions.SendToUserAsync(this Nalix.Abstractions.Networking.IConnectionBroadcaster! hub, Nalix.Abstractions.Networking.IConnectionGroupRegistry! registry, string! userId, Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, bool enableEncrypt = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Nalix.Runtime.Extensions.ConnectionUserExtensions.SendToUserExceptAsync(this Nalix.Abstractions.Networking.IConnectionBroadcaster! hub, Nalix.Abstractions.Networking.IConnectionGroupRegistry! registry, string! userId, Nalix.Abstractions.Networking.IConnection! excludedConnection, Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, bool enableEncrypt = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Nalix.Runtime.Extensions.ConnectionUserExtensions.UnmapUserAsync(this Nalix.Abstractions.Networking.IConnectionGroupRegistry! registry, string! userId, Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Nalix.Runtime.Extensions.ControlDirectiveOptions.operator !=(Nalix.Runtime.Extensions.ControlDirectiveOptions left, Nalix.Runtime.Extensions.ControlDirectiveOptions right) -> bool
+static Nalix.Runtime.Extensions.ControlDirectiveOptions.operator ==(Nalix.Runtime.Extensions.ControlDirectiveOptions left, Nalix.Runtime.Extensions.ControlDirectiveOptions right) -> bool
+static Nalix.Runtime.Handlers.HandshakeHandlers.ConfigureContextPool(int maxCapacity, int preallocCount = 0) -> void
+static Nalix.Runtime.Handlers.HandshakeHandlers.HandleSessionInitAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Codec.ProtocolFrames.SessionInit!>! context) -> System.Threading.Tasks.ValueTask
+static Nalix.Runtime.Handlers.HandshakeHandlers.HandleSessionProofAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Codec.ProtocolFrames.SessionProof!>! context) -> System.Threading.Tasks.ValueTask
+static Nalix.Runtime.Handlers.HandshakeHandlers.Initialize() -> void
+static Nalix.Runtime.Handlers.HandshakeHandlers.ServerPublicKey.get -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Runtime.Handlers.HandshakeHandlers.SetCertificatePath(string! path) -> void
+static Nalix.Runtime.Handlers.ProofOfWorkHandlers.HandleAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Codec.ProtocolFrames.ProofOfWorkProof!>! context) -> void
+static Nalix.Runtime.Handlers.SessionHandlers.HandleAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Codec.ProtocolFrames.SessionResume!>! context) -> System.Threading.Tasks.ValueTask
+static Nalix.Runtime.Handlers.SystemControlHandlers.HandleAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Codec.ProtocolFrames.Control!>! context) -> System.Threading.Tasks.ValueTask
+static Nalix.Runtime.Handlers.SystemTimeSyncHandlers.HandleAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Codec.ProtocolFrames.TimeSync!>! context) -> System.Threading.Tasks.ValueTask
+static Nalix.Runtime.Routing.ScopedServiceRegistry.Instance.get -> Nalix.Runtime.Routing.ScopedServiceRegistry!
+static Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.operator !=(Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy left, Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy right) -> bool
+static Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.operator ==(Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy left, Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy right) -> bool
+static readonly Nalix.Runtime.DiagnosticsEvents.Source -> System.Diagnostics.DiagnosticListener!
+static readonly Nalix.Runtime.Throttling.TokenBucketLimiter.RecurringName -> string!
+static readonly Nalix.Runtime.Timekeeping.TimeSynchronizer.DefaultPeriod -> System.TimeSpan
+~override Nalix.Runtime.Extensions.ControlDirectiveOptions.Equals(object obj) -> bool
+~override Nalix.Runtime.Extensions.ControlDirectiveOptions.ToString() -> string
+~override Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.Equals(object obj) -> bool
+~override Nalix.Runtime.Throttling.TokenBucketLimiter.RateLimitPolicy.ToString() -> string

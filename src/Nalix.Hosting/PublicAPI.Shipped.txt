@@ -1,0 +1,99 @@
+#nullable enable
+Nalix.Hosting.Bootstrap
+Nalix.Hosting.INetworkApplicationBuilder
+Nalix.Hosting.INetworkApplicationBuilder.Build() -> Nalix.Hosting.NetworkApplication!
+Nalix.Hosting.INetworkApplicationBuilder.Configure<TOptions>(System.Action<TOptions!>! configure) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.ConfigureDispatch(System.Func<System.Action<Nalix.Runtime.Routing.PacketDispatchOptions<Nalix.Abstractions.Networking.Packets.IPacket!>!>!, Nalix.Runtime.Dispatching.IPacketDispatch!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.ConfigureDispatchOptions(System.Action<Nalix.Runtime.Routing.PacketDispatchOptions<Nalix.Abstractions.Networking.Packets.IPacket!>!>! configure) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.ListenTcp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.ListenUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.ListenWebSocket<TProtocol>() -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.MapHandlers(System.Type! controllerType) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.MapHandlers<THandler>() -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.MapHandlers<THandler>(System.Func<THandler!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.MapTcp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.MapUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.MapWebSocket<TProtocol>() -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.RegisterScoped<TService>(System.Func<Nalix.Abstractions.Injection.IPacketScope!, TService!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.UseBufferPoolManager(Nalix.Abstractions.IBufferPoolManager! manager) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.UseConnectionGuard(Nalix.Abstractions.Networking.IConnectionGuard! connectionGuard) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.UseConnectionHub(Nalix.Abstractions.Networking.IConnectionHub! connectionHub) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.UseLogger(Microsoft.Extensions.Logging.ILogger! logger) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.UseObjectPoolManager(Nalix.Abstractions.IObjectPoolManager! manager) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.IProtocolBindingBuilder
+Nalix.Hosting.IProtocolBindingBuilder.Bind() -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.IProtocolBindingBuilder.OnPort(ushort port) -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.IProtocolBindingBuilder.WithAuthentication(System.Func<Nalix.Abstractions.Networking.IConnection!, System.Net.EndPoint!, System.ReadOnlySpan<byte>, bool>! authen) -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.IProtocolBindingBuilder.WithFactory(System.Func<Nalix.Runtime.Dispatching.IPacketDispatch!, Nalix.Abstractions.Networking.IProtocol!>! factory) -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.IProtocolBindingBuilder.WithMode(Nalix.Abstractions.Networking.OperatingMode mode) -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.IWebSocketBindingBuilder
+Nalix.Hosting.IWebSocketBindingBuilder.Bind() -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.IWebSocketBindingBuilder.MapGet(string! path, Nalix.Network.Listeners.Web.HttpRouteHandler! handler) -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.IWebSocketBindingBuilder.MapPost(string! path, Nalix.Network.Listeners.Web.HttpRouteHandler! handler) -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.IWebSocketBindingBuilder.OnPort(ushort port) -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.IWebSocketBindingBuilder.WithFactory(System.Func<Nalix.Runtime.Dispatching.IPacketDispatch!, Nalix.Abstractions.Networking.IProtocol!>! factory) -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.IWebSocketBindingBuilder.WithPath(string! path) -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.NetworkApplication
+Nalix.Hosting.NetworkApplication.ActivateAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Hosting.NetworkApplication.DeactivateAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Hosting.NetworkApplication.Dispose() -> void
+Nalix.Hosting.NetworkApplication.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Nalix.Hosting.NetworkApplication.RunAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Hosting.NetworkApplicationBuilder
+Nalix.Hosting.NetworkApplicationBuilder.Build() -> Nalix.Hosting.NetworkApplication!
+Nalix.Hosting.NetworkApplicationBuilder.Configure<TOptions>(System.Action<TOptions!>! configure) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.ConfigureDispatch(System.Func<System.Action<Nalix.Runtime.Routing.PacketDispatchOptions<Nalix.Abstractions.Networking.Packets.IPacket!>!>!, Nalix.Runtime.Dispatching.IPacketDispatch!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.ConfigureDispatchOptions(System.Action<Nalix.Runtime.Routing.PacketDispatchOptions<Nalix.Abstractions.Networking.Packets.IPacket!>!>! configure) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.ListenTcp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.ListenUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.ListenWebSocket<TProtocol>() -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.MapHandlers(System.Type! controllerType) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.MapHandlers<THandler>() -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.MapHandlers<THandler>(System.Func<THandler!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.MapTcp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.MapUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.MapWebSocket<TProtocol>() -> Nalix.Hosting.IWebSocketBindingBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.RegisterScoped<TService>(System.Func<Nalix.Abstractions.Injection.IPacketScope!, TService!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.UseBufferPoolManager(Nalix.Abstractions.IBufferPoolManager! manager) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.UseConnectionGuard(Nalix.Abstractions.Networking.IConnectionGuard! connectionGuard) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.UseConnectionHub(Nalix.Abstractions.Networking.IConnectionHub! connectionHub) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.UseLogger(Microsoft.Extensions.Logging.ILogger! logger) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.UseObjectPoolManager(Nalix.Abstractions.IObjectPoolManager! manager) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilderExtensions
+Nalix.Hosting.Options.HostingOptions
+Nalix.Hosting.Options.HostingOptions.DisableConsoleClear.get -> bool
+Nalix.Hosting.Options.HostingOptions.DisableConsoleClear.set -> void
+Nalix.Hosting.Options.HostingOptions.DisableStartupBanner.get -> bool
+Nalix.Hosting.Options.HostingOptions.DisableStartupBanner.set -> void
+Nalix.Hosting.Options.HostingOptions.EnableGlobalExceptionHandling.get -> bool
+Nalix.Hosting.Options.HostingOptions.EnableGlobalExceptionHandling.set -> void
+Nalix.Hosting.Options.HostingOptions.EnableHighPrecisionTimer.get -> bool
+Nalix.Hosting.Options.HostingOptions.EnableHighPrecisionTimer.set -> void
+Nalix.Hosting.Options.HostingOptions.HostingOptions() -> void
+Nalix.Hosting.Options.HostingOptions.MinCompletionPortThreads.get -> int
+Nalix.Hosting.Options.HostingOptions.MinCompletionPortThreads.set -> void
+Nalix.Hosting.Options.HostingOptions.MinWorkerThreads.get -> int
+Nalix.Hosting.Options.HostingOptions.MinWorkerThreads.set -> void
+Nalix.Hosting.Options.HostingOptions.Validate() -> void
+Nalix.Hosting.Protocols.DefaultFrameProcessor
+Nalix.Hosting.Protocols.DefaultFrameProcessor.DefaultFrameProcessor(Microsoft.Extensions.Logging.ILogger! logger, Nalix.Abstractions.Networking.IProtocol! protocol) -> void
+Nalix.Hosting.Protocols.DefaultFrameProcessor.ProcessFrame(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Hosting.Protocols.DefaultFrameProcessor.SupportsInlineProcessing.get -> bool
+Nalix.Hosting.Protocols.DefaultOpCodeExtractor
+Nalix.Hosting.Protocols.DefaultOpCodeExtractor.DefaultOpCodeExtractor() -> void
+Nalix.Hosting.Protocols.DefaultOpCodeExtractor.Extract(System.ReadOnlySpan<byte> payload) -> ushort
+Nalix.Hosting.Protocols.DefaultProtocol
+Nalix.Hosting.Protocols.DefaultProtocol.DefaultProtocol(Microsoft.Extensions.Logging.ILogger! logger, Nalix.Runtime.Dispatching.IPacketDispatch! dispatch) -> void
+override Nalix.Hosting.Protocols.DefaultProtocol.FrameProcessor.get -> Nalix.Abstractions.Networking.IFrameProcessor!
+override Nalix.Hosting.Protocols.DefaultProtocol.OpCodeExtractor.get -> Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor!
+override Nalix.Hosting.Protocols.DefaultProtocol.ProcessMessage(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+static Nalix.Hosting.NetworkApplication.CreateBuilder() -> Nalix.Hosting.NetworkApplicationBuilder!
+static Nalix.Hosting.NetworkApplication.CreateMinimal(ushort? port = null) -> Nalix.Hosting.NetworkApplication!
+static Nalix.Hosting.NetworkApplicationBuilderExtensions.UseGroups(this Nalix.Hosting.INetworkApplicationBuilder! builder) -> Nalix.Hosting.INetworkApplicationBuilder!
+static Nalix.Hosting.NetworkApplicationBuilderExtensions.UseSecureConnections(this Nalix.Hosting.INetworkApplicationBuilder! builder, string? certificatePath = null) -> Nalix.Hosting.INetworkApplicationBuilder!
+static Nalix.Hosting.NetworkApplicationBuilderExtensions.UseSessionFactory(this Nalix.Hosting.INetworkApplicationBuilder! builder, Nalix.Abstractions.Networking.Sessions.ISessionFactory! sessionFactory) -> Nalix.Hosting.INetworkApplicationBuilder!
+static Nalix.Hosting.NetworkApplicationBuilderExtensions.UseSessions(this Nalix.Hosting.INetworkApplicationBuilder! builder) -> Nalix.Hosting.INetworkApplicationBuilder!
+static Nalix.Hosting.NetworkApplicationBuilderExtensions.UseSessionService(this Nalix.Hosting.INetworkApplicationBuilder! builder, Nalix.Runtime.Sessions.SessionService! sessionService) -> Nalix.Hosting.INetworkApplicationBuilder!
+static Nalix.Hosting.NetworkApplicationBuilderExtensions.UseSessionStore(this Nalix.Hosting.INetworkApplicationBuilder! builder, Nalix.Abstractions.Networking.Sessions.ISessionStore! sessionStore) -> Nalix.Hosting.INetworkApplicationBuilder!
+static Nalix.Hosting.NetworkApplicationBuilderExtensions.UseSystemControl(this Nalix.Hosting.INetworkApplicationBuilder! builder) -> Nalix.Hosting.INetworkApplicationBuilder!
+static Nalix.Hosting.NetworkApplicationBuilderExtensions.UseTimeSync(this Nalix.Hosting.INetworkApplicationBuilder! builder) -> Nalix.Hosting.INetworkApplicationBuilder!
