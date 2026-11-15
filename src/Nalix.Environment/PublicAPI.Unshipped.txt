@@ -1,1 +1,2 @@
 #nullable enable
+*REMOVED*const Nalix.Environment.Fragments.FragmentHeader.Magic = 240 -> byte

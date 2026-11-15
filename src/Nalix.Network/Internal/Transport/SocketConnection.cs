@@ -738,7 +738,7 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         ReadOnlySpan<byte> rawPayloadSpan = MemoryExtensions.AsSpan(_buffer, offset, payloadLen);
 
         // Fragment Assembly Check (Zero-Copy Peak).
-        // A FragmentHeader is 8 bytes. We peek directly from the SAEA buffer BEFORE renting any leases.
+        // A FragmentHeader is FragmentHeader.WireSize bytes and is detected by PacketFlags.FRAGMENTED. We peek directly from the SAEA buffer BEFORE renting any leases.
         if (FragmentAssembler.IsFragmentedFrame(rawPayloadSpan, out FragmentHeader header))
         {
             // Reassembly state is allocated per connection, so only peers that completed the handshake may use it.

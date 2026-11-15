@@ -3,8 +3,6 @@
 
 #pragma warning disable CA1711
 
-using System;
-
 namespace Nalix.Abstractions.Networking.Packets;
 
 /// <summary>
@@ -36,31 +34,11 @@ public enum PacketFlags : byte
     ENCRYPTED = 1 << 2,
 
     /// <summary>
-    /// The packet is a fragment of a larger message that exceeded the maximum allowed size.
-    /// The receiving side should reassemble fragments in the correct order.
+    /// The frame is one chunk of a larger message that exceeded the maximum allowed size.
+    /// Set by the transport on every fragment chunk header; the receiver detects fragments by this
+    /// bit (never by payload content) and reassembles them in order.
     /// </summary>
     FRAGMENTED = 1 << 3,
-
-    /// <summary>
-    /// The packet is sent over a reliable transport protocol (typically TCP).
-    /// Guarantees delivery and ordering without the need for manual retries.
-    /// </summary>
-    [Obsolete("The RELIABLE flag is deprecated. Use transport-level reliability guarantees instead.")]
-    RELIABLE = 1 << 4,
-
-    /// <summary>
-    /// The packet is sent over an unreliable transport protocol (typically UDP).
-    /// Best suited for real-time data where occasional loss is acceptable.
-    /// </summary>
-    [Obsolete("The UNRELIABLE flag is deprecated. Use transport-level reliability guarantees instead.")]
-    UNRELIABLE = 1 << 5,
-
-    /// <summary>
-    /// The packet has been acknowledged by the receiver.
-    /// Often used to stop retransmissions or mark successful delivery.
-    /// </summary>
-    [Obsolete("The ACKNOWLEDGED flag is deprecated. Use transport-level acknowledgements instead.")]
-    ACKNOWLEDGED = 1 << 6,
 
     /// <summary>
     /// The packet is a system-level message that does not contain user data.
@@ -91,22 +69,6 @@ public enum PacketFlags : byte
     // Gói tin đã bị phân mảnh vì vượt quá giới hạn kích thước cho phép.
     // Dùng cho những payload lớn (như file, hình ảnh, bản đồ, v.v.)
     // Cần ghép lại ở phía nhận theo đúng thứ tự.
-
-    // RELIABLE
-    // Gói tin được gửi qua giao thức đáng tin cậy (thường là TCP).
-    // Dùng cho dữ liệu yêu cầu đúng thứ tự, không được mất mát, như đăng nhập, giao dịch.
-    // Không cần retry thủ công vì giao thức đảm bảo điều đó.
-
-    // UNRELIABLE
-    // Gói tin được gửi qua giao thức không đảm bảo (thường là UDP).
-    // Dùng cho dữ liệu thời gian thực như vị trí, trạng thái nhân vật trong game,
-    // nơi việc mất 1 vài gói tin không quan trọng bằng tốc độ truyền nhanh.
-    // Có thể dùng kèm timestamp nếu cần kiểm tra mới/cũ.
-
-    // ACKNOWLEDGED
-    // Gói tin này đã được xác nhận là đã nhận bởi phía bên kia.
-    // Dùng để đánh dấu là không cần gửi lại nữa hoặc cập nhật trạng thái thành công.
-    // Có thể dùng trong cơ chế tự định nghĩa RELIABLE-UDP.
 
     // SYSTEM
     // Gói tin cấp hệ thống, không mang dữ liệu người dùng.

@@ -125,7 +125,7 @@ public sealed class FragmentAssembler : IDisposable
     /// </summary>
     /// <param name="header">Header of the received chunk.</param>
     /// <param name="chunkBody">
-    /// The chunk body — without the 7-byte <see cref="FragmentHeader"/>.
+    /// The chunk body — without the <see cref="FragmentHeader.WireSize"/>-byte <see cref="FragmentHeader"/>.
     /// Data is <b>copied</b> immediately, so the caller may release the span after calling.
     /// </param>
     /// <param name="streamEvicted"></param>
@@ -335,7 +335,8 @@ public sealed class FragmentAssembler : IDisposable
     }
 
     /// <summary>
-    /// Quick check to determine if the payload is a fragmented chunk using the magic byte.
+    /// Quick check to determine if the payload is a fragmented chunk using
+    /// <see cref="Nalix.Abstractions.Networking.Packets.PacketFlags.FRAGMENTED"/> in its packet header.
     /// </summary>
     /// <remarks>
     /// Parsing failures are swallowed and reported as <see langword="false"/> instead of escaping to the caller.
@@ -349,7 +350,7 @@ public sealed class FragmentAssembler : IDisposable
             return false;
         }
 
-        if (payload[0] != FragmentHeader.Magic)
+        if (!FragmentHeader.IsFragmentFlagSet(payload))
         {
             return false;
         }
