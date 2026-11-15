@@ -15,9 +15,9 @@ public sealed class ProviderRegistryOwnershipTests
         FakeConnection owner = new();
         FakeConnection squatter = new();
 
-        Assert.True(registry.TryRegister(7, owner, new FakePacketSender()));
+        Assert.True(registry.TryRegister(7, owner));
 
-        bool registered = registry.TryRegister(7, squatter, new FakePacketSender());
+        bool registered = registry.TryRegister(7, squatter);
 
         Assert.False(registered);
     }
@@ -28,11 +28,11 @@ public sealed class ProviderRegistryOwnershipTests
         ProviderRegistry registry = new();
         FakeConnection owner = new();
         FakeConnection squatter = new();
-        _ = registry.TryRegister(7, owner, new FakePacketSender());
+        _ = registry.TryRegister(7, owner);
 
-        _ = registry.TryRegister(7, squatter, new FakePacketSender());
+        _ = registry.TryRegister(7, squatter);
 
-        Assert.True(registry.TryGetProvider(7, out IConnection? connection, out _));
+        Assert.True(registry.TryGetProvider(7, out IConnection? connection));
         Assert.Same(owner, connection);
     }
 
@@ -41,11 +41,11 @@ public sealed class ProviderRegistryOwnershipTests
     {
         ProviderRegistry registry = new();
         FakeConnection owner = new();
-        _ = registry.TryRegister(7, owner, new FakePacketSender());
+        _ = registry.TryRegister(7, owner);
 
         owner.RaiseClosed();
 
-        Assert.False(registry.TryGetProvider(7, out _, out _));
+        Assert.False(registry.TryGetProvider(7, out _));
     }
 
     [Fact]
@@ -54,13 +54,13 @@ public sealed class ProviderRegistryOwnershipTests
         ProviderRegistry registry = new();
         FakeConnection owner = new();
         FakeConnection replacement = new();
-        _ = registry.TryRegister(7, owner, new FakePacketSender());
+        _ = registry.TryRegister(7, owner);
         owner.RaiseClosed();
 
-        bool registered = registry.TryRegister(7, replacement, new FakePacketSender());
+        bool registered = registry.TryRegister(7, replacement);
 
         Assert.True(registered);
-        Assert.True(registry.TryGetProvider(7, out IConnection? connection, out _));
+        Assert.True(registry.TryGetProvider(7, out IConnection? connection));
         Assert.Same(replacement, connection);
     }
 
@@ -70,12 +70,12 @@ public sealed class ProviderRegistryOwnershipTests
         ProviderRegistry registry = new();
         FakeConnection owner = new();
         FakeConnection other = new();
-        _ = registry.TryRegister(7, owner, new FakePacketSender());
+        _ = registry.TryRegister(7, owner);
 
         bool released = registry.TryUnregister(7, other);
 
         Assert.False(released);
-        Assert.True(registry.TryGetProvider(7, out IConnection? connection, out _));
+        Assert.True(registry.TryGetProvider(7, out IConnection? connection));
         Assert.Same(owner, connection);
     }
 }

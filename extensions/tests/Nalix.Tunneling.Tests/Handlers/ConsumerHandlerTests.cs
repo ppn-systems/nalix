@@ -8,6 +8,10 @@ using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
 using Nalix.Abstractions.Security;
+using Nalix.Abstractions;
+using Nalix.Codec.Pooling;
+using Nalix.Codec.Transforms;
+using Nalix.Environment.Memory;
 using Nalix.Runtime.Internal.Compilation;
 using Nalix.Tunneling.Handlers;
 using Nalix.Tunneling.Tests.TestSupport;
@@ -59,7 +63,7 @@ public sealed class ConsumerHandlerTests
     {
         Harness harness = new();
         FakeConnection consumer = new();
-        _ = harness.Providers.TryRegister(3, new FakeConnection(), harness.ProviderSender);
+        _ = harness.Providers.TryRegister(3, harness.Provider);
         harness.Sessions.Register(consumer.ConnectionId, new TunnelSession(consumer, harness.Options, harness.Sessions));
         FakePacketSender consumerSender = new();
 
@@ -68,16 +72,16 @@ public sealed class ConsumerHandlerTests
         TunnelConnectAck ack = Assert.IsType<TunnelConnectAck>(Assert.Single(consumerSender.Sent));
         Assert.False(ack.Success);
         Assert.Equal(4, ack.Reason);
-        Assert.Empty(harness.ProviderSender.Sent);
+        Assert.Empty(harness.Provider.FakeTcp.SentMessages);
     }
 
     [Fact]
     public async Task TunnelConnect_WhenPendingTunnelsReachLimit_AcksTunnelLimitReachedWithoutRequestingProvider()
     {
         Harness harness = new() { Options = { MaxConcurrentTunnels = 1 } };
-        _ = harness.Providers.TryRegister(3, new FakeConnection(), harness.ProviderSender);
+        _ = harness.Providers.TryRegister(3, harness.Provider);
         Task first = StartConnectAsync(harness, new FakeConnection());
-        await Wait.UntilAsync(() => harness.ProviderSender.Sent.Count == 1, s_wait);
+        await Wait.UntilAsync(() => harness.Provider.FakeTcp.SentMessages.Count == 1, s_wait);
         FakePacketSender secondSender = new();
 
         await CreateHandler(harness).HandleConnectAsync(new FakePacketContext<TunnelConnect>(new TunnelConnect { ChannelId = 3 }, new FakeConnection(), secondSender));
@@ -85,7 +89,7 @@ public sealed class ConsumerHandlerTests
         TunnelConnectAck ack = Assert.IsType<TunnelConnectAck>(Assert.Single(secondSender.Sent));
         Assert.False(ack.Success);
         Assert.Equal(3, ack.Reason);
-        Assert.Single(harness.ProviderSender.Sent);
+        Assert.Single(harness.Provider.FakeTcp.SentMessages);
         await CompleteConnectAsync(harness, first);
     }
 
@@ -93,12 +97,12 @@ public sealed class ConsumerHandlerTests
     public async Task TunnelConnect_WhenSessionStartFails_DisconnectsProviderDataConnection()
     {
         Harness harness = new();
-        _ = harness.Providers.TryRegister(3, new FakeConnection(), harness.ProviderSender);
+        _ = harness.Providers.TryRegister(3, harness.Provider);
         FakeConnection providerData = new();
         Task pending = StartConnectAsync(harness, new FakeConnection());
-        await Wait.UntilAsync(() => harness.ProviderSender.Sent.Count == 1, s_wait);
+        await Wait.UntilAsync(() => harness.Provider.FakeTcp.SentMessages.Count == 1, s_wait);
 
-        TunnelRequest request = Assert.IsType<TunnelRequest>(harness.ProviderSender.Sent[0]);
+        TunnelRequest request = DecryptTunnelRequest(harness.Provider);
         _ = harness.Tunnels.Resolve(TunnelRegistry.ComputeTunnelId(request.Token), providerData);
         await pending.WaitAsync(s_wait);
 
@@ -113,9 +117,26 @@ public sealed class ConsumerHandlerTests
 
     private static async Task CompleteConnectAsync(Harness harness, Task pending)
     {
-        TunnelRequest request = Assert.IsType<TunnelRequest>(harness.ProviderSender.Sent[0]);
+        TunnelRequest request = DecryptTunnelRequest(harness.Provider);
         _ = harness.Tunnels.Resolve(TunnelRegistry.ComputeTunnelId(request.Token), new FakeConnection());
         await pending.WaitAsync(s_wait);
+    }
+
+    // The provider's control connection has a negotiated cipher; TUNNEL_REQUEST is refused without one.
+    private static FakeConnection CreateSessionConnection()
+    {
+        Span<byte> secret = stackalloc byte[Bytes32.Size];
+        Nalix.Environment.Random.Csprng.Fill(secret);
+        return new FakeConnection { Algorithm = CipherSuiteType.Chacha20Poly1305, Secret = new Bytes32(secret) };
+    }
+
+    // Decrypts the TUNNEL_REQUEST frame that reached the provider's control connection.
+    private static TunnelRequest DecryptTunnelRequest(FakeConnection provider)
+    {
+        Assert.NotEmpty(provider.FakeTcp.SentMessages);
+        using IBufferLease frame = BufferLease.CopyFrom(provider.FakeTcp.SentMessages[0]);
+        using IBufferLease plain = FrameCipher.DecryptFrame(frame, provider.Secret.AsSpan(), provider.Algorithm, out _);
+        return TunnelRequest.Deserialize(plain.Span);
     }
 
     private static ConsumerHandler CreateHandler(Harness harness) =>
@@ -127,6 +148,6 @@ public sealed class ConsumerHandlerTests
         public TunnelRegistry Tunnels { get; } = new();
         public TunnelSessionRegistry Sessions { get; } = new();
         public TunnelOptions Options { get; } = new();
-        public FakePacketSender ProviderSender { get; } = new();
+        public FakeConnection Provider { get; } = CreateSessionConnection();
     }
 }

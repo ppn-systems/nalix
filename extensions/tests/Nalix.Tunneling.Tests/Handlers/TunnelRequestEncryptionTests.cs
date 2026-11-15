@@ -25,7 +25,7 @@ public sealed class TunnelRequestEncryptionTests
         // [PacketEncryption] flag, so the TUNNEL_REQUEST must be encrypted explicitly.
         FakeConnection provider = CreateSessionConnection();
         ProviderRegistry providers = new();
-        Assert.True(providers.TryRegister(3, provider, CreateProviderSender(provider)));
+        Assert.True(providers.TryRegister(3, provider));
 
         _ = RunConnectAsync(providers);
 
@@ -41,7 +41,7 @@ public sealed class TunnelRequestEncryptionTests
         // Without a negotiated cipher the request must be refused, never sent in clear.
         FakeConnection provider = new() { Algorithm = CipherSuiteType.None };
         ProviderRegistry providers = new();
-        Assert.True(providers.TryRegister(3, provider, CreateProviderSender(provider)));
+        Assert.True(providers.TryRegister(3, provider));
 
         _ = RunConnectAsync(providers);
         await Task.Delay(200);
@@ -54,15 +54,6 @@ public sealed class TunnelRequestEncryptionTests
         Span<byte> secret = stackalloc byte[Bytes32.Size];
         Nalix.Environment.Random.Csprng.Fill(secret);
         return new FakeConnection { Algorithm = CipherSuiteType.Chacha20Poly1305, Secret = new Bytes32(secret) };
-    }
-
-    // Mirrors the production wiring: the sender is initialized from the TUNNEL_PROVIDE context, whose
-    // metadata does not request encryption.
-    private static PacketSender CreateProviderSender(FakeConnection provider)
-    {
-        PacketSender sender = new();
-        sender.Initialize(new FakePacketContext<TunnelProvide>(new TunnelProvide { ChannelId = 3 }, provider, new FakePacketSender()));
-        return sender;
     }
 
     private static Task RunConnectAsync(ProviderRegistry providers)

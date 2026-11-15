@@ -31,7 +31,7 @@ public sealed class ProviderHandler
         ArgumentNullException.ThrowIfNull(context);
 
         ushort channelId = context.Packet.ChannelId;
-        bool success = _registry.TryRegister(channelId, context.Connection, context.Sender);
+        bool success = _registry.TryRegister(channelId, context.Connection);
 
         if (success)
         {
