@@ -477,7 +477,7 @@ internal sealed partial class SocketConnection
                 // Write the outer frame length.
                 BinaryPrimitives.WriteUInt16LittleEndian(frame, (ushort)totalFrameSize);
 
-                // Write FragmentHeader + magic + chunk body.
+                // Write FragmentHeader (packet header with FRAGMENTED) + chunk body.
                 headerBuffer.CopyTo(frame[HeaderSize..]);
                 payload.Slice(offset, thisChunkSize).CopyTo(frame[(HeaderSize + FragmentHeader.WireSize)..]);
 

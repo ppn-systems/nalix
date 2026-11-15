@@ -1,1 +1,4 @@
 #nullable enable
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.ACKNOWLEDGED = 64 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.RELIABLE = 16 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.UNRELIABLE = 32 -> Nalix.Abstractions.Networking.Packets.PacketFlags

@@ -332,7 +332,7 @@ public sealed partial class PacketDispatchOptions<TPacket>
         PacketContext<TPacket> context = _objectPool.Get<PacketContext<TPacket>>();
         try
         {
-            // Use the UNRELIABLE flag as the source of truth for transport logic.
+            // Transport reliability comes from the receiving transport (the reliable argument), not header flags.
             context.Initialize(
                 packet: packet,
                 connection: connection,
