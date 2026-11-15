@@ -72,7 +72,7 @@ public sealed class ObservabilityAccessHandlersTests : IDisposable
     }
 
     [Fact]
-    public async Task HandleAsync_WhenAccessKeyMatches_GrantsSupervisorLevel()
+    public async Task HandleAsync_WhenAccessKeyMatches_GrantsObserverLevelNotSupervisor()
     {
         Bytes32 key = _scope.WriteAndLoadRandomKey();
         using ObservabilityAccess request = PacketBase<ObservabilityAccess>.Create();
@@ -83,8 +83,8 @@ public sealed class ObservabilityAccessHandlersTests : IDisposable
 
         Assert.Equal(ObservabilityAccessStage.RESPONSE, response.Stage);
         Assert.Equal(ProtocolReason.NONE, response.Reason);
-        Assert.Equal(PermissionLevel.SUPERVISOR, response.AccessLevel);
-        Assert.Equal(PermissionLevel.SUPERVISOR, connection.Level);
+        Assert.Equal(PermissionLevel.OBSERVER, response.AccessLevel);
+        Assert.Equal(PermissionLevel.OBSERVER, connection.Level);
     }
 
     private static IPacketContext<ObservabilityAccess> CreateContext(ObservabilityAccess packet, IConnection connection)

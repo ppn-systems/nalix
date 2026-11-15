@@ -1077,9 +1077,13 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             else if (name == KnownNames.PacketPermissionAttributeMetadataName)
             {
                 // A bare [PacketPermission] binds the parameterless ctor (default USER); it must still be forwarded.
-                tPermission = a.ConstructorArguments.Length > 0
-                    ? $"new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel){a.ConstructorArguments[0].Value})"
-                    : "new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute()";
+                // The optional second argument selects the evaluation mode (StrictMatch); dropping it would silently widen the check.
+                tPermission = a.ConstructorArguments.Length switch
+                {
+                    0 => "new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute()",
+                    1 => $"new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel){a.ConstructorArguments[0].Value})",
+                    _ => $"new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel){a.ConstructorArguments[0].Value}, (global::Nalix.Abstractions.Security.PermissionEvaluation){a.ConstructorArguments[1].Value})",
+                };
             }
             else if (name == KnownNames.PacketEncryptionAttributeMetadataName && a.ConstructorArguments.Length > 0)
             {

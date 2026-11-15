@@ -34,7 +34,7 @@ public sealed class RuntimeObservationHandlers
     [PacketEncryption(true)]
     [ReservedOpcodePermitted]
     [PacketOpcode(ProtocolOpCode.RUNTIME_OBSERVATION)]
-    [PacketPermission(PermissionLevel.SUPERVISOR)]
+    [PacketPermission(PermissionLevel.OBSERVER, PermissionEvaluation.StrictMatch)]
     public static async IAsyncEnumerable<RuntimeObservation> HandleAsync(IPacketContext<RuntimeObservation> context)
     {
         ArgumentNullException.ThrowIfNull(context);

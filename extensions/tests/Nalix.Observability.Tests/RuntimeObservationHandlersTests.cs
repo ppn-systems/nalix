@@ -4,8 +4,10 @@
 using System.Text.Json;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Diagnostics;
+using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Security;
 using Nalix.Codec.DataFrames;
 using Nalix.Framework;
 using Nalix.Observability.Contracts;
@@ -213,10 +215,34 @@ public sealed class RuntimeObservationHandlersTests
         return request;
     }
 
+    [Fact]
+    public async Task HandleAsync_WhenConnectionIsObserver_ReadsObservation()
+    {
+        using RuntimeObservation request = PacketBase<RuntimeObservation>.Create();
+        request.Initialize(RuntimeObservationStage.REQUEST, RuntimeObservationTargets.PROCESS);
+
+        List<RuntimeObservation> chunks = await ObservationChunks.CollectAsync(
+            RuntimeObservationHandlers.HandleAsync(CreateContext(request)));
+        try
+        {
+            RuntimeObservation response = Assert.Single(chunks);
+            Assert.Equal(ProtocolReason.NONE, response.Reason);
+            Assert.False(response.ObservationData.IsEmpty);
+        }
+        finally
+        {
+            ObservationChunks.DisposeAll(chunks);
+        }
+    }
+
     private static IPacketContext<RuntimeObservation> CreateContext(RuntimeObservation packet)
     {
+        IConnection connection = Substitute.For<IConnection>();
+        connection.Level.Returns(PermissionLevel.OBSERVER);
+
         IPacketContext<RuntimeObservation> context = Substitute.For<IPacketContext<RuntimeObservation>>();
         context.Packet.Returns(packet);
+        context.Connection.Returns(connection);
         return context;
     }
 }

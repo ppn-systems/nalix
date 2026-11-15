@@ -47,6 +47,35 @@ public sealed class PacketHandlerTests
         denyReason.Should().Be(ProtocolReason.UNAUTHORIZED, "permission denial in CanExecute must report ProtocolReason.UNAUTHORIZED consistent with PermissionMiddleware");
     }
 
+    [Fact]
+    public void CanExecute_WithUserRequirementAndObserverLevel_DeniesWithUnauthorized()
+    {
+        PacketMetadata metadata = new(
+            opCode: new PacketOpcodeAttribute(1),
+            timeout: null,
+            permission: new PacketPermissionAttribute(PermissionLevel.USER),
+            encryption: null,
+            rateLimit: null,
+            transport: null);
+
+        object descriptor = CreatePacketHandlerDescriptor(metadata);
+        MethodInfo canExecuteMethod = descriptor.GetType().GetMethod("CanExecute", BindingFlags.Instance | BindingFlags.Public)!;
+
+        using FakeConnection connection = new()
+        {
+            Level = PermissionLevel.OBSERVER // Below USER: an observability key must not unlock user handlers
+        };
+
+        using PacketContext<DummyPacket> context = PacketContextFactory.Create(new DummyPacket(), connection, metadata: metadata);
+
+        object?[] args = [context, ProtocolReason.NONE];
+        bool canExecute = (bool)canExecuteMethod.Invoke(descriptor, args)!;
+        ProtocolReason denyReason = (ProtocolReason)args[1]!;
+
+        canExecute.Should().BeFalse("an OBSERVER connection must not satisfy a USER-level handler");
+        denyReason.Should().Be(ProtocolReason.UNAUTHORIZED);
+    }
+
     /// <summary>
     /// A handler marked [PacketEncryption(true)] must be denied with ProtocolReason.FORBIDDEN
     /// when the packet context reports the frame did not arrive encrypted on the wire —
