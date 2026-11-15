@@ -60,6 +60,15 @@ public sealed class TraversalPacketRoundTripTests
         Assert.Equal((ushort)ProtocolOpCode.TRAVERSAL_REFLECTOR_INIT, result.Header.OpCode);
     }
 
+    [Fact]
+    public void Deserialize_WhenReflectorInitWasSerialized_PreservesRequestNonce()
+    {
+        ReflectorInit result = ReflectorInit.Deserialize(new ReflectorInit { TargetPeerId = 12UL, RequestNonce = 0xABCDUL }.Serialize());
+
+        Assert.Equal(12UL, result.TargetPeerId);
+        Assert.Equal(0xABCDUL, result.RequestNonce);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -70,5 +79,15 @@ public sealed class TraversalPacketRoundTripTests
 
         Assert.Equal(0xCAFEUL, result.ReflectorToken);
         Assert.Equal(success, result.Success);
+    }
+
+    [Fact]
+    public void Deserialize_WhenReflectorAllocatedWasSerialized_PreservesPeerIdAndRequestNonce()
+    {
+        ReflectorAllocated result = ReflectorAllocated.Deserialize(
+            new ReflectorAllocated { ReflectorToken = 1UL, Success = true, PeerId = 77UL, RequestNonce = 0x1234UL }.Serialize());
+
+        Assert.Equal(77UL, result.PeerId);
+        Assert.Equal(0x1234UL, result.RequestNonce);
     }
 }

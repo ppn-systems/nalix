@@ -28,6 +28,13 @@ public sealed partial class ReflectorInit : PacketBase<ReflectorInit>, IFixedSiz
     public ulong TargetPeerId { get; set; }
 
     /// <summary>
+    /// Client-chosen, non-zero correlation nonce. The server echoes it in <see cref="ReflectorAllocated.RequestNonce"/>
+    /// so the requester can tell its own allocation apart from any other allocation it receives.
+    /// </summary>
+    [SerializeOrder(1)]
+    public ulong RequestNonce { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ReflectorInit"/>.
     /// </summary>
     public ReflectorInit() => this.ResetForPool();
@@ -40,6 +47,7 @@ public sealed partial class ReflectorInit : PacketBase<ReflectorInit>, IFixedSiz
         this.Priority = PacketPriority.HIGH;
         this.Flags = PacketFlags.NONE;
         this.TargetPeerId = 0;
+        this.RequestNonce = 0;
     }
 }
 

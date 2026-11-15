@@ -45,6 +45,8 @@ public sealed class ReflectorInitHandler
 
         response.ReflectorToken = token;
         response.Success = true;
+        response.PeerId = peerBId;
+        response.RequestNonce = context.Packet.RequestNonce;
         response.SequenceId = context.Packet.SequenceId;
 
         await context.Sender.SendAsync(response).ConfigureAwait(false);
@@ -61,6 +63,8 @@ public sealed class ReflectorInitHandler
 
                 peerBNotification.ReflectorToken = token;
                 peerBNotification.Success = true;
+                peerBNotification.PeerId = peerAId;
+                peerBNotification.RequestNonce = 0; // Server-initiated message, not an answer to a request
                 peerBNotification.SequenceId = 0; // Server-initiated message, no request sequence to match
 
                 await targetConnection.SendAsync(
