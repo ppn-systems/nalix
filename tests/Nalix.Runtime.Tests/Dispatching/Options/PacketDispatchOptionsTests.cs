@@ -185,6 +185,99 @@ public sealed class PacketDispatchOptionsTests
     }
 
     /// <summary>
+    /// A packet that is not an instance of the handler's expected type is rejected with REQUEST_INVALID before the
+    /// handler runs. Each rejection must count toward the connection's error budget.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_WhenPacketTypeMismatches_CountsErrorAndSkipsHandler()
+    {
+        PacketDispatchOptions<IPacket> options = new();
+        bool invoked = false;
+        PacketHandler<IPacket> descriptor = PacketHandlerFactory.CreateDescriptor<IPacket>(
+            (_, _) =>
+            {
+                invoked = true;
+                return new ValueTask<object?>((object?)null);
+            },
+            expectedPacketType: typeof(ValidatingPacket));
+
+        FakeConnection connection = new();
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+
+            Assert.False(invoked);
+            Assert.Equal(1, connection.ErrorCount);
+            Assert.NotEmpty(connection.FakeTcp.SentMessages);
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A packet that fails <see cref="IPacketValidatable"/> is rejected with MALFORMED_PACKET before the handler runs.
+    /// Each rejection must count toward the connection's error budget.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_WhenPacketValidationFails_CountsErrorAndSkipsHandler()
+    {
+        PacketDispatchOptions<ValidatingPacket> options = new();
+        bool invoked = false;
+        PacketHandler<ValidatingPacket> descriptor = PacketHandlerFactory.CreateDescriptor<ValidatingPacket>((_, _) =>
+        {
+            invoked = true;
+            return new ValueTask<object?>((object?)null);
+        });
+
+        FakeConnection connection = new();
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new ValidatingPacket(valid: false), connection, reliable: true, encryptedOnWire: false).AsTask();
+
+            Assert.False(invoked);
+            Assert.Equal(1, connection.ErrorCount);
+            Assert.NotEmpty(connection.FakeTcp.SentMessages);
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A well-formed, correctly typed packet that passes validation must not touch the error budget.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_WhenPacketValid_LeavesErrorCountUntouched()
+    {
+        PacketDispatchOptions<ValidatingPacket> options = new();
+        bool invoked = false;
+        PacketHandler<ValidatingPacket> descriptor = PacketHandlerFactory.CreateDescriptor<ValidatingPacket>((_, _) =>
+        {
+            invoked = true;
+            return new ValueTask<object?>((object?)null);
+        });
+
+        FakeConnection connection = new();
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new ValidatingPacket(valid: true), connection, reliable: true, encryptedOnWire: false).AsTask();
+
+            Assert.True(invoked);
+            Assert.Equal(0, connection.ErrorCount);
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Area 4: ExecuteTerminalHandler calls ct.ThrowIfCancellationRequested() synchronously
     /// before invoking the handler — a context whose token is already cancelled must throw
     /// immediately without ever invoking the handler delegate.
@@ -335,6 +428,20 @@ public sealed class PacketDispatchOptionsTests
         {
             buffer[0] = (byte)Value;
             return 1;
+        }
+    }
+
+    private sealed class ValidatingPacket(bool valid) : IPacket, IPacketValidatable
+    {
+        public int Length => 0;
+        public PacketHeader Header { get; set; }
+        public byte[] Serialize() => [];
+        public int Serialize(Span<byte> buffer) => 0;
+
+        public bool Validate([System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? failureReason)
+        {
+            failureReason = valid ? null : "invalid";
+            return valid;
         }
     }
 }
