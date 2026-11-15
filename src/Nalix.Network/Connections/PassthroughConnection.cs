@@ -133,7 +133,7 @@ public sealed class PassthroughConnection :
         ArgumentNullException.ThrowIfNull(listenerSocket);
         ArgumentNullException.ThrowIfNull(remoteEndPoint);
 
-        if (_udpTransport is not null || this.IsDisposed)
+        if (Volatile.Read(ref _udpTransport) is not null || this.IsDisposed)
         {
             return;
         }
@@ -145,7 +145,49 @@ public sealed class PassthroughConnection :
         IPEndPoint ep = remoteEndPoint;
         transport.Initialize(ref ep);
 
-        _udpTransport = transport;
+        s_beforeUdpAttachHook?.Invoke(this);
+
+        if (Interlocked.CompareExchange(ref _udpTransport, transport, null) is not null)
+        {
+            // Another bind won the race; keep its transport and release ours.
+            ReturnToPool(transport);
+            return;
+        }
+
+        // Dispose may have run after the check above. It saw no transport and could not release ours,
+        // so the transport is released here instead of being left attached to a disposed connection.
+        if (this.IsDisposed)
+        {
+            ReleaseUdpTransport();
+        }
+    }
+
+    /// <summary>
+    /// Test seam: invoked on the binding thread after the transport is initialized and before it is
+    /// attached, so a test can run <see cref="Dispose"/> deterministically inside the bind window.
+    /// </summary>
+    [ThreadStatic]
+    internal static Action<PassthroughConnection>? s_beforeUdpAttachHook;
+
+    /// <summary>
+    /// Atomically detaches the UDP transport (if any) and returns it to the pool exactly once.
+    /// </summary>
+    private void ReleaseUdpTransport()
+    {
+        SocketUdpTransport? transport = Interlocked.Exchange(ref _udpTransport, null);
+        if (transport is not null)
+        {
+            ReturnToPool(transport);
+        }
+    }
+
+    private static void ReturnToPool(SocketUdpTransport transport)
+    {
+        try
+        {
+            s_pool.Return(transport);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
     }
 
     #endregion UDP Transport
@@ -190,7 +232,7 @@ public sealed class PassthroughConnection :
     public bool IsDisposed => Volatile.Read(ref _isDisposed) != 0;
 
     /// <inheritdoc />
-    public bool IsUdpCreated => _udpTransport is not null;
+    public bool IsUdpCreated => Volatile.Read(ref _udpTransport) is not null;
 
     /// <inheritdoc />
     public bool ExcludeFromIdleTimeout { get; set; }
@@ -236,10 +278,10 @@ public sealed class PassthroughConnection :
     public Bytes32 Secret { get; set; }
 
     /// <inheritdoc />
-    public long BytesSent => _udpTransport?.BytesSent ?? 0;
+    public long BytesSent => Volatile.Read(ref _udpTransport)?.BytesSent ?? 0;
 
     /// <inheritdoc />
-    public long BytesReceived => _udpTransport?.BytesReceived ?? 0;
+    public long BytesReceived => Volatile.Read(ref _udpTransport)?.BytesReceived ?? 0;
 
     /// <inheritdoc />
     public long PacketsDropped => 0;
@@ -276,11 +318,12 @@ public sealed class PassthroughConnection :
     {
         get
         {
-            if (_udpTransport is null)
+            SocketUdpTransport? transport = Volatile.Read(ref _udpTransport);
+            if (transport is null)
             {
                 Internal.Throw.UdpTransportNotCreated();
             }
-            return _udpTransport;
+            return transport;
         }
     }
 
@@ -409,16 +452,7 @@ public sealed class PassthroughConnection :
             }
         }
 
-        if (_udpTransport is not null)
-        {
-            try
-            {
-                s_pool.Return(_udpTransport);
-            }
-            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
-
-            _udpTransport = null;
-        }
+        ReleaseUdpTransport();
 
         try { _attributes?.Return(); }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }

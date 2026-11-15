@@ -55,4 +55,28 @@ public sealed class PassthroughConnectionTests
 
         conn.ExcludeFromIdleTimeout.Should().BeFalse("UDP passthrough connections must participate in idle timeout eviction by default");
     }
+
+    [Fact]
+    public void BindUdp_WhenDisposedInsideBindWindow_LeavesNoTransportAttached()
+    {
+        using Socket listenerSocket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        listenerSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+
+        PassthroughConnection conn = new(s_testOpCodeExtractor, new IPEndPoint(IPAddress.Loopback, 19002));
+
+        // Dispose runs after the connection has passed its initial checks and the transport is initialized,
+        // but before it is attached. Before the fix the transport was attached to the disposed connection.
+        PassthroughConnection.s_beforeUdpAttachHook = c => c.Dispose();
+        try
+        {
+            conn.BindUdp(listenerSocket, new IPEndPoint(IPAddress.Loopback, 19003));
+        }
+        finally
+        {
+            PassthroughConnection.s_beforeUdpAttachHook = null;
+        }
+
+        conn.IsDisposed.Should().BeTrue();
+        conn.IsUdpCreated.Should().BeFalse("a disposed connection must not keep a UDP transport attached");
+    }
 }
