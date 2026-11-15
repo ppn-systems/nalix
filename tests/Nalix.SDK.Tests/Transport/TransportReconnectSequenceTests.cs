@@ -25,7 +25,7 @@ namespace Nalix.SDK.Tests.Transport;
 public sealed class TransportReconnectSequenceTests : IDisposable
 {
     [Fact]
-    public async Task ConnectAsync_AfterStaleTcpSocket_ResetsSendSequence()
+    public async Task ConnectAsync_AfterStaleTcpSocket_KeepsSendSequenceForResume()
     {
         int port = TestEnvironment.GetFreePort();
         TcpListener listener = new(IPAddress.Loopback, port);
@@ -42,7 +42,7 @@ public sealed class TransportReconnectSequenceTests : IDisposable
             await session.ConnectAsync();
             using Socket accepted = await acceptTask.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(0u, CurrentSendSequence(session));
+            Assert.Equal(1u, CurrentSendSequence(session));
         }
         finally
         {
@@ -51,7 +51,7 @@ public sealed class TransportReconnectSequenceTests : IDisposable
     }
 
     [Fact]
-    public async Task ConnectAsync_AfterStaleWebSocket_ResetsSendSequence()
+    public async Task ConnectAsync_AfterStaleWebSocket_KeepsSendSequenceForResume()
     {
         ushort port = (ushort)TestEnvironment.GetFreePort();
         NetworkWebSocketOptions wsOptions = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
@@ -75,7 +75,7 @@ public sealed class TransportReconnectSequenceTests : IDisposable
 
             await session.ConnectAsync();
 
-            Assert.Equal(0u, CurrentSendSequence(session));
+            Assert.Equal(1u, CurrentSendSequence(session));
             server.Deactivate();
         }
         finally

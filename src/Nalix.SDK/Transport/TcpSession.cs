@@ -164,7 +164,7 @@ public class TcpSession : TransportSession
                 await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
-            this.ResetSequenceCounters();
+            // Sequence counters are not reset here: a resume continues them, and a full handshake resets them.
 
             // Initialize socket with NoDelay to reduce latency
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp) { NoDelay = this.Options.NoDelay };
@@ -241,7 +241,7 @@ public class TcpSession : TransportSession
                 await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
-            this.ResetSequenceCounters();
+            // Sequence counters are not reset here: a resume continues them, and a full handshake resets them.
 
             // Initialize socket with NoDelay to reduce latency
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp) { NoDelay = this.Options.NoDelay };

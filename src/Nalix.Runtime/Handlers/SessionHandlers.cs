@@ -93,14 +93,11 @@ public static partial class SessionHandlers
         RestoreSessionSnapshot(connection, session);
         connection.GetRuntimeState().HandshakeEstablished = true;
 
+        // The session key is restored from the snapshot, so the sequence state must be restored with it.
+        // Restarting at 0 would let frames recorded before the resume pass the receive check again.
         ConnectionSequenceState seqState = connection.GetSequenceState();
-
-        // Reset sequence counters for the newly established transport connection so both client
-        // and server start from sequence 0 on the resumed transport.
-        seqState.TcpSendSequence = 0;
-        seqState.TcpReceiveSequence = 0;
-        connection.TCP.SendSequence.Reset();
-        connection.TCP.ReceiveSequence.Reset();
+        connection.TCP.SendSequence.Reset(seqState.TcpSendSequence);
+        RestoreReceiveSequence(connection.TCP.ReceiveSequence, seqState.TcpReceiveSequence);
 
         if (connection.IsUdpCreated && connection.UDP is not null)
         {
@@ -130,6 +127,23 @@ public static partial class SessionHandlers
             flags: packet.Flags);
 
         await context.Sender.SendAsync(ack).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Restores a receive counter to the last accepted sequence and marks the reorder window below it as already seen.
+    /// </summary>
+    /// <param name="counter">The receive counter to restore.</param>
+    /// <param name="lastAccepted">The last sequence accepted before the session was saved.</param>
+    private static void RestoreReceiveSequence(ISequenceCounter counter, uint lastAccepted)
+    {
+        counter.Reset(lastAccepted);
+
+        // Reset clears the reorder bitmap, which would let replayed frames inside the TCP window pass again.
+        // Re-mark the 32 slots at and below lastAccepted as seen; the counter tracks at most 32 slots.
+        for (uint back = 0; back < 32 && back < lastAccepted; back++)
+        {
+            counter.UpdateTo(lastAccepted - back);
+        }
     }
 
     private static bool IsResumeProofValid(SessionEntry session, ulong sessionToken, Bytes32 proof)

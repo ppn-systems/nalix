@@ -187,7 +187,7 @@ TestEnvironment.SetupCertificate();
     }
 
     [Fact]
-    public async Task ResumeSessionAsync_WhenPreviousSessionHadHighSequences_ResetsSequencesForFreshTransport()
+    public async Task ResumeSessionAsync_WhenPreviousSessionHadHighSequences_RestoresReceiveSequence()
     {
         int port = TestEnvironment.GetFreePort();
         ulong token = Snowflake.NewId(SnowflakeType.Session).ToUInt64();
@@ -249,7 +249,7 @@ TestEnvironment.SetupCertificate();
             Assert.Equal(ProtocolReason.NONE, result);
 
             IConnection serverConn = Assert.Single(hub.ListConnections());
-            Assert.Equal(0u, serverConn.TCP.ReceiveSequence.Current());
+            Assert.Equal(50u, serverConn.TCP.ReceiveSequence.Current());
         }
         finally
         {

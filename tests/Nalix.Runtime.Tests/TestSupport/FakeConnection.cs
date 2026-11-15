@@ -17,7 +17,14 @@ internal sealed class FakeConnection : IConnection
 {
     private static ulong s_nextId = 1000;
 
-    public FakeTransport FakeTcp { get; } = new();
+    public FakeTransport FakeTcp { get; }
+
+    public FakeConnection()
+        : this(new FakeTransport())
+    {
+    }
+
+    public FakeConnection(FakeTransport tcp) => FakeTcp = tcp;
 
     public bool IsDisposed { get; private set; }
 
