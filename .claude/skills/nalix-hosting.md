@@ -71,7 +71,7 @@ The system handlers are registered by calling the corresponding builder `Use*` e
 ```csharp
 using var host = NetworkApplication.CreateBuilder()
     .ListenTcp<MyProtocol>().Bind()
-    .UseLogger(NLogix.Host.Instance)
+    .UseLogger(logger)                               // any Microsoft.Extensions.Logging ILogger
     .Configure<NetworkSocketOptions>(opt => opt.Port = 8080)
     .MapHandlers<MyPacketHandler>()
     .ConfigureDispatchOptions(opts => {
@@ -97,7 +97,6 @@ await host.RunAsync();                      // ActivateAsync → wait → Deacti
 1. Call `await host.DeactivateAsync()` — stops new packet processing
 2. Allow in-flight handler tasks to complete (await TaskManager workers if needed)
 3. Close listeners
-4. Call `NLogix.Host.Instance.Dispose()` — flushes the log channel before exit
 
 ---
 
