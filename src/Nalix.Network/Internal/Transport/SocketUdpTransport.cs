@@ -288,7 +288,11 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
     /// <inheritdoc/>
     public void Send(ReadOnlySpan<byte> message)
     {
-        if (message.IsEmpty || _endPoint == null || _socket == null)
+        // Snapshot the target once. ResetForPool may run concurrently and re-Initialize may then rebind
+        // this instance to another endpoint; re-reading the field could send this payload to that endpoint.
+        EndPoint? endPoint = _endPoint;
+        Socket? socket = _socket;
+        if (message.IsEmpty || endPoint == null || socket == null)
         {
             return;
         }
@@ -300,7 +304,7 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
 
         try
         {
-            int sent = _socket.SendTo(message, SocketFlags.None, _endPoint);
+            int sent = socket.SendTo(message, SocketFlags.None, endPoint);
             if (sent != message.Length)
             {
                 Throw.UdpPartialSendNow();
@@ -316,7 +320,10 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
     /// <inheritdoc/>
     public async ValueTask SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default)
     {
-        if (message.IsEmpty || _endPoint == null || _socket == null)
+        // Same single snapshot as Send (see comment there).
+        EndPoint? endPoint = _endPoint;
+        Socket? socket = _socket;
+        if (message.IsEmpty || endPoint == null || socket == null)
         {
             return;
         }
@@ -328,7 +335,7 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
 
         try
         {
-            int sentBytes = await _socket.SendToAsync(message, SocketFlags.None, _endPoint, cancellationToken).ConfigureAwait(false);
+            int sentBytes = await socket.SendToAsync(message, SocketFlags.None, endPoint, cancellationToken).ConfigureAwait(false);
             if (sentBytes != message.Length)
             {
                 Throw.UdpPartialSendNow();
