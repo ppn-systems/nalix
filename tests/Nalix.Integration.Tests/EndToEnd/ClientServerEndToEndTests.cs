@@ -116,6 +116,30 @@ public sealed class ClientServerEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task RequestAsync_WithPayloadLargerThanChunkSize_IsFragmentedBothWaysAndReturnsIntact()
+    {
+        ushort port = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: true);
+
+        using TcpSession client = new(CreateOptions(port));
+        await client.ConnectAsync().WaitAsync(s_timeout);
+        await client.HandshakeAsync().AsTask().WaitAsync(s_timeout);
+
+        // Incompressible and several times FragmentOptions.MaxChunkSize, so both the SDK sender and the
+        // server sender must split it into FRAGMENTED chunks and the other side must reassemble them.
+        Random random = new(1234);
+        string text = new([.. Enumerable.Range(0, 100_000).Select(_ => (char)random.Next('a', 'z' + 1))]);
+
+        EchoPacket response = await client.RequestAsync<EchoPacket>(
+            new EchoPacket { Sequence = 5, Text = text }, s_request.WithEncrypt()).AsTask().WaitAsync(s_timeout);
+
+        Assert.Equal(6, response.Sequence);
+        Assert.Equal(text.ToUpperInvariant(), response.Text);
+
+        await client.DisconnectAsync().WaitAsync(s_timeout);
+    }
+
+    [Fact]
     public async Task RequestAsync_FromManyConcurrentClients_EachReceivesOwnResponses()
     {
         const int clientCount = 8;
