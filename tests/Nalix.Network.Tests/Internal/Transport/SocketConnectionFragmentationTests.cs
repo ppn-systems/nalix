@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Security;
 using Nalix.Environment.Fragments;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Transport;
@@ -91,6 +92,7 @@ public sealed class SocketConnectionFragmentationTests
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
+        connection.Level = PermissionLevel.ESTABLISHED;
         TransportAsyncCallback.ResetStatistics();
 
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -115,6 +117,7 @@ public sealed class SocketConnectionFragmentationTests
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
+        connection.Level = PermissionLevel.ESTABLISHED;
         TransportAsyncCallback.ResetStatistics();
 
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);

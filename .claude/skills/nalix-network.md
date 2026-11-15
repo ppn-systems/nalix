@@ -39,6 +39,7 @@
 - `connection.Secret.IsZero` = connection not yet authenticated — use as pre-auth guard
 - Each `Connection` has local per-connection object pools (reduces global pool contention)
 - Malformed packet counter increments per bad packet — connection is disconnected when the threshold is reached
+- Fragmented frames (TCP `SocketConnection`) are accepted only when `connection.Level >= NetworkCallbackOptions.MinFragmentPermissionLevel` (default `ESTABLISHED`, granted by `CLIENT_FINISH` or session resume). Lower-level fragments are dropped before any `FragmentAssembler` is created. Handshake frames are never fragmented.
 
 ---
 

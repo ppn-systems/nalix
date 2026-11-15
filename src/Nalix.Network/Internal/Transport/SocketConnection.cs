@@ -15,6 +15,7 @@ using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Fragments;
 using Nalix.Environment.Memory;
@@ -144,6 +145,8 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     private static long s_receiveFaultedSuppressed;
     private static long s_fragmentErrorTicks;
     private static long s_fragmentErrorSuppressed;
+    private static long s_unauthorizedFragmentTicks;
+    private static long s_unauthorizedFragmentSuppressed;
     private static long s_receiveVarIntFaultedTicks;
     private static long s_receiveVarIntFaultedSuppressed;
     private static long s_protocolViolationTicks;
@@ -738,6 +741,13 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         // A FragmentHeader is 8 bytes. We peek directly from the SAEA buffer BEFORE renting any leases.
         if (FragmentAssembler.IsFragmentedFrame(rawPayloadSpan, out FragmentHeader header))
         {
+            // Reassembly state is allocated per connection, so only peers that completed the handshake may use it.
+            if (_owner.Level < s_opts.MinFragmentPermissionLevel)
+            {
+                this.REJECT_UNAUTHORIZED_FRAGMENT();
+                return;
+            }
+
             // Direct zero-copy handoff. Only the inner chunk body is passed.
             this.HANDLE_FRAGMENTED_FRAME_DIRECT(header, rawPayloadSpan[FragmentHeader.WireSize..]);
             return;
@@ -885,6 +895,23 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             if (fragmentAssembler is not null)
             {
                 Volatile.Write(ref _openFragmentStreams, fragmentAssembler.OpenStreamCount);
+            }
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void REJECT_UNAUTHORIZED_FRAGMENT()
+    {
+        if (_owner is IConnectionTrafficMetrics trafficMetrics)
+        {
+            trafficMetrics.IncrementPacketsDropped();
+        }
+
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+        {
+            if (Security.ThrottledEventGate.TryAcquire(ref s_unauthorizedFragmentTicks, ref s_unauthorizedFragmentSuppressed, DateTime.UtcNow.Ticks, TimeSpan.TicksPerSecond * 5, out long suppressed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning, new DiagnosticLog("NW.SocketConnection:Internal", $"dropped fragment from connection below MinFragmentPermissionLevel level={_owner.Level} required={s_opts.MinFragmentPermissionLevel} endpoint={_endpointString} suppressed-count={suppressed}"));
             }
         }
     }
