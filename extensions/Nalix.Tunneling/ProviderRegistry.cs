@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Nalix.Abstractions.Networking;
-using Nalix.Abstractions.Networking.Packets;
 
 namespace Nalix.Tunneling;
 
@@ -14,21 +13,21 @@ namespace Nalix.Tunneling;
 /// </summary>
 public sealed class ProviderRegistry
 {
-    private readonly ConcurrentDictionary<ushort, (IConnection Connection, IPacketSender Sender)> _providers = new();
+    // Only the connection is kept. A PacketSender belongs to a pooled PacketContext and is reset when its
+    // handler returns, so it must not outlive the dispatch that created it.
+    private readonly ConcurrentDictionary<ushort, IConnection> _providers = new();
 
     /// <summary>
     /// Registers a provider for a specific channel.
     /// </summary>
     /// <param name="channelId">The channel ID to register.</param>
     /// <param name="connection">The control connection of the provider.</param>
-    /// <param name="sender">The packet sender for the provider.</param>
     /// <returns>True if registration is successful; false if the channel is already taken.</returns>
-    public bool TryRegister(ushort channelId, IConnection connection, IPacketSender sender)
+    public bool TryRegister(ushort channelId, IConnection connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(sender);
 
-        if (_providers.TryAdd(channelId, (connection, sender)))
+        if (_providers.TryAdd(channelId, connection))
         {
             // Bind lifecycle: release the channel when its owning connection closes
             connection.ConnectionClosed += (s, e) => _ = this.TryUnregister(channelId, connection);
@@ -44,30 +43,27 @@ public sealed class ProviderRegistry
     /// <returns><see langword="true"/> if the channel was released; otherwise <see langword="false"/>.</returns>
     internal bool TryUnregister(ushort channelId, IConnection connection)
     {
-        if (_providers.TryGetValue(channelId, out (IConnection Connection, IPacketSender Sender) existing) &&
-            existing.Connection == connection)
+        if (_providers.TryGetValue(channelId, out IConnection? existing) && existing == connection)
         {
             // Remove by key and value so a concurrent re-registration by another connection is never removed.
-            return _providers.TryRemove(new KeyValuePair<ushort, (IConnection Connection, IPacketSender Sender)>(channelId, existing));
+            return _providers.TryRemove(new KeyValuePair<ushort, IConnection>(channelId, existing));
         }
 
         return false;
     }
 
     /// <summary>
-    /// Attempts to retrieve the provider's connection and sender for the given channel.
+    /// Attempts to retrieve the provider's control connection for the given channel.
     /// </summary>
-    public bool TryGetProvider(ushort channelId, [NotNullWhen(true)] out IConnection? connection, [NotNullWhen(true)] out IPacketSender? sender)
+    public bool TryGetProvider(ushort channelId, [NotNullWhen(true)] out IConnection? connection)
     {
-        if (_providers.TryGetValue(channelId, out (IConnection Connection, IPacketSender Sender) tuple))
+        if (_providers.TryGetValue(channelId, out IConnection? tuple))
         {
-            connection = tuple.Connection;
-            sender = tuple.Sender;
+            connection = tuple;
             return true;
         }
 
         connection = null;
-        sender = null;
         return false;
     }
 }

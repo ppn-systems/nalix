@@ -17,7 +17,7 @@ public sealed class ProviderRegistryTests
     {
         ProviderRegistry registry = new();
 
-        bool registered = registry.TryRegister(1, Substitute.For<IConnection>(), Substitute.For<IPacketSender>());
+        bool registered = registry.TryRegister(1, Substitute.For<IConnection>());
 
         Assert.True(registered);
     }
@@ -27,27 +27,24 @@ public sealed class ProviderRegistryTests
     {
         ProviderRegistry registry = new();
         IConnection first = Substitute.For<IConnection>();
-        IPacketSender firstSender = Substitute.For<IPacketSender>();
-        _ = registry.TryRegister(9, first, firstSender);
+        _ = registry.TryRegister(9, first);
 
-        bool second = registry.TryRegister(9, Substitute.For<IConnection>(), Substitute.For<IPacketSender>());
+        bool second = registry.TryRegister(9, Substitute.For<IConnection>());
 
         Assert.False(second);
-        Assert.True(registry.TryGetProvider(9, out IConnection? connection, out IPacketSender? sender));
+        Assert.True(registry.TryGetProvider(9, out IConnection? connection));
         Assert.Same(first, connection);
-        Assert.Same(firstSender, sender);
     }
 
     [Fact]
-    public void TryGetProvider_WhenChannelWasNeverRegistered_ReturnsFalseAndNullOutputs()
+    public void TryGetProvider_WhenChannelWasNeverRegistered_ReturnsFalseAndNullOutput()
     {
         ProviderRegistry registry = new();
 
-        bool found = registry.TryGetProvider(42, out IConnection? connection, out IPacketSender? sender);
+        bool found = registry.TryGetProvider(42, out IConnection? connection);
 
         Assert.False(found);
         Assert.Null(connection);
-        Assert.Null(sender);
     }
 
     [Fact]
@@ -55,16 +52,6 @@ public sealed class ProviderRegistryTests
     {
         ProviderRegistry registry = new();
 
-        _ = Assert.Throws<ArgumentNullException>(() =>
-            registry.TryRegister(1, null!, Substitute.For<IPacketSender>()));
-    }
-
-    [Fact]
-    public void TryRegister_WhenSenderIsNull_ThrowsArgumentNullException()
-    {
-        ProviderRegistry registry = new();
-
-        _ = Assert.Throws<ArgumentNullException>(() =>
-            registry.TryRegister(1, Substitute.For<IConnection>(), null!));
+        _ = Assert.Throws<ArgumentNullException>(() => registry.TryRegister(1, null!));
     }
 }

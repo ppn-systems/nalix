@@ -43,7 +43,7 @@ public sealed class ProviderHandlerTests
         ProviderRegistry registry = new();
         FakeConnection owner = new() { Level = PermissionLevel.USER };
         FakeConnection squatter = new() { Level = PermissionLevel.USER };
-        _ = registry.TryRegister(9, owner, new FakePacketSender());
+        _ = registry.TryRegister(9, owner);
         FakePacketSender squatterSender = new();
 
         await CreateHandler(registry).HandleProvideAsync(new FakePacketContext<TunnelProvide>(new TunnelProvide { ChannelId = 9 }, squatter, squatterSender));
@@ -51,7 +51,7 @@ public sealed class ProviderHandlerTests
         TunnelProvideAck ack = Assert.IsType<TunnelProvideAck>(Assert.Single(squatterSender.Sent));
         Assert.False(ack.Success);
         Assert.Equal(1, ack.Reason);
-        Assert.True(registry.TryGetProvider(9, out IConnection? connection, out _));
+        Assert.True(registry.TryGetProvider(9, out IConnection? connection));
         Assert.Same(owner, connection);
     }
 

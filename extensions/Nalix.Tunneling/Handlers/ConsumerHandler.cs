@@ -8,6 +8,7 @@ using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Security;
 using Nalix.Codec.Pooling;
+using Nalix.Runtime.Extensions;
 
 namespace Nalix.Tunneling.Handlers;
 
@@ -49,7 +50,7 @@ public sealed class ConsumerHandler
         }
 
         // 1. Find the Provider for this channel
-        if (!_providerRegistry.TryGetProvider(channelId, out IConnection? providerControlConnection, out IPacketSender? providerSender))
+        if (!_providerRegistry.TryGetProvider(channelId, out IConnection? providerControlConnection))
         {
             if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
             {
@@ -81,8 +82,10 @@ public sealed class ConsumerHandler
             TunnelRequest request = requestScope.Value;
             request.Token = token;
 
-            // Forward the request to the provider
-            await providerSender.SendAsync(request).ConfigureAwait(false);
+            // Forward the request to the provider. The token is a bearer secret, so it is always encrypted:
+            // the sender's metadata comes from TUNNEL_PROVIDE and does not request encryption. Without a
+            // negotiated cipher the send throws instead of falling back to plaintext.
+            await providerControlConnection.SendAsync(request, NetworkTransport.TCP, enableEncrypt: true).ConfigureAwait(false);
         }
 
         if (_logger != null && _logger.IsEnabled(LogLevel.Trace))
