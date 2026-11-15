@@ -81,8 +81,10 @@ public sealed class ConsumerHandler
             TunnelRequest request = requestScope.Value;
             request.Token = token;
 
-            // Forward the request to the provider
-            await providerSender.SendAsync(request).ConfigureAwait(false);
+            // Forward the request to the provider. The token is a bearer secret, so it is always encrypted:
+            // the sender's metadata comes from TUNNEL_PROVIDE and does not request encryption. Without a
+            // negotiated cipher the send throws instead of falling back to plaintext.
+            await providerSender.SendAsync(request, forceEncrypt: true).ConfigureAwait(false);
         }
 
         if (_logger != null && _logger.IsEnabled(LogLevel.Trace))
