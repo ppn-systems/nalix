@@ -16,7 +16,7 @@
 
 ---
 
-**Nalix** is low-latency binary realtime networking for .NET 10 — for Blazor WebAssembly, MAUI and game servers — with a pooled, near-zero-allocation hot path (~120 B per message on the server, the lowest of the frameworks measured below) and built-in X25519 + AEAD encryption.
+**Nalix** is low-latency binary realtime networking for .NET 10 — for Blazor WebAssembly, MAUI and game servers — with a pooled, near-zero-allocation hot path (~56 B per message on the server over TCP, the lowest of the frameworks measured below) and built-in X25519 + AEAD encryption.
 
 You define packets as plain C# classes, write handlers keyed by opcode, and talk to the server over TCP, UDP or WebSocket from the Nalix client SDK. There is no HTTP layer in between.
 
@@ -218,7 +218,7 @@ Nalix is composed of several modular packages — install only what you need.
 | **[Nalix.Abstractions](src/Nalix.Abstractions)** | Base abstractions, enums, and shared contracts for the Nalix ecosystem. |
 | **[Nalix.Codec](src/Nalix.Codec)** | High-performance framing, cryptography, and serialization. |
 | **[Nalix.Environment](src/Nalix.Environment)** | Low-level IO primitives, buffer leasing, and configuration loading. |
-| **[Nalix.Framework](src/Nalix.Framework)** | High-performance core: cryptography, identity, DI, serialization, and task orchestration. |
+| **[Nalix.Framework](src/Nalix.Framework)** | High-performance core: identity (Snowflake IDs), DI, object and buffer pooling, task orchestration, and diagnostics. |
 | **[Nalix.Runtime](src/Nalix.Runtime)** | Packet dispatching, middleware pipelines, protection primitives, and throttling. |
 
 ### 📡 Networking & Hosting

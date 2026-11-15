@@ -62,7 +62,7 @@ using Nalix.Observability;
 
 NetworkApplication host = NetworkApplication.CreateBuilder()
     .UseObservability()                       // or .UseObservability("/etc/myapp/observability.private")
-    .ListenWebSocket<DefaultProtocol>()
+    .MapWebSocket<DefaultProtocol>()
         .OnPort(57207)
         .WithPath("/ws/")
         .Bind()

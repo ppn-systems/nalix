@@ -21,7 +21,7 @@ dotnet add package Nalix.Hosting
 | Protocol binding | Bind TCP, UDP, and WebSocket protocols | `MapTcp<TProtocol>()`, `MapUdp<TProtocol>()`, `MapWebSocket<TProtocol>()` |
 | Handler registration | Register generated packet handlers explicitly | `MapHandlers<T>()`, `MapHandlers(Type)` |
 | Default protocol | Forward packets into the dispatch pipeline with minimal setup | `DefaultProtocol` |
-| Options | Host bootstrap and runtime settings | `HostEnvironmentOptions` |
+| Options | Host bootstrap and runtime settings | `HostingOptions` |
 
 ## Minimal Server
 
@@ -56,7 +56,7 @@ builder.MapUdp<DefaultProtocol>()
 
 builder.MapWebSocket<DefaultProtocol>()
     .OnPort(57207)
-    .OnPath("/ws/")
+    .WithPath("/ws/")
     .Bind();
 
 builder.Configure<NetworkSocketOptions>(options =>

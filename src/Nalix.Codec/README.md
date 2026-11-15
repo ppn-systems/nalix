@@ -17,7 +17,7 @@ dotnet add package Nalix.Codec
 | Area | Purpose | Main types |
 | :--- | :--- | :--- |
 | Packet model | Packet base types and runtime packet metadata | `PacketBase<TPacket>`, `FrameBase`, `PacketRegistry`, `PacketSchema` |
-| Protocol frames | Built-in control, directive, handshake, key exchange, and resume frames | `Control`, `Directive`, `Handshake`, `KeyExchange`, `SessionResume` |
+| Protocol frames | Built-in control, directive, session handshake, proof-of-work, time sync, and resume frames | `Control`, `Directive`, `SessionInit`, `SessionChallenge`, `SessionResume`, `ProofOfWorkChallenge`, `TimeSync` |
 | Serialization | Source-generated binary serialization | `LiteSerializer`, `FormatterProvider`, `IFormatter<T>`, `IFillableFormatter<T>` |
 | Transform pipeline | Ordered compression and encryption stages | `FrameTransformer`, `FramePipeline`, `FrameCompression`, `FrameCipher` |
 | Cryptography | X25519 handshakes, envelope ciphers, hashes, and MACs | `HandshakeX25519`, `EnvelopeCipher`, `Keccak256`, `HmacKeccak256`, `Poly1305` |
@@ -27,21 +27,19 @@ dotnet add package Nalix.Codec
 ## Minimal Packet
 
 ```csharp
+using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Serialization;
 using Nalix.Codec.DataFrames;
 
 [Packet]
 [GenerateFormatter]
 [SerializePackable(SerializeLayout.Explicit)]
-public partial class ChatMessage : PacketBase<ChatMessage>
+public sealed partial class ChatMessage : PacketBase<ChatMessage>, IPacketStaticOpcode
 {
+    public static ushort StaticOpCode => 201;
+
     [SerializeOrder(0)]
     public string Text { get; set; } = string.Empty;
-
-    public ChatMessage()
-    {
-        this.OpCode = 201;
-    }
 }
 ```
 
