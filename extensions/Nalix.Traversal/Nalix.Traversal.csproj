@@ -22,6 +22,10 @@ Nalix.Traversal provides NAT traversal, STUN signaling, and UDP hole punching ca
 	<Import Project="..\..\src\Package.Build.props" />
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Nalix.Traversal.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Nalix.Traversal.Contracts\Nalix.Traversal.Contracts.csproj" />
 		<ProjectReference Include="..\..\src\Nalix.Hosting\Nalix.Hosting.csproj" />
 		<ProjectReference Include="..\..\src\Nalix.Runtime\Nalix.Runtime.csproj" />

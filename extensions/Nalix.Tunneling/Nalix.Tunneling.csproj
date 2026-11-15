@@ -11,6 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Nalix.Tunneling.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Nalix.Abstractions\Nalix.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Nalix.Framework\Nalix.Framework.csproj" />
     <ProjectReference Include="..\..\src\Nalix.Hosting\Nalix.Hosting.csproj" />

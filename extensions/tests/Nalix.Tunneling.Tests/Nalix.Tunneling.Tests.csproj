@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Nalix.Abstractions\Nalix.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Nalix.Tunneling\Nalix.Tunneling.csproj" />
+    <ProjectReference Include="..\..\Nalix.Tunneling.Contracts\Nalix.Tunneling.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>
