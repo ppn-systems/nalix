@@ -11,7 +11,9 @@ using Nalix.Codec.DataFrames;
 namespace Nalix.Tunneling;
 
 /// <summary>
-/// Packet sent from Provider to Server to authenticate a new data connection.
+/// Packet sent from Provider to Server on a new data connection to start authenticating it.
+/// Carries the public tunnel identifier <c>Keccak256(token)</c>, never the token itself.
+/// The server answers with <c>TUNNEL_CHALLENGE</c>.
 /// </summary>
 [Packet]
 [GenerateFormatter]
@@ -22,7 +24,7 @@ public sealed partial class TunnelReady : PacketBase<TunnelReady>, IFixedSizeSer
     /// <inheritdoc/>
     public static ushort StaticOpCode => (ushort)ProtocolOpCode.TUNNEL_READY;
 
-    /// <inheritdoc/>
+    /// <summary>Tunnel identifier: Keccak256 of the one-time tunnel token.</summary>
     [SerializeOrder(0)]
     public Bytes32 Token { get; set; }
 

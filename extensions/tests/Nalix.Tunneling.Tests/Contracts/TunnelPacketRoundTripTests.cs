@@ -51,6 +51,26 @@ public sealed class TunnelPacketRoundTripTests
     }
 
     [Fact]
+    public void Deserialize_WhenTunnelChallengeWasSerialized_PreservesNonce()
+    {
+        Bytes32 nonce = Bytes32.Parse(new string('5', Bytes32.Size * 2));
+
+        TunnelChallenge result = TunnelChallenge.Deserialize(new TunnelChallenge { Nonce = nonce }.Serialize());
+
+        Assert.Equal(nonce, result.Nonce);
+    }
+
+    [Fact]
+    public void Deserialize_WhenTunnelProofWasSerialized_PreservesMac()
+    {
+        Bytes32 mac = Bytes32.Parse(new string('9', Bytes32.Size * 2));
+
+        TunnelProof result = TunnelProof.Deserialize(new TunnelProof { Mac = mac }.Serialize());
+
+        Assert.Equal(mac, result.Mac);
+    }
+
+    [Fact]
     public void Deserialize_WhenTunnelRequestWasSerialized_PreservesToken()
     {
         Bytes32 token = Bytes32.Parse(new string('a', Bytes32.Size * 2));
