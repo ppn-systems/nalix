@@ -145,12 +145,12 @@ public abstract partial class TcpListenerBase
 
                 if (_proxyConfig.Enabled)
                 {
-                    if (_proxyConfig.RequireTrustedProxy && socket.RemoteEndPoint is IPEndPoint remoteEp && !_limiter.IsTrustedProxy(remoteEp))
+                    if (_proxyConfig.RequireTrustedProxy && (socket.RemoteEndPoint is not IPEndPoint remoteEp || !_limiter.IsTrustedProxy(remoteEp)))
                     {
                         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
                         {
                             DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning,
-                                new DiagnosticLog("NW.TcpListenerBase:if", $"untrusted-proxy-rejected remote-endpoint={remoteEp}"));
+                                new DiagnosticLog("NW.TcpListenerBase:if", $"untrusted-proxy-rejected remote-endpoint={socket.RemoteEndPoint}"));
                         }
 
                         SafeCloseSocket(socket);
