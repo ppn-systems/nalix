@@ -346,7 +346,7 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
     /// <inheritdoc/>
     public void UseFraming(TransportFraming framing)
     {
-        // TODO: Review framing behavior. WebSocket currently relies on its built-in message framing.
+        // TODO: Review framing behavior. UDP is datagram-based, so message boundaries come from the datagram itself; the requested framing is currently ignored.
     }
 
     /// <summary>

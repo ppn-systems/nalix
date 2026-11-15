@@ -22,7 +22,7 @@ dotnet add package Nalix.Environment
 | Filesystem | Cross-platform application directories and permission hardening | `Directories` |
 | Time | Unix clock helpers and timing scopes | `Clock`, `TimingScope` |
 | Hashing | Non-cryptographic hashing | `XxHash32` |
-| Random | Thread-safe pseudo-random and OS CSPRNG helpers | `Csprng`, `OsCsprng`, `OsRandom` |
+| Random | Thread-safe pseudo-random and OS CSPRNG helpers | `Csprng`, `OsCsprng` |
 | Sequencing | Monotonic sequence validation | `SequenceCounter` |
 | Options | Environment-level option models | `MemoryOptions`, `FragmentOptions`, `SequenceOptions` |
 

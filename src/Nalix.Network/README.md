@@ -17,9 +17,9 @@ dotnet add package Nalix.Network
 
 | Area | Purpose | Main types |
 | :--- | :--- | :--- |
-| TCP listeners | High-throughput asynchronous TCP accept loops | `TcpListenerBase`, `TcpServerListener` |
-| UDP listeners | Session-aware UDP receive loops with endpoint pinning | `UdpListenerBase`, `UdpServerListener` |
-| WebSocket listeners | Raw WebSocket listener support for browser and proxy deployments | `WebSocketListenerBase`, `WebSocketServerListener` |
+| TCP listeners | High-throughput asynchronous TCP accept loops | `TcpListenerBase` |
+| UDP listeners | Session-aware UDP receive loops with endpoint pinning | `UdpListenerBase` |
+| WebSocket listeners | Raw WebSocket listener support for browser and proxy deployments | `WebSocketListenerBase` |
 | Connections | Active connection objects and lifecycle hooks | `Connection`, `WebSocketConnection`, `PassthroughConnection` |
 | Connection registry | Sharded active connection storage and broadcast support | `ConnectionHub`, `ConnectionTerminator` |
 | Protocols | Transport-neutral protocol lifecycle base | `Protocol` |
@@ -32,18 +32,11 @@ dotnet add package Nalix.Network
 using Nalix.Abstractions.Networking;
 using Nalix.Network.Listeners.Tcp;
 
-public sealed class CustomTcpListener : TcpListenerBase
-{
-    public CustomTcpListener(ushort port, IProtocol protocol, IConnectionHub hub)
-        : base(port, protocol, hub)
-    {
-    }
-
-    public override void ProcessFrame(object? sender, IConnectEventArgs args)
-    {
-        // Dispatch or inspect connection frames here.
-    }
-}
+// Frames are handled by the protocol's frame processor (IFrameProcessor.ProcessFrame),
+// so a listener subclass only supplies the port, protocol, hub and connection guard.
+public sealed class CustomTcpListener(
+    ushort port, IProtocol protocol, IConnectionHub hub, IConnectionGuard guard)
+    : TcpListenerBase(port, protocol, hub, guard);
 ```
 
 ## Operational Notes

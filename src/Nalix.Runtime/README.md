@@ -19,8 +19,8 @@ dotnet add package Nalix.Runtime
 | :--- | :--- | :--- |
 | Dispatching | Shard-aware packet dispatch channels and contexts | `PacketDispatchChannel`, `PacketContext`, `PacketDispatcherBase` |
 | Middleware | Inbound and outbound packet pipeline | `MiddlewarePipeline`, `IPacketMiddleware`, `RateLimitMiddleware`, `TimeoutMiddleware` |
-| Handlers | Built-in handshake, key exchange, and session handlers | `HandshakeHandlers`, `KeyExchangeHandlers`, `SessionHandlers` |
-| Throttling | Concurrency gates and token-bucket rate limiting | `ConcurrencyGate`, `TokenBucketLimiter`, `PolicyRateLimiter` |
+| Handlers | Built-in handshake, proof-of-work, and session handlers | `HandshakeHandlers`, `ProofOfWorkHandlers`, `SessionHandlers` |
+| Throttling | Token-bucket rate limiting | `TokenBucketLimiter`, `PolicyRateLimiter` |
 | Sessions | Session services, persistence observers, and in-memory store | `SessionService`, `InMemorySessionStore`, `SessionPersistenceObserver` |
 | Timekeeping | Clock skew and synchronization helpers | `TimeSynchronizer` |
 | Options | Runtime dispatch and throttling configuration | `DispatchOptions`, `TokenBucketOptions`, `SessionStoreOptions` |

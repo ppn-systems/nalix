@@ -19,8 +19,8 @@ namespace Nalix.Codec.DataFrames;
 /// Base class for all packets with automatic serialization and pooling.
 /// Eliminates boilerplate code for Length, Serialize, Deserialize, and ResetForPool.
 /// <para>
-/// <b>OpCode</b> is extracted automatically from <typeparamref name="TSelf"/>'s
-/// <c>[PacketOpcode]</c> attribute.
+/// <b>OpCode</b> is taken from <typeparamref name="TSelf"/>'s
+/// <see cref="IPacketStaticOpcode.StaticOpCode"/> (<see cref="IPacketStaticOpcode"/>).
 /// </para>
 /// </summary>
 /// <typeparam name="TSelf">The concrete packet type.</typeparam>

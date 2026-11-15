@@ -15,8 +15,8 @@ This package is intended for **server hosts**. For client-side packets and proto
 | 🔌 **Reverse Tunnel Broker** | Providers register named channels; consumers request connections to those channels. The server pairs them automatically. | `ProviderRegistry`, `TunnelRegistry` |
 | 🔑 **Proof-of-Possession Data Connections** | Each tunnel generates a 256-bit one-time token. The token never crosses the wire: the provider proves possession with an HMAC over a fresh server nonce. | `Bytes32`, `TunnelReady`, `TunnelChallenge`, `TunnelProof`, `DataConnectionHandler` |
 | 🚀 **Raw Socket Piping** | After handshake, sockets are unwrapped from the Nalix engine and piped bi-directionally at OS level — zero protocol overhead. | `TunnelPipe`, `TunnelSession` |
-| 📊 **Bandwidth Control** | Optional per-tunnel byte-level rate limiting with async-aware token bucket. | `TokenBucket`, `TunnelOptions.MaxBytesPerSecond` |
-| 🔄 **Stolen Data Recovery** | Transparently recovers any TCP bytes already buffered by the Nalix receive loop before transitioning to raw piping. | `TunnelSession.RecoverStolenDataAsync` |
+| 📊 **Bandwidth Control** | Optional per-tunnel byte-level rate limiting with async-aware token bucket. | `TunnelOptions.MaxBytesPerSecond` |
+| 🔄 **Stolen Data Recovery** | Bytes already buffered by the Nalix receive loops are forwarded to the peer before raw piping starts, so no data is lost in the handover. | `TunnelSession` |
 | 🧹 **Stale Request Cleanup** | Opportunistic sweep cancels pending tunnel requests that exceed the timeout window. | `TunnelRegistry.CleanupStale` |
 | 🧩 **Builder Integration** | Single `UseTunneling()` extension call to register all handlers and registries. | `TunnelApplicationBuilderExtensions` |
 
@@ -26,7 +26,7 @@ This package is intended for **server hosts**. For client-side packets and proto
 | :--- | :--- | :--- |
 | `Nalix.Tunneling` | Core tunnel management, registries, piping, and builder extensions | `TunnelSession`, `TunnelPipe`, `TunnelRegistry`, `TunnelSessionRegistry`, `ProviderRegistry`, `TunnelOptions` |
 | `Nalix.Tunneling.Handlers` | Packet handlers for the three-phase tunnel protocol | `ProviderHandler`, `ConsumerHandler`, `DataConnectionHandler` |
-| `Nalix.Tunneling.Internal` | Internal rate-limiting primitives | `TokenBucket` |
+| `Nalix.Tunneling.Internal` | Internal rate-limiting primitives (not public API) | — |
 | `Nalix.Tunneling.Packets` | Wire-format packet definitions (shared with Contracts) | `TunnelProvide`, `TunnelProvideAck`, `TunnelConnect`, `TunnelConnectAck`, `TunnelRequest`, `TunnelReady`, `TunnelChallenge`, `TunnelProof` |
 
 ## How It Works
