@@ -70,51 +70,33 @@ public sealed class UdpTransportLifecycleTests
     }
 
     [Fact]
-    public void ResetForPool_AfterUse_ZeroesSequenceCountersAndBytes()
-    {
-        var (transport, socket) = CreateInitialized();
-        try
-        {
-            transport.SendSequence.Next();
-            transport.SendSequence.Next();
-            transport.ReceiveSequence.Next();
-            transport.RecordBytesReceived(128);
-
-            transport.ResetForPool();
-
-            transport.CurrentSendSequence.Should().Be(0, "ResetForPool must zero the send sequence so a pooled instance can't leak state to its next owner");
-            transport.CurrentReceiveSequence.Should().Be(0, "ResetForPool must zero the receive sequence so a pooled instance can't leak state to its next owner");
-            transport.BytesReceived.Should().Be(0);
-            transport.BytesSent.Should().Be(0);
-        }
-        finally
-        {
-            socket.Dispose();
-        }
-    }
-
-    [Fact]
-    public void ResetForPool_WithOwnedAndSharedSocket_ReleasesOnlyOwnedSocket()
+    public void Dispose_AfterUse_SendsNothingAndReleasesOwnedSocket()
     {
         // Owned socket: Initialize() created it internally (no SetSocket call).
         SocketUdpTransport owned = new();
-        IPEndPoint ep = new(IPAddress.Loopback, 0);
-        owned.Initialize(ref ep);
-        owned.ResetForPool();
-        // Re-initializing after reset must succeed (proves the owned socket was disposed and cleared, not left dangling).
-        IPEndPoint ep2 = new(IPAddress.Loopback, 0);
-        Action act = () => owned.Initialize(ref ep2);
-        act.Should().NotThrow();
+        using Socket receiver = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        receiver.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        IPEndPoint remote = new(IPAddress.Loopback, ((IPEndPoint)receiver.LocalEndPoint!).Port);
+        owned.Initialize(ref remote);
         owned.Dispose();
 
+        // A disposed transport is inert: a stale holder must not send to the endpoint it was bound to.
+        Action sendAfterDispose = () => owned.Send(new byte[] { 1, 2, 3 });
+        sendAfterDispose.Should().NotThrow();
+        receiver.Poll(200_000, SelectMode.SelectRead).Should().BeFalse("a disposed UDP transport must not send");
+    }
+
+    [Fact]
+    public void Dispose_WithSharedSocket_DoesNotDisposeSocket()
+    {
         // Shared socket: SetSocket() means the transport does not own it and must not dispose it.
         using Socket shared = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         shared.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         SocketUdpTransport sharedTransport = new();
         sharedTransport.SetSocket(shared);
-        sharedTransport.ResetForPool();
+        sharedTransport.Dispose();
 
-        Action useAfterReset = () => shared.LocalEndPoint.Should().NotBeNull();
-        useAfterReset.Should().NotThrow("a shared (non-owned) socket must survive ResetForPool since the transport does not own its lifecycle");
+        Action useAfterDispose = () => shared.LocalEndPoint.Should().NotBeNull();
+        useAfterDispose.Should().NotThrow("a shared (non-owned) socket must survive Dispose since the transport does not own its lifecycle");
     }
 }

@@ -18,7 +18,6 @@ using Nalix.Environment.Configuration;
 using Nalix.Environment.Time;
 using Nalix.Framework.Identifiers;
 using Nalix.Framework.Injection;
-using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Internal.Connections;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
@@ -63,8 +62,6 @@ public sealed class PassthroughConnection :
 
     #region Fields
 
-    private static readonly ObjectPoolManager s_pool;
-
     private static readonly TimingWheelOptions s_timingWheelOptions;
 
     private readonly long _createdAtMs;
@@ -85,8 +82,6 @@ public sealed class PassthroughConnection :
 
     static PassthroughConnection()
     {
-        s_pool = ObjectPoolManager.Shared;
-
         s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
     }
 
@@ -138,7 +133,7 @@ public sealed class PassthroughConnection :
             return;
         }
 
-        SocketUdpTransport transport = s_pool.Get<SocketUdpTransport>();
+        SocketUdpTransport transport = new();
 
         transport.SetSocket(listenerSocket);
 
@@ -150,7 +145,7 @@ public sealed class PassthroughConnection :
         if (Interlocked.CompareExchange(ref _udpTransport, transport, null) is not null)
         {
             // Another bind won the race; keep its transport and release ours.
-            ReturnToPool(transport);
+            transport.Dispose();
             return;
         }
 
@@ -170,24 +165,15 @@ public sealed class PassthroughConnection :
     internal static Action<PassthroughConnection>? s_beforeUdpAttachHook;
 
     /// <summary>
-    /// Atomically detaches the UDP transport (if any) and returns it to the pool exactly once.
+    /// Atomically detaches the UDP transport (if any) and disposes it exactly once.
     /// </summary>
     private void ReleaseUdpTransport()
     {
         SocketUdpTransport? transport = Interlocked.Exchange(ref _udpTransport, null);
         if (transport is not null)
         {
-            ReturnToPool(transport);
+            transport.Dispose();
         }
-    }
-
-    private static void ReturnToPool(SocketUdpTransport transport)
-    {
-        try
-        {
-            s_pool.Return(transport);
-        }
-        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
     }
 
     #endregion UDP Transport

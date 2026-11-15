@@ -623,7 +623,7 @@ public sealed partial class Connection :
             {
                 if (backing.UdpTransport != null)
                 {
-                    s_pool.Return(backing.UdpTransport);
+                    backing.UdpTransport.Dispose();
                     backing.UdpTransport = null;
                 }
             }

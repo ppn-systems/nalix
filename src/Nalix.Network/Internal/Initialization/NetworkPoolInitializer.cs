@@ -30,7 +30,6 @@ internal static class NetworkPoolInitializer
         _ = pool.SetMaxCapacity<SocketConnection>(s_options.MaxConnections);
         _ = pool.SetMaxCapacity<ConnectionBacking>(s_options.MaxConnections);
         _ = pool.SetMaxCapacity<SocketTcpTransport>(s_options.MaxConnections);
-        _ = pool.SetMaxCapacity<SocketUdpTransport>(s_options.MaxConnections);
         _ = pool.SetMaxCapacity<WebSocketTransport>(s_options.MaxConnections); // Added missing WebSocketTransport
         _ = pool.SetMaxCapacity<ProxyHeaderContext>(s_options.MaxConnections);
         _ = pool.SetMaxCapacity<TimingWheel.TimeoutTask>(s_options.MaxConnections);
@@ -64,7 +63,6 @@ internal static class NetworkPoolInitializer
 
         _ = pool.Prealloc<SocketConnection>(128);
 
-        _ = pool.Prealloc<SocketUdpTransport>(64);
         _ = pool.Prealloc<SocketTcpTransport>(128);
         _ = pool.Prealloc<ProxyHeaderContext>(128);
         _ = pool.Prealloc<PooledSocketReceiveContext>(128);

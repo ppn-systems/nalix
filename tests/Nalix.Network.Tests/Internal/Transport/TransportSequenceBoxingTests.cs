@@ -97,34 +97,6 @@ public sealed class TransportSequenceBoxingTests : IDisposable
         transport.SendSequence.Next().Should().Be(2);
     }
 
-    [Fact]
-    public void SequenceCounter_OnUdpTransportAfterPoolReset_StartsFromZero()
-    {
-        // Arrange
-        using var transport = new SocketUdpTransport();
-
-        // Modify state
-        transport.ReceiveSequence.UpdateTo(42);
-        transport.SendSequence.Next();
-        transport.SendSequence.Next();
-
-        transport.ReceiveSequence.Current().Should().Be(42);
-        transport.SendSequence.Current().Should().Be(2);
-
-        // Act - reset for pooling
-        transport.ResetForPool();
-
-        // Assert - state is reset to 0
-        transport.ReceiveSequence.Current().Should().Be(0);
-        transport.SendSequence.Current().Should().Be(0);
-
-        // References should still be the same (not re-allocated)
-        ISequenceCounter rx = transport.ReceiveSequence;
-        ISequenceCounter tx = transport.SendSequence;
-        rx.Current().Should().Be(0);
-        tx.Current().Should().Be(0);
-    }
-
     public void Dispose()
     {
         _connection.Dispose();
