@@ -29,8 +29,6 @@ internal static class NetworkPoolInitializer
         // Pre-configure pool capacities based on expected usage patterns to minimize resizing during runtime.
         _ = pool.SetMaxCapacity<SocketConnection>(s_options.MaxConnections);
         _ = pool.SetMaxCapacity<ConnectionBacking>(s_options.MaxConnections);
-        _ = pool.SetMaxCapacity<SocketTcpTransport>(s_options.MaxConnections);
-        _ = pool.SetMaxCapacity<WebSocketTransport>(s_options.MaxConnections); // Added missing WebSocketTransport
         _ = pool.SetMaxCapacity<ProxyHeaderContext>(s_options.MaxConnections);
         _ = pool.SetMaxCapacity<TimingWheel.TimeoutTask>(s_options.MaxConnections);
         _ = pool.SetMaxCapacity<PooledSocketReceiveContext>(s_options.MaxConnections);
@@ -62,16 +60,7 @@ internal static class NetworkPoolInitializer
         ObjectPoolManager pool = ObjectPoolManager.Shared;
 
         _ = pool.Prealloc<SocketConnection>(128);
-
-        _ = pool.Prealloc<SocketTcpTransport>(128);
         _ = pool.Prealloc<ProxyHeaderContext>(128);
         _ = pool.Prealloc<PooledSocketReceiveContext>(128);
-    }
-
-    public static void InitializeWebSocket()
-    {
-        ObjectPoolManager pool = ObjectPoolManager.Shared;
-
-        _ = pool.Prealloc<WebSocketTransport>(128);
     }
 }

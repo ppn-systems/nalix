@@ -122,7 +122,7 @@ public sealed partial class Connection :
         // Initialize the socket connection.
         _backing.Socket = s_pool.Get<SocketConnection>();
         _backing.Socket.Initialize(socket, this);
-        _backing.TcpTransport = s_pool.Get<SocketTcpTransport>();
+        _backing.TcpTransport = new SocketTcpTransport();
         _backing.TcpTransport.Initialize(this, _backing.Socket);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
@@ -641,7 +641,6 @@ public sealed partial class Connection :
                 if (backing.TcpTransport != null)
                 {
                     backing.TcpTransport.Dispose();
-                    s_pool.Return(backing.TcpTransport);
                     backing.TcpTransport = null;
                 }
             }

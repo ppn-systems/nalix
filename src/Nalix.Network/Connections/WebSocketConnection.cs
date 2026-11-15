@@ -63,8 +63,6 @@ public sealed class WebSocketConnection :
         s_limitOptions = ConfigurationManager.Instance.Get<ConnectionGuardOptions>();
         s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
         s_callbackOptions = ConfigurationManager.Instance.Get<NetworkCallbackOptions>();
-
-        NetworkPoolInitializer.InitializeWebSocket();
     }
 
     /// <summary>
@@ -98,7 +96,7 @@ public sealed class WebSocketConnection :
         this.NetworkEndpoint = SocketEndpoint.FromEndPoint(remoteEndPoint ?? new IPEndPoint(IPAddress.Loopback, 0));
 
         // Transport owns WebSocket — ownership transfer
-        _backing.WsTransport = s_pool.Get<WebSocketTransport>();
+        _backing.WsTransport = new WebSocketTransport();
         _backing.WsTransport.Initialize(this, webSocket, writeBatcher);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
@@ -595,7 +593,6 @@ public sealed class WebSocketConnection :
                     if (b.WsTransport != null)
                     {
                         b.WsTransport.Dispose();
-                        s_pool.Return(b.WsTransport);
                         b.WsTransport = null;
                     }
                 }

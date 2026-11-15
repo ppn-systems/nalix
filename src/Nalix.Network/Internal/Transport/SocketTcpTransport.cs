@@ -20,7 +20,7 @@ namespace Nalix.Network.Internal.Transport;
 [SkipLocalsInit]
 [DebuggerNonUserCode]
 [EditorBrowsable(EditorBrowsableState.Never)]
-internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IPoolable, IDisposable
+internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDisposable
 {
     #region Fields
 
@@ -115,9 +115,10 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IPoolab
             throw new ArgumentException("Message must not be empty.", nameof(message));
         }
 
-        ObjectDisposedException.ThrowIf(_socket is null, typeof(SocketTcpTransport));
+        SocketConnection? socket = _socket;
+        ObjectDisposedException.ThrowIf(socket is null, typeof(SocketTcpTransport));
 
-        SocketConnection.SendResult result = _socket.Send(message);
+        SocketConnection.SendResult result = socket.Send(message);
 
         if (result is SocketConnection.SendResult.PeerClosed or SocketConnection.SendResult.Aborted)
         {
@@ -259,7 +260,8 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IPoolab
             return ValueTask.FromException(new ArgumentException("Message must not be empty.", nameof(message)));
         }
 
-        if (_socket is null)
+        SocketConnection? socket = _socket;
+        if (socket is null)
         {
             return ValueTask.FromException(new ObjectDisposedException(nameof(SocketTcpTransport)));
         }
@@ -269,7 +271,7 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IPoolab
             return this.SEND_WITH_LOCK_ASYNC(message, cancellationToken);
         }
 
-        ValueTask<SocketConnection.SendResult> vt = _socket.SendAsync(message, cancellationToken);
+        ValueTask<SocketConnection.SendResult> vt = socket.SendAsync(message, cancellationToken);
         if (vt.IsCompletedSuccessfully)
         {
             SocketConnection.SendResult result = vt.Result;
@@ -371,23 +373,21 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IPoolab
 
     #endregion Methods
 
-    #region Pooling
+    #region Disposal
 
-    /// <inheritdoc/>
-    public void ResetForPool()
+    /// <summary>
+    /// Clears the socket and the owner. After this call the instance never sends again: every send fails with
+    /// <see cref="ObjectDisposedException"/>. Transports are not pooled, so a caller that kept this reference
+    /// can never reach a later owner's socket.
+    /// </summary>
+    public void Dispose()
     {
         _outer = null;
         _socket = null;
-        _sendLockScope = null!;
-        _sendLock?.Dispose();
-        _sendLock = null!;
         _sendSequence.Reset(0);
         _receiveSequence.Reset(0);
         this.Framing = TransportFraming.None;
     }
 
-    /// <inheritdoc/>
-    public void Dispose() => this.ResetForPool();
-
-    #endregion Pooling
+    #endregion Disposal
 }

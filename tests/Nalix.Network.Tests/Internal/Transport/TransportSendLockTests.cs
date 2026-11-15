@@ -196,69 +196,6 @@ public sealed class TransportSendLockTests : IDisposable
         await vt.Result.DisposeAsync();
     }
 
-    [Fact]
-    public async Task ResetForPool_OnTcpTransport_ReinitializesCachedScope()
-    {
-        SocketTcpTransport transport = new();
-        SocketConnection socketConn = ObjectPoolManager.Shared.Get<SocketConnection>();
-        socketConn.Initialize(_socket, _connection);
-        transport.Initialize(_connection, socketConn);
-
-        IConnection.ITransport iface = transport;
-
-        // Acquire lock
-        ValueTask<IAsyncDisposable> vt1 = iface.AcquireSendLockAsync(CancellationToken.None);
-        vt1.IsCompletedSuccessfully.Should().BeTrue();
-        IAsyncDisposable scope1 = vt1.Result;
-        await scope1.DisposeAsync();
-
-        // Reset for pool
-        transport.ResetForPool();
-
-        // Re-initialize
-        transport.Initialize(_connection, socketConn);
-
-        // Acquire lock again
-        ValueTask<IAsyncDisposable> vt2 = iface.AcquireSendLockAsync(CancellationToken.None);
-        vt2.IsCompletedSuccessfully.Should().BeTrue();
-        IAsyncDisposable scope2 = vt2.Result;
-        scope2.Should().NotBeNull();
-        await scope2.DisposeAsync();
-
-        transport.ResetForPool();
-        socketConn.ResetForPool();
-    }
-
-    [Fact]
-    public async Task ResetForPool_OnWebSocketTransport_ReinitializesCachedScope()
-    {
-        WebSocketTransport transport = new();
-        transport.Initialize(_webSocketConnection, _webSocket);
-
-        IConnection.ITransport iface = transport;
-
-        // Acquire lock
-        ValueTask<IAsyncDisposable> vt1 = iface.AcquireSendLockAsync(CancellationToken.None);
-        vt1.IsCompletedSuccessfully.Should().BeTrue();
-        IAsyncDisposable scope1 = vt1.Result;
-        await scope1.DisposeAsync();
-
-        // Reset for pool
-        transport.ResetForPool();
-
-        // Re-initialize
-        transport.Initialize(_webSocketConnection, _webSocket);
-
-        // Acquire lock again
-        ValueTask<IAsyncDisposable> vt2 = iface.AcquireSendLockAsync(CancellationToken.None);
-        vt2.IsCompletedSuccessfully.Should().BeTrue();
-        IAsyncDisposable scope2 = vt2.Result;
-        scope2.Should().NotBeNull();
-        await scope2.DisposeAsync();
-
-        transport.ResetForPool();
-    }
-
     private sealed class DummyOpCodeExtractor : IOpCodeExtractor
     {
         public ushort Extract(ReadOnlySpan<byte> payload) => 0;

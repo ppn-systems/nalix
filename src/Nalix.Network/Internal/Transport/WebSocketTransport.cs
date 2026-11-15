@@ -30,7 +30,7 @@ namespace Nalix.Network.Internal.Transport;
 [SkipLocalsInit]
 [DebuggerNonUserCode]
 [EditorBrowsable(EditorBrowsableState.Never)]
-internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, IDisposable
+internal sealed class WebSocketTransport : IConnection.ITransport, IDisposable
 {
     #region Fields
 
@@ -75,25 +75,6 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         _disposed = 0;
         _receiveStarted = 0;
         _receiveLoopTask = null;
-    }
-
-    public void ResetForPool()
-    {
-        _owner = null!;
-        _webSocket = null!;
-        _writeBatcher = null;
-        _options = null!;
-        _sendSequence = null!;
-        _receiveSequence = null!;
-        _disposed = 0;
-        _receiveStarted = 0;
-        _receiveLoopTask = null;
-
-        try { _sendLock?.Dispose(); }
-        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
-
-        _sendLockScope = null!;
-        _sendLock = null!;
     }
 
     #endregion Constructor
