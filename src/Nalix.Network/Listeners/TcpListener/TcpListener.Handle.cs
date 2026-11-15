@@ -637,7 +637,7 @@ public abstract partial class TcpListenerBase
 
             if (_proxyConfig.Enabled)
             {
-                if (_proxyConfig.RequireTrustedProxy && socket.RemoteEndPoint is IPEndPoint remoteEp && !_limiter.IsTrustedProxy(remoteEp))
+                if (_proxyConfig.RequireTrustedProxy && (socket.RemoteEndPoint is not IPEndPoint remoteEp || !_limiter.IsTrustedProxy(remoteEp)))
                 {
                     this.Metrics.RECORD_LIMITER_REJECTION();
                     SafeCloseSocket(socket);
