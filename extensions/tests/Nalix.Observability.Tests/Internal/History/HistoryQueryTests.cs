@@ -72,6 +72,36 @@ public sealed class HistoryQueryTests : IDisposable
         Assert.False(HistoryQuery.TryParse("""{"from":10,"to":5}"""u8, out _, out _, out _, out _));
     }
 
+    [Theory]
+    [InlineData("""{"from":-9223372036854775808,"to":9223372036854775807}""")]
+    [InlineData("""{"from":0,"to":9223372036854775807}""")]
+    [InlineData("""{"from":-1,"to":5}""")]
+    [InlineData("""{"from":0,"to":253402300800000}""")]
+    [InlineData("""{"from":-9000000000000000000,"to":9000000000000000000}""")]
+    public void TryParse_WhenRangeIsOutsideSupportedWindow_ReturnsFalse(string json)
+    {
+        Assert.False(HistoryQuery.TryParse(System.Text.Encoding.UTF8.GetBytes(json), out _, out _, out _, out _));
+    }
+
+    [Fact]
+    public void TryParse_WhenRangeIsAtSupportedWindowEdges_AcceptsIt()
+    {
+        string json = $$"""{"from":0,"to":{{HistoryQuery.MaxUnixMilliseconds}}}""";
+
+        Assert.True(HistoryQuery.TryParse(System.Text.Encoding.UTF8.GetBytes(json), out long from, out long to, out _, out _));
+        Assert.Equal((0, HistoryQuery.MaxUnixMilliseconds), (from, to));
+    }
+
+    [Fact]
+    public void Series_WhenSpanIsWholeSupportedWindow_ReturnsBoundedBuckets()
+    {
+        using HistoryRecorder recorder = _directory.CreateRecorder();
+        using BufferLease lease = HistoryQuery.Series(recorder, 0, HistoryQuery.MaxUnixMilliseconds, HistoryQuery.MaxPoints, ["Missing"]);
+        using JsonDocument json = JsonDocument.Parse(lease.Memory);
+
+        Assert.Equal(HistoryQuery.MaxPoints, json.RootElement.GetProperty(RuntimeObservationHistory.Times).GetArrayLength());
+    }
+
     [Fact]
     public void TryParse_WhenQueryIsValid_ClampsPointsAndIgnoresUnknownFields()
     {

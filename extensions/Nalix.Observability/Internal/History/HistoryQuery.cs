@@ -19,6 +19,9 @@ internal static class HistoryQuery
 {
     public const int MaxPoints = 2000;
     public const int MaxMetrics = 32;
+
+    /// <summary>The last millisecond representable as a UTC <see cref="DateTimeOffset"/> (9999-12-31T23:59:59.999Z).</summary>
+    public const long MaxUnixMilliseconds = 253_402_300_799_999;
     private const int DefaultPoints = 600;
 
     private static readonly JsonWriterOptions s_options = new() { Indented = false, SkipValidation = true };
@@ -38,7 +41,7 @@ internal static class HistoryQuery
         return Math.Clamp(points, 2, Math.Min(fit, MaxPoints));
     }
 
-    /// <summary>Parses a query; returns <see langword="false"/> for malformed JSON or an empty/inverted range.</summary>
+    /// <summary>Parses a query; returns <see langword="false"/> for malformed JSON, an empty or inverted range, or bounds outside [0, <see cref="MaxUnixMilliseconds"/>].</summary>
     public static bool TryParse(ReadOnlySpan<byte> json, out long from, out long to, out int points, out List<string> metrics)
     {
         from = 0;
@@ -105,7 +108,8 @@ internal static class HistoryQuery
             return false;
         }
 
-        return to > from;
+        // Both bounds must map to a valid UTC day, so the span cannot overflow and day enumeration stays bounded.
+        return from >= 0 && to > from && to <= MaxUnixMilliseconds;
     }
 
     /// <summary>
