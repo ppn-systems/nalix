@@ -58,10 +58,18 @@ CI publishes a coverage summary on the Linux/Release job.
 | :--- | :--- | :--- |
 | Core | Release | Linux (whole suite) |
 | Core | Release | Windows (client-side projects only: `tests/Nalix.Client.Tests.slnf` — SDK, Codec, Environment, Abstractions) |
-| Extensions | Release | Linux |
+| Extensions | Release | Linux (one job per extension whose sources, contracts, tests or solution changed; shared changes run all) |
 
 `CI OK` is the single required status check. Test builds are never strong-name signed (a signed assembly cannot
 grant `InternalsVisibleTo` by simple name), so CI does not decode the signing key for test runs.
+
+## Extension tests
+
+Tests for the extensions under `extensions/` live in `extensions/tests/`, one project per extension
+(`Nalix.Observability.Tests`, `Nalix.Tunneling.Tests`, `Nalix.Traversal.Tests`, `Nalix.SDK.Traversal.Tests`). Each
+project is listed in its extension's solution, so `dotnet test extensions/Nalix.<Extension>.sln -c Release` runs it.
+They follow the same conventions as the core suite, and `extensions/tests/Directory.Build.props` supplies the same
+test packages. Internal members are reached through `InternalsVisibleTo` in the extension project.
 
 ## Writing a test
 

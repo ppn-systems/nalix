@@ -37,6 +37,10 @@ It enables P2P hole punching and automatic fallback to Reflector UDP proxying.
 	<Import Project="..\..\src\Package.Build.props" />
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Nalix.SDK.Traversal.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\..\src\Nalix.SDK\Nalix.SDK.csproj" />
 		<ProjectReference Include="..\Nalix.Traversal.Contracts\Nalix.Traversal.Contracts.csproj" />
 	</ItemGroup>

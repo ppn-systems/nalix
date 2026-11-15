@@ -40,7 +40,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       core: ${{ steps.map.outputs.core }}
-      extensions: ${{ steps.map.outputs.extensions }}
+      extensions_matrix: ${{ steps.map.outputs.extensions_matrix }}
       workflows: ${{ steps.map.outputs.workflows }}
     steps:
       - uses: actions/checkout@v7
@@ -56,9 +56,13 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
         run: |
           set -uo pipefail
+          # Extension matrix: one entry per extension whose sources, contracts, tests or solution changed.
+          # The matrix is {"include":[...]}; the extensions job is skipped when it is empty.
+          ALL_EXTENSIONS='{"include":[{"name":"Observability","project":"extensions/Nalix.Observability.sln","test":"extensions/Nalix.Observability.sln"},{"name":"Traversal","project":"extensions/Nalix.Traversal.sln","test":"extensions/Nalix.Traversal.sln"},{"name":"SDK.Traversal","project":"extensions/Nalix.SDK.Traversal.sln","test":"extensions/Nalix.SDK.Traversal.sln"},{"name":"Tunneling","project":"extensions/Nalix.Tunneling.sln","test":"extensions/Nalix.Tunneling.sln"}]}'
+
           all() {
             echo "Running every tier: $1"
-            { echo "core=true"; echo "extensions=true"; echo "workflows=true"; } >> "$GITHUB_OUTPUT"
+            { echo "core=true"; echo "workflows=true"; echo "extensions_matrix=$ALL_EXTENSIONS"; } >> "$GITHUB_OUTPUT"
             exit 0
           }
 
@@ -75,15 +79,47 @@ jobs:
           git diff --name-only "$base" HEAD > "$changed" || all "git diff failed"
           echo "Changed files:"; cat "$changed"
 
-          core=false; extensions=false; workflows=false
+          # Per-extension trigger: the extension's own project folders, its contracts project and its test project,
+          # or its solution file. Keep these in step with the ProjectReferences of each extension.
+          X_OBSERVABILITY='^extensions/(Nalix\.Observability|Nalix\.Observability\.Contracts|tests/Nalix\.Observability\.Tests)/|^extensions/Nalix\.Observability\.sln$'
+          X_TRAVERSAL='^extensions/(Nalix\.Traversal|Nalix\.Traversal\.Contracts|tests/Nalix\.Traversal\.Tests)/|^extensions/Nalix\.Traversal\.sln$'
+          # SDK.Traversal references Traversal.Contracts, so a contracts change also rebuilds it.
+          X_SDK_TRAVERSAL='^extensions/(Nalix\.SDK\.Traversal|Nalix\.Traversal\.Contracts|tests/Nalix\.SDK\.Traversal\.Tests)/|^extensions/Nalix\.SDK\.Traversal\.sln$'
+          X_TUNNELING='^extensions/(Nalix\.Tunneling|Nalix\.Tunneling\.Contracts|tests/Nalix\.Tunneling\.Tests)/|^extensions/Nalix\.Tunneling\.sln$'
+          OWN_ANY="$X_OBSERVABILITY|$X_TRAVERSAL|$X_SDK_TRAVERSAL|$X_TUNNELING"
+
+          # Changes that can affect every extension: core sources and analyzers, root build props, the shared
+          # extension props and test props, and workflows. Any extension path that no extension claims is also
+          # treated as shared, so a new file cannot silently skip every job.
+          SHARED='^(src/|analyzers/)|^[^/]+\.(props|targets)$|^(global\.json|NuGet\.config)$|^extensions/(Directory\.Build\.props|tests/Directory\.Build\.props)$|^extensions/tests/[^/]+$|^\.github/(workflows|actions)/'
+          unclaimed=$(grep -E '^extensions/' "$changed" | grep -vE "$OWN_ANY" || true)
+          entries=()
+          add() { entries+=("{\"name\":\"$1\",\"project\":\"$2\",\"test\":\"$2\"}"); }
+          if grep -qE "$SHARED" "$changed" || [ -n "$unclaimed" ]; then
+            echo "Shared change: every extension runs"
+            add Observability extensions/Nalix.Observability.sln
+            add Traversal extensions/Nalix.Traversal.sln
+            add SDK.Traversal extensions/Nalix.SDK.Traversal.sln
+            add Tunneling extensions/Nalix.Tunneling.sln
+          else
+            if grep -qE "$X_OBSERVABILITY" "$changed"; then add Observability extensions/Nalix.Observability.sln; fi
+            if grep -qE "$X_TRAVERSAL" "$changed"; then add Traversal extensions/Nalix.Traversal.sln; fi
+            if grep -qE "$X_SDK_TRAVERSAL" "$changed"; then add SDK.Traversal extensions/Nalix.SDK.Traversal.sln; fi
+            if grep -qE "$X_TUNNELING" "$changed"; then add Tunneling extensions/Nalix.Tunneling.sln; fi
+          fi
+          matrix='{"include":[]}'
+          if [ "${#entries[@]}" -gt 0 ]; then
+            joined=$(IFS=,; echo "${entries[*]}")
+            matrix="{\"include\":[$joined]}"
+          fi
+
+          core=false; workflows=false
           # Anything outside extensions/ can affect the core solution (src, tests, analyzers, root props, ...).
           if grep -qvE '^extensions/' "$changed"; then core=true; fi
-          # Extensions reference src/ and inherit root build props.
-          if grep -qE '^(extensions/|src/|analyzers/|[^/]+\.(props|targets)$|global\.json$|NuGet\.config$)' "$changed"; then extensions=true; fi
-          if grep -qE '^\.github/(workflows|actions)/' "$changed"; then workflows=true; core=true; extensions=true; fi
+          if grep -qE '^\.github/(workflows|actions)/' "$changed"; then workflows=true; core=true; fi
 
-          echo "core=$core extensions=$extensions workflows=$workflows"
-          { echo "core=$core"; echo "extensions=$extensions"; echo "workflows=$workflows"; } >> "$GITHUB_OUTPUT"
+          echo "core=$core workflows=$workflows extensions=$matrix"
+          { echo "core=$core"; echo "workflows=$workflows"; echo "extensions_matrix=$matrix"; } >> "$GITHUB_OUTPUT"
 
   # Release only (what ships). Linux runs the whole suite; Windows runs only the client-side projects
   # (Nalix.SDK and the libraries it ships with) listed in tests/Nalix.Client.Tests.slnf.
@@ -111,28 +147,20 @@ jobs:
       deploy: false
       coverage: ${{ matrix.coverage }}
 
+  # One matrix entry per extension the diff touches (see the changes job). Each entry builds and tests its own solution.
   extensions:
     name: Extension (${{ matrix.name }})
     needs: [changes]
-    if: needs.changes.outputs.extensions == 'true'
+    if: needs.changes.outputs.extensions_matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: Observability
-            project: extensions/Nalix.Observability.sln
-          - name: Traversal
-            project: extensions/Nalix.Traversal.sln
-          - name: SDK.Traversal
-            project: extensions/Nalix.SDK.Traversal.sln
-          - name: Tunneling
-            project: extensions/Nalix.Tunneling.sln
+      matrix: ${{ fromJSON(needs.changes.outputs.extensions_matrix) }}
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:
       os: ubuntu-latest
       project: ${{ matrix.project }}
-      test: ""
+      test: ${{ matrix.test }}
       deploy: false
 
   lint-workflows:

@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Net;
+using Microsoft.Extensions.Logging.Abstractions;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
@@ -61,10 +62,7 @@ public sealed class NetworkApplicationEndToEndTests
         int port = GetFreePort();
 
         // 1. Setup Server
-        using var logger = new Nalix.Logging.NLogixBuilder()
-            .SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace)
-            .AddTarget(new Nalix.Logging.Sinks.BatchConsoleLogTarget())
-            .Build();
+        var logger = NullLogger.Instance;
 
         NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
         builder.UseLogger(logger);
@@ -142,10 +140,7 @@ public sealed class NetworkApplicationEndToEndTests
         int port = GetFreePort();
 
         // 1. Setup Server
-        using var logger = new Nalix.Logging.NLogixBuilder()
-            .SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace)
-            .AddTarget(new Nalix.Logging.Sinks.BatchConsoleLogTarget())
-            .Build();
+        var logger = NullLogger.Instance;
 
         NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
         builder.UseLogger(logger);
