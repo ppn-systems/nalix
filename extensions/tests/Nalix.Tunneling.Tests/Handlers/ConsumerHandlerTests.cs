@@ -99,7 +99,7 @@ public sealed class ConsumerHandlerTests
         await Wait.UntilAsync(() => harness.ProviderSender.Sent.Count == 1, s_wait);
 
         TunnelRequest request = Assert.IsType<TunnelRequest>(harness.ProviderSender.Sent[0]);
-        _ = harness.Tunnels.Resolve(request.Token, providerData);
+        _ = harness.Tunnels.Resolve(TunnelRegistry.ComputeTunnelId(request.Token), providerData);
         await pending.WaitAsync(s_wait);
 
         Assert.True(providerData.Disconnected);
@@ -114,7 +114,7 @@ public sealed class ConsumerHandlerTests
     private static async Task CompleteConnectAsync(Harness harness, Task pending)
     {
         TunnelRequest request = Assert.IsType<TunnelRequest>(harness.ProviderSender.Sent[0]);
-        _ = harness.Tunnels.Resolve(request.Token, new FakeConnection());
+        _ = harness.Tunnels.Resolve(TunnelRegistry.ComputeTunnelId(request.Token), new FakeConnection());
         await pending.WaitAsync(s_wait);
     }
 

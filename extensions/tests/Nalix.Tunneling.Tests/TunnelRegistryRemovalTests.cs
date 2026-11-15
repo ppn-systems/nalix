@@ -27,7 +27,7 @@ public sealed class TunnelRegistryRemovalTests
         (_, Bytes32 token) = registry.Register();
         _ = registry.Remove(token);
 
-        bool resolved = registry.Resolve(token, new FakeConnection());
+        bool resolved = registry.Resolve(TunnelRegistry.ComputeTunnelId(token), new FakeConnection());
 
         Assert.False(resolved);
     }

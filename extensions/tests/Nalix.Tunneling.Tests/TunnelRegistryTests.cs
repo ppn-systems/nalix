@@ -34,7 +34,7 @@ public sealed class TunnelRegistryTests
         IConnection provider = Substitute.For<IConnection>();
         (Task<IConnection> task, Bytes32 token) = registry.Register();
 
-        bool resolved = registry.Resolve(token, provider);
+        bool resolved = registry.Resolve(TunnelRegistry.ComputeTunnelId(token), provider);
 
         Assert.True(resolved);
         Assert.Same(provider, await task.WaitAsync(TimeSpan.FromSeconds(5)));
@@ -42,13 +42,26 @@ public sealed class TunnelRegistryTests
     }
 
     [Fact]
+    public void Resolve_WhenRawTokenIsUsedAsKey_ReturnsFalse()
+    {
+        // The wire carries Keccak256(token); presenting the secret token itself must not resolve anything.
+        TunnelRegistry registry = new();
+        (_, Bytes32 token) = registry.Register();
+
+        bool resolved = registry.Resolve(token, Substitute.For<IConnection>());
+
+        Assert.False(resolved);
+        Assert.Equal(1, registry.PendingCount);
+    }
+
+    [Fact]
     public void Resolve_WhenTokenIsReusedAfterResolution_ReturnsFalse()
     {
         TunnelRegistry registry = new();
         (_, Bytes32 token) = registry.Register();
-        _ = registry.Resolve(token, Substitute.For<IConnection>());
+        _ = registry.Resolve(TunnelRegistry.ComputeTunnelId(token), Substitute.For<IConnection>());
 
-        bool secondAttempt = registry.Resolve(token, Substitute.For<IConnection>());
+        bool secondAttempt = registry.Resolve(TunnelRegistry.ComputeTunnelId(token), Substitute.For<IConnection>());
 
         Assert.False(secondAttempt);
     }
@@ -71,7 +84,7 @@ public sealed class TunnelRegistryTests
         TunnelRegistry registry = new();
         (_, Bytes32 token) = registry.Register();
 
-        _ = Assert.Throws<ArgumentNullException>(() => registry.Resolve(token, null!));
+        _ = Assert.Throws<ArgumentNullException>(() => registry.Resolve(TunnelRegistry.ComputeTunnelId(token), null!));
         Assert.Equal(1, registry.PendingCount);
     }
 

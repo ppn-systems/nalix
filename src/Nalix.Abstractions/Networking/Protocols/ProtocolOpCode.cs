@@ -96,6 +96,16 @@ public enum ProtocolOpCode : ushort
     TUNNEL_READY = 0x00F6,
 
     /// <summary>
+    /// Server challenge sent on a tunnel data connection; the provider answers with <c>TUNNEL_PROOF</c>.
+    /// </summary>
+    TUNNEL_CHALLENGE = 0x00F1,
+
+    /// <summary>
+    /// Provider proof of possession of the tunnel token, answering <c>TUNNEL_CHALLENGE</c>.
+    /// </summary>
+    TUNNEL_PROOF = 0x00F2,
+
+    /// <summary>
     /// Tunnel provisioning packet used to provide tunnel endpoint or relay metadata.
     /// </summary>
     TUNNEL_PROVIDE = 0x00F7,
