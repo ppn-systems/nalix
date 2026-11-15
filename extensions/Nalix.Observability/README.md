@@ -9,36 +9,39 @@ Server-side observability for Nalix applications. Pairs with the [n12d dashboard
 | `0x00FF` | `ObservabilityAccess` | `NONE` | Presents the 32-byte admin key; grants `OBSERVER` on match. `OBSERVER` grants nothing else. |
 | `0x00FE` | `RuntimeObservation` | `OBSERVER` (exact match) | Samples every subsystem selected by the `RuntimeObservationTargets` mask in one round-trip, or queries recorded history. |
 
-A `RuntimeObservation` response carries one UTF-8 JSON object whose top-level keys are the
+Each `RuntimeObservation` response chunk carries one UTF-8 JSON object whose top-level keys are the
 `RuntimeObservationSections` names (`Process`, `Dispatch`, `Tasks`, …). Subsystems not registered on the
-server are omitted, and the response's `Targets` lists only the sections actually written. `SampledAt` is the
+server are omitted, and each chunk's `Targets` lists only the sections it actually contains. `SampledAt` is the
 server time in Unix milliseconds; the `Process` section reports cumulative counters (CPU time, allocations,
 GC counts) so clients compute rates from consecutive samples.
 
 `RuntimeObservation` requires exactly `OBSERVER` (`StrictMatch`), so a `USER`, `SUPERVISOR` or `OWNER` connection
 must present the key to read observations; the key itself does not raise the connection above `OBSERVER`.
 
-Both packets are encrypted; large payloads are compressed by the frame pipeline automatically.
+Both packets are encrypted; payloads above the compression threshold (`CompressionOptions.MinSizeToCompress`, 512 B by default) are compressed automatically.
 
 ### Payload budget
 
-Every response stays under `ObservabilityOptions.MaxPayloadBytes` (96 KiB by default), below the 128 KiB transport
-frame limit. Sections are packed while they fit; the rest are left out of the response's `Targets` and the client
-asks for them in a follow-up request. A single section larger than the budget (long worker or instance lists) has its
-arrays capped and is marked `"_truncated": true`. History series lower their bucket count to fit, and a catalog cuts
+Every chunk stays under `ObservabilityOptions.MaxPayloadBytes` (96 KiB by default), below the 128 KiB transport
+frame limit (`VarIntFramingOptions.MaxPayloadSize`). Sections are packed into as many chunks as needed, streamed
+back in order, each listing its sections in `Targets`; no follow-up request is required. A single section larger
+than the budget (long worker or instance lists) has its arrays capped and is marked `"_truncated": true`. History series lower their bucket count to fit, and a catalog cuts
 its metric list (`"truncated": true`).
 
 ## History
 
 Unless disabled, `UseObservability` also records numeric metrics to disk so a dashboard can browse past days:
 
-- One append-only binary file per UTC day (`<DataDirectory>/observability-history/yyyyMMdd.nxh`). Each sample stores
-  only the metrics whose value changed (`u16` id + `f32` value); names are written once per file. A day at the
-  default 10 s interval is about 1 MB; files older than the retention window (7 days) are deleted.
-- Sampling runs as a non-reentrant `TaskManager` recurring job: one `ObservationWriter` pass into a pooled buffer, one
-  forward-only JSON walk (object fields only, per-item arrays skipped) and one file write — about 15 µs of I/O per sample.
-- Nothing is kept in memory. A query streams the day files once and folds samples into at most 2 000 buckets
-  (average and maximum), so memory is O(metrics × points) whatever the range.
+- One append-only binary file per UTC day, `yyyyMMdd.nxh`, in `ObservabilityOptions.HistoryDirectory` (default
+  `observability-history` under the Nalix data directory). Each sample stores only the metrics whose value changed
+  since the previous sample in that file (`u16` id + `f32` value); metric names are written once per file. File size
+  therefore grows with the number of metrics that change between samples.
+- The file keeps the last `HistoryRetentionDays` UTC days (today included, 7 by default); older files are deleted.
+- Sampling runs as a non-reentrant `TaskManager` recurring job (`HistoryInterval`, 10 s by default, never below 1 s):
+  one `ObservationWriter` pass into a pooled buffer, one forward-only JSON walk (object fields only, per-item arrays
+  skipped) and one file append.
+- Samples are not kept in memory. A query streams the day files once and folds samples into at most 2 000 buckets
+  (average and maximum), so the query's memory use is bounded by the number of metrics times the bucket count.
 - Derived rates are recorded too: `Process.CpuPercent`, `Process.AllocationBytesPerSecond`, `Process.GcPerSecond`.
 
 Query it with a `RuntimeObservation` at stage `HISTORY_REQUEST` whose `ObservationData` is a UTF-8 JSON query; the
