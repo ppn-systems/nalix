@@ -84,6 +84,20 @@ public sealed class SessionHandlersResumeTests : IDisposable
         Assert.Equal(SavedSendSequence + 1, connection.TCP.SendSequence.Next());
     }
 
+    [Fact]
+    public async Task HandleAsync_WhenResumedWithUdpUnbound_ClearsStaleUdpSequenceState()
+    {
+        Bytes32 secret = NewSecret(0x3C);
+        FakeConnection connection = new(new FakeTransport(new SequenceCounter(), new SequenceCounter()));
+
+        await StoreSessionAsync(secret, savedUdpSend: 5000, savedUdpReceive: 4000);
+        await ResumeAsync(connection, secret);
+
+        ConnectionSequenceState state = (ConnectionSequenceState)connection.Attributes[ConnectionAttributes.SequenceState];
+        Assert.Equal(0u, state.UdpSendSequence);
+        Assert.Equal(0u, state.UdpReceiveSequence);
+    }
+
     private static Bytes32 NewSecret(byte first)
     {
         byte[] bytes = new byte[Bytes32.Size];
@@ -92,13 +106,15 @@ public sealed class SessionHandlersResumeTests : IDisposable
         return new Bytes32(bytes);
     }
 
-    private async Task StoreSessionAsync(Bytes32 secret)
+    private async Task StoreSessionAsync(Bytes32 secret, uint savedUdpSend = 0, uint savedUdpReceive = 0)
     {
         ObjectMap<AttributeKey, object> attributes = ObjectMap<AttributeKey, object>.Rent();
         attributes[ConnectionAttributes.SequenceState] = new ConnectionSequenceState
         {
             TcpSendSequence = SavedSendSequence,
             TcpReceiveSequence = SavedReceiveSequence,
+            UdpSendSequence = savedUdpSend,
+            UdpReceiveSequence = savedUdpReceive,
         };
 
         SessionEntry entry = new(new SessionSnapshot

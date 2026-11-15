@@ -99,10 +99,14 @@ public static partial class SessionHandlers
         connection.TCP.SendSequence.Reset(seqState.TcpSendSequence);
         RestoreReceiveSequence(connection.TCP.ReceiveSequence, seqState.TcpReceiveSequence);
 
+        // UDP is keyed by the new ConnectionId (the datagram session token), so it always starts a fresh
+        // transport and replay window. The snapshot's UDP counters belong to the old binding and must not
+        // be carried over: a transport bound later would otherwise start from stale values.
+        seqState.UdpSendSequence = 0;
+        seqState.UdpReceiveSequence = 0;
+
         if (connection.IsUdpCreated && connection.UDP is not null)
         {
-            seqState.UdpSendSequence = 0;
-            seqState.UdpReceiveSequence = 0;
             connection.UDP.SendSequence.Reset();
             connection.UDP.ReceiveSequence.Reset();
         }
