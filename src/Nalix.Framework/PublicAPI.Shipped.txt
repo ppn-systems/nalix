@@ -1,0 +1,409 @@
+#nullable enable
+const Nalix.Framework.DiagnosticsEvents.Injection.Failure = "Injection.Failure" -> string!
+const Nalix.Framework.DiagnosticsEvents.Injection.Registered = "Injection.Registered" -> string!
+const Nalix.Framework.DiagnosticsEvents.Injection.Resolved = "Injection.Resolved" -> string!
+const Nalix.Framework.DiagnosticsEvents.ListenerName = "Framework" -> string!
+const Nalix.Framework.DiagnosticsEvents.Memory.BufferAllocated = "Memory.BufferAllocated" -> string!
+const Nalix.Framework.DiagnosticsEvents.Memory.BufferReleased = "Memory.BufferReleased" -> string!
+const Nalix.Framework.DiagnosticsEvents.Memory.PoolExpanded = "Memory.PoolExpanded" -> string!
+const Nalix.Framework.DiagnosticsEvents.Memory.PoolFailure = "Memory.PoolFailure" -> string!
+const Nalix.Framework.DiagnosticsEvents.Memory.PoolReturned = "Memory.PoolReturned" -> string!
+const Nalix.Framework.DiagnosticsEvents.Memory.PoolTrimmed = "Memory.PoolTrimmed" -> string!
+const Nalix.Framework.DiagnosticsEvents.Memory.SentinelWarning = "Memory.SentinelWarning" -> string!
+const Nalix.Framework.DiagnosticsEvents.Tasks.Cancelled = "Tasks.WorkerCancelled" -> string!
+const Nalix.Framework.DiagnosticsEvents.Tasks.Completed = "Tasks.WorkerCompleted" -> string!
+const Nalix.Framework.DiagnosticsEvents.Tasks.Dispatcher = "Tasks.Dispatcher" -> string!
+const Nalix.Framework.DiagnosticsEvents.Tasks.Disposed = "Tasks.WorkerDisposed" -> string!
+const Nalix.Framework.DiagnosticsEvents.Tasks.Failed = "Tasks.WorkerFailed" -> string!
+const Nalix.Framework.DiagnosticsEvents.Tasks.RecurringExecuted = "Tasks.RecurringExecuted" -> string!
+const Nalix.Framework.DiagnosticsEvents.Tasks.Started = "Tasks.WorkerStarted" -> string!
+const Nalix.Framework.Identifiers.Snowflake.Size = 8 -> int
+const Nalix.Framework.Memory.Pools.ObjectPool.DefaultMaxSize = 1024 -> int
+const Nalix.Framework.Tasks.TaskNaming.Tags.Accept = "accept" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Cleanup = "cleanup" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Dispatch = "dispatch" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Logging = "log" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Net = "net" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Process = "proc" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Proxy = "proxy" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Service = "service" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Sync = "sync" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Tcp = "tcp" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Time = "time" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Udp = "udp" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.WebSocket = "ws" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Wheel = "wheel" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Worker = "worker" -> string!
+Nalix.Framework.DiagnosticsEvents
+Nalix.Framework.DiagnosticsEvents.Injection
+Nalix.Framework.DiagnosticsEvents.Memory
+Nalix.Framework.DiagnosticsEvents.Tasks
+Nalix.Framework.Extensions.ReportExtensions
+Nalix.Framework.Extensions.TaskExtensions
+Nalix.Framework.Identifiers.Snowflake
+Nalix.Framework.Identifiers.Snowflake.CompareTo(Nalix.Framework.Identifiers.Snowflake other) -> int
+Nalix.Framework.Identifiers.Snowflake.Equals(Nalix.Abstractions.Identity.ISnowflake? other) -> bool
+Nalix.Framework.Identifiers.Snowflake.Equals(Nalix.Framework.Identifiers.Snowflake other) -> bool
+Nalix.Framework.Identifiers.Snowflake.IsEmpty.get -> bool
+Nalix.Framework.Identifiers.Snowflake.MachineId.get -> ushort
+Nalix.Framework.Identifiers.Snowflake.Sequence.get -> ushort
+Nalix.Framework.Identifiers.Snowflake.Snowflake() -> void
+Nalix.Framework.Identifiers.Snowflake.Snowflake(ulong value) -> void
+Nalix.Framework.Identifiers.Snowflake.ToByteArray() -> byte[]!
+Nalix.Framework.Identifiers.Snowflake.ToUInt64() -> ulong
+Nalix.Framework.Identifiers.Snowflake.TryWriteBytes(System.Span<byte> destination) -> bool
+Nalix.Framework.Identifiers.Snowflake.TryWriteBytes(System.Span<byte> destination, out int bytesWritten) -> bool
+Nalix.Framework.Identifiers.Snowflake.Type.get -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Framework.Identifiers.Snowflake.Value.get -> uint
+Nalix.Framework.Injection.DI.Singleton
+Nalix.Framework.Injection.DI.SingletonActivatorCache
+Nalix.Framework.Injection.DI.SingletonBase<T>
+Nalix.Framework.Injection.DI.SingletonBase<T>.Dispose() -> void
+Nalix.Framework.Injection.DI.SingletonBase<T>.SingletonBase() -> void
+Nalix.Framework.Injection.InstanceManager
+Nalix.Framework.Injection.InstanceManager.CachedInstanceCount.get -> int
+Nalix.Framework.Injection.InstanceManager.Clear(bool dispose = true) -> void
+Nalix.Framework.Injection.InstanceManager.CreateInstance(System.Type! type, params object?[]! args) -> object!
+Nalix.Framework.Injection.InstanceManager.CreateInstanceWithInjection(System.Type! type) -> object!
+Nalix.Framework.Injection.InstanceManager.CreateInstanceWithInjection<T>() -> T!
+Nalix.Framework.Injection.InstanceManager.GenerateReport() -> string!
+Nalix.Framework.Injection.InstanceManager.GetExistingInstance<T>() -> T?
+Nalix.Framework.Injection.InstanceManager.GetOrCreateInstance(System.Type! type, params object?[]! args) -> object!
+Nalix.Framework.Injection.InstanceManager.GetOrCreateInstance<T>(params object?[]! args) -> T!
+Nalix.Framework.Injection.InstanceManager.HasInstance<T>() -> bool
+Nalix.Framework.Injection.InstanceManager.InstanceManager() -> void
+Nalix.Framework.Injection.InstanceManager.Lockdown() -> void
+Nalix.Framework.Injection.InstanceManager.Register<T>(T! instance) -> void
+Nalix.Framework.Injection.InstanceManager.RegisterForClassOnly<T>(T! instance) -> void
+Nalix.Framework.Injection.InstanceManager.RemoveInstance(System.Type! type) -> bool
+Nalix.Framework.Injection.InstanceManager.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Framework.Memory.Buffers.BufferPoolManager
+Nalix.Framework.Memory.Buffers.BufferPoolManager.BufferPoolManager() -> void
+Nalix.Framework.Memory.Buffers.BufferPoolManager.BufferPoolManager(Nalix.Framework.Options.BufferOptions? bufferConfig = null) -> void
+Nalix.Framework.Memory.Buffers.BufferPoolManager.Dispose() -> void
+Nalix.Framework.Memory.Buffers.BufferPoolManager.GenerateReport() -> string!
+Nalix.Framework.Memory.Buffers.BufferPoolManager.MaxBufferSize.get -> int
+Nalix.Framework.Memory.Buffers.BufferPoolManager.MinBufferSize.get -> int
+Nalix.Framework.Memory.Buffers.BufferPoolManager.Rent(int minimumLength = 256) -> byte[]!
+Nalix.Framework.Memory.Buffers.BufferPoolManager.Return(byte[]? array, bool arrayClear = false) -> void
+Nalix.Framework.Memory.Buffers.BufferPoolManager.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Add(System.Collections.Generic.KeyValuePair<TKey, TValue> item) -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Add(TKey key, TValue value) -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Clear() -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Contains(System.Collections.Generic.KeyValuePair<TKey, TValue> item) -> bool
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.ContainsKey(TKey key) -> bool
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.CopyTo(System.Collections.Generic.KeyValuePair<TKey, TValue>[]! array, int arrayIndex) -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Count.get -> int
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.GetEnumerator() -> System.Collections.Generic.IEnumerator<System.Collections.Generic.KeyValuePair<TKey, TValue>>!
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.IsReadOnly.get -> bool
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Keys.get -> System.Collections.Generic.ICollection<TKey>!
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.ObjectMap() -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Remove(System.Collections.Generic.KeyValuePair<TKey, TValue> item) -> bool
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Remove(TKey key) -> bool
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.ResetForPool() -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Return() -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.this[TKey key].get -> TValue
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.this[TKey key].set -> void
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.TryGetValue(TKey key, out TValue value) -> bool
+Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Values.get -> System.Collections.Generic.ICollection<TValue>!
+Nalix.Framework.Memory.Objects.ObjectPoolManager
+Nalix.Framework.Memory.Objects.ObjectPoolManager.CacheHitRate.get -> double
+Nalix.Framework.Memory.Objects.ObjectPoolManager.ClearAllPools() -> int
+Nalix.Framework.Memory.Objects.ObjectPoolManager.ClearPool<T>() -> int
+Nalix.Framework.Memory.Objects.ObjectPoolManager.Dispose() -> void
+Nalix.Framework.Memory.Objects.ObjectPoolManager.GenerateReport() -> string!
+Nalix.Framework.Memory.Objects.ObjectPoolManager.Get<T>() -> T
+Nalix.Framework.Memory.Objects.ObjectPoolManager.GetTypedPool<T>() -> Nalix.Framework.Memory.Objects.TypedObjectPool<T>!
+Nalix.Framework.Memory.Objects.ObjectPoolManager.GetTypeInfo<T>() -> System.Collections.Generic.Dictionary<string!, object!>!
+Nalix.Framework.Memory.Objects.ObjectPoolManager.ObjectPoolManager() -> void
+Nalix.Framework.Memory.Objects.ObjectPoolManager.ObjectPoolManager(Nalix.Framework.Options.ObjectPoolOptions! config) -> void
+Nalix.Framework.Memory.Objects.ObjectPoolManager.PeakPoolCount.get -> int
+Nalix.Framework.Memory.Objects.ObjectPoolManager.PerformHealthCheck() -> int
+Nalix.Framework.Memory.Objects.ObjectPoolManager.PoolCount.get -> int
+Nalix.Framework.Memory.Objects.ObjectPoolManager.Prealloc<T>(int count) -> int
+Nalix.Framework.Memory.Objects.ObjectPoolManager.ResetMetrics() -> void
+Nalix.Framework.Memory.Objects.ObjectPoolManager.ResetStatistics() -> void
+Nalix.Framework.Memory.Objects.ObjectPoolManager.Return<T>(T obj) -> void
+Nalix.Framework.Memory.Objects.ObjectPoolManager.SetMaxCapacity<T>(int maxCapacity) -> bool
+Nalix.Framework.Memory.Objects.ObjectPoolManager.TotalCacheHits.get -> long
+Nalix.Framework.Memory.Objects.ObjectPoolManager.TotalCacheMisses.get -> long
+Nalix.Framework.Memory.Objects.ObjectPoolManager.TotalGetOperations.get -> long
+Nalix.Framework.Memory.Objects.ObjectPoolManager.TotalReturnOperations.get -> long
+Nalix.Framework.Memory.Objects.ObjectPoolManager.UnhealthyPoolCount.get -> int
+Nalix.Framework.Memory.Objects.ObjectPoolManager.Uptime.get -> System.TimeSpan
+Nalix.Framework.Memory.Objects.ObjectPoolManager.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.Clear() -> int
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.Get() -> T
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.GetInfo() -> System.Collections.Generic.Dictionary<string!, object!>!
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.GetMultiple(int count) -> System.Collections.Generic.List<T>!
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.Prealloc(int count) -> int
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.Return(T obj) -> void
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.ReturnMultiple(System.Collections.Generic.IEnumerable<T>! objects) -> int
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.SetMaxCapacity(int maxCapacity) -> void
+Nalix.Framework.Memory.Objects.TypedObjectPool<T>.Trim(int percentage = 50) -> int
+Nalix.Framework.Memory.Pools.ListPool<T>
+Nalix.Framework.Memory.Pools.ListPool<T>.AvailableCount.get -> int
+Nalix.Framework.Memory.Pools.ListPool<T>.Clear() -> int
+Nalix.Framework.Memory.Pools.ListPool<T>.CreatedCount.get -> long
+Nalix.Framework.Memory.Pools.ListPool<T>.GetStatistics() -> System.Collections.Generic.Dictionary<string!, object!>!
+Nalix.Framework.Memory.Pools.ListPool<T>.ListPool(int maxPoolSize, int initialCapacity) -> void
+Nalix.Framework.Memory.Pools.ListPool<T>.Prealloc(int count, int capacity = 0) -> void
+Nalix.Framework.Memory.Pools.ListPool<T>.Rent(int minimumCapacity = 0) -> System.Collections.Generic.List<T>!
+Nalix.Framework.Memory.Pools.ListPool<T>.RentedCount.get -> long
+Nalix.Framework.Memory.Pools.ListPool<T>.ResetStatistics() -> void
+Nalix.Framework.Memory.Pools.ListPool<T>.Return(System.Collections.Generic.List<T>! list, bool clearItems = true) -> void
+Nalix.Framework.Memory.Pools.ListPool<T>.TotalRentOperations.get -> long
+Nalix.Framework.Memory.Pools.ListPool<T>.TotalReturnOperations.get -> long
+Nalix.Framework.Memory.Pools.ListPool<T>.Trim(int maximumSize = 0) -> int
+Nalix.Framework.Memory.Pools.ListPool<T>.TrimmedCount.get -> long
+Nalix.Framework.Memory.Pools.ListPool<T>.UptimeMs.get -> long
+Nalix.Framework.Memory.Pools.ObjectPool
+Nalix.Framework.Memory.Pools.ObjectPool.Clear() -> int
+Nalix.Framework.Memory.Pools.ObjectPool.ClearType<T>() -> int
+Nalix.Framework.Memory.Pools.ObjectPool.CreateTypedPool<T>() -> Nalix.Framework.Memory.Objects.TypedObjectPool<T>!
+Nalix.Framework.Memory.Pools.ObjectPool.Get<T>() -> T
+Nalix.Framework.Memory.Pools.ObjectPool.GetAllTypeInfo() -> System.Collections.Generic.List<System.Collections.Generic.Dictionary<string!, object!>!>!
+Nalix.Framework.Memory.Pools.ObjectPool.GetMultiple<T>(int count) -> System.Collections.Generic.List<T>!
+Nalix.Framework.Memory.Pools.ObjectPool.GetStatistics() -> System.Collections.Generic.Dictionary<string!, object!>!
+Nalix.Framework.Memory.Pools.ObjectPool.GetTypeInfo<T>() -> System.Collections.Generic.Dictionary<string!, object!>!
+Nalix.Framework.Memory.Pools.ObjectPool.GetWithInfo<T>() -> (T obj, bool isCacheHit)
+Nalix.Framework.Memory.Pools.ObjectPool.ObjectPool() -> void
+Nalix.Framework.Memory.Pools.ObjectPool.ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth = 0) -> void
+Nalix.Framework.Memory.Pools.ObjectPool.Prealloc<T>(int count) -> int
+Nalix.Framework.Memory.Pools.ObjectPool.ResetStatistics() -> void
+Nalix.Framework.Memory.Pools.ObjectPool.Return<T>(T obj) -> void
+Nalix.Framework.Memory.Pools.ObjectPool.ReturnMultiple<T>(System.Collections.Generic.IEnumerable<T>! objects) -> int
+Nalix.Framework.Memory.Pools.ObjectPool.SetMaxCapacity<T>(int maxCapacity) -> bool
+Nalix.Framework.Memory.Pools.ObjectPool.TotalAvailableCount.get -> int
+Nalix.Framework.Memory.Pools.ObjectPool.TotalCreatedCount.get -> long
+Nalix.Framework.Memory.Pools.ObjectPool.TotalDroppedCount.get -> long
+Nalix.Framework.Memory.Pools.ObjectPool.TotalRejectedReturnCount.get -> long
+Nalix.Framework.Memory.Pools.ObjectPool.TotalRentedCount.get -> long
+Nalix.Framework.Memory.Pools.ObjectPool.TotalReturnedCount.get -> long
+Nalix.Framework.Memory.Pools.ObjectPool.Trim(int percentage = 50, double decayFactor = 1) -> int
+Nalix.Framework.Memory.Pools.ObjectPool.TypeCount.get -> int
+Nalix.Framework.Memory.Pools.ObjectPool.UptimeMs.get -> long
+Nalix.Framework.Options.BufferOptions
+Nalix.Framework.Options.BufferOptions.BufferOptions() -> void
+Nalix.Framework.Options.BufferOptions.EnableBufferLeakDetection.get -> bool
+Nalix.Framework.Options.BufferOptions.EnableBufferLeakDetection.set -> void
+Nalix.Framework.Options.BufferOptions.EnableBufferLeakStackTrace.get -> bool
+Nalix.Framework.Options.BufferOptions.EnableBufferLeakStackTrace.set -> void
+Nalix.Framework.Options.BufferOptions.SuspiciousThresholdSeconds.get -> int
+Nalix.Framework.Options.BufferOptions.SuspiciousThresholdSeconds.set -> void
+Nalix.Framework.Options.BufferOptions.Validate() -> void
+Nalix.Framework.Options.ObjectPoolOptions
+Nalix.Framework.Options.ObjectPoolOptions.BaseKeepPercentage.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.BaseKeepPercentage.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.CaptureStackTraces.get -> bool
+Nalix.Framework.Options.ObjectPoolOptions.CaptureStackTraces.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.DeepTrimIntervalMinutes.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.DeepTrimIntervalMinutes.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.DeepTrimPercentage.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.DeepTrimPercentage.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.DefaultMaxPoolSize.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.DefaultMaxPoolSize.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.DefaultPreallocate.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.DefaultPreallocate.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.EnableDiagnostics.get -> bool
+Nalix.Framework.Options.ObjectPoolOptions.EnableDiagnostics.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.EnableLeakDetection.get -> bool
+Nalix.Framework.Options.ObjectPoolOptions.EnableLeakDetection.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.EnableMetrics.get -> bool
+Nalix.Framework.Options.ObjectPoolOptions.EnableMetrics.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.EnableObjectTrimming.get -> bool
+Nalix.Framework.Options.ObjectPoolOptions.EnableObjectTrimming.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.HotHitRateThreshold.get -> double
+Nalix.Framework.Options.ObjectPoolOptions.HotHitRateThreshold.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.LifetimeReservoirSize.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.LifetimeReservoirSize.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.MinimumKeepObjects.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.MinimumKeepObjects.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.ObjectPoolOptions() -> void
+Nalix.Framework.Options.ObjectPoolOptions.SuspiciousThresholdSeconds.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.SuspiciousThresholdSeconds.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.ThreadCacheDepth.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.ThreadCacheDepth.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.TrimDecayFactor.get -> double
+Nalix.Framework.Options.ObjectPoolOptions.TrimDecayFactor.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.TrimIntervalMinutes.get -> int
+Nalix.Framework.Options.ObjectPoolOptions.TrimIntervalMinutes.set -> void
+Nalix.Framework.Options.ObjectPoolOptions.Validate() -> void
+Nalix.Framework.Options.RecurringOptions
+Nalix.Framework.Options.RecurringOptions.BackoffCap.get -> System.TimeSpan
+Nalix.Framework.Options.RecurringOptions.BackoffCap.set -> void
+Nalix.Framework.Options.RecurringOptions.ExecutionTimeout.get -> System.TimeSpan?
+Nalix.Framework.Options.RecurringOptions.ExecutionTimeout.set -> void
+Nalix.Framework.Options.RecurringOptions.FailuresBeforeBackoff.get -> int
+Nalix.Framework.Options.RecurringOptions.FailuresBeforeBackoff.set -> void
+Nalix.Framework.Options.RecurringOptions.Jitter.get -> System.TimeSpan?
+Nalix.Framework.Options.RecurringOptions.Jitter.set -> void
+Nalix.Framework.Options.RecurringOptions.NonReentrant.get -> bool
+Nalix.Framework.Options.RecurringOptions.NonReentrant.set -> void
+Nalix.Framework.Options.RecurringOptions.RecurringOptions() -> void
+Nalix.Framework.Options.RecurringOptions.Tag.get -> string?
+Nalix.Framework.Options.RecurringOptions.Tag.set -> void
+Nalix.Framework.Options.SnowflakeOptions
+Nalix.Framework.Options.SnowflakeOptions.MachineId.get -> ushort
+Nalix.Framework.Options.SnowflakeOptions.MachineId.set -> void
+Nalix.Framework.Options.SnowflakeOptions.SnowflakeOptions() -> void
+Nalix.Framework.Options.SnowflakeOptions.Validate() -> void
+Nalix.Framework.Options.TaskManagerOptions
+Nalix.Framework.Options.TaskManagerOptions.AdjustmentStreakRequired.get -> int
+Nalix.Framework.Options.TaskManagerOptions.AdjustmentStreakRequired.set -> void
+Nalix.Framework.Options.TaskManagerOptions.BackoffBaseInterval.get -> System.TimeSpan
+Nalix.Framework.Options.TaskManagerOptions.BackoffBaseInterval.set -> void
+Nalix.Framework.Options.TaskManagerOptions.BackoffMaxPower.get -> int
+Nalix.Framework.Options.TaskManagerOptions.BackoffMaxPower.set -> void
+Nalix.Framework.Options.TaskManagerOptions.BusyWaitThreshold.get -> System.TimeSpan
+Nalix.Framework.Options.TaskManagerOptions.BusyWaitThreshold.set -> void
+Nalix.Framework.Options.TaskManagerOptions.CleanupInterval.get -> System.TimeSpan
+Nalix.Framework.Options.TaskManagerOptions.CleanupInterval.set -> void
+Nalix.Framework.Options.TaskManagerOptions.CpuWarmupDuration.get -> System.TimeSpan
+Nalix.Framework.Options.TaskManagerOptions.CpuWarmupDuration.set -> void
+Nalix.Framework.Options.TaskManagerOptions.DynamicAdjustmentEnabled.get -> bool
+Nalix.Framework.Options.TaskManagerOptions.DynamicAdjustmentEnabled.set -> void
+Nalix.Framework.Options.TaskManagerOptions.IsEnableLatency.get -> bool
+Nalix.Framework.Options.TaskManagerOptions.IsEnableLatency.set -> void
+Nalix.Framework.Options.TaskManagerOptions.MaxWorkers.get -> int
+Nalix.Framework.Options.TaskManagerOptions.MaxWorkers.set -> void
+Nalix.Framework.Options.TaskManagerOptions.ObservingInterval.get -> System.TimeSpan
+Nalix.Framework.Options.TaskManagerOptions.ObservingInterval.set -> void
+Nalix.Framework.Options.TaskManagerOptions.TaskManagerOptions() -> void
+Nalix.Framework.Options.TaskManagerOptions.ThresholdHighCpu.get -> double
+Nalix.Framework.Options.TaskManagerOptions.ThresholdHighCpu.set -> void
+Nalix.Framework.Options.TaskManagerOptions.ThresholdLowCpu.get -> double
+Nalix.Framework.Options.TaskManagerOptions.ThresholdLowCpu.set -> void
+Nalix.Framework.Options.TaskManagerOptions.Validate() -> void
+Nalix.Framework.Options.WorkerOptions
+Nalix.Framework.Options.WorkerOptions.CancellationToken.get -> System.Threading.CancellationToken
+Nalix.Framework.Options.WorkerOptions.CancellationToken.set -> void
+Nalix.Framework.Options.WorkerOptions.ExecutionTimeout.get -> System.TimeSpan?
+Nalix.Framework.Options.WorkerOptions.GroupConcurrencyLimit.get -> int?
+Nalix.Framework.Options.WorkerOptions.GroupConcurrencyLimit.set -> void
+Nalix.Framework.Options.WorkerOptions.IdType.get -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Framework.Options.WorkerOptions.IdType.set -> void
+Nalix.Framework.Options.WorkerOptions.MachineId.get -> ushort
+Nalix.Framework.Options.WorkerOptions.MachineId.set -> void
+Nalix.Framework.Options.WorkerOptions.OnCompleted.get -> System.Action<Nalix.Abstractions.Concurrency.IWorkerHandle!>?
+Nalix.Framework.Options.WorkerOptions.OnCompleted.set -> void
+Nalix.Framework.Options.WorkerOptions.OnFailed.get -> System.Action<Nalix.Abstractions.Concurrency.IWorkerHandle!, System.Exception!>?
+Nalix.Framework.Options.WorkerOptions.OnFailed.set -> void
+Nalix.Framework.Options.WorkerOptions.OSPriority.get -> System.Threading.ThreadPriority?
+Nalix.Framework.Options.WorkerOptions.OSPriority.set -> void
+Nalix.Framework.Options.WorkerOptions.Priority.get -> Nalix.Abstractions.Concurrency.WorkerPriority
+Nalix.Framework.Options.WorkerOptions.Priority.set -> void
+Nalix.Framework.Options.WorkerOptions.ProcessorAffinity.get -> int?
+Nalix.Framework.Options.WorkerOptions.ProcessorAffinity.set -> void
+Nalix.Framework.Options.WorkerOptions.RetainFor.get -> System.TimeSpan?
+Nalix.Framework.Options.WorkerOptions.RetainFor.set -> void
+Nalix.Framework.Options.WorkerOptions.Tag.get -> string?
+Nalix.Framework.Options.WorkerOptions.Tag.set -> void
+Nalix.Framework.Options.WorkerOptions.TryAcquireSlotImmediately.get -> bool
+Nalix.Framework.Options.WorkerOptions.TryAcquireSlotImmediately.set -> void
+Nalix.Framework.Options.WorkerOptions.WorkerOptions() -> void
+Nalix.Framework.ReportRegistry
+Nalix.Framework.ReportRegistry.Clear() -> void
+Nalix.Framework.ReportRegistry.GenerateReport() -> string!
+Nalix.Framework.ReportRegistry.Get<T>(System.Enum! key) -> T?
+Nalix.Framework.ReportRegistry.Register<T>(System.Enum! key, T! instance) -> void
+Nalix.Framework.ReportRegistry.Unregister<T>(System.Enum! key) -> bool
+Nalix.Framework.ReportRegistry.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Framework.ReportRegistry.WriteReportData<T>(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Framework.Tasks.TaskManager
+Nalix.Framework.Tasks.TaskManager.AverageRecurringExecutionTime.get -> double
+Nalix.Framework.Tasks.TaskManager.AverageWorkerUptime.get -> double
+Nalix.Framework.Tasks.TaskManager.AverageWorkerWaitTime.get -> double
+Nalix.Framework.Tasks.TaskManager.CancelAllWorkers() -> int
+Nalix.Framework.Tasks.TaskManager.CancelGroup(string! group) -> int
+Nalix.Framework.Tasks.TaskManager.CancelRecurring(string? name) -> void
+Nalix.Framework.Tasks.TaskManager.CancelWorker(Nalix.Abstractions.Identity.ISnowflake! id) -> void
+Nalix.Framework.Tasks.TaskManager.ConcurrencyLimitRatio.get -> double
+Nalix.Framework.Tasks.TaskManager.Dispose() -> void
+Nalix.Framework.Tasks.TaskManager.GenerateReport() -> string!
+Nalix.Framework.Tasks.TaskManager.GetRecurring() -> System.Collections.Generic.IReadOnlyCollection<Nalix.Abstractions.Concurrency.IRecurringHandle!>!
+Nalix.Framework.Tasks.TaskManager.GetWorkers(bool runningOnly = true, string? group = null) -> System.Collections.Generic.IReadOnlyCollection<Nalix.Abstractions.Concurrency.IWorkerHandle!>!
+Nalix.Framework.Tasks.TaskManager.P95WorkerUptime.get -> double
+Nalix.Framework.Tasks.TaskManager.P99WorkerUptime.get -> double
+Nalix.Framework.Tasks.TaskManager.PauseRecurring(string! name) -> void
+Nalix.Framework.Tasks.TaskManager.PeakRunningWorkerCount.get -> int
+Nalix.Framework.Tasks.TaskManager.RecurringErrorCount.get -> int
+Nalix.Framework.Tasks.TaskManager.ResumeRecurring(string! name) -> void
+Nalix.Framework.Tasks.TaskManager.RunOnceAsync(string! name, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Framework.Tasks.TaskManager.ScheduleRecurring(string! name, System.TimeSpan interval, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, Nalix.Abstractions.Concurrency.IRecurringOptions? options = null) -> Nalix.Abstractions.Concurrency.IRecurringHandle!
+Nalix.Framework.Tasks.TaskManager.ScheduleWorker(Nalix.Abstractions.Concurrency.IWorker! worker) -> Nalix.Abstractions.Concurrency.IWorkerHandle!
+Nalix.Framework.Tasks.TaskManager.ScheduleWorker(string! name, string! group, System.Func<Nalix.Abstractions.Concurrency.IWorkerContext!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, Nalix.Abstractions.Concurrency.IWorkerOptions? options = null) -> Nalix.Abstractions.Concurrency.IWorkerHandle!
+Nalix.Framework.Tasks.TaskManager.ScheduleWorker<TState>(string! name, System.Action<TState>! work, TState state) -> void
+Nalix.Framework.Tasks.TaskManager.SetGroupConcurrencyLimit(string! group, int limit) -> void
+Nalix.Framework.Tasks.TaskManager.TaskManager() -> void
+Nalix.Framework.Tasks.TaskManager.TaskManager(Nalix.Framework.Options.TaskManagerOptions? options = null) -> void
+Nalix.Framework.Tasks.TaskManager.Title.get -> string!
+Nalix.Framework.Tasks.TaskManager.TryGetRecurring(string! name, out Nalix.Abstractions.Concurrency.IRecurringHandle? handle) -> bool
+Nalix.Framework.Tasks.TaskManager.TryGetWorker(Nalix.Abstractions.Identity.ISnowflake! id, out Nalix.Abstractions.Concurrency.IWorkerHandle? handle) -> bool
+Nalix.Framework.Tasks.TaskManager.WaitGroupAsync(string! group, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Framework.Tasks.TaskManager.WorkerErrorCount.get -> int
+Nalix.Framework.Tasks.TaskManager.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Framework.Tasks.TaskNaming
+Nalix.Framework.Tasks.TaskNaming.Recurring
+Nalix.Framework.Tasks.TaskNaming.Tags
+override Nalix.Framework.Identifiers.Snowflake.Equals(object? obj) -> bool
+override Nalix.Framework.Identifiers.Snowflake.GetHashCode() -> int
+override Nalix.Framework.Identifiers.Snowflake.ToString() -> string!
+static Nalix.Framework.DiagnosticsEvents.Write<T>(string! name, T payload) -> void
+static Nalix.Framework.Extensions.ReportExtensions.FormatCompact(this int value) -> string!
+static Nalix.Framework.Extensions.ReportExtensions.FormatCompact(this long value) -> string!
+static Nalix.Framework.Extensions.ReportExtensions.FormatGroup(long current, long total, bool compact = false) -> string!
+static Nalix.Framework.Extensions.ReportExtensions.FormatTimeSpan(this System.TimeSpan value) -> string!
+static Nalix.Framework.Extensions.ReportExtensions.FormatTypeName(string! name, int maxLength = 24) -> string!
+static Nalix.Framework.Extensions.ReportExtensions.SaveReportToFile(this Nalix.Abstractions.IReportable! this, string! prefix = "null") -> string!
+static Nalix.Framework.Extensions.TaskExtensions.Await(this System.Threading.Tasks.Task! this) -> void
+static Nalix.Framework.Extensions.TaskExtensions.Await(this System.Threading.Tasks.Task! this, bool continueOnCapturedContext) -> void
+static Nalix.Framework.Extensions.TaskExtensions.Await(this System.Threading.Tasks.ValueTask this) -> void
+static Nalix.Framework.Extensions.TaskExtensions.Await<TResult>(this System.Threading.Tasks.Task<TResult>! this) -> TResult
+static Nalix.Framework.Extensions.TaskExtensions.Await<TResult>(this System.Threading.Tasks.ValueTask<TResult> this) -> TResult
+static Nalix.Framework.Extensions.TaskExtensions.LinkCancellation<T>(this System.Threading.Tasks.TaskCompletionSource<T>! tcs, System.Threading.CancellationToken token) -> System.IDisposable!
+static Nalix.Framework.Extensions.TaskExtensions.WithTimeout<T>(this System.Threading.Tasks.Task<T>! this, int msTimeout) -> System.Threading.Tasks.Task<T?>!
+static Nalix.Framework.Identifiers.Snowflake.Compare(Nalix.Framework.Identifiers.Snowflake a, Nalix.Framework.Identifiers.Snowflake b) -> int
+static Nalix.Framework.Identifiers.Snowflake.Equals(Nalix.Framework.Identifiers.Snowflake a, Nalix.Framework.Identifiers.Snowflake b) -> bool
+static Nalix.Framework.Identifiers.Snowflake.FromBytes(byte[]! bytes) -> Nalix.Framework.Identifiers.Snowflake
+static Nalix.Framework.Identifiers.Snowflake.FromBytes(System.ReadOnlySpan<byte> bytes) -> Nalix.Framework.Identifiers.Snowflake
+static Nalix.Framework.Identifiers.Snowflake.FromUInt64(ulong combined) -> Nalix.Framework.Identifiers.Snowflake
+static Nalix.Framework.Identifiers.Snowflake.NewId(Nalix.Abstractions.Identity.SnowflakeType type) -> Nalix.Framework.Identifiers.Snowflake
+static Nalix.Framework.Identifiers.Snowflake.NewId(Nalix.Abstractions.Identity.SnowflakeType type, ushort machineId = 1) -> Nalix.Framework.Identifiers.Snowflake
+static Nalix.Framework.Identifiers.Snowflake.NewId(uint value, ushort machineId, Nalix.Abstractions.Identity.SnowflakeType type) -> Nalix.Framework.Identifiers.Snowflake
+static Nalix.Framework.Identifiers.Snowflake.NewId(ulong value) -> Nalix.Framework.Identifiers.Snowflake
+static Nalix.Framework.Identifiers.Snowflake.operator !=(Nalix.Framework.Identifiers.Snowflake left, Nalix.Framework.Identifiers.Snowflake right) -> bool
+static Nalix.Framework.Identifiers.Snowflake.operator <(Nalix.Framework.Identifiers.Snowflake a, Nalix.Framework.Identifiers.Snowflake b) -> bool
+static Nalix.Framework.Identifiers.Snowflake.operator <=(Nalix.Framework.Identifiers.Snowflake a, Nalix.Framework.Identifiers.Snowflake b) -> bool
+static Nalix.Framework.Identifiers.Snowflake.operator ==(Nalix.Framework.Identifiers.Snowflake left, Nalix.Framework.Identifiers.Snowflake right) -> bool
+static Nalix.Framework.Identifiers.Snowflake.operator >(Nalix.Framework.Identifiers.Snowflake a, Nalix.Framework.Identifiers.Snowflake b) -> bool
+static Nalix.Framework.Identifiers.Snowflake.operator >=(Nalix.Framework.Identifiers.Snowflake a, Nalix.Framework.Identifiers.Snowflake b) -> bool
+static Nalix.Framework.Identifiers.Snowflake.TryParse(string? s, out Nalix.Framework.Identifiers.Snowflake result) -> bool
+static Nalix.Framework.Injection.DI.Singleton.Clear() -> void
+static Nalix.Framework.Injection.DI.Singleton.Dispose() -> void
+static Nalix.Framework.Injection.DI.Singleton.IsDisposing.get -> bool
+static Nalix.Framework.Injection.DI.Singleton.IsRegistered<TClass>() -> bool
+static Nalix.Framework.Injection.DI.Singleton.Register<TClass>(TClass! instance, bool allowOverwrite = false) -> void
+static Nalix.Framework.Injection.DI.Singleton.Register<TInterface, TImplementation>(System.Func<TImplementation!>? factory = null) -> void
+static Nalix.Framework.Injection.DI.Singleton.Remove<TClass>() -> void
+static Nalix.Framework.Injection.DI.Singleton.Resolve<TClass>(bool createIfNotExists = true) -> TClass?
+static Nalix.Framework.Injection.DI.SingletonActivatorCache.Register(System.Type! type, System.Func<object!>! factory) -> void
+static Nalix.Framework.Injection.DI.SingletonBase<T>.EnsureCreated() -> void
+static Nalix.Framework.Injection.DI.SingletonBase<T>.Instance.get -> T!
+static Nalix.Framework.Injection.DI.SingletonBase<T>.IsCreated.get -> bool
+static Nalix.Framework.Injection.DI.SingletonBase<T>.TryGetInstance(out T! instance) -> bool
+static Nalix.Framework.Injection.InstanceManager.RegisterActivator(System.Type! type, System.Func<object?[]!, object!>! factory) -> void
+static Nalix.Framework.Injection.InstanceManager.RegisterServiceMapping(System.Type! concreteType, System.Type! serviceType) -> void
+static Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>.Rent() -> Nalix.Framework.Memory.Objects.ObjectMap<TKey, TValue>!
+static Nalix.Framework.Memory.Objects.ObjectPoolManager.Configure(Nalix.Framework.Memory.Objects.ObjectPoolManager! manager) -> void
+static Nalix.Framework.Memory.Objects.ObjectPoolManager.Shared.get -> Nalix.Framework.Memory.Objects.ObjectPoolManager!
+static Nalix.Framework.Memory.Pools.ListPool<T>.Instance.get -> Nalix.Framework.Memory.Pools.ListPool<T>!
+static Nalix.Framework.Memory.Pools.ObjectPool.Default.get -> Nalix.Framework.Memory.Pools.ObjectPool!
+static Nalix.Framework.Tasks.TaskNaming.Recurring.CleanupJobId(string! prefix, int instanceKey) -> string!
+static Nalix.Framework.Tasks.TaskNaming.SanitizeToken(string! s) -> string!
+static readonly Nalix.Framework.DiagnosticsEvents.Source -> System.Diagnostics.DiagnosticListener!
+static readonly Nalix.Framework.Identifiers.Snowflake.Empty -> Nalix.Abstractions.Identity.ISnowflake!
+virtual Nalix.Framework.Injection.DI.SingletonBase<T>.Dispose(bool disposing) -> void
+virtual Nalix.Framework.Injection.DI.SingletonBase<T>.DisposeManaged() -> void

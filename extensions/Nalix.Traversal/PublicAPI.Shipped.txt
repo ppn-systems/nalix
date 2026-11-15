@@ -1,0 +1,46 @@
+#nullable enable
+Nalix.Traversal.Handlers.PeerSignalHandler
+Nalix.Traversal.Handlers.PeerSignalHandler.PeerSignalHandler() -> void
+Nalix.Traversal.Handlers.ReflectorInitHandler
+Nalix.Traversal.Handlers.ReflectorInitHandler.HandleAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Traversal.Packets.ReflectorInit!>! context) -> System.Threading.Tasks.ValueTask
+Nalix.Traversal.Handlers.ReflectorInitHandler.ReflectorInitHandler(Nalix.Traversal.Reflector.ReflectorManager! reflectorManager) -> void
+Nalix.Traversal.Options.ReflectorOptions
+Nalix.Traversal.Options.ReflectorOptions.BandwidthBurstCapacity.get -> long
+Nalix.Traversal.Options.ReflectorOptions.BandwidthBurstCapacity.set -> void
+Nalix.Traversal.Options.ReflectorOptions.BandwidthFillRate.get -> long
+Nalix.Traversal.Options.ReflectorOptions.BandwidthFillRate.set -> void
+Nalix.Traversal.Options.ReflectorOptions.Port.get -> ushort
+Nalix.Traversal.Options.ReflectorOptions.Port.set -> void
+Nalix.Traversal.Options.ReflectorOptions.ReflectorOptions() -> void
+Nalix.Traversal.Reflector.ReflectorManager
+Nalix.Traversal.Reflector.ReflectorManager.CreateSession(ulong peerA, ulong peerB, Nalix.Abstractions.Networking.IConnection! requester) -> ulong
+Nalix.Traversal.Reflector.ReflectorManager.ReflectorManager() -> void
+Nalix.Traversal.Reflector.ReflectorManager.RemoveSession(ulong token) -> void
+Nalix.Traversal.Reflector.ReflectorManager.TryGetSession(ulong token, out Nalix.Traversal.Reflector.ReflectorSession! session) -> bool
+Nalix.Traversal.Reflector.ReflectorProtocol
+Nalix.Traversal.Reflector.ReflectorProtocol.Dispose() -> void
+Nalix.Traversal.Reflector.ReflectorProtocol.FrameProcessor.get -> Nalix.Abstractions.Networking.IFrameProcessor!
+Nalix.Traversal.Reflector.ReflectorProtocol.GenerateReport() -> string!
+Nalix.Traversal.Reflector.ReflectorProtocol.KeepConnectionOpen.get -> bool
+Nalix.Traversal.Reflector.ReflectorProtocol.OnAccept(Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Traversal.Reflector.ReflectorProtocol.OpCodeExtractor.get -> Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor!
+Nalix.Traversal.Reflector.ReflectorProtocol.PostProcessMessage(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Traversal.Reflector.ReflectorProtocol.ProcessFrame(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Traversal.Reflector.ReflectorProtocol.ProcessMessage(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Traversal.Reflector.ReflectorProtocol.ReflectorProtocol(Nalix.Traversal.Reflector.ReflectorManager! manager) -> void
+Nalix.Traversal.Reflector.ReflectorProtocol.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Traversal.Reflector.ReflectorSession
+Nalix.Traversal.Reflector.ReflectorSession.Dispose() -> void
+Nalix.Traversal.Reflector.ReflectorSession.OnConnectionClosed(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Traversal.Reflector.ReflectorSession.PeerAConnection.get -> Nalix.Abstractions.Networking.IConnection?
+Nalix.Traversal.Reflector.ReflectorSession.PeerAConnection.set -> void
+Nalix.Traversal.Reflector.ReflectorSession.PeerAId.get -> ulong
+Nalix.Traversal.Reflector.ReflectorSession.PeerBConnection.get -> Nalix.Abstractions.Networking.IConnection?
+Nalix.Traversal.Reflector.ReflectorSession.PeerBConnection.set -> void
+Nalix.Traversal.Reflector.ReflectorSession.PeerBId.get -> ulong
+Nalix.Traversal.Reflector.ReflectorSession.ReflectorSession(ulong token, ulong peerAId, ulong peerBId, Nalix.Traversal.Reflector.ReflectorManager! manager, Nalix.Abstractions.Networking.IConnection! requester, long capacity, long fillRate) -> void
+Nalix.Traversal.Reflector.ReflectorSession.Token.get -> ulong
+Nalix.Traversal.TraversalApplicationBuilderExtensions
+static Nalix.Traversal.Handlers.PeerSignalHandler.HandleAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Traversal.Packets.PeerSignal!>! context) -> System.Threading.Tasks.ValueTask
+static Nalix.Traversal.Reflector.ReflectorProtocol.Name.get -> string!
+static Nalix.Traversal.TraversalApplicationBuilderExtensions.UseTraversal(this Nalix.Hosting.INetworkApplicationBuilder! builder) -> Nalix.Hosting.INetworkApplicationBuilder!

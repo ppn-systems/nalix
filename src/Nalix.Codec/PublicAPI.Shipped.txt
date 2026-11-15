@@ -1,0 +1,496 @@
+#nullable enable
+abstract Nalix.Codec.DataFrames.FrameBase.Length.get -> int
+abstract Nalix.Codec.DataFrames.FrameBase.ResetForPool() -> void
+abstract Nalix.Codec.DataFrames.FrameBase.Serialize() -> byte[]!
+abstract Nalix.Codec.DataFrames.FrameBase.Serialize(System.Span<byte> buffer) -> int
+const Nalix.Codec.DiagnosticsEvents.ListenerName = "Codec" -> string!
+const Nalix.Codec.DiagnosticsEvents.Packet.Malformed = "Packet.Malformed" -> string!
+const Nalix.Codec.DiagnosticsEvents.Sequence.Rejected = "Sequence.Rejected" -> string!
+const Nalix.Codec.DiagnosticsEvents.Serialization.Failure = "Serialization.Failure" -> string!
+const Nalix.Codec.DiagnosticsEvents.Serialization.FormatterRegistered = "Serialization.FormatterRegistered" -> string!
+const Nalix.Codec.DiagnosticsEvents.Serialization.Initialization = "Serialization.Initialization" -> string!
+const Nalix.Codec.DiagnosticsEvents.Serialization.Poisoned = "Serialization.Poisoned" -> string!
+const Nalix.Codec.LZ4.LZ4BlockHeader.Size = 8 -> int
+const Nalix.Codec.LZ4.LZ4CompressionConstants.LastLiteralSize = 5 -> int
+const Nalix.Codec.LZ4.LZ4CompressionConstants.MaxBlockSize = 262144 -> int
+const Nalix.Codec.LZ4.LZ4CompressionConstants.MaxOffset = 65535 -> int
+const Nalix.Codec.LZ4.LZ4CompressionConstants.MinMatchLength = 4 -> int
+const Nalix.Codec.LZ4.LZ4CompressionConstants.TokenLiteralMask = 15 -> int
+const Nalix.Codec.LZ4.LZ4CompressionConstants.TokenMatchMask = 15 -> int
+const Nalix.Codec.Security.Aead.ChaCha20Poly1305.TagSize = 16 -> byte
+const Nalix.Codec.Security.Aead.Salsa20Poly1305.TagSize = 16 -> byte
+const Nalix.Codec.Security.Asymmetric.X25519.KeySize = 32 -> int
+const Nalix.Codec.Security.EnvelopeCipher.HeaderSize = 12 -> int
+const Nalix.Codec.Security.Hashing.Pbkdf2.KeySize = 32 -> int
+const Nalix.Codec.Security.Hashing.Pbkdf2.SaltSize = 32 -> int
+const Nalix.Codec.Security.Hashing.Poly1305.KeySize = 32 -> byte
+const Nalix.Codec.Security.Hashing.Poly1305.TagSize = 16 -> byte
+const Nalix.Codec.Security.Symmetric.ChaCha20.BlockSize = 64 -> byte
+const Nalix.Codec.Security.Symmetric.ChaCha20.KeySize = 32 -> byte
+const Nalix.Codec.Security.Symmetric.ChaCha20.NonceSize = 12 -> byte
+const Nalix.Codec.Security.Symmetric.ChaCha20.StateLength = 16 -> byte
+const Nalix.Codec.Security.Symmetric.Salsa20.NonceSize = 8 -> byte
+const Nalix.Codec.Transforms.FrameTransformer.Offset = 6 -> int
+Nalix.Codec.DataFrames.FrameBase
+Nalix.Codec.DataFrames.FrameBase.Flags.get -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Codec.DataFrames.FrameBase.Flags.set -> void
+Nalix.Codec.DataFrames.FrameBase.FrameBase() -> void
+Nalix.Codec.DataFrames.FrameBase.Header.get -> Nalix.Abstractions.Primitives.PacketHeader
+Nalix.Codec.DataFrames.FrameBase.Header.set -> void
+Nalix.Codec.DataFrames.FrameBase.OpCode.get -> ushort
+Nalix.Codec.DataFrames.FrameBase.Priority.get -> Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Codec.DataFrames.FrameBase.Priority.set -> void
+Nalix.Codec.DataFrames.FrameBase.SequenceId.get -> ushort
+Nalix.Codec.DataFrames.FrameBase.SequenceId.set -> void
+Nalix.Codec.DataFrames.PacketBase<TSelf>
+Nalix.Codec.DataFrames.PacketBase<TSelf>.Dispose() -> void
+Nalix.Codec.DataFrames.PacketBase<TSelf>.OnRent() -> void
+Nalix.Codec.DataFrames.PacketBase<TSelf>.PacketBase() -> void
+Nalix.Codec.DataFrames.PacketDispatch
+Nalix.Codec.DataFrames.PacketRegistry
+Nalix.Codec.DataFrames.PacketSchema<TSelf>
+Nalix.Codec.DiagnosticsEvents
+Nalix.Codec.DiagnosticsEvents.Packet
+Nalix.Codec.DiagnosticsEvents.Sequence
+Nalix.Codec.DiagnosticsEvents.Serialization
+Nalix.Codec.Extensions.DataReaderExtensions
+Nalix.Codec.Extensions.DataWriterExtensions
+Nalix.Codec.Extensions.EnumExtensions
+Nalix.Codec.Extensions.ValueTaskExtensions
+Nalix.Codec.LZ4.LZ4BlockEncoder
+Nalix.Codec.LZ4.LZ4BlockHeader
+Nalix.Codec.LZ4.LZ4BlockHeader.LZ4BlockHeader() -> void
+Nalix.Codec.LZ4.LZ4BlockHeader.LZ4BlockHeader(int originalLength, int compressedLength) -> void
+Nalix.Codec.LZ4.LZ4Codec
+Nalix.Codec.LZ4.LZ4CompressionConstants
+Nalix.Codec.Options.CompressionOptions
+Nalix.Codec.Options.CompressionOptions.CompressionOptions() -> void
+Nalix.Codec.Options.CompressionOptions.Enabled.get -> bool
+Nalix.Codec.Options.CompressionOptions.Enabled.set -> void
+Nalix.Codec.Options.CompressionOptions.MaxDecompressedSize.get -> int
+Nalix.Codec.Options.CompressionOptions.MaxDecompressedSize.set -> void
+Nalix.Codec.Options.CompressionOptions.MinSizeToCompress.get -> int
+Nalix.Codec.Options.CompressionOptions.MinSizeToCompress.set -> void
+Nalix.Codec.Options.CompressionOptions.Validate() -> void
+Nalix.Codec.Options.SecurityOptions
+Nalix.Codec.Options.SecurityOptions.Pbkdf2Iterations.get -> int
+Nalix.Codec.Options.SecurityOptions.Pbkdf2Iterations.set -> void
+Nalix.Codec.Options.SecurityOptions.SecurityOptions() -> void
+Nalix.Codec.Options.SecurityOptions.Validate() -> void
+Nalix.Codec.Options.SerializationOptions
+Nalix.Codec.Options.SerializationOptions.MaxArrayLength.get -> int
+Nalix.Codec.Options.SerializationOptions.MaxArrayLength.set -> void
+Nalix.Codec.Options.SerializationOptions.MaxDeserializationDepth.get -> int
+Nalix.Codec.Options.SerializationOptions.MaxDeserializationDepth.set -> void
+Nalix.Codec.Options.SerializationOptions.MaxStringLength.get -> int
+Nalix.Codec.Options.SerializationOptions.MaxStringLength.set -> void
+Nalix.Codec.Options.SerializationOptions.SerializationOptions() -> void
+Nalix.Codec.Options.SerializationOptions.Validate() -> void
+Nalix.Codec.Pooling.PacketBatchScope<TPacket>
+Nalix.Codec.Pooling.PacketBatchScope<TPacket>.AsReadOnlySpan() -> System.ReadOnlySpan<TPacket!>
+Nalix.Codec.Pooling.PacketBatchScope<TPacket>.AsSpan() -> System.Span<TPacket!>
+Nalix.Codec.Pooling.PacketBatchScope<TPacket>.Count.get -> int
+Nalix.Codec.Pooling.PacketBatchScope<TPacket>.Dispose() -> void
+Nalix.Codec.Pooling.PacketBatchScope<TPacket>.PacketBatchScope() -> void
+Nalix.Codec.Pooling.PacketBatchScope<TPacket>.PacketBatchScope(int count) -> void
+Nalix.Codec.Pooling.PacketBatchScope<TPacket>.this[int index].get -> TPacket!
+Nalix.Codec.Pooling.PacketFactory<TPacket>
+Nalix.Codec.Pooling.PacketScope<TPacket>
+Nalix.Codec.Pooling.PacketScope<TPacket>.Dispose() -> void
+Nalix.Codec.Pooling.PacketScope<TPacket>.IsValid.get -> bool
+Nalix.Codec.Pooling.PacketScope<TPacket>.PacketScope() -> void
+Nalix.Codec.Pooling.PacketScope<TPacket>.PacketScope(TPacket! packet) -> void
+Nalix.Codec.Pooling.PacketScope<TPacket>.Value.get -> TPacket!
+Nalix.Codec.ProtocolFrames.Control
+Nalix.Codec.ProtocolFrames.Control.Control() -> void
+Nalix.Codec.ProtocolFrames.Control.Initialize(Nalix.Abstractions.Networking.Protocols.ControlType type, ushort sequenceId = 0, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM, Nalix.Abstractions.Networking.Protocols.ProtocolReason reasonCode = Nalix.Abstractions.Networking.Protocols.ProtocolReason.NONE) -> void
+Nalix.Codec.ProtocolFrames.Control.Reason.get -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Codec.ProtocolFrames.Control.Reason.set -> void
+Nalix.Codec.ProtocolFrames.Control.Type.get -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Codec.ProtocolFrames.Control.Type.set -> void
+Nalix.Codec.ProtocolFrames.Directive
+Nalix.Codec.ProtocolFrames.Directive.Action.get -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Codec.ProtocolFrames.Directive.Action.set -> void
+Nalix.Codec.ProtocolFrames.Directive.Arg0.get -> uint
+Nalix.Codec.ProtocolFrames.Directive.Arg0.set -> void
+Nalix.Codec.ProtocolFrames.Directive.Arg1.get -> uint
+Nalix.Codec.ProtocolFrames.Directive.Arg1.set -> void
+Nalix.Codec.ProtocolFrames.Directive.Arg2.get -> ushort
+Nalix.Codec.ProtocolFrames.Directive.Arg2.set -> void
+Nalix.Codec.ProtocolFrames.Directive.Control.get -> Nalix.Abstractions.Networking.Protocols.ControlFlags
+Nalix.Codec.ProtocolFrames.Directive.Control.set -> void
+Nalix.Codec.ProtocolFrames.Directive.Directive() -> void
+Nalix.Codec.ProtocolFrames.Directive.Initialize(Nalix.Abstractions.Networking.Protocols.ControlType type, Nalix.Abstractions.Networking.Protocols.ProtocolReason reason, Nalix.Abstractions.Networking.Protocols.ProtocolAdvice action, ushort sequenceId, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM, Nalix.Abstractions.Networking.Protocols.ControlFlags controlFlags = Nalix.Abstractions.Networking.Protocols.ControlFlags.NONE, uint arg0 = 0, uint arg1 = 0, ushort arg2 = 0) -> void
+Nalix.Codec.ProtocolFrames.Directive.Reason.get -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Codec.ProtocolFrames.Directive.Reason.set -> void
+Nalix.Codec.ProtocolFrames.Directive.Type.get -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Codec.ProtocolFrames.Directive.Type.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Difficulty.get -> byte
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Difficulty.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Initialize(Nalix.Abstractions.Primitives.Bytes32 nonce, byte diff, long ts, Nalix.Abstractions.Primitives.Bytes32 mac, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM) -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Mac.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Mac.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Nonce.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Nonce.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.ProofOfWorkChallenge() -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.TimestampTicks.get -> long
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.TimestampTicks.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Difficulty.get -> byte
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Difficulty.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Initialize(Nalix.Abstractions.Primitives.Bytes32 nonce, byte diff, long ts, Nalix.Abstractions.Primitives.Bytes32 mac, long solution, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM) -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Mac.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Mac.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Nonce.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Nonce.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.ProofOfWorkProof() -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Solution.get -> long
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Solution.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.TimestampTicks.get -> long
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.TimestampTicks.set -> void
+Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.SessionChallenge
+Nalix.Codec.ProtocolFrames.SessionChallenge.Initialize(Nalix.Abstractions.Primitives.Bytes32 publicKey, Nalix.Abstractions.Primitives.Bytes32 nonce, Nalix.Abstractions.Primitives.Bytes32 proof, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM) -> void
+Nalix.Codec.ProtocolFrames.SessionChallenge.Nonce.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionChallenge.Nonce.set -> void
+Nalix.Codec.ProtocolFrames.SessionChallenge.Proof.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionChallenge.Proof.set -> void
+Nalix.Codec.ProtocolFrames.SessionChallenge.PublicKey.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionChallenge.PublicKey.set -> void
+Nalix.Codec.ProtocolFrames.SessionChallenge.SessionChallenge() -> void
+Nalix.Codec.ProtocolFrames.SessionChallenge.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.SessionEstablished
+Nalix.Codec.ProtocolFrames.SessionEstablished.Initialize(Nalix.Abstractions.Primitives.Bytes32 proof, ulong sessionToken, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM) -> void
+Nalix.Codec.ProtocolFrames.SessionEstablished.Proof.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionEstablished.Proof.set -> void
+Nalix.Codec.ProtocolFrames.SessionEstablished.SessionEstablished() -> void
+Nalix.Codec.ProtocolFrames.SessionEstablished.SessionToken.get -> ulong
+Nalix.Codec.ProtocolFrames.SessionEstablished.SessionToken.set -> void
+Nalix.Codec.ProtocolFrames.SessionEstablished.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.SessionInit
+Nalix.Codec.ProtocolFrames.SessionInit.Initialize(Nalix.Abstractions.Primitives.Bytes32 publicKey, Nalix.Abstractions.Primitives.Bytes32 nonce, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM) -> void
+Nalix.Codec.ProtocolFrames.SessionInit.Nonce.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionInit.Nonce.set -> void
+Nalix.Codec.ProtocolFrames.SessionInit.PublicKey.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionInit.PublicKey.set -> void
+Nalix.Codec.ProtocolFrames.SessionInit.SessionInit() -> void
+Nalix.Codec.ProtocolFrames.SessionInit.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.SessionProof
+Nalix.Codec.ProtocolFrames.SessionProof.Initialize(Nalix.Abstractions.Primitives.Bytes32 proof, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM) -> void
+Nalix.Codec.ProtocolFrames.SessionProof.Proof.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionProof.Proof.set -> void
+Nalix.Codec.ProtocolFrames.SessionProof.SessionProof() -> void
+Nalix.Codec.ProtocolFrames.SessionProof.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.SessionResume
+Nalix.Codec.ProtocolFrames.SessionResume.Initialize(Nalix.Codec.ProtocolFrames.SessionResumeStage stage, ulong sessionToken, Nalix.Abstractions.Networking.Protocols.ProtocolReason reason = Nalix.Abstractions.Networking.Protocols.ProtocolReason.NONE, Nalix.Abstractions.Primitives.Bytes32 proof = default(Nalix.Abstractions.Primitives.Bytes32), Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM) -> void
+Nalix.Codec.ProtocolFrames.SessionResume.Proof.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionResume.Proof.set -> void
+Nalix.Codec.ProtocolFrames.SessionResume.Reason.get -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Codec.ProtocolFrames.SessionResume.Reason.set -> void
+Nalix.Codec.ProtocolFrames.SessionResume.SessionResume() -> void
+Nalix.Codec.ProtocolFrames.SessionResume.SessionToken.get -> ulong
+Nalix.Codec.ProtocolFrames.SessionResume.SessionToken.set -> void
+Nalix.Codec.ProtocolFrames.SessionResume.Stage.get -> Nalix.Codec.ProtocolFrames.SessionResumeStage
+Nalix.Codec.ProtocolFrames.SessionResume.Stage.set -> void
+Nalix.Codec.ProtocolFrames.SessionResume.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.SessionResumeStage
+Nalix.Codec.ProtocolFrames.SessionResumeStage.NONE = 0 -> Nalix.Codec.ProtocolFrames.SessionResumeStage
+Nalix.Codec.ProtocolFrames.SessionResumeStage.REQUEST = 1 -> Nalix.Codec.ProtocolFrames.SessionResumeStage
+Nalix.Codec.ProtocolFrames.SessionResumeStage.RESPONSE = 2 -> Nalix.Codec.ProtocolFrames.SessionResumeStage
+Nalix.Codec.ProtocolFrames.SessionTofu
+Nalix.Codec.ProtocolFrames.SessionTofu.Initialize(Nalix.Abstractions.Primitives.Bytes32 publicKey) -> void
+Nalix.Codec.ProtocolFrames.SessionTofu.PublicKey.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.SessionTofu.PublicKey.set -> void
+Nalix.Codec.ProtocolFrames.SessionTofu.SessionTofu() -> void
+Nalix.Codec.ProtocolFrames.SessionTofu.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.TimeSync
+Nalix.Codec.ProtocolFrames.TimeSync.Initialize(Nalix.Abstractions.Networking.Protocols.ControlType type, ushort sequenceId = 0, Nalix.Abstractions.Networking.Packets.PacketFlags flags = Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM) -> void
+Nalix.Codec.ProtocolFrames.TimeSync.MonoTicks.get -> long
+Nalix.Codec.ProtocolFrames.TimeSync.MonoTicks.set -> void
+Nalix.Codec.ProtocolFrames.TimeSync.Timestamp.get -> long
+Nalix.Codec.ProtocolFrames.TimeSync.Timestamp.set -> void
+Nalix.Codec.ProtocolFrames.TimeSync.TimeSync() -> void
+Nalix.Codec.ProtocolFrames.TimeSync.Type.get -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Codec.ProtocolFrames.TimeSync.Type.set -> void
+Nalix.Codec.Security.Aead.ChaCha20Poly1305
+Nalix.Codec.Security.Aead.Salsa20Poly1305
+Nalix.Codec.Security.Asymmetric.X25519
+Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair
+Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair.PrivateKey.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair.PrivateKey.set -> void
+Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair.PublicKey.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair.PublicKey.set -> void
+Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair.Wipe() -> void
+Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair.X25519KeyPair() -> void
+Nalix.Codec.Security.Engine.AeadEngine
+Nalix.Codec.Security.Engine.SymmetricEngine
+Nalix.Codec.Security.EnvelopeCipher
+Nalix.Codec.Security.HandshakeX25519
+Nalix.Codec.Security.Hashing.HmacKeccak256
+Nalix.Codec.Security.Hashing.Keccak256
+Nalix.Codec.Security.Hashing.Keccak256.Sponge
+Nalix.Codec.Security.Hashing.Keccak256.Sponge.Absorb(scoped System.ReadOnlySpan<byte> data) -> void
+Nalix.Codec.Security.Hashing.Keccak256.Sponge.PadAndSqueeze(scoped System.Span<byte> output) -> void
+Nalix.Codec.Security.Hashing.Keccak256.Sponge.Sponge() -> void
+Nalix.Codec.Security.Hashing.Pbkdf2
+Nalix.Codec.Security.Hashing.Pbkdf2.Encoded
+Nalix.Codec.Security.Hashing.Poly1305
+Nalix.Codec.Security.Hashing.Poly1305.Clear() -> void
+Nalix.Codec.Security.Hashing.Poly1305.ComputeTag(System.ReadOnlySpan<byte> message, System.Span<byte> destination) -> void
+Nalix.Codec.Security.Hashing.Poly1305.ComputeTagIncremental(System.ReadOnlySpan<byte> message, System.Span<byte> destination) -> void
+Nalix.Codec.Security.Hashing.Poly1305.FinalizeTag() -> byte[]!
+Nalix.Codec.Security.Hashing.Poly1305.FinalizeTag(System.Span<byte> tag16) -> void
+Nalix.Codec.Security.Hashing.Poly1305.Poly1305() -> void
+Nalix.Codec.Security.Hashing.Poly1305.Poly1305(System.ReadOnlySpan<byte> key) -> void
+Nalix.Codec.Security.Hashing.Poly1305.Update(scoped System.ReadOnlySpan<byte> data) -> void
+Nalix.Codec.Security.Primitives.BitwiseOperations
+Nalix.Codec.Security.Primitives.MemorySecurity
+Nalix.Codec.Security.ProofOfWork
+Nalix.Codec.Security.ProofOfWorkSolver
+Nalix.Codec.Security.ProofOfWorkSolver.ProofOfWorkSolver() -> void
+Nalix.Codec.Security.Symmetric.ChaCha20
+Nalix.Codec.Security.Symmetric.ChaCha20.ChaCha20() -> void
+Nalix.Codec.Security.Symmetric.ChaCha20.ChaCha20(byte[]! key, byte[]! nonce, uint counter) -> void
+Nalix.Codec.Security.Symmetric.ChaCha20.ChaCha20(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> nonce, uint counter) -> void
+Nalix.Codec.Security.Symmetric.ChaCha20.Clear() -> void
+Nalix.Codec.Security.Symmetric.ChaCha20.Decrypt(System.ReadOnlySpan<byte> src, System.Span<byte> dst) -> int
+Nalix.Codec.Security.Symmetric.ChaCha20.Encrypt(System.ReadOnlySpan<byte> src, System.Span<byte> dst) -> int
+Nalix.Codec.Security.Symmetric.ChaCha20.GenerateKeyBlock(scoped System.Span<byte> dst) -> void
+Nalix.Codec.Security.Symmetric.Salsa20
+Nalix.Codec.Serialization.FormatterProvider
+Nalix.Codec.Serialization.IFillableFormatter<T>
+Nalix.Codec.Serialization.IFillableFormatter<T>.Fill(ref Nalix.Environment.Memory.DataReader reader, T value) -> void
+Nalix.Codec.Serialization.IFormatter<T>
+Nalix.Codec.Serialization.IFormatter<T>.Deserialize(ref Nalix.Environment.Memory.DataReader reader) -> T
+Nalix.Codec.Serialization.IFormatter<T>.Serialize(ref Nalix.Environment.Memory.DataWriter writer, in T value) -> void
+Nalix.Codec.Serialization.LiteSerializer
+Nalix.Codec.Transforms.FrameCipher
+Nalix.Codec.Transforms.FrameCompression
+Nalix.Codec.Transforms.FramePipeline
+Nalix.Codec.Transforms.FrameTransformer
+override Nalix.Codec.DataFrames.PacketBase<TSelf>.ResetForPool() -> void
+override Nalix.Codec.DataFrames.PacketBase<TSelf>.Serialize() -> byte[]!
+override Nalix.Codec.DataFrames.PacketBase<TSelf>.Serialize(System.Span<byte> buffer) -> int
+override Nalix.Codec.DataFrames.PacketBase<TSelf>.ToString() -> string!
+override Nalix.Codec.ProtocolFrames.Control.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.Control.ToString() -> string!
+override Nalix.Codec.ProtocolFrames.Directive.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.Directive.ToString() -> string!
+override Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.ProofOfWorkProof.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.SessionChallenge.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.SessionEstablished.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.SessionInit.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.SessionProof.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.SessionResume.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.SessionTofu.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.TimeSync.ResetForPool() -> void
+override Nalix.Codec.ProtocolFrames.TimeSync.ToString() -> string!
+readonly Nalix.Codec.LZ4.LZ4BlockHeader.CompressedLength -> int
+readonly Nalix.Codec.LZ4.LZ4BlockHeader.OriginalLength -> int
+static Nalix.Codec.DataFrames.PacketBase<TSelf>.Create() -> TSelf!
+static Nalix.Codec.DataFrames.PacketBase<TSelf>.Deserialize(System.ReadOnlySpan<byte> buffer) -> TSelf!
+static Nalix.Codec.DataFrames.PacketRegistry.Build() -> void
+static Nalix.Codec.DataFrames.PacketRegistry.Configure(Nalix.Abstractions.IObjectPoolManager? manager) -> void
+static Nalix.Codec.DataFrames.PacketRegistry.Deserialize(System.ReadOnlySpan<byte> raw) -> Nalix.Abstractions.Networking.Packets.IPacket!
+static Nalix.Codec.DataFrames.PacketRegistry.DeserializerCount.get -> int
+static Nalix.Codec.DataFrames.PacketRegistry.IsBuilt.get -> bool
+static Nalix.Codec.DataFrames.PacketRegistry.IsKnownOpCode(ushort opcode) -> bool
+static Nalix.Codec.DataFrames.PacketRegistry.IsRegistered<TPacket>() -> bool
+static Nalix.Codec.DataFrames.PacketRegistry.RegisterGenerated(Nalix.Codec.DataFrames.PacketDispatch! dispatcher) -> void
+static Nalix.Codec.DataFrames.PacketRegistry.RegisterGenerated<TPacket>(string! name, Nalix.Abstractions.Networking.Packets.PacketDeserializer! deserializer) -> void
+static Nalix.Codec.DataFrames.PacketRegistry.TryDeserialize(System.ReadOnlySpan<byte> raw, out Nalix.Abstractions.Networking.Packets.IPacket? packet) -> bool
+static Nalix.Codec.DataFrames.PacketSchema<TSelf>.StaticSize.get -> int
+static Nalix.Codec.DataFrames.PacketSchema<TSelf>.StaticSize.set -> void
+static Nalix.Codec.DiagnosticsEvents.Write<T>(string! name, T payload) -> void
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadBoolean(this ref Nalix.Environment.Memory.DataReader reader) -> bool
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadByte(this ref Nalix.Environment.Memory.DataReader reader) -> byte
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadBytes(this ref Nalix.Environment.Memory.DataReader reader, int count) -> byte[]!
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadChar(this ref Nalix.Environment.Memory.DataReader reader) -> char
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadDouble(this ref Nalix.Environment.Memory.DataReader reader) -> double
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadEnumByte<TEnum>(this ref Nalix.Environment.Memory.DataReader reader) -> TEnum
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadEnumInt16<TEnum>(this ref Nalix.Environment.Memory.DataReader reader) -> TEnum
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadEnumInt32<TEnum>(this ref Nalix.Environment.Memory.DataReader reader) -> TEnum
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadEnumSByte<TEnum>(this ref Nalix.Environment.Memory.DataReader reader) -> TEnum
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadEnumUInt16<TEnum>(this ref Nalix.Environment.Memory.DataReader reader) -> TEnum
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadEnumUInt32<TEnum>(this ref Nalix.Environment.Memory.DataReader reader) -> TEnum
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadInt16(this ref Nalix.Environment.Memory.DataReader reader) -> short
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadInt32(this ref Nalix.Environment.Memory.DataReader reader) -> int
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadInt64(this ref Nalix.Environment.Memory.DataReader reader) -> long
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadRemainingBytes(this ref Nalix.Environment.Memory.DataReader reader) -> byte[]!
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadSByte(this ref Nalix.Environment.Memory.DataReader reader) -> sbyte
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadSingle(this ref Nalix.Environment.Memory.DataReader reader) -> float
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadUInt16(this ref Nalix.Environment.Memory.DataReader reader) -> ushort
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadUInt32(this ref Nalix.Environment.Memory.DataReader reader) -> uint
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadUInt64(this ref Nalix.Environment.Memory.DataReader reader) -> ulong
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadUnmanaged<T>(this ref Nalix.Environment.Memory.DataReader reader) -> T
+static Nalix.Codec.Extensions.DataReaderExtensions.Remaining(this ref Nalix.Environment.Memory.DataReader reader) -> int
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, bool value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, byte value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, byte[]! value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, char value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, double value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, float value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, int value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, long value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, sbyte value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, short value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, System.ReadOnlySpan<byte> value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, uint value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, ulong value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.Write(this ref Nalix.Environment.Memory.DataWriter writer, ushort value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.WriteEnum<TEnum>(this ref Nalix.Environment.Memory.DataWriter writer, TEnum value) -> void
+static Nalix.Codec.Extensions.DataWriterExtensions.WriteUnmanaged<T>(this ref Nalix.Environment.Memory.DataWriter writer, T value) -> void
+static Nalix.Codec.Extensions.EnumExtensions.AddFlag<TEnum>(this TEnum this, TEnum mask) -> TEnum
+static Nalix.Codec.Extensions.EnumExtensions.RemoveFlag<TEnum>(this TEnum this, TEnum mask) -> TEnum
+static Nalix.Codec.Extensions.ValueTaskExtensions.DisposeOnCompletionAsync<TPacket>(this System.Threading.Tasks.ValueTask pending, Nalix.Codec.Pooling.PacketScope<TPacket!> lease) -> System.Threading.Tasks.ValueTask
+static Nalix.Codec.LZ4.LZ4BlockEncoder.EncodeBlock(System.ReadOnlySpan<byte> input, System.Span<byte> output, int* hashTable, int hashBits) -> int
+static Nalix.Codec.LZ4.LZ4BlockEncoder.GetMaxLength(int input) -> int
+static Nalix.Codec.LZ4.LZ4BlockEncoder.GetMinOutputBufferSize(int inputLength) -> int
+static Nalix.Codec.LZ4.LZ4Codec.Decode(System.ReadOnlySpan<byte> input, out Nalix.Environment.Memory.BufferLease? lease, out int bytesWritten) -> void
+static Nalix.Codec.LZ4.LZ4Codec.Decode(System.ReadOnlySpan<byte> input, System.Span<byte> output) -> int
+static Nalix.Codec.LZ4.LZ4Codec.Encode(System.ReadOnlySpan<byte> input, out Nalix.Environment.Memory.BufferLease! lease, out int bytesWritten) -> void
+static Nalix.Codec.LZ4.LZ4Codec.Encode(System.ReadOnlySpan<byte> input, System.Span<byte> output) -> int
+static Nalix.Codec.LZ4.LZ4Codec.TryDecode(System.ReadOnlySpan<byte> input, out Nalix.Environment.Memory.BufferLease? lease, out int bytesWritten) -> bool
+static Nalix.Codec.LZ4.LZ4Codec.TryDecode(System.ReadOnlySpan<byte> input, System.Span<byte> output, out int bytesWritten) -> bool
+static Nalix.Codec.Pooling.PacketFactory<TPacket>.Acquire() -> Nalix.Codec.Pooling.PacketScope<TPacket!>
+static Nalix.Codec.Pooling.PacketFactory<TPacket>.AcquireBatch(int count) -> Nalix.Codec.Pooling.PacketBatchScope<TPacket!>
+static Nalix.Codec.Pooling.PacketScope<TPacket>.implicit operator TPacket!(Nalix.Codec.Pooling.PacketScope<TPacket!> lease) -> TPacket!
+static Nalix.Codec.ProtocolFrames.Control.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.Directive.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.ProofOfWorkProof.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.SessionChallenge.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.SessionEstablished.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.SessionInit.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.SessionProof.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.SessionResume.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.SessionTofu.StaticOpCode.get -> ushort
+static Nalix.Codec.ProtocolFrames.TimeSync.StaticOpCode.get -> ushort
+static Nalix.Codec.Security.Aead.ChaCha20Poly1305.Decrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> nonce, System.ReadOnlySpan<byte> ciphertext, System.ReadOnlySpan<byte> aad, System.ReadOnlySpan<byte> tag, System.Span<byte> dstPlaintext) -> int
+static Nalix.Codec.Security.Aead.ChaCha20Poly1305.Encrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> nonce, System.ReadOnlySpan<byte> plaintext, System.ReadOnlySpan<byte> aad, System.Span<byte> dstCiphertext, System.Span<byte> tag) -> int
+static Nalix.Codec.Security.Aead.Salsa20Poly1305.Decrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> nonce, System.ReadOnlySpan<byte> ciphertext, System.ReadOnlySpan<byte> aad, System.ReadOnlySpan<byte> tag, System.Span<byte> dstPlaintext) -> int
+static Nalix.Codec.Security.Aead.Salsa20Poly1305.Encrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> nonce, System.ReadOnlySpan<byte> plaintext, System.ReadOnlySpan<byte> aad, System.Span<byte> dstCiphertext, System.Span<byte> tag) -> int
+static Nalix.Codec.Security.Asymmetric.X25519.Agreement(Nalix.Abstractions.Primitives.Bytes32 myPrivateKey, Nalix.Abstractions.Primitives.Bytes32 otherPublicKey) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.Asymmetric.X25519.GenerateKeyFromPrivateKey(Nalix.Abstractions.Primitives.Bytes32 privateKey) -> Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair
+static Nalix.Codec.Security.Asymmetric.X25519.GenerateKeyPair() -> Nalix.Codec.Security.Asymmetric.X25519.X25519KeyPair
+static Nalix.Codec.Security.Engine.AeadEngine.Decrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> envelope, System.Span<byte> plaintext, System.ReadOnlySpan<byte> aad, out int written) -> void
+static Nalix.Codec.Security.Engine.AeadEngine.Encrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> plaintext, System.Span<byte> ciphertext, System.ReadOnlySpan<byte> nonce, System.ReadOnlySpan<byte> aad, uint? seq, Nalix.Abstractions.Security.CipherSuiteType algorithm, out int written) -> void
+static Nalix.Codec.Security.Engine.SymmetricEngine.Decrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> envelope, System.Span<byte> plaintext, out int written) -> void
+static Nalix.Codec.Security.Engine.SymmetricEngine.Encrypt(Nalix.Abstractions.Security.CipherSuiteType type, System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> nonce, ulong counter, System.ReadOnlySpan<byte> src, System.Span<byte> dst, out int written) -> void
+static Nalix.Codec.Security.Engine.SymmetricEngine.Encrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> plaintext, System.Span<byte> ciphertext, System.ReadOnlySpan<byte> nonce, uint? seq, Nalix.Abstractions.Security.CipherSuiteType algorithm, out int written) -> void
+static Nalix.Codec.Security.EnvelopeCipher.Decrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> envelope, System.Span<byte> plaintext, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out int written, out uint receivedSeq) -> void
+static Nalix.Codec.Security.EnvelopeCipher.Decrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> envelope, System.Span<byte> plaintext, System.ReadOnlySpan<byte> aad, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out int written, out uint seq) -> void
+static Nalix.Codec.Security.EnvelopeCipher.Encrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> plaintext, System.Span<byte> ciphertext, System.ReadOnlySpan<byte> aad, uint? seq, Nalix.Abstractions.Security.CipherSuiteType algorithm, out int written) -> void
+static Nalix.Codec.Security.EnvelopeCipher.Encrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> plaintext, System.Span<byte> ciphertext, uint? seq, Nalix.Abstractions.Security.CipherSuiteType algorithm, out int written) -> void
+static Nalix.Codec.Security.EnvelopeCipher.GetNonceLength(Nalix.Abstractions.Security.CipherSuiteType type) -> int
+static Nalix.Codec.Security.EnvelopeCipher.GetTagLength(Nalix.Abstractions.Security.CipherSuiteType type) -> int
+static Nalix.Codec.Security.EnvelopeCipher.TryDecrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> envelope, System.Span<byte> plaintext, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out int written, out uint receivedSeq) -> bool
+static Nalix.Codec.Security.EnvelopeCipher.TryDecrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> envelope, System.Span<byte> plaintext, System.ReadOnlySpan<byte> aad, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out int written, out uint seq) -> bool
+static Nalix.Codec.Security.HandshakeX25519.ComposeTranscriptBuffer(Nalix.Abstractions.Primitives.Bytes32 clientPublicKey, Nalix.Abstractions.Primitives.Bytes32 clientNonce, Nalix.Abstractions.Primitives.Bytes32 serverPublicKey, Nalix.Abstractions.Primitives.Bytes32 serverNonce) -> byte[]!
+static Nalix.Codec.Security.HandshakeX25519.ComputeClientProof(Nalix.Abstractions.Primitives.Bytes32 masterSecret, Nalix.Abstractions.Primitives.Bytes32 transcriptHash) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.HandshakeX25519.ComputeMasterSecret(Nalix.Abstractions.Primitives.Bytes32 sharedSecretEE, Nalix.Abstractions.Primitives.Bytes32 sharedSecretSE) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.HandshakeX25519.ComputeServerFinishProof(Nalix.Abstractions.Primitives.Bytes32 masterSecret, Nalix.Abstractions.Primitives.Bytes32 transcriptHash) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.HandshakeX25519.ComputeServerProof(Nalix.Abstractions.Primitives.Bytes32 masterSecret, Nalix.Abstractions.Primitives.Bytes32 transcriptHash) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.HandshakeX25519.ComputeTranscriptHash(Nalix.Abstractions.Primitives.Bytes32 clientPublicKey, Nalix.Abstractions.Primitives.Bytes32 clientNonce, Nalix.Abstractions.Primitives.Bytes32 serverPublicKey, Nalix.Abstractions.Primitives.Bytes32 serverNonce) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.HandshakeX25519.DeriveRekeySecret(Nalix.Abstractions.Primitives.Bytes32 currentSecret) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.HandshakeX25519.DeriveSessionKey(Nalix.Abstractions.Primitives.Bytes32 masterSecret, Nalix.Abstractions.Primitives.Bytes32 clientNonce, Nalix.Abstractions.Primitives.Bytes32 serverNonce, Nalix.Abstractions.Primitives.Bytes32 transcriptHash) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.HandshakeX25519.TryComposeTranscriptBuffer(System.Span<byte> destination, out int written, Nalix.Abstractions.Primitives.Bytes32 clientPublicKey, Nalix.Abstractions.Primitives.Bytes32 clientNonce, Nalix.Abstractions.Primitives.Bytes32 serverPublicKey, Nalix.Abstractions.Primitives.Bytes32 serverNonce) -> bool
+static Nalix.Codec.Security.Hashing.HmacKeccak256.Compute(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> data, System.Span<byte> output) -> void
+static Nalix.Codec.Security.Hashing.Keccak256.AlgorithmName.get -> string!
+static Nalix.Codec.Security.Hashing.Keccak256.HashData(System.ReadOnlySpan<byte> data) -> byte[]!
+static Nalix.Codec.Security.Hashing.Keccak256.HashData(System.ReadOnlySpan<byte> data, System.Span<byte> output) -> void
+static Nalix.Codec.Security.Hashing.Keccak256.HashDataToFixed(System.ReadOnlySpan<byte> data) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Codec.Security.Hashing.Keccak256.TryHashData(System.ReadOnlySpan<byte> data, System.Span<byte> output) -> bool
+static Nalix.Codec.Security.Hashing.Pbkdf2.Encoded.Hash(string! credential) -> string!
+static Nalix.Codec.Security.Hashing.Pbkdf2.Encoded.Verify(string! credential, string! encoded) -> bool
+static Nalix.Codec.Security.Hashing.Pbkdf2.Hash(string! credential, out byte[]! salt, out byte[]! hash) -> void
+static Nalix.Codec.Security.Hashing.Pbkdf2.Iterations.get -> int
+static Nalix.Codec.Security.Hashing.Pbkdf2.Verify(string! credential, byte[]! salt, byte[]! hash) -> bool
+static Nalix.Codec.Security.Hashing.Poly1305.Compute(byte[]! key, byte[]! message) -> byte[]!
+static Nalix.Codec.Security.Hashing.Poly1305.Compute(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> message) -> byte[]!
+static Nalix.Codec.Security.Hashing.Poly1305.Compute(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> message, System.Span<byte> destination) -> void
+static Nalix.Codec.Security.Hashing.Poly1305.Verify(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> message, System.ReadOnlySpan<byte> tag) -> bool
+static Nalix.Codec.Security.Primitives.BitwiseOperations.FixedTimeEquals(System.ReadOnlySpan<byte> left, System.ReadOnlySpan<byte> right) -> bool
+static Nalix.Codec.Security.Primitives.BitwiseOperations.IsZero(System.ReadOnlySpan<byte> value) -> bool
+static Nalix.Codec.Security.Primitives.MemorySecurity.ZeroMemory(byte[]! buffer) -> void
+static Nalix.Codec.Security.Primitives.MemorySecurity.ZeroMemory(System.Span<byte> buffer) -> void
+static Nalix.Codec.Security.ProofOfWork.CreateChallenge(byte difficulty, ulong connectionId, long timestampTicks) -> (Nalix.Abstractions.Primitives.Bytes32 Nonce, Nalix.Abstractions.Primitives.Bytes32 Mac)
+static Nalix.Codec.Security.ProofOfWork.VerifySolution(System.ReadOnlySpan<byte> nonce, byte difficulty, long timestampTicks, ulong connectionId, System.ReadOnlySpan<byte> providedMac, long solution) -> bool
+static Nalix.Codec.Security.ProofOfWorkSolver.SolveChallenge(System.ReadOnlySpan<byte> nonce, byte difficulty, long timestampTicks) -> long
+static Nalix.Codec.Security.ProofOfWorkSolver.SolveChallenge(System.ReadOnlySpan<byte> nonce, byte difficulty, long timestampTicks, System.Threading.CancellationToken ct) -> long
+static Nalix.Codec.Security.Symmetric.Salsa20.Decrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> nonce, ulong counter, System.ReadOnlySpan<byte> ciphertext, System.Span<byte> plaintext) -> int
+static Nalix.Codec.Security.Symmetric.Salsa20.Encrypt(System.ReadOnlySpan<byte> key, System.ReadOnlySpan<byte> nonce, ulong counter, System.ReadOnlySpan<byte> plaintext, System.Span<byte> ciphertext) -> int
+static Nalix.Codec.Serialization.FormatterProvider.Get<T>() -> Nalix.Codec.Serialization.IFormatter<T>!
+static Nalix.Codec.Serialization.FormatterProvider.GetComplex<T>() -> Nalix.Codec.Serialization.IFormatter<T>!
+static Nalix.Codec.Serialization.FormatterProvider.Register<T>(Nalix.Codec.Serialization.IFormatter<T>! formatter) -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterAllFormatters<T>() -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterCollectionFormatters<T>() -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterComplex<T>(Nalix.Codec.Serialization.IFormatter<T>! formatter) -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterDictionary<TKey, TValue>() -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterGenerated<T>(Nalix.Codec.Serialization.IFormatter<T>! formatter) -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterTuple<T1, T2, T3, T4, T5>() -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterTuple<T1, T2, T3, T4>() -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterTuple<T1, T2, T3>() -> void
+static Nalix.Codec.Serialization.FormatterProvider.RegisterTuple<T1, T2>() -> void
+static Nalix.Codec.Serialization.LiteSerializer.Deserialize<T>(byte[]! buffer, out int value) -> T
+static Nalix.Codec.Serialization.LiteSerializer.Deserialize<T>(byte[]! buffer, ref T value) -> int
+static Nalix.Codec.Serialization.LiteSerializer.Deserialize<T>(System.ReadOnlyMemory<byte> buffer, out int value) -> T
+static Nalix.Codec.Serialization.LiteSerializer.Deserialize<T>(System.ReadOnlyMemory<byte> buffer, ref T value) -> int
+static Nalix.Codec.Serialization.LiteSerializer.Deserialize<T>(System.ReadOnlySpan<byte> buffer, out int value) -> T
+static Nalix.Codec.Serialization.LiteSerializer.Deserialize<T>(System.ReadOnlySpan<byte> buffer, ref T value) -> int
+static Nalix.Codec.Serialization.LiteSerializer.Fill<T>(byte[]! buffer, ref T value) -> int
+static Nalix.Codec.Serialization.LiteSerializer.Fill<T>(System.ReadOnlyMemory<byte> buffer, ref T value) -> int
+static Nalix.Codec.Serialization.LiteSerializer.Fill<T>(System.ReadOnlySpan<byte> buffer, ref T value) -> int
+static Nalix.Codec.Serialization.LiteSerializer.Register<T>(Nalix.Codec.Serialization.IFormatter<T>! formatter) -> void
+static Nalix.Codec.Serialization.LiteSerializer.Serialize<T>(in T value) -> byte[]!
+static Nalix.Codec.Serialization.LiteSerializer.Serialize<T>(in T value, byte[]! buffer) -> int
+static Nalix.Codec.Serialization.LiteSerializer.Serialize<T>(in T value, System.Span<byte> buffer) -> int
+static Nalix.Codec.Transforms.FrameCipher.DecryptFrame(Nalix.Abstractions.IBufferLease! src, System.ReadOnlySpan<byte> key, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out uint seq) -> Nalix.Abstractions.IBufferLease!
+static Nalix.Codec.Transforms.FrameCipher.EncryptFrame(Nalix.Abstractions.IBufferLease! src, System.ReadOnlySpan<byte> key, uint? seq, Nalix.Abstractions.Security.CipherSuiteType suite) -> Nalix.Abstractions.IBufferLease!
+static Nalix.Codec.Transforms.FrameCipher.TryDecryptFrame(Nalix.Abstractions.IBufferLease! src, System.ReadOnlySpan<byte> key, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out uint seq, out Nalix.Abstractions.IBufferLease? dest) -> bool
+static Nalix.Codec.Transforms.FrameCompression.CompressFrame(Nalix.Abstractions.IBufferLease! src) -> Nalix.Abstractions.IBufferLease!
+static Nalix.Codec.Transforms.FrameCompression.DecompressFrame(Nalix.Abstractions.IBufferLease! src) -> Nalix.Abstractions.IBufferLease!
+static Nalix.Codec.Transforms.FrameCompression.TryDecompressFrame(Nalix.Abstractions.IBufferLease! src, out Nalix.Abstractions.IBufferLease? dest) -> bool
+static Nalix.Codec.Transforms.FramePipeline.ProcessInbound(ref Nalix.Abstractions.IBufferLease! current, System.ReadOnlySpan<byte> secret, Nalix.Abstractions.Security.CipherSuiteType algorithm, out uint? seq) -> void
+static Nalix.Codec.Transforms.FramePipeline.ProcessOutbound(ref Nalix.Abstractions.IBufferLease! current, bool enableCompress, int minSizeToCompress, bool enableEncrypt, System.ReadOnlySpan<byte> secret, uint? seq, Nalix.Abstractions.Security.CipherSuiteType algorithm) -> void
+static Nalix.Codec.Transforms.FramePipeline.TryProcessInbound(ref Nalix.Abstractions.IBufferLease! current, System.ReadOnlySpan<byte> secret, Nalix.Abstractions.Security.CipherSuiteType algorithm, out uint? seq) -> bool
+static Nalix.Codec.Transforms.FrameTransformer.Compress(Nalix.Abstractions.IBufferLease! src, Nalix.Abstractions.IBufferLease! dest) -> void
+static Nalix.Codec.Transforms.FrameTransformer.Decompress(Nalix.Abstractions.IBufferLease! src, Nalix.Abstractions.IBufferLease! dest) -> void
+static Nalix.Codec.Transforms.FrameTransformer.Decrypt(Nalix.Abstractions.IBufferLease! src, Nalix.Abstractions.IBufferLease! dest, System.ReadOnlySpan<byte> key, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out uint seq) -> void
+static Nalix.Codec.Transforms.FrameTransformer.Encrypt(Nalix.Abstractions.IBufferLease! src, Nalix.Abstractions.IBufferLease! dest, System.ReadOnlySpan<byte> key, uint? seq, Nalix.Abstractions.Security.CipherSuiteType suite) -> void
+static Nalix.Codec.Transforms.FrameTransformer.GetDecompressedLength(System.ReadOnlySpan<byte> src) -> int
+static Nalix.Codec.Transforms.FrameTransformer.GetMaxCiphertextSize(Nalix.Abstractions.Security.CipherSuiteType type, int plaintextSize) -> int
+static Nalix.Codec.Transforms.FrameTransformer.GetMaxCompressedSize(int plaintextSize) -> int
+static Nalix.Codec.Transforms.FrameTransformer.GetPlaintextLength(System.ReadOnlySpan<byte> envelope) -> int
+static Nalix.Codec.Transforms.FrameTransformer.TryDecompress(Nalix.Abstractions.IBufferLease! src, Nalix.Abstractions.IBufferLease! dest) -> bool
+static Nalix.Codec.Transforms.FrameTransformer.TryDecrypt(Nalix.Abstractions.IBufferLease! src, Nalix.Abstractions.IBufferLease! dest, System.ReadOnlySpan<byte> key, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out uint seq) -> bool
+static Nalix.Codec.Transforms.FrameTransformer.TryGetDecompressedLength(System.ReadOnlySpan<byte> src, out int length) -> bool
+static Nalix.Codec.Transforms.FrameTransformer.TryGetPlaintextLength(System.ReadOnlySpan<byte> envelope, out int length) -> bool
+static readonly Nalix.Codec.DiagnosticsEvents.Source -> System.Diagnostics.DiagnosticListener!
+virtual Nalix.Codec.DataFrames.PacketBase<TSelf>.Dispose(bool disposing) -> void
+virtual Nalix.Codec.DataFrames.PacketDispatch.Invoke(ushort opcode, System.ReadOnlySpan<byte> raw, out Nalix.Abstractions.Networking.Packets.IPacket? packet) -> bool
+override Nalix.Codec.ProtocolFrames.Control.Length.get -> int
+override Nalix.Codec.ProtocolFrames.Directive.Length.get -> int
+override Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Length.get -> int
+override Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Length.get -> int
+override Nalix.Codec.ProtocolFrames.SessionChallenge.Length.get -> int
+override Nalix.Codec.ProtocolFrames.SessionEstablished.Length.get -> int
+override Nalix.Codec.ProtocolFrames.SessionInit.Length.get -> int
+override Nalix.Codec.ProtocolFrames.SessionProof.Length.get -> int
+override Nalix.Codec.ProtocolFrames.SessionResume.Length.get -> int
+override Nalix.Codec.ProtocolFrames.SessionTofu.Length.get -> int
+override Nalix.Codec.ProtocolFrames.TimeSync.Length.get -> int
+static Nalix.Codec.ProtocolFrames.Control.Size.get -> int
+static Nalix.Codec.ProtocolFrames.Directive.Size.get -> int
+static Nalix.Codec.ProtocolFrames.ProofOfWorkChallenge.Size.get -> int
+static Nalix.Codec.ProtocolFrames.ProofOfWorkProof.Size.get -> int
+static Nalix.Codec.ProtocolFrames.SessionChallenge.Size.get -> int
+static Nalix.Codec.ProtocolFrames.SessionEstablished.Size.get -> int
+static Nalix.Codec.ProtocolFrames.SessionInit.Size.get -> int
+static Nalix.Codec.ProtocolFrames.SessionProof.Size.get -> int
+static Nalix.Codec.ProtocolFrames.SessionResume.Size.get -> int
+static Nalix.Codec.ProtocolFrames.SessionTofu.Size.get -> int
+static Nalix.Codec.ProtocolFrames.TimeSync.Size.get -> int

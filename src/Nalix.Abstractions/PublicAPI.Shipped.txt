@@ -1,0 +1,918 @@
+#nullable enable
+const Nalix.Abstractions.Networking.Packets.PacketConstants.CompressionThreshold = 256 -> short
+const Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize = 6 -> byte
+const Nalix.Abstractions.Networking.Packets.PacketConstants.HeapAllocLimit = 1024 -> short
+const Nalix.Abstractions.Networking.Packets.PacketConstants.StackAllocLimit = 512 -> short
+const Nalix.Abstractions.Primitives.Bytes32.Size = 32 -> int
+const Nalix.Abstractions.Primitives.PacketHeader.Size = 6 -> int
+const Nalix.Abstractions.Serialization.SerializerBounds.MaxArray = 1048576 -> int
+const Nalix.Abstractions.Serialization.SerializerBounds.MaxString = 1048576 -> int
+const Nalix.Abstractions.Serialization.SerializerBounds.Null = -1 -> int
+Nalix.Abstractions.AttributeKey
+Nalix.Abstractions.AttributeKey.AttributeKey() -> void
+Nalix.Abstractions.AttributeKey.AttributeKey(ulong hash, string? name = null) -> void
+Nalix.Abstractions.AttributeKey.Equals(Nalix.Abstractions.AttributeKey other) -> bool
+Nalix.Abstractions.BorrowedAttribute
+Nalix.Abstractions.BorrowedAttribute.BorrowedAttribute() -> void
+Nalix.Abstractions.Concurrency.IRecurringHandle
+Nalix.Abstractions.Concurrency.IRecurringHandle.ConsecutiveFailures.get -> int
+Nalix.Abstractions.Concurrency.IRecurringHandle.Interval.get -> System.TimeSpan
+Nalix.Abstractions.Concurrency.IRecurringHandle.IsPaused.get -> bool
+Nalix.Abstractions.Concurrency.IRecurringHandle.IsRunning.get -> bool
+Nalix.Abstractions.Concurrency.IRecurringHandle.LastRunUtc.get -> System.DateTimeOffset?
+Nalix.Abstractions.Concurrency.IRecurringHandle.Name.get -> string!
+Nalix.Abstractions.Concurrency.IRecurringHandle.NextRunUtc.get -> System.DateTimeOffset?
+Nalix.Abstractions.Concurrency.IRecurringHandle.Options.get -> Nalix.Abstractions.Concurrency.IRecurringOptions!
+Nalix.Abstractions.Concurrency.IRecurringHandle.TotalRuns.get -> long
+Nalix.Abstractions.Concurrency.IRecurringOptions
+Nalix.Abstractions.Concurrency.IRecurringOptions.BackoffCap.get -> System.TimeSpan
+Nalix.Abstractions.Concurrency.IRecurringOptions.BackoffCap.set -> void
+Nalix.Abstractions.Concurrency.IRecurringOptions.ExecutionTimeout.get -> System.TimeSpan?
+Nalix.Abstractions.Concurrency.IRecurringOptions.ExecutionTimeout.set -> void
+Nalix.Abstractions.Concurrency.IRecurringOptions.FailuresBeforeBackoff.get -> int
+Nalix.Abstractions.Concurrency.IRecurringOptions.FailuresBeforeBackoff.set -> void
+Nalix.Abstractions.Concurrency.IRecurringOptions.Jitter.get -> System.TimeSpan?
+Nalix.Abstractions.Concurrency.IRecurringOptions.Jitter.set -> void
+Nalix.Abstractions.Concurrency.IRecurringOptions.NonReentrant.get -> bool
+Nalix.Abstractions.Concurrency.IRecurringOptions.NonReentrant.set -> void
+Nalix.Abstractions.Concurrency.IRecurringOptions.Tag.get -> string?
+Nalix.Abstractions.Concurrency.IRecurringOptions.Tag.set -> void
+Nalix.Abstractions.Concurrency.ITaskManager
+Nalix.Abstractions.Concurrency.ITaskManager.CancelAllWorkers() -> int
+Nalix.Abstractions.Concurrency.ITaskManager.CancelGroup(string! group) -> int
+Nalix.Abstractions.Concurrency.ITaskManager.CancelRecurring(string! name) -> void
+Nalix.Abstractions.Concurrency.ITaskManager.CancelWorker(Nalix.Abstractions.Identity.ISnowflake! id) -> void
+Nalix.Abstractions.Concurrency.ITaskManager.ConcurrencyLimitRatio.get -> double
+Nalix.Abstractions.Concurrency.ITaskManager.GetRecurring() -> System.Collections.Generic.IReadOnlyCollection<Nalix.Abstractions.Concurrency.IRecurringHandle!>!
+Nalix.Abstractions.Concurrency.ITaskManager.GetWorkers(bool runningOnly = true, string? group = null) -> System.Collections.Generic.IReadOnlyCollection<Nalix.Abstractions.Concurrency.IWorkerHandle!>!
+Nalix.Abstractions.Concurrency.ITaskManager.RunOnceAsync(string! name, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Concurrency.ITaskManager.ScheduleRecurring(string! name, System.TimeSpan interval, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, Nalix.Abstractions.Concurrency.IRecurringOptions? options = null) -> Nalix.Abstractions.Concurrency.IRecurringHandle!
+Nalix.Abstractions.Concurrency.ITaskManager.ScheduleWorker(Nalix.Abstractions.Concurrency.IWorker! worker) -> Nalix.Abstractions.Concurrency.IWorkerHandle!
+Nalix.Abstractions.Concurrency.ITaskManager.ScheduleWorker(string! name, string! group, System.Func<Nalix.Abstractions.Concurrency.IWorkerContext!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, Nalix.Abstractions.Concurrency.IWorkerOptions? options = null) -> Nalix.Abstractions.Concurrency.IWorkerHandle!
+Nalix.Abstractions.Concurrency.ITaskManager.ScheduleWorker<TState>(string! name, System.Action<TState>! work, TState state) -> void
+Nalix.Abstractions.Concurrency.ITaskManager.Title.get -> string!
+Nalix.Abstractions.Concurrency.ITaskManager.TryGetRecurring(string! name, out Nalix.Abstractions.Concurrency.IRecurringHandle? handle) -> bool
+Nalix.Abstractions.Concurrency.ITaskManager.TryGetWorker(Nalix.Abstractions.Identity.ISnowflake! id, out Nalix.Abstractions.Concurrency.IWorkerHandle? handle) -> bool
+Nalix.Abstractions.Concurrency.ITaskManager.WaitGroupAsync(string! group, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Concurrency.IWorker
+Nalix.Abstractions.Concurrency.IWorker.ExecuteAsync(Nalix.Abstractions.Concurrency.IWorkerContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Concurrency.IWorkerContext
+Nalix.Abstractions.Concurrency.IWorkerContext.Advance(long delta, string? note = null) -> void
+Nalix.Abstractions.Concurrency.IWorkerContext.Beat() -> void
+Nalix.Abstractions.Concurrency.IWorkerContext.Group.get -> string!
+Nalix.Abstractions.Concurrency.IWorkerContext.Id.get -> Nalix.Abstractions.Identity.ISnowflake!
+Nalix.Abstractions.Concurrency.IWorkerContext.IsCancellationRequested.get -> bool
+Nalix.Abstractions.Concurrency.IWorkerContext.Name.get -> string!
+Nalix.Abstractions.Concurrency.IWorkerHandle
+Nalix.Abstractions.Concurrency.IWorkerHandle.Group.get -> string!
+Nalix.Abstractions.Concurrency.IWorkerHandle.Id.get -> Nalix.Abstractions.Identity.ISnowflake!
+Nalix.Abstractions.Concurrency.IWorkerHandle.IsRunning.get -> bool
+Nalix.Abstractions.Concurrency.IWorkerHandle.LastHeartbeatUtc.get -> System.DateTimeOffset?
+Nalix.Abstractions.Concurrency.IWorkerHandle.LastNote.get -> string?
+Nalix.Abstractions.Concurrency.IWorkerHandle.Name.get -> string!
+Nalix.Abstractions.Concurrency.IWorkerHandle.Options.get -> Nalix.Abstractions.Concurrency.IWorkerOptions!
+Nalix.Abstractions.Concurrency.IWorkerHandle.Progress.get -> long
+Nalix.Abstractions.Concurrency.IWorkerHandle.StartedUtc.get -> System.DateTimeOffset
+Nalix.Abstractions.Concurrency.IWorkerHandle.TotalRuns.get -> long
+Nalix.Abstractions.Concurrency.IWorkerOptions
+Nalix.Abstractions.Concurrency.IWorkerOptions.CancellationToken.get -> System.Threading.CancellationToken
+Nalix.Abstractions.Concurrency.IWorkerOptions.CancellationToken.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.ExecutionTimeout.get -> System.TimeSpan?
+Nalix.Abstractions.Concurrency.IWorkerOptions.GroupConcurrencyLimit.get -> int?
+Nalix.Abstractions.Concurrency.IWorkerOptions.GroupConcurrencyLimit.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.IdType.get -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Concurrency.IWorkerOptions.IdType.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.MachineId.get -> ushort
+Nalix.Abstractions.Concurrency.IWorkerOptions.MachineId.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.OnCompleted.get -> System.Action<Nalix.Abstractions.Concurrency.IWorkerHandle!>?
+Nalix.Abstractions.Concurrency.IWorkerOptions.OnFailed.get -> System.Action<Nalix.Abstractions.Concurrency.IWorkerHandle!, System.Exception!>?
+Nalix.Abstractions.Concurrency.IWorkerOptions.OSPriority.get -> System.Threading.ThreadPriority?
+Nalix.Abstractions.Concurrency.IWorkerOptions.OSPriority.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.Priority.get -> Nalix.Abstractions.Concurrency.WorkerPriority
+Nalix.Abstractions.Concurrency.IWorkerOptions.Priority.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.ProcessorAffinity.get -> int?
+Nalix.Abstractions.Concurrency.IWorkerOptions.ProcessorAffinity.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.RetainFor.get -> System.TimeSpan?
+Nalix.Abstractions.Concurrency.IWorkerOptions.RetainFor.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.Tag.get -> string?
+Nalix.Abstractions.Concurrency.IWorkerOptions.Tag.set -> void
+Nalix.Abstractions.Concurrency.IWorkerOptions.TryAcquireSlotImmediately.get -> bool
+Nalix.Abstractions.Concurrency.IWorkerOptions.TryAcquireSlotImmediately.set -> void
+Nalix.Abstractions.Concurrency.WorkerAttribute
+Nalix.Abstractions.Concurrency.WorkerAttribute.Enabled.get -> bool
+Nalix.Abstractions.Concurrency.WorkerAttribute.Enabled.init -> void
+Nalix.Abstractions.Concurrency.WorkerAttribute.Group.get -> string!
+Nalix.Abstractions.Concurrency.WorkerAttribute.GroupConcurrencyLimit.get -> int
+Nalix.Abstractions.Concurrency.WorkerAttribute.GroupConcurrencyLimit.init -> void
+Nalix.Abstractions.Concurrency.WorkerAttribute.IdType.get -> int
+Nalix.Abstractions.Concurrency.WorkerAttribute.IdType.init -> void
+Nalix.Abstractions.Concurrency.WorkerAttribute.Name.get -> string!
+Nalix.Abstractions.Concurrency.WorkerAttribute.Priority.get -> int
+Nalix.Abstractions.Concurrency.WorkerAttribute.Priority.init -> void
+Nalix.Abstractions.Concurrency.WorkerAttribute.ProcessorAffinity.get -> int
+Nalix.Abstractions.Concurrency.WorkerAttribute.ProcessorAffinity.init -> void
+Nalix.Abstractions.Concurrency.WorkerAttribute.RetainForMs.get -> int
+Nalix.Abstractions.Concurrency.WorkerAttribute.RetainForMs.init -> void
+Nalix.Abstractions.Concurrency.WorkerAttribute.Tag.get -> string?
+Nalix.Abstractions.Concurrency.WorkerAttribute.Tag.init -> void
+Nalix.Abstractions.Concurrency.WorkerAttribute.WorkerAttribute(string! name, string! group) -> void
+Nalix.Abstractions.Concurrency.WorkerPriority
+Nalix.Abstractions.Concurrency.WorkerPriority.HIGH = 2 -> Nalix.Abstractions.Concurrency.WorkerPriority
+Nalix.Abstractions.Concurrency.WorkerPriority.LOW = 0 -> Nalix.Abstractions.Concurrency.WorkerPriority
+Nalix.Abstractions.Concurrency.WorkerPriority.NORMAL = 1 -> Nalix.Abstractions.Concurrency.WorkerPriority
+Nalix.Abstractions.Concurrency.WorkerPriority.URGENT = 3 -> Nalix.Abstractions.Concurrency.WorkerPriority
+Nalix.Abstractions.ConfiguredIgnoreAttribute
+Nalix.Abstractions.ConfiguredIgnoreAttribute.ConfiguredIgnoreAttribute(string? reason = null) -> void
+Nalix.Abstractions.ConfiguredIgnoreAttribute.Reason.get -> string!
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.Buffers = 2 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.ConcurrencyGate = 7 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.ConnectionGuard = 5 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.Connections = 4 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.None = 0 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.ObjectPools = 3 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.PacketDispatch = 6 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.PolicyRateLimiter = 8 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.Sessions = 10 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.Tasks = 1 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.CoreTelemetryTarget.TokenBucketLimiter = 9 -> Nalix.Abstractions.Diagnostics.CoreTelemetryTarget
+Nalix.Abstractions.Diagnostics.DiagnosticLog
+Nalix.Abstractions.Diagnostics.DiagnosticLog.Deconstruct(out string! Tag, out string! Message, out System.Exception? Exception) -> void
+Nalix.Abstractions.Diagnostics.DiagnosticLog.DiagnosticLog() -> void
+Nalix.Abstractions.Diagnostics.DiagnosticLog.DiagnosticLog(string! Tag, string! Message, System.Exception? Exception = null) -> void
+Nalix.Abstractions.Diagnostics.DiagnosticLog.Equals(Nalix.Abstractions.Diagnostics.DiagnosticLog other) -> bool
+Nalix.Abstractions.Diagnostics.DiagnosticLog.Exception.get -> System.Exception?
+Nalix.Abstractions.Diagnostics.DiagnosticLog.Exception.init -> void
+Nalix.Abstractions.Diagnostics.DiagnosticLog.Message.get -> string!
+Nalix.Abstractions.Diagnostics.DiagnosticLog.Message.init -> void
+Nalix.Abstractions.Diagnostics.DiagnosticLog.Tag.get -> string!
+Nalix.Abstractions.Diagnostics.DiagnosticLog.Tag.init -> void
+Nalix.Abstractions.Exceptions.BaseException
+Nalix.Abstractions.Exceptions.BaseException.BaseException() -> void
+Nalix.Abstractions.Exceptions.BaseException.BaseException(string! message) -> void
+Nalix.Abstractions.Exceptions.BaseException.BaseException(string! message, System.Exception! innerException) -> void
+Nalix.Abstractions.Exceptions.CipherException
+Nalix.Abstractions.Exceptions.CipherException.CipherException() -> void
+Nalix.Abstractions.Exceptions.CipherException.CipherException(string! message) -> void
+Nalix.Abstractions.Exceptions.CipherException.CipherException(string! message, System.Exception! innerException) -> void
+Nalix.Abstractions.Exceptions.ConcurrencyFailureException
+Nalix.Abstractions.Exceptions.ConcurrencyFailureException.ConcurrencyFailureException() -> void
+Nalix.Abstractions.Exceptions.ConcurrencyFailureException.ConcurrencyFailureException(string! message) -> void
+Nalix.Abstractions.Exceptions.ConcurrencyFailureException.ConcurrencyFailureException(string! message, string! details) -> void
+Nalix.Abstractions.Exceptions.ConcurrencyFailureException.ConcurrencyFailureException(string! message, System.Exception! innerException) -> void
+Nalix.Abstractions.Exceptions.ExceptionClassifier
+Nalix.Abstractions.Exceptions.InternalErrorException
+Nalix.Abstractions.Exceptions.InternalErrorException.Details.get -> string?
+Nalix.Abstractions.Exceptions.InternalErrorException.InternalErrorException() -> void
+Nalix.Abstractions.Exceptions.InternalErrorException.InternalErrorException(string! message) -> void
+Nalix.Abstractions.Exceptions.InternalErrorException.InternalErrorException(string! message, string! details) -> void
+Nalix.Abstractions.Exceptions.InternalErrorException.InternalErrorException(string! message, System.Exception! innerException) -> void
+Nalix.Abstractions.Exceptions.LZ4Exception
+Nalix.Abstractions.Exceptions.LZ4Exception.LZ4Exception() -> void
+Nalix.Abstractions.Exceptions.LZ4Exception.LZ4Exception(string! message) -> void
+Nalix.Abstractions.Exceptions.LZ4Exception.LZ4Exception(string! message, System.Exception! innerException) -> void
+Nalix.Abstractions.Exceptions.NetworkException
+Nalix.Abstractions.Exceptions.NetworkException.NetworkException() -> void
+Nalix.Abstractions.Exceptions.NetworkException.NetworkException(string! message) -> void
+Nalix.Abstractions.Exceptions.NetworkException.NetworkException(string! message, System.Exception! innerException) -> void
+Nalix.Abstractions.Exceptions.SerializationFailureException
+Nalix.Abstractions.Exceptions.SerializationFailureException.SerializationFailureException() -> void
+Nalix.Abstractions.Exceptions.SerializationFailureException.SerializationFailureException(string! message) -> void
+Nalix.Abstractions.Exceptions.SerializationFailureException.SerializationFailureException(string! message, System.Exception! innerException) -> void
+Nalix.Abstractions.Exceptions.ValidationException
+Nalix.Abstractions.Exceptions.ValidationException.ValidationException() -> void
+Nalix.Abstractions.Exceptions.ValidationException.ValidationException(string! message) -> void
+Nalix.Abstractions.Exceptions.ValidationException.ValidationException(string! message, System.Exception! innerException) -> void
+Nalix.Abstractions.IActivatable
+Nalix.Abstractions.IActivatable.Activate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Abstractions.IActivatable.Deactivate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Abstractions.IActivatableAsync
+Nalix.Abstractions.IActivatableAsync.ActivateAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.IActivatableAsync.DeactivateAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.IBufferLease
+Nalix.Abstractions.IBufferLease.Capacity.get -> int
+Nalix.Abstractions.IBufferLease.CommitLength(int length) -> void
+Nalix.Abstractions.IBufferLease.EncryptedOnWire.get -> bool
+Nalix.Abstractions.IBufferLease.EncryptedOnWire.set -> void
+Nalix.Abstractions.IBufferLease.IsReliable.get -> bool
+Nalix.Abstractions.IBufferLease.IsReliable.set -> void
+Nalix.Abstractions.IBufferLease.Length.get -> int
+Nalix.Abstractions.IBufferLease.Memory.get -> System.ReadOnlyMemory<byte>
+Nalix.Abstractions.IBufferLease.ReleaseOwnership(out byte[]? buffer, out int start, out int length) -> bool
+Nalix.Abstractions.IBufferLease.Retain() -> void
+Nalix.Abstractions.IBufferLease.Span.get -> System.Span<byte>
+Nalix.Abstractions.IBufferLease.SpanFull.get -> System.Span<byte>
+Nalix.Abstractions.IBufferPoolManager
+Nalix.Abstractions.IBufferPoolManager.Rent(int minimumLength = 256) -> byte[]!
+Nalix.Abstractions.IBufferPoolManager.Return(byte[]? array, bool arrayClear = false) -> void
+Nalix.Abstractions.Identity.ISnowflake
+Nalix.Abstractions.Identity.ISnowflake.Empty.get -> Nalix.Abstractions.Identity.ISnowflake?
+Nalix.Abstractions.Identity.ISnowflake.IsEmpty.get -> bool
+Nalix.Abstractions.Identity.ISnowflake.MachineId.get -> ushort
+Nalix.Abstractions.Identity.ISnowflake.Size.get -> int
+Nalix.Abstractions.Identity.ISnowflake.ToByteArray() -> byte[]!
+Nalix.Abstractions.Identity.ISnowflake.ToUInt64() -> ulong
+Nalix.Abstractions.Identity.ISnowflake.TryWriteBytes(System.Span<byte> destination) -> bool
+Nalix.Abstractions.Identity.ISnowflake.TryWriteBytes(System.Span<byte> destination, out int bytesWritten) -> bool
+Nalix.Abstractions.Identity.ISnowflake.Type.get -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.ISnowflake.Value.get -> uint
+Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Account = 10 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Configuration = 1 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Email = 22 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Inventory = 31 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Invoice = 33 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Log = 2 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.MaxValue = 255 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Message = 20 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Notification = 21 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Order = 30 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Session = 11 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Sms = 23 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.SupportTicket = 34 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.System = 3 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Transaction = 32 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.Identity.SnowflakeType.Unknown = 0 -> Nalix.Abstractions.Identity.SnowflakeType
+Nalix.Abstractions.IniCommentAttribute
+Nalix.Abstractions.IniCommentAttribute.Comment.get -> string!
+Nalix.Abstractions.IniCommentAttribute.IniCommentAttribute(string! comment) -> void
+Nalix.Abstractions.Injection.FromScopeAttribute
+Nalix.Abstractions.Injection.FromScopeAttribute.FromScopeAttribute() -> void
+Nalix.Abstractions.Injection.InjectableAttribute
+Nalix.Abstractions.Injection.InjectableAttribute.InjectableAttribute() -> void
+Nalix.Abstractions.Injection.InjectableAttribute.InjectableAttribute(System.Type! serviceType) -> void
+Nalix.Abstractions.Injection.InjectableAttribute.ServiceType.get -> System.Type?
+Nalix.Abstractions.Injection.InjectAttribute
+Nalix.Abstractions.Injection.InjectAttribute.InjectAttribute() -> void
+Nalix.Abstractions.Injection.IPacketScope
+Nalix.Abstractions.Injection.IPacketScope.Connection.get -> Nalix.Abstractions.Networking.IConnection!
+Nalix.Abstractions.Injection.IPacketScope.GetOrAdd<T>(object! key, System.Func<T!>! factory) -> T!
+Nalix.Abstractions.Injection.IPacketScope.GetOrAdd<T>(System.Func<T!>! factory) -> T!
+Nalix.Abstractions.Injection.IPacketScope.GetRequiredService<T>() -> T!
+Nalix.Abstractions.Injection.IPacketScope.GetService<T>() -> T?
+Nalix.Abstractions.Injection.IPacketScope.RegisterForDisposal(System.IAsyncDisposable! asyncDisposable) -> void
+Nalix.Abstractions.Injection.IPacketScope.RegisterForDisposal(System.IDisposable! disposable) -> void
+Nalix.Abstractions.IObjectMap<TKey, TValue>
+Nalix.Abstractions.IObjectMap<TKey, TValue>.Return() -> void
+Nalix.Abstractions.IObjectPoolManager
+Nalix.Abstractions.IObjectPoolManager.Get<T>() -> T
+Nalix.Abstractions.IObjectPoolManager.Prealloc<T>(int count) -> int
+Nalix.Abstractions.IObjectPoolManager.Return<T>(T obj) -> void
+Nalix.Abstractions.IObjectPoolManager.SetMaxCapacity<T>(int maxCapacity) -> bool
+Nalix.Abstractions.IPoolable
+Nalix.Abstractions.IPoolable.ResetForPool() -> void
+Nalix.Abstractions.IPoolRentable
+Nalix.Abstractions.IPoolRentable.OnRent() -> void
+Nalix.Abstractions.IPoolStateTracked
+Nalix.Abstractions.IPoolStateTracked.PoolState.get -> int
+Nalix.Abstractions.IReportable
+Nalix.Abstractions.IReportable.GenerateReport() -> string!
+Nalix.Abstractions.IReportable.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+Nalix.Abstractions.IValidatableConfiguration
+Nalix.Abstractions.IValidatableConfiguration.Validate() -> void
+Nalix.Abstractions.Middleware.IPacketMiddleware<TPacket>
+Nalix.Abstractions.Middleware.IPacketMiddleware<TPacket>.InvokeAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>! context, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! next) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Middleware.MiddlewareOrderAttribute
+Nalix.Abstractions.Middleware.MiddlewareOrderAttribute.MiddlewareOrderAttribute(int order) -> void
+Nalix.Abstractions.Middleware.MiddlewareOrderAttribute.Order.get -> int
+Nalix.Abstractions.Middleware.MiddlewareStage
+Nalix.Abstractions.Middleware.MiddlewareStage.Both = 2 -> Nalix.Abstractions.Middleware.MiddlewareStage
+Nalix.Abstractions.Middleware.MiddlewareStage.Inbound = 0 -> Nalix.Abstractions.Middleware.MiddlewareStage
+Nalix.Abstractions.Middleware.MiddlewareStage.Outbound = 1 -> Nalix.Abstractions.Middleware.MiddlewareStage
+Nalix.Abstractions.Middleware.MiddlewareStageAttribute
+Nalix.Abstractions.Middleware.MiddlewareStageAttribute.AlwaysExecute.get -> bool
+Nalix.Abstractions.Middleware.MiddlewareStageAttribute.AlwaysExecute.set -> void
+Nalix.Abstractions.Middleware.MiddlewareStageAttribute.MiddlewareStageAttribute(Nalix.Abstractions.Middleware.MiddlewareStage stage) -> void
+Nalix.Abstractions.Middleware.MiddlewareStageAttribute.Stage.get -> Nalix.Abstractions.Middleware.MiddlewareStage
+Nalix.Abstractions.Networking.ConnectionAttributes
+Nalix.Abstractions.Networking.ConnectionSequenceState
+Nalix.Abstractions.Networking.ConnectionSequenceState.ConnectionSequenceState() -> void
+Nalix.Abstractions.Networking.ConnectionSequenceState.ResetForPool() -> void
+Nalix.Abstractions.Networking.ConnectionSequenceState.TcpReceiveSequence.get -> uint
+Nalix.Abstractions.Networking.ConnectionSequenceState.TcpReceiveSequence.set -> void
+Nalix.Abstractions.Networking.ConnectionSequenceState.TcpSendSequence.get -> uint
+Nalix.Abstractions.Networking.ConnectionSequenceState.TcpSendSequence.set -> void
+Nalix.Abstractions.Networking.ConnectionSequenceState.UdpReceiveSequence.get -> uint
+Nalix.Abstractions.Networking.ConnectionSequenceState.UdpReceiveSequence.set -> void
+Nalix.Abstractions.Networking.ConnectionSequenceState.UdpSendSequence.get -> uint
+Nalix.Abstractions.Networking.ConnectionSequenceState.UdpSendSequence.set -> void
+Nalix.Abstractions.Networking.IConnection
+Nalix.Abstractions.Networking.IConnection.Algorithm.get -> Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Networking.IConnection.Algorithm.set -> void
+Nalix.Abstractions.Networking.IConnection.Attributes.get -> Nalix.Abstractions.IObjectMap<Nalix.Abstractions.AttributeKey, object!>!
+Nalix.Abstractions.Networking.IConnection.ConnectionClosed -> System.EventHandler<Nalix.Abstractions.Networking.IConnectionEventArgs!>!
+Nalix.Abstractions.Networking.IConnection.ConnectionId.get -> ulong
+Nalix.Abstractions.Networking.IConnection.Disconnect(string? reason = null) -> void
+Nalix.Abstractions.Networking.IConnection.ExcludeFromIdleTimeout.get -> bool
+Nalix.Abstractions.Networking.IConnection.ExcludeFromIdleTimeout.set -> void
+Nalix.Abstractions.Networking.IConnection.IsDisposed.get -> bool
+Nalix.Abstractions.Networking.IConnection.ISocketTransport
+Nalix.Abstractions.Networking.IConnection.ISocketTransport.ReceiveLoopTask.get -> System.Threading.Tasks.Task?
+Nalix.Abstractions.Networking.IConnection.ISocketTransport.Socket.get -> System.Net.Sockets.Socket!
+Nalix.Abstractions.Networking.IConnection.ISocketTransport.StolenData.get -> byte[]?
+Nalix.Abstractions.Networking.IConnection.ISocketTransport.Unwrap() -> System.Net.Sockets.Socket!
+Nalix.Abstractions.Networking.IConnection.IsUdpCreated.get -> bool
+Nalix.Abstractions.Networking.IConnection.ITransport
+Nalix.Abstractions.Networking.IConnection.ITransport.AcquireSendLockAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IAsyncDisposable!>
+Nalix.Abstractions.Networking.IConnection.ITransport.BeginReceive(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Abstractions.Networking.IConnection.ITransport.Framing.get -> Nalix.Abstractions.Networking.TransportFraming
+Nalix.Abstractions.Networking.IConnection.ITransport.Send(System.ReadOnlySpan<byte> message) -> void
+Nalix.Abstractions.Networking.IConnection.ITransport.SendAsync(System.ReadOnlyMemory<byte> message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.IConnection.ITransport.SendAsyncCore(Nalix.Abstractions.IBufferLease! frame, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.IConnection.ITransport.SendAsyncCore(System.ReadOnlyMemory<byte> message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.IConnection.ITransport.SendAsyncCore(System.ReadOnlyMemory<Nalix.Abstractions.IBufferLease!> frames, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.IConnection.ITransport.UseFraming(Nalix.Abstractions.Networking.TransportFraming framing) -> void
+Nalix.Abstractions.Networking.IConnection.LastPingTime.get -> long
+Nalix.Abstractions.Networking.IConnection.Level.get -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Networking.IConnection.Level.set -> void
+Nalix.Abstractions.Networking.IConnection.MessageProcessed -> System.EventHandler<Nalix.Abstractions.Networking.IConnectionEventArgs!>!
+Nalix.Abstractions.Networking.IConnection.MessageProcessing -> System.EventHandler<Nalix.Abstractions.Networking.IConnectionEventArgs!>!
+Nalix.Abstractions.Networking.IConnection.NetworkEndpoint.get -> Nalix.Abstractions.Networking.INetworkEndpoint!
+Nalix.Abstractions.Networking.IConnection.PacketClassifier.get -> Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor!
+Nalix.Abstractions.Networking.IConnection.RateLimitCache.get -> System.Collections.Concurrent.ConcurrentDictionary<ushort, object!>!
+Nalix.Abstractions.Networking.IConnection.Secret.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Abstractions.Networking.IConnection.Secret.set -> void
+Nalix.Abstractions.Networking.IConnection.TCP.get -> Nalix.Abstractions.Networking.IConnection.ITransport!
+Nalix.Abstractions.Networking.IConnection.UDP.get -> Nalix.Abstractions.Networking.IConnection.ITransport?
+Nalix.Abstractions.Networking.IConnection.UpdateIdleTimeout(int newTimeoutMs) -> void
+Nalix.Abstractions.Networking.IConnection.UpTime.get -> long
+Nalix.Abstractions.Networking.IConnection.UserId.get -> string?
+Nalix.Abstractions.Networking.IConnection.UserId.set -> void
+Nalix.Abstractions.Networking.IConnectionBroadcaster
+Nalix.Abstractions.Networking.IConnectionBroadcaster.BroadcastAsync(System.ReadOnlyMemory<byte> message, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.BroadcastAsync<TState, TSender>(TState state, TSender sender, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.BroadcastWhereAsync(System.ReadOnlyMemory<byte> message, System.Func<Nalix.Abstractions.Networking.IConnection!, bool>! predicate, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.MulticastAsync(Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, System.ReadOnlyMemory<byte> message, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.MulticastAsync<TState, TSender>(Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, TState state, TSender sender, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.MulticastExceptAsync(Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, Nalix.Abstractions.Networking.IConnection! excludedConnection, System.ReadOnlyMemory<byte> message, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.MulticastExceptAsync<TState, TSender>(Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, Nalix.Abstractions.Networking.IConnection! excludedConnection, TState state, TSender sender, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionErrorTracked
+Nalix.Abstractions.Networking.IConnectionErrorTracked.ErrorCount.get -> int
+Nalix.Abstractions.Networking.IConnectionErrorTracked.IncrementErrorCount() -> void
+Nalix.Abstractions.Networking.IConnectionEventArgs
+Nalix.Abstractions.Networking.IConnectionEventArgs.Connection.get -> Nalix.Abstractions.Networking.IConnection!
+Nalix.Abstractions.Networking.IConnectionEventArgs.Lease.get -> Nalix.Abstractions.IBufferLease?
+Nalix.Abstractions.Networking.IConnectionEventArgs.NetworkEndpoint.get -> Nalix.Abstractions.Networking.INetworkEndpoint?
+Nalix.Abstractions.Networking.IConnectionGroupRegistry
+Nalix.Abstractions.Networking.IConnectionGroupRegistry.AddToGroupAsync(string! groupName, Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionGroupRegistry.GetGroupMembers(string! groupName) -> System.Collections.Generic.IReadOnlyCollection<Nalix.Abstractions.Networking.IConnection!>!
+Nalix.Abstractions.Networking.IConnectionGroupRegistry.RemoveFromAllGroupsAsync(Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionGroupRegistry.RemoveFromGroupAsync(string! groupName, Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionGuard
+Nalix.Abstractions.Networking.IConnectionGuard.BanEndpoint(System.Net.IPAddress! address, System.TimeSpan duration) -> void
+Nalix.Abstractions.Networking.IConnectionGuard.IsTrustedProxy(System.Net.IPEndPoint? endPoint) -> bool
+Nalix.Abstractions.Networking.IConnectionGuard.OnConnectionClosed(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Abstractions.Networking.IConnectionGuard.Release(System.Net.IPEndPoint! endPoint) -> void
+Nalix.Abstractions.Networking.IConnectionGuard.TryAccept(System.Net.IPEndPoint! endPoint) -> bool
+Nalix.Abstractions.Networking.IConnectionHub
+Nalix.Abstractions.Networking.IConnectionHub.ConnectionUnregistered -> System.Action<Nalix.Abstractions.Networking.IConnection!>?
+Nalix.Abstractions.Networking.IConnectionHub.Count.get -> int
+Nalix.Abstractions.Networking.IConnectionHub.GetConnection(System.ReadOnlySpan<byte> id) -> Nalix.Abstractions.Networking.IConnection?
+Nalix.Abstractions.Networking.IConnectionHub.GetConnection(ulong id) -> Nalix.Abstractions.Networking.IConnection?
+Nalix.Abstractions.Networking.IConnectionHub.ListConnections() -> System.Collections.Generic.IReadOnlyCollection<Nalix.Abstractions.Networking.IConnection!>!
+Nalix.Abstractions.Networking.IConnectionHub.ListConnections(Nalix.Abstractions.Networking.INetworkEndpoint! networkEndpoint) -> System.Collections.Generic.IReadOnlyCollection<Nalix.Abstractions.Networking.IConnection!>!
+Nalix.Abstractions.Networking.IConnectionHub.RegisterConnection(Nalix.Abstractions.Networking.IConnection! connection) -> void
+Nalix.Abstractions.Networking.IConnectionHub.UnregisterConnection(Nalix.Abstractions.Networking.IConnection! connection) -> void
+Nalix.Abstractions.Networking.IConnectionSender<TState>
+Nalix.Abstractions.Networking.IConnectionSender<TState>.SendAsync(Nalix.Abstractions.Networking.IConnection! connection, ref TState state, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.IConnectionTrafficMetrics
+Nalix.Abstractions.Networking.IConnectionTrafficMetrics.BytesReceived.get -> long
+Nalix.Abstractions.Networking.IConnectionTrafficMetrics.BytesSent.get -> long
+Nalix.Abstractions.Networking.IConnectionTrafficMetrics.IncrementBytesReceived(int bytes) -> void
+Nalix.Abstractions.Networking.IConnectionTrafficMetrics.IncrementBytesSent(int bytes) -> void
+Nalix.Abstractions.Networking.IConnectionTrafficMetrics.IncrementPacketsDropped() -> void
+Nalix.Abstractions.Networking.IConnectionTrafficMetrics.PacketsDropped.get -> long
+Nalix.Abstractions.Networking.IFrameProcessor
+Nalix.Abstractions.Networking.IFrameProcessor.ProcessFrame(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Abstractions.Networking.IFrameProcessor.SupportsInlineProcessing.get -> bool
+Nalix.Abstractions.Networking.IListener
+Nalix.Abstractions.Networking.INetworkEndpoint
+Nalix.Abstractions.Networking.INetworkEndpoint.Address.get -> string!
+Nalix.Abstractions.Networking.INetworkEndpoint.HasPort.get -> bool
+Nalix.Abstractions.Networking.INetworkEndpoint.IsIPv6.get -> bool
+Nalix.Abstractions.Networking.INetworkEndpoint.Port.get -> int
+Nalix.Abstractions.Networking.INetworkEndpoint.TryFormatAddress(System.Span<char> destination, out int charsWritten) -> bool
+Nalix.Abstractions.Networking.IProtocol
+Nalix.Abstractions.Networking.IProtocol.FrameProcessor.get -> Nalix.Abstractions.Networking.IFrameProcessor!
+Nalix.Abstractions.Networking.IProtocol.KeepConnectionOpen.get -> bool
+Nalix.Abstractions.Networking.IProtocol.OnAccept(Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+Nalix.Abstractions.Networking.IProtocol.OpCodeExtractor.get -> Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor!
+Nalix.Abstractions.Networking.IProtocol.PostProcessMessage(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Abstractions.Networking.IProtocol.ProcessMessage(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+Nalix.Abstractions.Networking.ITransportSequencer
+Nalix.Abstractions.Networking.ITransportSequencer.CurrentReceiveSequence.get -> uint
+Nalix.Abstractions.Networking.ITransportSequencer.CurrentSendSequence.get -> uint
+Nalix.Abstractions.Networking.ITransportSequencer.NextReceiveSequence() -> uint
+Nalix.Abstractions.Networking.ITransportSequencer.NextSendSequence() -> uint
+Nalix.Abstractions.Networking.ITransportSequencer.ReceiveSequence.get -> Nalix.Abstractions.Security.ISequenceCounter!
+Nalix.Abstractions.Networking.ITransportSequencer.SendSequence.get -> Nalix.Abstractions.Security.ISequenceCounter!
+Nalix.Abstractions.Networking.NetworkOverflowPolicy
+Nalix.Abstractions.Networking.NetworkOverflowPolicy.Disconnect = 1 -> Nalix.Abstractions.Networking.NetworkOverflowPolicy
+Nalix.Abstractions.Networking.NetworkOverflowPolicy.DropPacket = 0 -> Nalix.Abstractions.Networking.NetworkOverflowPolicy
+Nalix.Abstractions.Networking.NetworkTransport
+Nalix.Abstractions.Networking.NetworkTransport.TCP = 0 -> Nalix.Abstractions.Networking.NetworkTransport
+Nalix.Abstractions.Networking.NetworkTransport.UDP = 1 -> Nalix.Abstractions.Networking.NetworkTransport
+Nalix.Abstractions.Networking.NetworkTransport.WEBSOCKET = 2 -> Nalix.Abstractions.Networking.NetworkTransport
+Nalix.Abstractions.Networking.OperatingMode
+Nalix.Abstractions.Networking.OperatingMode.Passthrough = 1 -> Nalix.Abstractions.Networking.OperatingMode
+Nalix.Abstractions.Networking.OperatingMode.Server = 0 -> Nalix.Abstractions.Networking.OperatingMode
+Nalix.Abstractions.Networking.Packets.IPacket
+Nalix.Abstractions.Networking.Packets.IPacket.Header.get -> Nalix.Abstractions.Primitives.PacketHeader
+Nalix.Abstractions.Networking.Packets.IPacket.Header.set -> void
+Nalix.Abstractions.Networking.Packets.IPacket.Length.get -> int
+Nalix.Abstractions.Networking.Packets.IPacket.Serialize() -> byte[]!
+Nalix.Abstractions.Networking.Packets.IPacket.Serialize(System.Span<byte> buffer) -> int
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.Attributes.get -> Nalix.Abstractions.Networking.Packets.PacketMetadata
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.CancellationToken.get -> System.Threading.CancellationToken
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.Connection.get -> Nalix.Abstractions.Networking.IConnection!
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.EncryptedOnWire.get -> bool
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.IsReliable.get -> bool
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.Packet.get -> TPacket
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.Scope.get -> Nalix.Abstractions.Injection.IPacketScope!
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.Sender.get -> Nalix.Abstractions.Networking.Packets.IPacketSender!
+Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.SkipOutbound.get -> bool
+Nalix.Abstractions.Networking.Packets.IPacketDeserializer<TPacket>
+Nalix.Abstractions.Networking.Packets.IPacketDeserializer<TPacket>.Deserialize(System.ReadOnlySpan<byte> buffer) -> TPacket
+Nalix.Abstractions.Networking.Packets.IPacketHeader
+Nalix.Abstractions.Networking.Packets.IPacketHeader.Flags.get -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.IPacketHeader.Flags.set -> void
+Nalix.Abstractions.Networking.Packets.IPacketHeader.OpCode.get -> ushort
+Nalix.Abstractions.Networking.Packets.IPacketHeader.Priority.get -> Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Abstractions.Networking.Packets.IPacketHeader.Priority.set -> void
+Nalix.Abstractions.Networking.Packets.IPacketHeader.SequenceId.get -> ushort
+Nalix.Abstractions.Networking.Packets.IPacketHeader.SequenceId.set -> void
+Nalix.Abstractions.Networking.Packets.IPacketReasoned
+Nalix.Abstractions.Networking.Packets.IPacketReasoned.Reason.get -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Packets.IPacketSender
+Nalix.Abstractions.Networking.Packets.IPacketSender.Initialize<TPacket>(Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>! context) -> void
+Nalix.Abstractions.Networking.Packets.IPacketSender.ReplyAsync(Nalix.Abstractions.Networking.Packets.IPacket! response, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Packets.IPacketSender.ReplyAsync<TPacket>(System.ReadOnlySpan<TPacket> responses, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Packets.IPacketSender.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, bool forceEncrypt, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Packets.IPacketSender.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Packets.IPacketSender.SendAsync<TPacket>(System.ReadOnlySpan<TPacket> packets, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Packets.IPacketStaticOpcode
+Nalix.Abstractions.Networking.Packets.IPacketStaticOpcode.StaticOpCode.get -> ushort
+Nalix.Abstractions.Networking.Packets.IPacketStreamable
+Nalix.Abstractions.Networking.Packets.IPacketStreamable.IsEndOfStream.get -> bool
+Nalix.Abstractions.Networking.Packets.IPacketStreamable.IsEndOfStream.set -> void
+Nalix.Abstractions.Networking.Packets.IPacketStreamTerminator
+Nalix.Abstractions.Networking.Packets.IPacketStreamTerminator.IsTerminator.get -> bool
+Nalix.Abstractions.Networking.Packets.IPacketTimestamped
+Nalix.Abstractions.Networking.Packets.IPacketTimestamped.MonoTicks.get -> long
+Nalix.Abstractions.Networking.Packets.IPacketTimestamped.MonoTicks.set -> void
+Nalix.Abstractions.Networking.Packets.IPacketTimestamped.Timestamp.get -> long
+Nalix.Abstractions.Networking.Packets.IPacketTimestamped.Timestamp.set -> void
+Nalix.Abstractions.Networking.Packets.IPacketValidatable
+Nalix.Abstractions.Networking.Packets.IPacketValidatable.Validate(out string? failureReason) -> bool
+Nalix.Abstractions.Networking.Packets.MemoryPacket
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Deconstruct(out System.ReadOnlyMemory<byte> Memory, out Nalix.Abstractions.Primitives.PacketHeader Header) -> void
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Equals(Nalix.Abstractions.Networking.Packets.MemoryPacket other) -> bool
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Header.get -> Nalix.Abstractions.Primitives.PacketHeader
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Header.init -> void
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Length.get -> int
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Memory.get -> System.ReadOnlyMemory<byte>
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Memory.init -> void
+Nalix.Abstractions.Networking.Packets.MemoryPacket.MemoryPacket() -> void
+Nalix.Abstractions.Networking.Packets.MemoryPacket.MemoryPacket(System.ReadOnlyMemory<byte> Memory, Nalix.Abstractions.Primitives.PacketHeader Header) -> void
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Serialize() -> byte[]!
+Nalix.Abstractions.Networking.Packets.MemoryPacket.Serialize(System.Span<byte> buffer) -> int
+Nalix.Abstractions.Networking.Packets.PacketAttribute
+Nalix.Abstractions.Networking.Packets.PacketAttribute.PacketAttribute() -> void
+Nalix.Abstractions.Networking.Packets.PacketConstants
+Nalix.Abstractions.Networking.Packets.PacketContextState
+Nalix.Abstractions.Networking.Packets.PacketContextState.InUse = 1 -> Nalix.Abstractions.Networking.Packets.PacketContextState
+Nalix.Abstractions.Networking.Packets.PacketContextState.Pooled = 0 -> Nalix.Abstractions.Networking.Packets.PacketContextState
+Nalix.Abstractions.Networking.Packets.PacketContextState.Returned = 2 -> Nalix.Abstractions.Networking.Packets.PacketContextState
+Nalix.Abstractions.Networking.Packets.PacketDeserializer
+Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute
+Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute.AlgorithmType.get -> Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute.IsEncrypted.get -> bool
+Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute.PacketEncryptionAttribute(bool isEncrypted = true, Nalix.Abstractions.Security.CipherSuiteType algorithmType = Nalix.Abstractions.Security.CipherSuiteType.Chacha20Poly1305) -> void
+Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketFlags.ACKNOWLEDGED = 64 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketFlags.COMPRESSED = 2 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketFlags.ENCRYPTED = 4 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketFlags.FRAGMENTED = 8 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketFlags.NONE = 0 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketFlags.RELIABLE = 16 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketFlags.SYSTEM = 128 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketFlags.UNRELIABLE = 32 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Packets.PacketHandlerAttribute
+Nalix.Abstractions.Networking.Packets.PacketHandlerAttribute.IsActive.get -> bool
+Nalix.Abstractions.Networking.Packets.PacketHandlerAttribute.Name.get -> string!
+Nalix.Abstractions.Networking.Packets.PacketHandlerAttribute.PacketHandlerAttribute(string! name = "None", bool isActive = true, string! version = "1.0") -> void
+Nalix.Abstractions.Networking.Packets.PacketHandlerAttribute.Version.get -> string!
+Nalix.Abstractions.Networking.Packets.PacketHeaderOffset
+Nalix.Abstractions.Networking.Packets.PacketHeaderOffset.Flags = 2 -> Nalix.Abstractions.Networking.Packets.PacketHeaderOffset
+Nalix.Abstractions.Networking.Packets.PacketHeaderOffset.MaxValue = 255 -> Nalix.Abstractions.Networking.Packets.PacketHeaderOffset
+Nalix.Abstractions.Networking.Packets.PacketHeaderOffset.OpCode = 0 -> Nalix.Abstractions.Networking.Packets.PacketHeaderOffset
+Nalix.Abstractions.Networking.Packets.PacketHeaderOffset.Priority = 3 -> Nalix.Abstractions.Networking.Packets.PacketHeaderOffset
+Nalix.Abstractions.Networking.Packets.PacketHeaderOffset.Region = 6 -> Nalix.Abstractions.Networking.Packets.PacketHeaderOffset
+Nalix.Abstractions.Networking.Packets.PacketHeaderOffset.SequenceId = 4 -> Nalix.Abstractions.Networking.Packets.PacketHeaderOffset
+Nalix.Abstractions.Networking.Packets.PacketIdempotentAttribute
+Nalix.Abstractions.Networking.Packets.PacketIdempotentAttribute.PacketIdempotentAttribute() -> void
+Nalix.Abstractions.Networking.Packets.PacketMetadata
+Nalix.Abstractions.Networking.Packets.PacketMetadata.GetCustomAttribute<TAttribute>() -> TAttribute?
+Nalix.Abstractions.Networking.Packets.PacketMetadata.PacketMetadata() -> void
+Nalix.Abstractions.Networking.Packets.PacketMetadata.PacketMetadata(Nalix.Abstractions.Networking.Packets.PacketOpcodeAttribute! opCode, Nalix.Abstractions.Networking.Packets.PacketTimeoutAttribute? timeout, Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute? permission, Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute? encryption, Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute? rateLimit, Nalix.Abstractions.Networking.Packets.PacketTransportAttribute? transport, System.Collections.Generic.IReadOnlyDictionary<System.Type!, System.Attribute!>? customAttributes = null) -> void
+Nalix.Abstractions.Networking.Packets.PacketOpcodeAttribute
+Nalix.Abstractions.Networking.Packets.PacketOpcodeAttribute.OpCode.get -> ushort
+Nalix.Abstractions.Networking.Packets.PacketOpcodeAttribute.PacketOpcodeAttribute(object! opcode) -> void
+Nalix.Abstractions.Networking.Packets.PacketOpcodeAttribute.PacketOpcodeAttribute(ushort opcode) -> void
+Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute
+Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute.Evaluation.get -> Nalix.Abstractions.Security.PermissionEvaluation
+Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute.Level.get -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute.PacketPermissionAttribute() -> void
+Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute.PacketPermissionAttribute(Nalix.Abstractions.Security.PermissionLevel level) -> void
+Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute.PacketPermissionAttribute(Nalix.Abstractions.Security.PermissionLevel level, Nalix.Abstractions.Security.PermissionEvaluation evaluation) -> void
+Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Abstractions.Networking.Packets.PacketPriority.HIGH = 3 -> Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Abstractions.Networking.Packets.PacketPriority.LOW = 1 -> Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Abstractions.Networking.Packets.PacketPriority.MEDIUM = 2 -> Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Abstractions.Networking.Packets.PacketPriority.NONE = 0 -> Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Abstractions.Networking.Packets.PacketPriority.URGENT = 4 -> Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.Burst.get -> double
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.HardLockoutSeconds.get -> int
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.HardLockoutSeconds.init -> void
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.MaxSoftViolations.get -> int
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.MaxSoftViolations.init -> void
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.PacketRateLimitAttribute(int requestsPerSecond, double burst = 1) -> void
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.PolicyId.get -> string?
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.PolicyId.init -> void
+Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute.RequestsPerSecond.get -> int
+Nalix.Abstractions.Networking.Packets.PacketTimeoutAttribute
+Nalix.Abstractions.Networking.Packets.PacketTimeoutAttribute.PacketTimeoutAttribute(int timeoutMilliseconds) -> void
+Nalix.Abstractions.Networking.Packets.PacketTimeoutAttribute.TimeoutMilliseconds.get -> int
+Nalix.Abstractions.Networking.Packets.PacketTransportAttribute
+Nalix.Abstractions.Networking.Packets.PacketTransportAttribute.PacketTransportAttribute(Nalix.Abstractions.Networking.NetworkTransport transportType) -> void
+Nalix.Abstractions.Networking.Packets.PacketTransportAttribute.TransportType.get -> Nalix.Abstractions.Networking.NetworkTransport
+Nalix.Abstractions.Networking.Protocols.ControlFlags
+Nalix.Abstractions.Networking.Protocols.ControlFlags.HAS_REDIRECT = 4 -> Nalix.Abstractions.Networking.Protocols.ControlFlags
+Nalix.Abstractions.Networking.Protocols.ControlFlags.IS_AUTHRELATED = 2 -> Nalix.Abstractions.Networking.Protocols.ControlFlags
+Nalix.Abstractions.Networking.Protocols.ControlFlags.IS_TRANSIENT = 1 -> Nalix.Abstractions.Networking.Protocols.ControlFlags
+Nalix.Abstractions.Networking.Protocols.ControlFlags.NONE = 0 -> Nalix.Abstractions.Networking.Protocols.ControlFlags
+Nalix.Abstractions.Networking.Protocols.ControlFlags.SLOW_DOWN = 8 -> Nalix.Abstractions.Networking.Protocols.ControlFlags
+Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.CIPHER_UPDATE = 20 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.CIPHER_UPDATE_ACK = 21 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.DISCONNECT = 4 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.ERROR = 5 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.FAIL = 17 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.NONE = 0 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.NOTICE = 13 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.PING = 1 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.PONG = 2 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.POW_REQUEST = 23 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.PUBLIC_KEY_REQUEST = 22 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.REDIRECT = 11 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.RESERVED1 = 254 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.RESERVED2 = 255 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.RESUME = 9 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.SESSION_REKEY = 24 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.SESSION_REKEY_ACK = 25 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.SHUTDOWN = 10 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.TIMEOUT = 16 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.TIMESYNCREQUEST = 18 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.ControlType.TIMESYNCRESPONSE = 19 -> Nalix.Abstractions.Networking.Protocols.ControlType
+Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor
+Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor.Extract(System.ReadOnlySpan<byte> payload) -> ushort
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice.BACKOFF_RETRY = 2 -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice.DO_NOT_RETRY = 3 -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice.FIX_AND_RETRY = 7 -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice.NONE = 0 -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice.REAUTHENTICATE = 4 -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice.RECONNECT = 6 -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice.RETRY = 1 -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolAdvice.SLOW_DOWN = 5 -> Nalix.Abstractions.Networking.Protocols.ProtocolAdvice
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.OBSERVABILITY_ACCESS = 255 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.POW_CHALLENGE = 10 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.POW_PROOF = 11 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.RUNTIME_OBSERVATION = 254 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SESSION_CHALLENGE = 6 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SESSION_ESTABLISHED = 7 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SESSION_INIT = 0 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SESSION_PROOF = 3 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SESSION_REKEY = 9 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SESSION_SIGNAL = 2 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SESSION_TOFU = 5 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SYSTEM_CONTROL = 1 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SYSTEM_DIRECTIVE = 8 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.SYSTEM_TIMESYNC = 4 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TRAVERSAL_NAT_PROBE = 253 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TRAVERSAL_NAT_PROBE_ACK = 252 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TRAVERSAL_PEER_SIGNAL = 251 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TRAVERSAL_REFLECTOR_ALLOCATED = 250 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TRAVERSAL_REFLECTOR_INIT = 249 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_CONNECT = 248 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_CONNECT_ACK = 245 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_PROVIDE = 247 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_PROVIDE_ACK = 244 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_READY = 246 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_REQUEST = 243 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.ABORTED = 501 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.ACCOUNT_LOCKED = 203 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.ACCOUNT_SUSPENDED = 204 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.AGE_RESTRICTED = 702 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.ALREADY_EXISTS = 352 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.BANNED = 205 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CACHE_UNAVAILABLE = 306 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CANCELLED = 2 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CHECKSUM_FAILED = 264 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CLIENT_QUIT = 500 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.COMPRESSION_FAILED = 504 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.COMPRESSION_UNSUPPORTED = 159 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CONGESTION = 108 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CONNECTION_LIMIT = 452 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CONNECTION_REFUSED = 104 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CONNECTION_RESET = 105 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CONSENSUS_UNAVAILABLE = 602 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CONTENT_VIOLATION = 701 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CPU_LIMIT = 455 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CREDIT_EXHAUSTED = 402 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.CRYPTO_UNSUPPORTED = 158 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DATABASE_UNAVAILABLE = 305 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DECRYPTION_FAILED = 265 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DEPENDENCY_FAILURE = 304 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DEPRECATED = 5 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DEVICE_UNTRUSTED = 210 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DISK_FULL = 454 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DNS_FAILURE = 106 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DUPLICATE_MESSAGE = 156 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.DUPLICATE_SESSION = 552 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.FD_LIMIT = 453 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.FORBIDDEN = 202 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.FRAME_TOO_LARGE = 152 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.IDLE_TIMEOUT = 502 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.INTERNAL_ERROR = 7 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.INVALID_USERNAME = 703 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.IP_BLOCKED = 206 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.KEEPALIVE_FAILED = 109 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.KEY_ROTATION_REQUIRED = 553 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.LEADER_CHANGE = 600 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.LEGAL_BLOCK = 700 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.LOCAL_CLOSED = 102 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.LOCAL_POLICY = 503 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.MAINTENANCE = 302 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.MALFORMED_PACKET = 161 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.MEMORY_EXHAUSTED = 451 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.MESSAGE_TOO_LARGE = 153 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.MIGRATE = 651 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.MISSING_REQUIRED_FIELD = 155 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.MTU_VIOLATION = 107 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.NETWORK_ERROR = 103 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.NONCE_INVALID = 267 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.NONE = 0 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.NOT_FOUND = 351 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.NOT_IMPLEMENTED = 3 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.NOT_LEADER = 601 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.OPERATION_UNSUPPORTED = 160 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.OVERLOADED = 303 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.POW_INVALID = 271 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.POW_REQUIRED = 270 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.PRECONDITION_FAILED = 353 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.PROTOCOL_ERROR = 150 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.QUEUE_UNAVAILABLE = 307 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.RATE_LIMITED = 207 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.REDIRECT = 650 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.REGION_UNAVAILABLE = 652 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.REMOTE_CLOSED = 101 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.REPLAY_DETECTED = 266 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.REQUEST_INVALID = 6 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.RESERVED_900 = 900 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.RESERVED_901 = 901 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.RESOURCE_LIMIT = 450 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.SERIALIZATION_FAILED = 356 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.SERVER_SHUTDOWN = 300 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.SERVICE_UNAVAILABLE = 301 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.SESSION_EXPIRED = 551 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.SESSION_NOT_FOUND = 550 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.SIGNATURE_INVALID = 263 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.SLOW_CONSUMER = 401 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.STALE_READ = 603 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.STATE_CONFLICT = 354 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.STATE_VIOLATION = 157 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TEMPORARY_FAILURE = 4 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.THROTTLED = 400 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TIMEOUT = 100 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TIME_SKEW = 554 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TLS_CERT_INVALID = 262 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TLS_HANDSHAKE_FAILED = 260 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TLS_REQUIRED = 261 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TOKEN_EXPIRED = 208 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TOKEN_REVOKED = 209 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.TRANSFORM_FAILED = 358 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.UNAUTHENTICATED = 200 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.UNAUTHORIZED = 201 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.UNEXPECTED_MESSAGE = 154 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.UNKNOWN = 1 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.UNSUPPORTED_MEDIA_TYPE = 355 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.UNSUPPORTED_PACKET = 357 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.VALIDATION_FAILED = 350 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.VERSION_UNSUPPORTED = 151 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.WEAK_PASSWORD = 704 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Protocols.ProtocolReason.WINDOW_EXCEEDED = 403 -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Abstractions.Networking.Rpc.RpcServiceAttribute
+Nalix.Abstractions.Networking.Rpc.RpcServiceAttribute.RpcServiceAttribute() -> void
+Nalix.Abstractions.Networking.Sessions.ISessionFactory
+Nalix.Abstractions.Networking.Sessions.ISessionFactory.CreateSession(Nalix.Abstractions.Networking.IConnection! connection) -> Nalix.Abstractions.Networking.Sessions.SessionEntry!
+Nalix.Abstractions.Networking.Sessions.ISessionPersistencePolicy
+Nalix.Abstractions.Networking.Sessions.ISessionPersistencePolicy.ShouldPersist(Nalix.Abstractions.Networking.IConnection! connection) -> bool
+Nalix.Abstractions.Networking.Sessions.ISessionService
+Nalix.Abstractions.Networking.Sessions.ISessionService.ConsumeAsync(ulong sessionToken, System.Func<Nalix.Abstractions.Networking.Sessions.SessionEntry!, bool>? predicate = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Nalix.Abstractions.Networking.Sessions.SessionScope>
+Nalix.Abstractions.Networking.Sessions.ISessionService.SaveSessionAsync(Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Sessions.ISessionStore
+Nalix.Abstractions.Networking.Sessions.ISessionStore.ConsumeAsync(ulong sessionToken, System.Func<Nalix.Abstractions.Networking.Sessions.SessionEntry!, bool>? predicate = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Nalix.Abstractions.Networking.Sessions.SessionScope>
+Nalix.Abstractions.Networking.Sessions.ISessionStore.StoreAsync(Nalix.Abstractions.Networking.Sessions.SessionEntry! entry, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Sessions.SessionEntry
+Nalix.Abstractions.Networking.Sessions.SessionEntry.ConnectionId.get -> ulong
+Nalix.Abstractions.Networking.Sessions.SessionEntry.ConnectionId.set -> void
+Nalix.Abstractions.Networking.Sessions.SessionEntry.Return() -> void
+Nalix.Abstractions.Networking.Sessions.SessionEntry.SessionEntry(Nalix.Abstractions.Networking.Sessions.SessionSnapshot! snapshot, ulong connectionId) -> void
+Nalix.Abstractions.Networking.Sessions.SessionEntry.Snapshot.get -> Nalix.Abstractions.Networking.Sessions.SessionSnapshot!
+Nalix.Abstractions.Networking.Sessions.SessionEntry.Snapshot.set -> void
+Nalix.Abstractions.Networking.Sessions.SessionScope
+Nalix.Abstractions.Networking.Sessions.SessionScope.Dispose() -> void
+Nalix.Abstractions.Networking.Sessions.SessionScope.IsValid.get -> bool
+Nalix.Abstractions.Networking.Sessions.SessionScope.SessionScope() -> void
+Nalix.Abstractions.Networking.Sessions.SessionScope.SessionScope(Nalix.Abstractions.Networking.Sessions.SessionEntry? entry) -> void
+Nalix.Abstractions.Networking.Sessions.SessionScope.Value.get -> Nalix.Abstractions.Networking.Sessions.SessionEntry?
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Algorithm.get -> Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Algorithm.set -> void
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Attributes.get -> Nalix.Abstractions.IObjectMap<Nalix.Abstractions.AttributeKey, object!>?
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Attributes.set -> void
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.CreatedAtUnixMilliseconds.get -> long
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.CreatedAtUnixMilliseconds.set -> void
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.ExpiresAtUnixMilliseconds.get -> long
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.ExpiresAtUnixMilliseconds.set -> void
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Level.get -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Level.set -> void
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Return() -> void
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Secret.get -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.Secret.set -> void
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.SessionSnapshot() -> void
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.SessionToken.get -> ulong
+Nalix.Abstractions.Networking.Sessions.SessionSnapshot.SessionToken.set -> void
+Nalix.Abstractions.Networking.TransportFraming
+Nalix.Abstractions.Networking.TransportFraming.None = 0 -> Nalix.Abstractions.Networking.TransportFraming
+Nalix.Abstractions.Networking.TransportFraming.UInt16LengthPrefixed = 1 -> Nalix.Abstractions.Networking.TransportFraming
+Nalix.Abstractions.Networking.TransportFraming.VarIntLengthPrefixed = 2 -> Nalix.Abstractions.Networking.TransportFraming
+Nalix.Abstractions.Primitives.Bytes32
+Nalix.Abstractions.Primitives.Bytes32.AsSpan() -> System.ReadOnlySpan<byte>
+Nalix.Abstractions.Primitives.Bytes32.Bytes32() -> void
+Nalix.Abstractions.Primitives.Bytes32.Bytes32(byte[]! source) -> void
+Nalix.Abstractions.Primitives.Bytes32.Bytes32(System.ReadOnlySpan<byte> source) -> void
+Nalix.Abstractions.Primitives.Bytes32.Equals(Nalix.Abstractions.Primitives.Bytes32 other) -> bool
+Nalix.Abstractions.Primitives.Bytes32.IsZero.get -> bool
+Nalix.Abstractions.Primitives.Bytes32.ToByteArray() -> byte[]!
+Nalix.Abstractions.Primitives.Bytes32.TryWriteTo(System.Span<byte> destination) -> bool
+Nalix.Abstractions.Primitives.Bytes32.WriteTo(System.Span<byte> destination) -> void
+Nalix.Abstractions.Primitives.PacketHeader
+Nalix.Abstractions.Primitives.PacketHeader.Flags -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Primitives.PacketHeader.OpCode -> ushort
+Nalix.Abstractions.Primitives.PacketHeader.PacketHeader() -> void
+Nalix.Abstractions.Primitives.PacketHeader.Priority -> Nalix.Abstractions.Networking.Packets.PacketPriority
+Nalix.Abstractions.Primitives.PacketHeader.SequenceId -> ushort
+Nalix.Abstractions.ReservedOpcodePermittedAttribute
+Nalix.Abstractions.ReservedOpcodePermittedAttribute.ReservedOpcodePermittedAttribute() -> void
+Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Security.CipherSuiteType.Chacha20 = 4 -> Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Security.CipherSuiteType.Chacha20Poly1305 = 8 -> Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Security.CipherSuiteType.None = 0 -> Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Security.CipherSuiteType.Salsa20 = 3 -> Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Security.CipherSuiteType.Salsa20Poly1305 = 7 -> Nalix.Abstractions.Security.CipherSuiteType
+Nalix.Abstractions.Security.DropPolicy
+Nalix.Abstractions.Security.DropPolicy.Block = 2 -> Nalix.Abstractions.Security.DropPolicy
+Nalix.Abstractions.Security.DropPolicy.Coalesce = 3 -> Nalix.Abstractions.Security.DropPolicy
+Nalix.Abstractions.Security.DropPolicy.DropNewest = 0 -> Nalix.Abstractions.Security.DropPolicy
+Nalix.Abstractions.Security.DropPolicy.DropOldest = 1 -> Nalix.Abstractions.Security.DropPolicy
+Nalix.Abstractions.Security.ICertificateStore
+Nalix.Abstractions.Security.ICertificateStore.Load(string! path) -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Abstractions.Security.ICertificateStore.Save(string! path, Nalix.Abstractions.Primitives.Bytes32 privateKey, Nalix.Abstractions.Primitives.Bytes32 publicKey) -> void
+Nalix.Abstractions.Security.IProofOfWorkPolicy
+Nalix.Abstractions.Security.IProofOfWorkPolicy.CurrentDifficulty.get -> byte
+Nalix.Abstractions.Security.IProofOfWorkPolicy.IsUnderAttack.get -> bool
+Nalix.Abstractions.Security.ISequenceCounter
+Nalix.Abstractions.Security.ISequenceCounter.Current() -> uint
+Nalix.Abstractions.Security.ISequenceCounter.IsApproachingOverflow(uint margin = 1000000) -> bool
+Nalix.Abstractions.Security.ISequenceCounter.IsValid(uint? receivedSeq, uint window = 0) -> bool
+Nalix.Abstractions.Security.ISequenceCounter.Next() -> uint
+Nalix.Abstractions.Security.ISequenceCounter.Reset(uint newValue = 0) -> void
+Nalix.Abstractions.Security.ISequenceCounter.ResumeFrom(uint lastKnownSeq, uint safetyGap = 1000) -> void
+Nalix.Abstractions.Security.ISequenceCounter.UpdateTo(uint receivedSeq) -> void
+Nalix.Abstractions.Security.PermissionEvaluation
+Nalix.Abstractions.Security.PermissionEvaluation.MinimumLevel = 0 -> Nalix.Abstractions.Security.PermissionEvaluation
+Nalix.Abstractions.Security.PermissionEvaluation.StrictMatch = 1 -> Nalix.Abstractions.Security.PermissionEvaluation
+Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.ESTABLISHED = 20 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.GUEST = 25 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.NONE = 0 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.OBSERVER = 22 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.OWNER = 255 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.POW_VERIFIED = 10 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.READ_ONLY = 50 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.SUPERVISOR = 175 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.SYSTEM_ADMINISTRATOR = 225 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.TENANT_ADMINISTRATOR = 200 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Security.PermissionLevel.USER = 100 -> Nalix.Abstractions.Security.PermissionLevel
+Nalix.Abstractions.Serialization.GenerateFormatterAttribute
+Nalix.Abstractions.Serialization.GenerateFormatterAttribute.GenerateFormatterAttribute() -> void
+Nalix.Abstractions.Serialization.IFixedSizeSerializable
+Nalix.Abstractions.Serialization.IFixedSizeSerializable.Size.get -> int
+Nalix.Abstractions.Serialization.SerializeDynamicSizeAttribute
+Nalix.Abstractions.Serialization.SerializeDynamicSizeAttribute.SerializeDynamicSizeAttribute() -> void
+Nalix.Abstractions.Serialization.SerializeDynamicSizeAttribute.SerializeDynamicSizeAttribute(int size) -> void
+Nalix.Abstractions.Serialization.SerializeDynamicSizeAttribute.Size.get -> int
+Nalix.Abstractions.Serialization.SerializeDynamicSizeAttribute.Size.set -> void
+Nalix.Abstractions.Serialization.SerializeHeaderAttribute
+Nalix.Abstractions.Serialization.SerializeHeaderAttribute.Order.get -> int
+Nalix.Abstractions.Serialization.SerializeHeaderAttribute.Order.set -> void
+Nalix.Abstractions.Serialization.SerializeHeaderAttribute.SerializeHeaderAttribute(int order) -> void
+Nalix.Abstractions.Serialization.SerializeHeaderAttribute.SerializeHeaderAttribute(Nalix.Abstractions.Networking.Packets.PacketHeaderOffset position) -> void
+Nalix.Abstractions.Serialization.SerializeIgnoreAttribute
+Nalix.Abstractions.Serialization.SerializeIgnoreAttribute.SerializeIgnoreAttribute() -> void
+Nalix.Abstractions.Serialization.SerializeLayout
+Nalix.Abstractions.Serialization.SerializeLayout.Auto = 0 -> Nalix.Abstractions.Serialization.SerializeLayout
+Nalix.Abstractions.Serialization.SerializeLayout.Explicit = 2 -> Nalix.Abstractions.Serialization.SerializeLayout
+Nalix.Abstractions.Serialization.SerializeLayout.Sequential = 1 -> Nalix.Abstractions.Serialization.SerializeLayout
+Nalix.Abstractions.Serialization.SerializeOrderAttribute
+Nalix.Abstractions.Serialization.SerializeOrderAttribute.Order.get -> int
+Nalix.Abstractions.Serialization.SerializeOrderAttribute.Order.set -> void
+Nalix.Abstractions.Serialization.SerializeOrderAttribute.SerializeOrderAttribute(int order) -> void
+Nalix.Abstractions.Serialization.SerializeOrderAttribute.SerializeOrderAttribute(Nalix.Abstractions.Networking.Packets.PacketHeaderOffset position) -> void
+Nalix.Abstractions.Serialization.SerializePackableAttribute
+Nalix.Abstractions.Serialization.SerializePackableAttribute.SerializeLayout.get -> Nalix.Abstractions.Serialization.SerializeLayout
+Nalix.Abstractions.Serialization.SerializePackableAttribute.SerializeLayout.set -> void
+Nalix.Abstractions.Serialization.SerializePackableAttribute.SerializePackableAttribute(Nalix.Abstractions.Serialization.SerializeLayout layout = Nalix.Abstractions.Serialization.SerializeLayout.Auto) -> void
+Nalix.Abstractions.Serialization.SerializerBounds
+Nalix.Abstractions.SkipCleanAttribute
+Nalix.Abstractions.SkipCleanAttribute.SkipCleanAttribute() -> void
+Nalix.Abstractions.Validation.AllowedEnumAttribute
+Nalix.Abstractions.Validation.AllowedEnumAttribute.AllowedEnumAttribute() -> void
+Nalix.Abstractions.Validation.DurationRangeAttribute
+Nalix.Abstractions.Validation.DurationRangeAttribute.DurationRangeAttribute(string! minimum, string! maximum) -> void
+Nalix.Abstractions.Validation.DurationRangeAttribute.Maximum.get -> string!
+Nalix.Abstractions.Validation.DurationRangeAttribute.Minimum.get -> string!
+Nalix.Abstractions.Validation.LengthAttribute
+Nalix.Abstractions.Validation.LengthAttribute.LengthAttribute(int minimum) -> void
+Nalix.Abstractions.Validation.LengthAttribute.Minimum.get -> int
+Nalix.Abstractions.Validation.RequiredAttribute
+Nalix.Abstractions.Validation.RequiredAttribute.RequiredAttribute() -> void
+Nalix.Abstractions.Validation.ReturnValidation
+Nalix.Abstractions.Validation.ReturnValidation.Disabled = 0 -> Nalix.Abstractions.Validation.ReturnValidation
+Nalix.Abstractions.Validation.ReturnValidation.SilentDrop = 1 -> Nalix.Abstractions.Validation.ReturnValidation
+Nalix.Abstractions.Validation.ReturnValidation.ThrowOnError = 2 -> Nalix.Abstractions.Validation.ReturnValidation
+Nalix.Abstractions.Validation.ValueRangeAttribute
+Nalix.Abstractions.Validation.ValueRangeAttribute.Maximum.get -> double
+Nalix.Abstractions.Validation.ValueRangeAttribute.MaximumInt64.get -> long
+Nalix.Abstractions.Validation.ValueRangeAttribute.Minimum.get -> double
+Nalix.Abstractions.Validation.ValueRangeAttribute.MinimumInt64.get -> long
+Nalix.Abstractions.Validation.ValueRangeAttribute.UseInt64.get -> bool
+Nalix.Abstractions.Validation.ValueRangeAttribute.ValueRangeAttribute(double minimum, double maximum) -> void
+Nalix.Abstractions.Validation.ValueRangeAttribute.ValueRangeAttribute(long minimum, long maximum) -> void
+override Nalix.Abstractions.AttributeKey.Equals(object? obj) -> bool
+override Nalix.Abstractions.AttributeKey.GetHashCode() -> int
+override Nalix.Abstractions.AttributeKey.ToString() -> string!
+override Nalix.Abstractions.Diagnostics.DiagnosticLog.GetHashCode() -> int
+override Nalix.Abstractions.Networking.Packets.MemoryPacket.GetHashCode() -> int
+override Nalix.Abstractions.Primitives.Bytes32.Equals(object? obj) -> bool
+override Nalix.Abstractions.Primitives.Bytes32.GetHashCode() -> int
+override Nalix.Abstractions.Primitives.Bytes32.ToString() -> string!
+readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.CustomAttributes -> System.Collections.Generic.IReadOnlyDictionary<System.Type!, System.Attribute!>!
+readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.Encryption -> Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute?
+readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.PacketOpcode -> Nalix.Abstractions.Networking.Packets.PacketOpcodeAttribute!
+readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.Permission -> Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute?
+readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.RateLimit -> Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute?
+readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.Timeout -> Nalix.Abstractions.Networking.Packets.PacketTimeoutAttribute?
+readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.Transport -> Nalix.Abstractions.Networking.Packets.PacketTransportAttribute?
+static Nalix.Abstractions.AttributeKey.FromName(string! name) -> Nalix.Abstractions.AttributeKey
+static Nalix.Abstractions.AttributeKey.operator !=(Nalix.Abstractions.AttributeKey left, Nalix.Abstractions.AttributeKey right) -> bool
+static Nalix.Abstractions.AttributeKey.operator ==(Nalix.Abstractions.AttributeKey left, Nalix.Abstractions.AttributeKey right) -> bool
+static Nalix.Abstractions.Diagnostics.DiagnosticLog.operator !=(Nalix.Abstractions.Diagnostics.DiagnosticLog left, Nalix.Abstractions.Diagnostics.DiagnosticLog right) -> bool
+static Nalix.Abstractions.Diagnostics.DiagnosticLog.operator ==(Nalix.Abstractions.Diagnostics.DiagnosticLog left, Nalix.Abstractions.Diagnostics.DiagnosticLog right) -> bool
+static Nalix.Abstractions.Exceptions.ExceptionClassifier.IsNonFatal(System.Exception! ex) -> bool
+static Nalix.Abstractions.Networking.Packets.MemoryPacket.operator !=(Nalix.Abstractions.Networking.Packets.MemoryPacket left, Nalix.Abstractions.Networking.Packets.MemoryPacket right) -> bool
+static Nalix.Abstractions.Networking.Packets.MemoryPacket.operator ==(Nalix.Abstractions.Networking.Packets.MemoryPacket left, Nalix.Abstractions.Networking.Packets.MemoryPacket right) -> bool
+static Nalix.Abstractions.Networking.Sessions.SessionScope.implicit operator Nalix.Abstractions.Networking.Sessions.SessionEntry?(Nalix.Abstractions.Networking.Sessions.SessionScope scope) -> Nalix.Abstractions.Networking.Sessions.SessionEntry?
+static Nalix.Abstractions.Primitives.Bytes32.CopyFrom(System.ReadOnlySpan<byte> source) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Abstractions.Primitives.Bytes32.operator !=(Nalix.Abstractions.Primitives.Bytes32 left, Nalix.Abstractions.Primitives.Bytes32 right) -> bool
+static Nalix.Abstractions.Primitives.Bytes32.operator ==(Nalix.Abstractions.Primitives.Bytes32 left, Nalix.Abstractions.Primitives.Bytes32 right) -> bool
+static Nalix.Abstractions.Primitives.Bytes32.Parse(string! hex) -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Abstractions.Primitives.Bytes32.Wipe(ref Nalix.Abstractions.Primitives.Bytes32 value) -> void
+static Nalix.Abstractions.Primitives.Bytes32.Zero.get -> Nalix.Abstractions.Primitives.Bytes32
+static Nalix.Abstractions.Serialization.SerializerBounds.EmptyArrayMarker.get -> System.ReadOnlySpan<byte>
+static Nalix.Abstractions.Serialization.SerializerBounds.NullArrayMarker.get -> System.ReadOnlySpan<byte>
+static readonly Nalix.Abstractions.Networking.ConnectionAttributes.HandshakeDeadlineExtension -> Nalix.Abstractions.AttributeKey
+static readonly Nalix.Abstractions.Networking.ConnectionAttributes.OwnerHub -> Nalix.Abstractions.AttributeKey
+static readonly Nalix.Abstractions.Networking.ConnectionAttributes.RuntimeState -> Nalix.Abstractions.AttributeKey
+static readonly Nalix.Abstractions.Networking.ConnectionAttributes.SequenceState -> Nalix.Abstractions.AttributeKey
+virtual Nalix.Abstractions.Networking.Packets.PacketDeserializer.Invoke(System.ReadOnlySpan<byte> raw) -> Nalix.Abstractions.Networking.Packets.IPacket!
+~override Nalix.Abstractions.Diagnostics.DiagnosticLog.Equals(object obj) -> bool
+~override Nalix.Abstractions.Diagnostics.DiagnosticLog.ToString() -> string
+~override Nalix.Abstractions.Networking.Packets.MemoryPacket.Equals(object obj) -> bool
+~override Nalix.Abstractions.Networking.Packets.MemoryPacket.ToString() -> string
