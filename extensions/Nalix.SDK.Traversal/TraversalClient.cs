@@ -101,7 +101,6 @@ public sealed class TraversalClient
             {
                 udpClient.Client.DualMode = true;
             }
-
             udpClient.Connect(targetEndpoint);
 
             receiveTask = this.ReceiveProbeAsync(udpClient, probeTcs, probeCts.Token);
@@ -149,9 +148,17 @@ public sealed class TraversalClient
         }
 
         // 3. Fallback: Request Reflector Proxying
+        // Accept only an allocation that answers this request, or the server's notification for a session
+        // that names targetPeerId as its peer. Anything else (another pair's allocation) must not be adopted.
+        ulong requestNonce = (ulong)Random.Shared.NextInt64(1, long.MaxValue);
         TaskCompletionSource<ulong> reflectorTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
         using IDisposable reflectorSub = _controlSession.On<ReflectorAllocated>(p =>
         {
+            if (p.PeerId != targetPeerId || (p.RequestNonce != requestNonce && p.RequestNonce != 0))
+            {
+                return;
+            }
+
             if (p.Success)
             {
                 _ = reflectorTcs.TrySetResult(p.ReflectorToken);
@@ -166,6 +173,7 @@ public sealed class TraversalClient
         {
             ReflectorInit refInit = refLease.Value;
             refInit.TargetPeerId = targetPeerId;
+            refInit.RequestNonce = requestNonce;
             await _controlSession.SendAsync(refInit, cts.Token).ConfigureAwait(false);
         }
 
