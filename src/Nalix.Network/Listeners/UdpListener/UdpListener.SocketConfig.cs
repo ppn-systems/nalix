@@ -108,7 +108,7 @@ public abstract partial class UdpListenerBase
                     $"dual-requested={requestedDualMode} " +
                     $"dual-actual={actualDualMode} " +
                     $"local-endpoint={_socket.LocalEndPoint} " +
-                    $"options-reuse-address={_options.ReuseAddress} " +
+                    $"options-reuse-address={_options.UdpReuseAddress} " +
                     $"options-buffer-size={_options.BufferSize}"));
         }
     }
@@ -136,11 +136,14 @@ public abstract partial class UdpListenerBase
         ArgumentNullException.ThrowIfNull(socket, nameof(socket));
 
         socket.Blocking = false;
-        socket.ExclusiveAddressUse = !_options.ReuseAddress;
+        // SO_REUSEADDR on UDP lets another socket bind the same address and receive datagrams, so it is
+        // opt-in only. On Windows it allows any local user to take the port; ExclusiveAddressUse is always used there.
+        bool allowAddressSharing = _options.UdpReuseAddress && !OperatingSystem.IsWindows();
+        socket.ExclusiveAddressUse = !allowAddressSharing;
         socket.SendBufferSize = _options.BufferSize;
         socket.ReceiveBufferSize = _options.BufferSize;
 
-        if (_options.ReuseAddress)
+        if (allowAddressSharing)
         {
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         }

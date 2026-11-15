@@ -342,7 +342,7 @@ public abstract partial class UdpListenerBase : IListener
         // Socket configuration — UDP-relevant settings only.
         _ = sb.AppendLine("Configuration:");
         _ = sb.AppendLine("------------------------------------------------------------");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"ReuseAddress    : {_options.ReuseAddress}");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"UdpReuseAddress : {_options.UdpReuseAddress}");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"BufferSize      : {_options.BufferSize}");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"EnableIPv6      : {_options.EnableDualStack}");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"DualMode        : {_options.DualMode}");
@@ -397,7 +397,7 @@ public abstract partial class UdpListenerBase : IListener
         writer.WriteString("ProtocolType", this.Protocol?.GetType().FullName ?? "<null>");
 
         writer.WriteStartObject("Config");
-        writer.WriteBoolean("ReuseAddress", _options.ReuseAddress);
+        writer.WriteBoolean("UdpReuseAddress", _options.UdpReuseAddress);
         writer.WriteNumber("BufferSize", _options.BufferSize);
         writer.WriteBoolean("EnableDualStack", _options.EnableDualStack);
         writer.WriteBoolean("DualMode", _options.DualMode);
