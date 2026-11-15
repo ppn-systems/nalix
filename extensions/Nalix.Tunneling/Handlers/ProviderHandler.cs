@@ -4,6 +4,7 @@
 using Microsoft.Extensions.Logging;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Security;
 using Nalix.Codec.Pooling;
 
 namespace Nalix.Tunneling.Handlers;
@@ -23,6 +24,7 @@ public sealed class ProviderHandler
         _registry = registry;
     }
 
+    [PacketPermission(PermissionLevel.USER)]
     [PacketOpcode(ProtocolOpCode.TUNNEL_PROVIDE)]
     public async ValueTask HandleProvideAsync(IPacketContext<TunnelProvide> context)
     {

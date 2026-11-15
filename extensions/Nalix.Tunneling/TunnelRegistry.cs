@@ -60,6 +60,12 @@ public sealed class TunnelRegistry
     }
 
     /// <summary>
+    /// Removes a pending tunnel request without resolving it.
+    /// </summary>
+    /// <returns><see langword="true"/> if the request was pending and has been removed.</returns>
+    public bool Remove(Bytes32 token) => _pendingTunnels.TryRemove(token, out _);
+
+    /// <summary>
     /// Gets the number of pending tunnel requests.
     /// </summary>
     public int PendingCount => _pendingTunnels.Count;

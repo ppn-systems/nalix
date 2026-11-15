@@ -21,6 +21,8 @@ public sealed class TunnelSessionRegistry
 
     public int Count => _sessions.Count;
 
+    public bool Contains(ulong connectionId) => _sessions.ContainsKey(connectionId);
+
     public void Register(ulong connectionId, TunnelSession session)
     {
         ArgumentNullException.ThrowIfNull(session);

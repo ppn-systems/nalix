@@ -6,6 +6,7 @@ using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
+using Nalix.Abstractions.Security;
 
 namespace Nalix.Tunneling.Handlers;
 
@@ -24,6 +25,9 @@ public sealed class DataConnectionHandler
         _registry = registry;
     }
 
+    // NONE: the data connection is a fresh, unauthenticated TCP connection. The 256-bit one-time token
+    // resolved below is the only authorization.
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(ProtocolOpCode.TUNNEL_READY)]
     public ValueTask HandleReadyAsync(IPacketContext<TunnelReady> context)
     {
