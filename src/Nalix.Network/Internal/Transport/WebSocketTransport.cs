@@ -372,7 +372,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
                     if (result.Count == 0)
                     {
-                        return;
+                        continue;
                     }
 
                     // Rent a lease and copy data so the receive loop can continue immediately

@@ -153,19 +153,19 @@ public sealed class SequenceCounter : ISequenceCounter
 
             if (receivedSeq > currentSeq)
             {
-                int shift = (int)(receivedSeq - currentSeq);
-                uint newBitmap = shift >= 32 ? 1U : (currentBitmap << shift) | 1U;
+                uint delta = receivedSeq - currentSeq;
+                uint newBitmap = delta >= 32 ? 1U : (currentBitmap << (int)delta) | 1U;
                 newState = ((ulong)receivedSeq << 32) | newBitmap;
             }
             else
             {
-                int shift = (int)(currentSeq - receivedSeq);
-                if (shift >= 32)
+                uint delta = currentSeq - receivedSeq;
+                if (delta >= 32)
                 {
                     return; // Outside window, cannot track
                 }
 
-                uint mask = 1U << shift;
+                uint mask = 1U << (int)delta;
                 if ((currentBitmap & mask) != 0)
                 {
                     return; // Already processed
