@@ -117,18 +117,6 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
         IPEndPoint epTarget = remoteEndPoint;
         transport.Initialize(ref epTarget);
         connection.SetUdpTransport(transport);
-
-        if (connection.Attributes.TryGetValue(ConnectionAttributes.SequenceState, out object? stateObj) && stateObj is ConnectionSequenceState state)
-        {
-            if (state.UdpSendSequence > 0)
-            {
-                connection.UDP!.SendSequence.ResumeFrom(state.UdpSendSequence);
-            }
-            if (state.UdpReceiveSequence > 0)
-            {
-                connection.UDP!.ReceiveSequence.ResumeFrom(state.UdpReceiveSequence);
-            }
-        }
     }
 
     #endregion APIs
