@@ -18,6 +18,7 @@ using Nalix.Environment.Configuration;
 using Nalix.Environment.Time;
 using Nalix.Framework.Identifiers;
 using Nalix.Framework.Injection;
+using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Internal.Connections;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
@@ -69,6 +70,7 @@ public sealed class PassthroughConnection :
     private readonly TimingWheel _timingWheel;
 
     private SocketUdpTransport? _udpTransport;
+    private UdpSequenceState? _udpSequences;
     private IObjectMap<AttributeKey, object>? _attributes;
     private EventHandler<IConnectionEventArgs>? _connectionClosed;
 
@@ -133,7 +135,8 @@ public sealed class PassthroughConnection :
             return;
         }
 
-        SocketUdpTransport transport = new();
+        UdpSequenceState sequences = ObjectPoolManager.Shared.Get<UdpSequenceState>();
+        SocketUdpTransport transport = new(sequences.Send, sequences.Receive);
 
         transport.SetSocket(listenerSocket);
 
@@ -146,8 +149,11 @@ public sealed class PassthroughConnection :
         {
             // Another bind won the race; keep its transport and release ours.
             transport.Dispose();
+            ObjectPoolManager.Shared.Return(sequences);
             return;
         }
+
+        _udpSequences = sequences;
 
         // Dispose may have run after the check above. It saw no transport and could not release ours,
         // so the transport is released here instead of being left attached to a disposed connection.
@@ -173,6 +179,13 @@ public sealed class PassthroughConnection :
         if (transport is not null)
         {
             transport.Dispose();
+
+            // The disposed transport no longer references the counters, so they can be reused by another binding.
+            UdpSequenceState? sequences = Interlocked.Exchange(ref _udpSequences, null);
+            if (sequences is not null)
+            {
+                ObjectPoolManager.Shared.Return(sequences);
+            }
         }
     }
 

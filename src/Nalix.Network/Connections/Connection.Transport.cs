@@ -1,10 +1,8 @@
-// Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,110 +11,84 @@ using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Security;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Sequencing;
-using Nalix.Network.Connections;
+using Nalix.Network.Internal;
+using Nalix.Network.Internal.Transport;
 
-namespace Nalix.Network.Internal.Transport;
+namespace Nalix.Network.Connections;
 
-[SkipLocalsInit]
-[DebuggerNonUserCode]
-[EditorBrowsable(EditorBrowsableState.Never)]
-internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDisposable
+/// <summary>
+/// The TCP transport of a <see cref="Connection"/>. The connection is its own transport: it is created once per
+/// connection and never pooled, so a caller that kept <see cref="TCP"/> cannot reach a later connection. Its
+/// sequence counters are pooled with the connection's backing, and the socket is only reachable while the
+/// connection is alive.
+/// </summary>
+public sealed partial class Connection : IConnection.ITransport, IAsyncDisposable
 {
-    #region Fields
+    #region Transport Fields
 
-    private Connection? _outer;
-    private SocketConnection? _socket;
-    private readonly SequenceCounter _sendSequence = new();
-    private readonly SequenceCounter _receiveSequence = new();
-    private SemaphoreSlim _sendLock = null!;
-#pragma warning disable CA2213 // Scoped wrapper over _sendLock; does not own standalone unmanaged resources
-    private SendLockScope _sendLockScope = null!;
+    /// <summary>Replaces the counters of a closed connection so stale callers never touch the next owner's counters.</summary>
+    private static readonly SequenceCounter s_detachedSequence = new();
+
+#pragma warning disable CA2213 // A SemaphoreSlim without AvailableWaitHandle holds no unmanaged resource; release is via the connection's scope.
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
 #pragma warning restore CA2213
+    private TransportFraming _tcpFraming = TransportFraming.None;
 
-    #endregion Fields
+    #endregion Transport Fields
 
-    #region Constructor
+    #region Transport Helpers
 
-    public SocketTcpTransport()
-    {
-    }
+    private SocketConnection? TcpSocket => Volatile.Read(ref _backing)?.Socket;
 
-    #endregion Constructor
+    private SequenceCounter TcpSendSequence => Volatile.Read(ref _backing)?.SendSequence ?? s_detachedSequence;
 
-    #region Properties
+    private SequenceCounter TcpReceiveSequence => Volatile.Read(ref _backing)?.ReceiveSequence ?? s_detachedSequence;
 
-    /// <inheritdoc/>
-    public TransportFraming Framing { get; private set; } = TransportFraming.None;
+    /// <summary>Gets the UDP send counter of this connection's backing; used when a UDP binding is created.</summary>
+    internal SequenceCounter UdpSendSequenceCounter
+        => (Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(Connection))).UdpSendSequence;
 
-    /// <inheritdoc/>
-    public Socket Socket => _socket?.Socket ?? throw new ObjectDisposedException(nameof(SocketTcpTransport));
+    /// <summary>Gets the UDP receive counter of this connection's backing; used when a UDP binding is created.</summary>
+    internal SequenceCounter UdpReceiveSequenceCounter
+        => (Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(Connection))).UdpReceiveSequence;
 
-    /// <inheritdoc/>
-    public Task? ReceiveLoopTask => _socket?.ReceiveLoopTask;
+    #endregion Transport Helpers
 
-    /// <inheritdoc/>
-    public byte[]? StolenData => _socket?.StolenData;
-
-    /// <inheritdoc/>
-    public ISequenceCounter SendSequence => _sendSequence;
+    #region IConnection.ITransport
 
     /// <inheritdoc/>
-    public ISequenceCounter ReceiveSequence => _receiveSequence;
-
-    #endregion Properties
-
-    #region Methods
+    TransportFraming IConnection.ITransport.Framing => _tcpFraming;
 
     /// <inheritdoc/>
-    public void Initialize(Connection outer, SocketConnection socket)
-    {
-        _outer = outer ?? throw new ArgumentNullException(nameof(outer));
-        _socket = socket ?? throw new ArgumentNullException(nameof(socket));
-        _sendLock = new SemaphoreSlim(1, 1);
-        _sendLockScope = new SendLockScope(_sendLock);
-    }
+    ISequenceCounter ITransportSequencer.SendSequence => this.TcpSendSequence;
 
     /// <inheritdoc/>
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Socket Unwrap()
-    {
-        ObjectDisposedException.ThrowIf(_socket is null, typeof(SocketTcpTransport));
-        return _socket.Unwrap();
-    }
+    ISequenceCounter ITransportSequencer.ReceiveSequence => this.TcpReceiveSequence;
+
+    /// <inheritdoc/>
+    uint ITransportSequencer.NextSendSequence() => this.TcpSendSequence.Next();
+
+    /// <inheritdoc/>
+    uint ITransportSequencer.NextReceiveSequence() => this.TcpReceiveSequence.Next();
+
+    /// <inheritdoc/>
+    uint ITransportSequencer.CurrentSendSequence => this.TcpSendSequence.Current();
+
+    /// <inheritdoc/>
+    uint ITransportSequencer.CurrentReceiveSequence => this.TcpReceiveSequence.Current();
 
     /// <inheritdoc/>
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void BeginReceive(CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_outer is null || _socket is null, typeof(SocketTcpTransport));
-        ObjectDisposedException.ThrowIf(_outer.IsDisposed, nameof(Connection));
-        _socket.BeginReceive(cancellationToken);
-    }
-
-    /// <inheritdoc/>
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void UseFraming(TransportFraming framing)
-    {
-        this.Framing = framing;
-        ObjectDisposedException.ThrowIf(_socket is null, typeof(SocketTcpTransport));
-        _socket.SetFraming(framing);
-    }
-
-    /// <inheritdoc/>
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Send(ReadOnlySpan<byte> message)
+    void IConnection.ITransport.Send(ReadOnlySpan<byte> message)
     {
         if (message.IsEmpty)
         {
             throw new ArgumentException("Message must not be empty.", nameof(message));
         }
 
-        SocketConnection? socket = _socket;
-        ObjectDisposedException.ThrowIf(socket is null, typeof(SocketTcpTransport));
+        SocketConnection? socket = this.TcpSocket;
+        ObjectDisposedException.ThrowIf(socket is null, typeof(Connection));
 
         SocketConnection.SendResult result = socket.Send(message);
 
@@ -134,7 +106,7 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDispos
     /// <inheritdoc/>
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ValueTask SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default)
+    ValueTask IConnection.ITransport.SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
         => this.SEND_ASYNC(message, cancellationToken, acquireLock: true);
 
     /// <inheritdoc/>
@@ -144,7 +116,7 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDispos
     {
         if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
         {
-            return new ValueTask<IAsyncDisposable>(_sendLockScope);
+            return new ValueTask<IAsyncDisposable>(this);
         }
 
         return this.ACQUIRE_SEND_LOCK_ASYNC(cancellationToken);
@@ -153,17 +125,17 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDispos
     private async ValueTask<IAsyncDisposable> ACQUIRE_SEND_LOCK_ASYNC(CancellationToken cancellationToken)
     {
         await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return _sendLockScope;
+        return this;
     }
 
-    private sealed class SendLockScope(SemaphoreSlim sendLock) : IAsyncDisposable
+    /// <summary>
+    /// Releases the send lock taken by <see cref="IConnection.ITransport.AcquireSendLockAsync"/>. The connection
+    /// itself is the scope, so acquiring the lock allocates nothing.
+    /// </summary>
+    ValueTask IAsyncDisposable.DisposeAsync()
     {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ValueTask DisposeAsync()
-        {
-            _ = sendLock.Release();
-            return ValueTask.CompletedTask;
-        }
+        _ = _sendLock.Release();
+        return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc/>
@@ -180,7 +152,7 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDispos
     {
         ArgumentNullException.ThrowIfNull(frame);
 
-        SocketConnection? socket = _socket;
+        SocketConnection? socket = this.TcpSocket;
         if (socket is not null
             && frame is BufferLease lease
             && socket.CanSendWithReservedHeader(lease.Length)
@@ -223,7 +195,7 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDispos
     /// </remarks>
     ValueTask IConnection.ITransport.SendAsyncCore(ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
     {
-        SocketConnection? socket = _socket;
+        SocketConnection? socket = this.TcpSocket;
         if (socket is not null && frames.Length > 1 && socket.CanSendBatch(frames.Span))
         {
             return COMPLETE_SEND(socket.SendBatchAsync(frames, cancellationToken));
@@ -260,10 +232,10 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDispos
             return ValueTask.FromException(new ArgumentException("Message must not be empty.", nameof(message)));
         }
 
-        SocketConnection? socket = _socket;
+        SocketConnection? socket = this.TcpSocket;
         if (socket is null)
         {
-            return ValueTask.FromException(new ObjectDisposedException(nameof(SocketTcpTransport)));
+            return ValueTask.FromException(new ObjectDisposedException(nameof(Connection)));
         }
 
         if (acquireLock)
@@ -340,54 +312,40 @@ internal sealed class SocketTcpTransport : IConnection.ISocketTransport, IDispos
             }
         }
 
-        static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(SocketTcpTransport transport, ReadOnlyMemory<byte> msg, CancellationToken ct)
+        static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(Connection connection, ReadOnlyMemory<byte> msg, CancellationToken ct)
         {
-            await transport._sendLock.WaitAsync(ct).ConfigureAwait(false);
+            await connection._sendLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                await transport.SEND_ASYNC(msg, ct, acquireLock: false).ConfigureAwait(false);
+                await connection.SEND_ASYNC(msg, ct, acquireLock: false).ConfigureAwait(false);
             }
             finally
             {
-                _ = transport._sendLock.Release();
+                _ = connection._sendLock.Release();
             }
         }
     }
 
-
     /// <inheritdoc/>
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public uint NextSendSequence() => _sendSequence.Next();
-
-    /// <inheritdoc/>
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public uint NextReceiveSequence() => _receiveSequence.Next();
-
-    /// <inheritdoc/>
-    public uint CurrentSendSequence => _sendSequence.Current();
-
-    /// <inheritdoc/>
-    public uint CurrentReceiveSequence => _receiveSequence.Current();
-
-    #endregion Methods
-
-    #region Disposal
-
-    /// <summary>
-    /// Clears the socket and the owner. After this call the instance never sends again: every send fails with
-    /// <see cref="ObjectDisposedException"/>. Transports are not pooled, so a caller that kept this reference
-    /// can never reach a later owner's socket.
-    /// </summary>
-    public void Dispose()
+    void IConnection.ITransport.BeginReceive(CancellationToken cancellationToken)
     {
-        _outer = null;
-        _socket = null;
-        _sendSequence.Reset(0);
-        _receiveSequence.Reset(0);
-        this.Framing = TransportFraming.None;
+        SocketConnection? socket = this.TcpSocket;
+        ObjectDisposedException.ThrowIf(socket is null || this.IsDisposed, typeof(Connection));
+        socket.BeginReceive(cancellationToken);
     }
 
-    #endregion Disposal
+    /// <inheritdoc/>
+    [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    void IConnection.ITransport.UseFraming(TransportFraming framing)
+    {
+        _tcpFraming = framing;
+        SocketConnection? socket = this.TcpSocket;
+        ObjectDisposedException.ThrowIf(socket is null, typeof(Connection));
+        socket.SetFraming(framing);
+    }
+
+    #endregion IConnection.ITransport
 }

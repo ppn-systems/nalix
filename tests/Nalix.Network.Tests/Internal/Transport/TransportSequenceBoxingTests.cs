@@ -67,7 +67,7 @@ public sealed class TransportSequenceBoxingTests : IDisposable
     public void SequenceCounter_OnUdpTransport_ReturnsSameReferenceAndPersistsState()
     {
         // Arrange
-        using var transport = new SocketUdpTransport();
+        using var transport = new SocketUdpTransport(new Nalix.Environment.Sequencing.SequenceCounter(), new Nalix.Environment.Sequencing.SequenceCounter());
 
         // Act & Assert
         // 1. Same reference check (verifies boxing is eliminated)

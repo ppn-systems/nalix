@@ -14,6 +14,7 @@ using Nalix.Environment.Configuration;
 using Nalix.Framework.Injection;
 using Nalix.Framework.Memory.Buffers;
 using Nalix.Framework.Memory.Objects;
+using Nalix.Abstractions.Networking;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Transport;
 using Xunit;
@@ -35,8 +36,7 @@ public sealed class WebSocketTransportEmptyMessageTests
         using EmptyThenPendingWebSocket socket = new();
         using WebSocketConnection owner = new(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
 
-        WebSocketTransport transport = new();
-        transport.Initialize(owner, socket);
+        IConnection.ITransport transport = owner.TCP;
         transport.BeginReceive();
 
         await socket.SecondReceiveStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -44,7 +44,6 @@ public sealed class WebSocketTransportEmptyMessageTests
         owner.IsDisposed.Should().BeFalse("an empty message must not disconnect the client");
         socket.State.Should().Be(WebSocketState.Open);
 
-        transport.Dispose();
     }
 
     private static void EnsureRegistered()

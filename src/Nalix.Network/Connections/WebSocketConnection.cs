@@ -34,7 +34,7 @@ namespace Nalix.Network.Connections;
 /// Represents a network connection that manages WebSocket communication, stream
 /// transformation, and event handling.
 /// </summary>
-public sealed class WebSocketConnection :
+public sealed partial class WebSocketConnection :
     IConnection,
     IConnectionErrorTracked,
     IConnectionTrafficMetrics,
@@ -96,8 +96,7 @@ public sealed class WebSocketConnection :
         this.NetworkEndpoint = SocketEndpoint.FromEndPoint(remoteEndPoint ?? new IPEndPoint(IPAddress.Loopback, 0));
 
         // Transport owns WebSocket — ownership transfer
-        _backing.WsTransport = new WebSocketTransport();
-        _backing.WsTransport.Initialize(this, webSocket, writeBatcher);
+        this.InitializeTransport(webSocket, writeBatcher);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
         {
@@ -128,7 +127,7 @@ public sealed class WebSocketConnection :
     public IOpCodeExtractor PacketClassifier { get; }
 
     /// <inheritdoc/>
-    public IConnection.ITransport TCP => Volatile.Read(ref _backing)?.WsTransport ?? throw new ObjectDisposedException(nameof(WebSocketConnection));
+    public IConnection.ITransport TCP => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(WebSocketConnection));
 
     /// <inheritdoc/>
     public IConnection.ITransport? UDP => null;
@@ -587,14 +586,10 @@ public sealed class WebSocketConnection :
                 try { b.Attributes?.Return(); b.Attributes = null; }
                 catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
 
-                // Transport.Dispose() handles WebSocket Abort + Dispose
+                // Closes the WebSocket and stops the receive loop.
                 try
                 {
-                    if (b.WsTransport != null)
-                    {
-                        b.WsTransport.Dispose();
-                        b.WsTransport = null;
-                    }
+                    this.DisposeTransport();
                 }
                 catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
 

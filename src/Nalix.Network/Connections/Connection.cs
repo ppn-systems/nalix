@@ -122,8 +122,6 @@ public sealed partial class Connection :
         // Initialize the socket connection.
         _backing.Socket = s_pool.Get<SocketConnection>();
         _backing.Socket.Initialize(socket, this);
-        _backing.TcpTransport = new SocketTcpTransport();
-        _backing.TcpTransport.Initialize(this, _backing.Socket);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
         {
@@ -164,7 +162,7 @@ public sealed partial class Connection :
     public string? UserId { get; set; }
 
     /// <inheritdoc/>
-    public IConnection.ITransport TCP => Volatile.Read(ref _backing)?.TcpTransport ?? throw new ObjectDisposedException(nameof(Connection));
+    public IConnection.ITransport TCP => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(Connection));
 
     /// <inheritdoc/>
     public IConnection.ITransport? UDP => Volatile.Read(ref _backing)?.UdpTransport;
@@ -635,16 +633,6 @@ public sealed partial class Connection :
                 }
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { LOG_ERROR(ex, "udptransport"); }
-
-            try
-            {
-                if (backing.TcpTransport != null)
-                {
-                    backing.TcpTransport.Dispose();
-                    backing.TcpTransport = null;
-                }
-            }
-            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { LOG_ERROR(ex, "tcptransport"); }
 
             // DO NOT call backing.ArgsPool.Destroy() or backing.ContextPool.Destroy()
             // in order to safely pool the local pool for reuse.

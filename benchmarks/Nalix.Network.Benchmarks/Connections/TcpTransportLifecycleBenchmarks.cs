@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
@@ -25,6 +26,9 @@ public class TcpTransportLifecycleBenchmarks
     private Connection _sendConnection = null!;
     private CancellationTokenSource _drainCts = null!;
     private Task _drainTask = null!;
+    private Socket _udpListener = null!;
+    private Action<PassthroughConnection, Socket, IPEndPoint> _bindUdp = null!;
+    private readonly IPEndPoint _remote = new(IPAddress.Loopback, 9);
 
     private sealed class StubOpCodeExtractor : IOpCodeExtractor
     {
@@ -46,6 +50,13 @@ public class TcpTransportLifecycleBenchmarks
         _serverSocket = acceptTask.GetAwaiter().GetResult();
 
         _sendConnection = new Connection(_serverSocket, new StubOpCodeExtractor());
+
+        _udpListener = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        _udpListener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+
+        // BindUdp is internal. The delegate is built once here, so the timed loop calls it without reflection.
+        MethodInfo bind = typeof(PassthroughConnection).GetMethod("BindUdp", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        _bindUdp = (Action<PassthroughConnection, Socket, IPEndPoint>)bind.CreateDelegate(typeof(Action<PassthroughConnection, Socket, IPEndPoint>));
 
         // Keep the peer drained so the steady-state send never blocks on a full socket buffer.
         _drainCts = new CancellationTokenSource();
@@ -76,6 +87,7 @@ public class TcpTransportLifecycleBenchmarks
         _sendConnection.Dispose();
         _client.Dispose();
         _listener.Dispose();
+        _udpListener.Dispose();
         try { _drainTask.Wait(TimeSpan.FromSeconds(2)); } catch (AggregateException) { }
     }
 
@@ -87,6 +99,37 @@ public class TcpTransportLifecycleBenchmarks
         Connection connection = new(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
         connection.Dispose();
     }
+
+    /// <summary>Creates a UDP-bound passthrough connection and disposes it, as a new UDP client session does.</summary>
+    [Benchmark]
+    public void CreateBindDispose_Passthrough()
+    {
+        PassthroughConnection connection = new(new StubOpCodeExtractor(), _remote);
+        _bindUdp(connection, _udpListener, _remote);
+        connection.Dispose();
+    }
+
+    /// <summary>
+    /// Churn: 256 TCP connections are accepted, wrapped in a <see cref="Connection"/> and closed per invocation,
+    /// so Allocated/op is bytes per connection and the Gen0/Gen1/Gen2 columns are collections per 1000 connections.
+    /// </summary>
+    [Benchmark(OperationsPerInvoke = ChurnBatch)]
+    public void Churn_TcpConnections()
+    {
+        for (int i = 0; i < ChurnBatch; i++)
+        {
+            Socket client = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            Task<Socket> accept = _listener.AcceptAsync();
+            client.Connect(_listener.LocalEndPoint!);
+            Socket server = accept.GetAwaiter().GetResult();
+
+            Connection connection = new(server, new StubOpCodeExtractor());
+            connection.Dispose();
+            client.Dispose();
+        }
+    }
+
+    private const int ChurnBatch = 256;
 
     [Benchmark]
     public void Send_Steady()

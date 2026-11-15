@@ -9,7 +9,6 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Nalix.Abstractions;
 using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
@@ -34,10 +33,27 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
 
     private static readonly NetworkSocketOptions s_options = ConfigurationManager.Instance.Get<NetworkSocketOptions>();
 
-    private readonly ISequenceCounter _sendSequence = new SequenceCounter();
-    private readonly ISequenceCounter _receiveSequence = new SequenceCounter();
+    /// <summary>Replaces the counters of a disposed transport so it never touches counters that were handed on.</summary>
+    private static readonly ISequenceCounter s_detachedSequence = new SequenceCounter();
 
     #endregion Static Factory
+
+    #region Constructor
+
+    /// <summary>
+    /// Creates a transport for one binding. The counters are supplied by the owner, so an owner that is itself
+    /// pooled (<see cref="Nalix.Network.Internal.Connections.ConnectionBacking"/>) provides them without a per-binding allocation. A new binding starts
+    /// both counters at zero.
+    /// </summary>
+    internal SocketUdpTransport(SequenceCounter sendSequence, SequenceCounter receiveSequence)
+    {
+        _sendSequence = sendSequence;
+        _receiveSequence = receiveSequence;
+        _sendSequence.Reset(0);
+        _receiveSequence.Reset(0);
+    }
+
+    #endregion Constructor
 
     #region Properties
 
@@ -81,7 +97,7 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
     /// Reuses the existing transport if it is already bound to the same socket and endpoint.
     /// If the socket or endpoint changes, the previous transport is disposed and a new one is created.
     /// Transports are never pooled: a caller that kept a reference to a disposed transport must not be able to
-    /// send to the endpoint of a later binding.
+    /// send to the endpoint of a later binding. Only the counters are pooled (with the connection's backing).
     /// </summary>
     public static void EnsureUDP(Connection connection, IPEndPoint remoteEndPoint, Socket socket)
     {
@@ -110,7 +126,7 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
             }
         }
 
-        SocketUdpTransport transport = new();
+        SocketUdpTransport transport = new(connection.UdpSendSequenceCounter, connection.UdpReceiveSequenceCounter);
 
         transport.SetSocket(socket);
 
@@ -123,6 +139,8 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
 
     #region Fields
 
+    private ISequenceCounter _sendSequence;
+    private ISequenceCounter _receiveSequence;
     private Socket? _socket;
     private EndPoint? _endPoint;
 
@@ -359,8 +377,8 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
     #region Disposal
 
     /// <summary>
-    /// Clears the target and releases an owned socket. After this call the instance never sends again, so any
-    /// caller still holding it becomes a no-op instead of reaching another connection's endpoint.
+    /// Clears the target, detaches the counters and releases an owned socket. After this call the instance never
+    /// sends again, so any caller still holding it becomes a no-op instead of reaching another connection's endpoint.
     /// </summary>
     public void Dispose()
     {
@@ -377,8 +395,9 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
         _bytesSent = 0;
         _bytesReceived = 0;
 
-        _sendSequence.Reset(0);
-        _receiveSequence.Reset(0);
+        // The counters belong to the owner and may be handed to a later binding: detach, never reset them.
+        _sendSequence = s_detachedSequence;
+        _receiveSequence = s_detachedSequence;
     }
 
     #endregion Disposal
