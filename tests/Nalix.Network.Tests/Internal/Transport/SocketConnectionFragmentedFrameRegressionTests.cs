@@ -77,6 +77,7 @@ public sealed class SocketConnectionFragmentedFrameRegressionTests
         try
         {
             Connection realConn = new(server, s_testOpCodeExtractor);
+            realConn.Level = PermissionLevel.ESTABLISHED;
             FieldInfo backingField = typeof(Connection).GetField("_backing", BindingFlags.Instance | BindingFlags.NonPublic)!;
             object backing = backingField.GetValue(realConn)!;
             FieldInfo socketField = backing.GetType().GetField("Socket", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
