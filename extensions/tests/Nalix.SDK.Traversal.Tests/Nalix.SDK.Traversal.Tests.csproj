@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Nalix.Abstractions\Nalix.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\src\Nalix.Framework\Nalix.Framework.csproj" />
     <ProjectReference Include="..\..\Nalix.SDK.Traversal\Nalix.SDK.Traversal.csproj" />
     <ProjectReference Include="..\..\Nalix.Traversal.Contracts\Nalix.Traversal.Contracts.csproj" />
   </ItemGroup>
