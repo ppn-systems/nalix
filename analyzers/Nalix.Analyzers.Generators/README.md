@@ -9,7 +9,7 @@
 | Generator | Code Emitted / Purpose | Trigger Criteria / Attributes |
 | :--- | :--- | :--- |
 | **`SerializeFormatterGenerator`** | Zero-allocation `IFormatter<T>` implementations that statically serialize and deserialize packable types. | Classes, structs, or records decorated with the `[GenerateFormatter]` attribute. |
-| **`PacketRegistryGenerator`** | Static opcode-to-type lookup mapping and poolable object factory registration helpers. | Classes implementing `IPacket` decorated with the `[Packet(opcode)]` attribute. |
+| **`PacketRegistryGenerator`** | Opcode-to-type lookup mapping (from `StaticOpCode`) and poolable object factory registration helpers. | Classes inheriting `PacketBase<T>` and decorated with the `[Packet]` attribute. The opcode comes from `static ushort StaticOpCode` (`IPacketStaticOpcode`). |
 | **`PacketSchemaGenerator`** | Reflection-free binary serialization schemas mapping property layouts and fixed size constraints. | Classes with layout attributes (`[SerializeOrder]`, `[SerializeHeader]`, `[SerializeIgnore]`). |
 | **`ConfigurationGenerator`** | Zero-reflection INI configuration binding, parsing, default writing, and DataAnnotations validation helpers. | Classes inheriting from the `ConfigurationLoader` base type. |
 
