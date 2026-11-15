@@ -25,6 +25,13 @@ public enum PermissionLevel : byte
     ESTABLISHED = 20,
 
     /// <summary>
+    /// Read-only observability access. Granted only by presenting the observability access key; it grants nothing else.
+    /// Sits at or above <see cref="ESTABLISHED"/> so that large observation payloads can be fragmented, and below
+    /// <see cref="GUEST"/> so that it does not satisfy any handler that requires guest or higher.
+    /// </summary>
+    OBSERVER = 22,
+
+    /// <summary>
     /// Minimal access for anonymous or guest users.
     /// </summary>
     GUEST = 25,

@@ -187,7 +187,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
 
             Assert.Equal(ObservabilityAccessStage.RESPONSE, accessResponse.Stage);
             Assert.Equal(ProtocolReason.NONE, accessResponse.Reason);
-            Assert.Equal(PermissionLevel.SUPERVISOR, accessResponse.AccessLevel);
+            Assert.Equal(PermissionLevel.OBSERVER, accessResponse.AccessLevel);
 
             // -- 5. Build RuntimeObservation request --
             RuntimeObservation runtimeRequest = PacketBase<RuntimeObservation>.Create();
