@@ -110,6 +110,7 @@ public sealed class WebSocketListenerHealthCheckTests : IDisposable
         var wsOpt = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
         wsOpt.Host = "127.0.0.1";
         wsOpt.ServerVersion = "2.5.0-release";
+        wsOpt.DevOpsBearerToken = "health-test-token-0123456789";
 
         ConnectionHub hub = new();
         var builder = NetworkApplication.CreateBuilder();
@@ -129,7 +130,7 @@ public sealed class WebSocketListenerHealthCheckTests : IDisposable
             using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             await socket.ConnectAsync(IPAddress.Loopback, port);
 
-            string requestLine = "GET /version HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
+            string requestLine = "GET /version HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer health-test-token-0123456789\r\n\r\n";
             await socket.SendAsync(Encoding.ASCII.GetBytes(requestLine), SocketFlags.None);
 
             byte[] buffer = new byte[512];
@@ -150,7 +151,9 @@ public sealed class WebSocketListenerHealthCheckTests : IDisposable
     public async Task MetricsEndpoint_WhenRequested_ReturnsPrometheusFormattedMetrics()
     {
         ushort port = GetFreePort();
-        ConfigurationManager.Instance.Get<NetworkWebSocketOptions>().Host = "127.0.0.1";
+        var wsOpt = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
+        wsOpt.Host = "127.0.0.1";
+        wsOpt.DevOpsBearerToken = "health-test-token-0123456789";
 
         ConnectionHub hub = new();
         var builder = NetworkApplication.CreateBuilder();
@@ -170,7 +173,7 @@ public sealed class WebSocketListenerHealthCheckTests : IDisposable
             using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             await socket.ConnectAsync(IPAddress.Loopback, port);
 
-            string requestLine = "GET /metrics HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
+            string requestLine = "GET /metrics HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer health-test-token-0123456789\r\n\r\n";
             await socket.SendAsync(Encoding.ASCII.GetBytes(requestLine), SocketFlags.None);
 
             byte[] buffer = new byte[1024];

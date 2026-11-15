@@ -72,6 +72,11 @@ public readonly ref struct HttpRequestView
     public ReadOnlySpan<byte> Origin { get; init; }
 
     /// <summary>
+    /// Gets the <c>Authorization</c> header value, or empty if absent.
+    /// </summary>
+    public ReadOnlySpan<byte> Authorization { get; init; }
+
+    /// <summary>
     /// Gets the resolved client endpoint (accounting for Proxy Protocol or trusted forwarded headers).
     /// </summary>
     public EndPoint? RemoteEndPoint { get; init; }

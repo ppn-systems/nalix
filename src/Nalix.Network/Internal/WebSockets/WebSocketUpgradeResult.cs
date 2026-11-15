@@ -26,4 +26,5 @@ internal readonly ref struct WebSocketUpgradeResult
     public ReadOnlySpan<byte> CfConnectingIp { get; init; }
     public ReadOnlySpan<byte> XRealIp { get; init; }
     public ReadOnlySpan<byte> XForwardedFor { get; init; }
+    public ReadOnlySpan<byte> Authorization { get; init; }
 }

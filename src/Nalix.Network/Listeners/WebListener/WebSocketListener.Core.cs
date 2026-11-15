@@ -34,6 +34,7 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
 
     private readonly string _path;
     private readonly byte[] _versionResponseBytes;
+    private byte[]? _devOpsBearerToken;
     private readonly long _handshakeTimeoutTicks;
 
     private readonly NetworkWebSocketOptions _wsconfig;

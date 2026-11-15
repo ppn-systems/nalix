@@ -29,6 +29,7 @@ internal static class WebSocketUpgradeParser
     private static ReadOnlySpan<byte> XForwardedForKey => "x-forwarded-for:"u8;
     private static ReadOnlySpan<byte> ContentLengthKey => "content-length:"u8;
     private static ReadOnlySpan<byte> ContentTypeKey => "content-type:"u8;
+    private static ReadOnlySpan<byte> AuthorizationKey => "authorization:"u8;
     private static ReadOnlySpan<byte> TransferEncodingKey => "transfer-encoding:"u8;
 
     // Header expected values
@@ -124,6 +125,7 @@ internal static class WebSocketUpgradeParser
         bool hasCfConnectingIp = false;
         bool hasXRealIp = false;
         bool hasXForwardedFor = false;
+        bool hasAuthorization = false;
         bool isMalformed = false;
         int contentLength = 0;
         ReadOnlySpan<byte> secWebSocketKey = default;
@@ -133,6 +135,7 @@ internal static class WebSocketUpgradeParser
         ReadOnlySpan<byte> cfConnectingIp = default;
         ReadOnlySpan<byte> xRealIp = default;
         ReadOnlySpan<byte> xForwardedFor = default;
+        ReadOnlySpan<byte> authorization = default;
 
         Span<byte> lowerKeyBuffer = stackalloc byte[128]; // Max expected header key length
 
@@ -273,6 +276,16 @@ internal static class WebSocketUpgradeParser
                 hasContentType = true;
                 contentType = value;
             }
+            else if (lowerKey.SequenceEqual(AuthorizationKey[..^1]))
+            {
+                if (hasAuthorization)
+                {
+                    isMalformed = true;
+                    break;
+                }
+                hasAuthorization = true;
+                authorization = value;
+            }
             else if (lowerKey.SequenceEqual(TransferEncodingKey[..^1]))
             {
                 // Strict constraint: Transfer-Encoding (e.g. chunked) is never allowed.
@@ -320,6 +333,7 @@ internal static class WebSocketUpgradeParser
             CfConnectingIp = cfConnectingIp,
             XRealIp = xRealIp,
             XForwardedFor = xForwardedFor,
+            Authorization = authorization,
             BytesConsumed = totalBytesConsumed
         };
     }
