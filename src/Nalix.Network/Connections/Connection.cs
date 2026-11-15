@@ -413,7 +413,13 @@ public sealed partial class Connection :
     #region Methods
 
     /// <inheritdoc />
-    public void IncrementErrorCount()
+    public void IncrementErrorCount() => this.IncrementErrorCount(Clock.MonoTicksNow());
+
+    /// <summary>
+    /// Records one error observed at <paramref name="nowTicks"/> (a <see cref="Clock.MonoTicksNow"/> value).
+    /// Taking the time as a parameter lets tests simulate hours of traffic without sleeping.
+    /// </summary>
+    internal void IncrementErrorCount(long nowTicks)
     {
         ConnectionBacking? backing = Volatile.Read(ref _backing);
         if (backing == null)
@@ -421,7 +427,8 @@ public sealed partial class Connection :
             return;
         }
 
-        int count = Interlocked.Increment(ref backing.ErrorCount);
+        long windowTicks = (long)(s_options.ErrorWindow.TotalSeconds * Clock.TicksPerSecond);
+        int count = backing.RecordError(nowTicks, windowTicks);
 
         // SEC-54: Disconnect persistent noisy/malformed connections
         if (s_options.MaxErrorThreshold > 0 && count >= s_options.MaxErrorThreshold)

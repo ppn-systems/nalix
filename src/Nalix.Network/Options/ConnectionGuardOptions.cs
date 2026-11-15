@@ -35,12 +35,21 @@ public sealed partial class ConnectionGuardOptions : ConfigurationLoader, IValid
     public System.TimeSpan DDoSLogSuppressWindow { get; set; } = System.TimeSpan.FromSeconds(20);
 
     /// <summary>
-    /// Gets or sets the maximum allowed error count before a connection is automatically severed.
+    /// Gets or sets the maximum number of errors a connection may accumulate within <see cref="ErrorWindow"/>
+    /// before it is automatically severed.
     /// SEC-54: Prevents persistent noisy or malformed connections from consuming CPU/logs.
     /// </summary>
-    [IniComment("Maximum cumulative errors allowed per connection before disconnection (SEC-54, default 50)")]
+    [IniComment("Maximum errors allowed per connection within ErrorWindow before disconnection (SEC-54, default 50)")]
     [ValueRange(1, int.MaxValue)]
     public int MaxErrorThreshold { get; set; } = 50;
+
+    /// <summary>
+    /// Gets or sets the window over which a connection's errors are counted. When the window elapses the count
+    /// restarts, so a long-lived connection with an occasional error is not disconnected cumulatively.
+    /// </summary>
+    [IniComment("Window over which per-connection errors are counted against MaxErrorThreshold (default 00:01:00)")]
+    [DurationRange("00:00:01", "24:00:00")]
+    public System.TimeSpan ErrorWindow { get; set; } = System.TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// Gets or sets the maximum number of packets allowed per second from a single connection before it is considered abusive and disconnected.

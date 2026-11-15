@@ -490,7 +490,8 @@ public sealed class WebSocketConnection :
             return;
         }
 
-        int count = Interlocked.Increment(ref backing.ErrorCount);
+        long windowTicks = (long)(s_limitOptions.ErrorWindow.TotalSeconds * Clock.TicksPerSecond);
+        int count = backing.RecordError(Clock.MonoTicksNow(), windowTicks);
 
         if (s_limitOptions.MaxErrorThreshold > 0 && count >= s_limitOptions.MaxErrorThreshold)
         {
