@@ -239,6 +239,30 @@ public static class DataReaderExtensions
         return Unsafe.As<uint, TEnum>(ref value);
     }
 
+    /// <summary>
+    /// Reads an enum value with underlying type <see cref="long"/>.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the reader does not contain enough remaining data.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static TEnum ReadEnumInt64<TEnum>(this ref DataReader reader)
+    where TEnum : unmanaged, Enum
+    {
+        long value = reader.ReadInt64();
+        return Unsafe.As<long, TEnum>(ref value);
+    }
+
+    /// <summary>
+    /// Reads an enum value with underlying type <see cref="ulong"/>.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the reader does not contain enough remaining data.</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static TEnum ReadEnumUInt64<TEnum>(this ref DataReader reader)
+    where TEnum : unmanaged, Enum
+    {
+        ulong value = reader.ReadUInt64();
+        return Unsafe.As<ulong, TEnum>(ref value);
+    }
+
     #endregion Enum Types
 
     #region Array Types
