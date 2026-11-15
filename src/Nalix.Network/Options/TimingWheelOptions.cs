@@ -40,6 +40,17 @@ public sealed partial class TimingWheelOptions : ConfigurationLoader, IValidatab
     public int IdleTimeoutMs { get; set; } = 60_000;
 
     /// <summary>
+    /// Gets or sets the maximum time in milliseconds a TCP or WebSocket connection may stay open
+    /// while its permission level is still below <c>PermissionLevel.ESTABLISHED</c>, measured from
+    /// the moment the connection was accepted. Frames received before authentication do not extend
+    /// this deadline. Connections that reach <c>ESTABLISHED</c> (handshake or session resume) are not
+    /// affected. Set to 0 to disable the deadline.
+    /// </summary>
+    [IniComment("Maximum time in milliseconds a TCP/WebSocket connection may stay below ESTABLISHED permission after accept, before auto-close; frames do not extend it (default 15000 = 15s, 0 = disabled)")]
+    [ValueRange(0, 600_000)]
+    public int HandshakeTimeoutMs { get; set; } = 15_000;
+
+    /// <summary>
     /// Gets or sets the maximum time in milliseconds to wait for the timing wheel to drain
     /// gracefully during shutdown before forceful termination.
     /// </summary>

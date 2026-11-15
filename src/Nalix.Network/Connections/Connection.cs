@@ -233,6 +233,12 @@ public sealed partial class Connection :
     /// </summary>
     TimingWheel.TimeoutTask? TimingWheel.ITimeoutTrackedConnection.TimeoutTask { get; set; }
 
+    /// <inheritdoc />
+    long TimingWheel.ITimeoutTrackedConnection.AcceptedAtMs { get; set; }
+
+    /// <inheritdoc />
+    bool TimingWheel.ITimeoutTrackedConnection.AppliesHandshakeTimeout => true;
+
     /// <summary>
     /// Gets the total number of bytes sent over the life of the connection.
     /// </summary>

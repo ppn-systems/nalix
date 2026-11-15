@@ -14,6 +14,7 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Identity;
 using Nalix.Abstractions.Injection;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Security;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Time;
 using Nalix.Framework.Injection;
@@ -79,6 +80,8 @@ internal sealed class TimingWheel : IActivatable
     private readonly int _tickMs;
     private readonly int _wheelSize;
     private readonly int _idleTimeoutMs;
+    private readonly int _handshakeTimeoutMs;
+    private const int MaxHandshakeGraceMs = 60_000;
 
     /// <summary>
     /// Mask is used only when WheelSize is a power of two.
@@ -128,6 +131,12 @@ internal sealed class TimingWheel : IActivatable
         int TimeoutVersion { get; set; }
         bool IsRegisteredInWheel { get; set; }
         TimeoutTask? TimeoutTask { get; set; }
+
+        /// <summary>Unix milliseconds at which the connection was first registered (accept time). 0 = not yet stamped.</summary>
+        long AcceptedAtMs { get; set; }
+
+        /// <summary>Whether the pre-authentication deadline applies (false for connections without a Nalix handshake).</summary>
+        bool AppliesHandshakeTimeout { get; }
     }
 
     /// <summary>
@@ -248,6 +257,7 @@ internal sealed class TimingWheel : IActivatable
         _wheelSize = _options.BucketCount;
         _tickMs = _options.TickDuration;
         _idleTimeoutMs = _options.IdleTimeoutMs;
+        _handshakeTimeoutMs = _options.HandshakeTimeoutMs;
 
         _useMask = (_wheelSize & (_wheelSize - 1)) == 0 && _wheelSize > 0;
         _mask = _useMask ? (_wheelSize - 1) : 0;
@@ -490,8 +500,15 @@ internal sealed class TimingWheel : IActivatable
                 // Set version to match current connection version.
                 task.Version = connection.TimeoutVersion;
 
+                long nowMs = Clock.UnixMillisecondsNow();
+                if (connection.AcceptedAtMs == 0)
+                {
+                    connection.AcceptedAtMs = nowMs;
+                }
+
+                long delayMs = Math.Min(connection.IdleTimeoutMs, HandshakeRemainingMs(connection, nowMs));
                 long baseTick = Volatile.Read(ref _tick);
-                long ticks = Math.Max(1, connection.IdleTimeoutMs / (long)_tickMs);
+                long ticks = Math.Max(1, delayMs / _tickMs);
 
                 int bucket = _useMask
                     ? (int)((baseTick + ticks) & _mask)
@@ -747,10 +764,12 @@ internal sealed class TimingWheel : IActivatable
                             continue;
                         }
 
-                        long idleMs = Clock.UnixMillisecondsNow() - connection.LastPingTime;
-                        int currentTimeoutMs = connection.IdleTimeoutMs;
+                        long nowMs = Clock.UnixMillisecondsNow();
+                        long idleMs = nowMs - connection.LastPingTime;
+                        long idleRemainingMs = connection.IdleTimeoutMs - idleMs;
+                        long handshakeRemainingMs = HandshakeRemainingMs(connection, nowMs);
 
-                        if (idleMs >= currentTimeoutMs)
+                        if (idleRemainingMs <= 0 || handshakeRemainingMs <= 0)
                         {
                             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Debug))
                             {
@@ -800,7 +819,7 @@ internal sealed class TimingWheel : IActivatable
                             continue;
                         }
 
-                        long remainingMs = currentTimeoutMs - idleMs;
+                        long remainingMs = Math.Min(idleRemainingMs, handshakeRemainingMs);
                         long ticksMore = Math.Max(1, remainingMs / _tickMs);
 
                         int nextBucket = _useMask
@@ -851,6 +870,29 @@ internal sealed class TimingWheel : IActivatable
     #endregion Loop
 
     #region Helpers
+
+    /// <summary>
+    /// Milliseconds left before the pre-authentication deadline of <paramref name="connection"/> expires, or
+    /// <see cref="long.MaxValue"/> when the deadline does not apply (disabled, passthrough, or already at ESTABLISHED).
+    /// The deadline is measured from accept time and is not affected by received frames. A proof-of-work grant
+    /// (<see cref="ConnectionAttributes.HandshakeDeadlineExtension"/>) is added once, clamped to 60 seconds.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private long HandshakeRemainingMs(ITimeoutTrackedConnection connection, long nowMs)
+    {
+        if (_handshakeTimeoutMs <= 0 || !connection.AppliesHandshakeTimeout || connection.Level >= PermissionLevel.ESTABLISHED)
+        {
+            return long.MaxValue;
+        }
+
+        long grantMs = 0;
+        if (connection.Attributes.TryGetValue(ConnectionAttributes.HandshakeDeadlineExtension, out object? grant) && grant is int g)
+        {
+            grantMs = Math.Clamp(g, 0, MaxHandshakeGraceMs);
+        }
+
+        return connection.AcceptedAtMs + _handshakeTimeoutMs + grantMs - nowMs;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void OnConnectionClosed(object? sender, IConnectionEventArgs args)

@@ -302,6 +302,15 @@ public sealed class PassthroughConnection :
     /// <inheritdoc />
     TimingWheel.TimeoutTask? TimingWheel.ITimeoutTrackedConnection.TimeoutTask { get; set; }
 
+    /// <inheritdoc />
+    long TimingWheel.ITimeoutTrackedConnection.AcceptedAtMs { get; set; }
+
+    /// <summary>
+    /// Passthrough UDP endpoints have no Nalix handshake; the protocol layer owns authentication, so the
+    /// pre-authentication deadline does not apply.
+    /// </summary>
+    bool TimingWheel.ITimeoutTrackedConnection.AppliesHandshakeTimeout => false;
+
     #endregion ITimeoutTrackedConnection
 
     #region TCP — Not Supported
