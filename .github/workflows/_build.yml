@@ -168,7 +168,7 @@ jobs:
 
       - name: Generate coverage report
         if: always() && steps.coverage_files.outputs.found == 'true'
-        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        uses: danielpalme/ReportGenerator-GitHub-Action@v5.6.0
         with:
           reports: ${{ env.TEST_RESULTS_DIR }}/**/coverage.cobertura.xml
           targetdir: ${{ env.COVERAGE_REPORT_DIR }}
