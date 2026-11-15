@@ -72,6 +72,9 @@ public static class HandshakeExtensions
         Bytes32 masterSecret = default;
         Bytes32 sessionKey = default;
 
+        // A full handshake starts a new key and a new server-side session, so both directions restart at 0.
+        session.ResetSequenceCounters();
+
         TransportSession? transportSession = session as TransportSession;
         transportSession?.EnterNegotiation();
 

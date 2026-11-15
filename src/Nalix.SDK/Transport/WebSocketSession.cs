@@ -166,7 +166,7 @@ public class WebSocketSession : TransportSession
                 await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
-            this.ResetSequenceCounters();
+            // Sequence counters are not reset here: a resume continues them, and a full handshake resets them.
 
             _socket = new ClientWebSocket();
 
