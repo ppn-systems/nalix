@@ -208,6 +208,42 @@ public sealed class RuntimeObservationHandlersTests
         }
     }
 
+    [Theory]
+    [InlineData("""{"from":-9223372036854775808,"to":9223372036854775807}""")]
+    [InlineData("""{"from":-9223372036854775808,"to":9223372036854775807,"metrics":["Process.WorkingSetBytes"]}""")]
+    [InlineData("""{"from":0,"to":9223372036854775807,"metrics":["Process.WorkingSetBytes"]}""")]
+    [InlineData("""{"from":1,"to":253402300800000}""")]
+    [InlineData("""{"from":1,"to":253402300800000,"metrics":["Process.WorkingSetBytes"]}""")]
+    public async Task HandleAsync_WhenHistoryRangeIsExtreme_ReturnsMalformedWithoutThrowing(string json)
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "nxh-" + Path.GetRandomFileName());
+        HistoryRecorder.Start(new ObservabilityOptions { HistoryDirectory = directory, HistoryTargets = RuntimeObservationTargets.PROCESS });
+        try
+        {
+            HistoryRecorder.Current!.Sample(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+            using RuntimeObservation request = HistoryRequest(json);
+            List<RuntimeObservation> chunks = await ObservationChunks.CollectAsync(RuntimeObservationHandlers.HandleAsync(CreateContext(request)));
+            try
+            {
+                RuntimeObservation response = Assert.Single(chunks);
+                Assert.Equal(ProtocolReason.MALFORMED_PACKET, response.Reason);
+            }
+            finally
+            {
+                ObservationChunks.DisposeAll(chunks);
+            }
+        }
+        finally
+        {
+            HistoryRecorder.Current?.Dispose();
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
     private static RuntimeObservation HistoryRequest(string json)
     {
         RuntimeObservation request = PacketBase<RuntimeObservation>.Create();
