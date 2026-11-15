@@ -246,6 +246,12 @@ public sealed class WebSocketConnection :
     /// </summary>
     TimingWheel.TimeoutTask? TimingWheel.ITimeoutTrackedConnection.TimeoutTask { get; set; }
 
+    /// <inheritdoc />
+    long TimingWheel.ITimeoutTrackedConnection.AcceptedAtMs { get; set; }
+
+    /// <inheritdoc />
+    bool TimingWheel.ITimeoutTrackedConnection.AppliesHandshakeTimeout => true;
+
     #endregion Properties
 
     #region Events

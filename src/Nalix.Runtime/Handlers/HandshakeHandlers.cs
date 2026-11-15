@@ -77,6 +77,10 @@ public static partial class HandshakeHandlers
                 {
                     error.Value.Initialize(ControlType.ERROR, reasonCode: ProtocolReason.POW_REQUIRED, flags: PacketFlags.SYSTEM);
                     connection.UpdateIdleTimeout(adaptiveTimeoutMs);
+                    if (!connection.Attributes.ContainsKey(ConnectionAttributes.HandshakeDeadlineExtension))
+                    {
+                        connection.Attributes[ConnectionAttributes.HandshakeDeadlineExtension] = adaptiveTimeoutMs;
+                    }
                     return context.Sender.SendAsync(error.Value).DisposeOnCompletionAsync(error);
                 }
                 catch

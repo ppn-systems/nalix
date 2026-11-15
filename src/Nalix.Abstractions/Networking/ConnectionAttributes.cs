@@ -22,4 +22,11 @@ public static class ConnectionAttributes
     /// Key for the runtime specific state stored during the connection lifecycle.
     /// </summary>
     public static readonly AttributeKey RuntimeState = AttributeKey.FromName("nalix.connection.runtime_state");
+
+    /// <summary>
+    /// Key for the one-time extension, in milliseconds (<see cref="int"/> value), that the proof-of-work gate grants to
+    /// the pre-authentication deadline of a connection. Set at most once per connection by the handshake layer;
+    /// the transport layer clamps it to 60 seconds.
+    /// </summary>
+    public static readonly AttributeKey HandshakeDeadlineExtension = AttributeKey.FromName("nalix.connection.handshake_deadline_extension");
 }

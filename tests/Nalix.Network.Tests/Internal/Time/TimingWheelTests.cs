@@ -129,6 +129,8 @@ public sealed class TimingWheelTests
         public bool IsUdpCreated => false;
         public bool ExcludeFromIdleTimeout { get; set; }
         public IObjectMap<AttributeKey, object> Attributes => throw new NotSupportedException();
+        public long AcceptedAtMs { get; set; }
+        public bool AppliesHandshakeTimeout => false;
         public ConcurrentDictionary<ushort, object> RateLimitCache { get; } = new();
         public int ErrorCount => 0;
         public PermissionLevel Level { get; set; }
