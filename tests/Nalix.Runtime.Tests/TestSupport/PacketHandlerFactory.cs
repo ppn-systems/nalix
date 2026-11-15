@@ -15,13 +15,15 @@ internal static class PacketHandlerFactory
     public static PacketHandler<TestPacket> CreateDescriptor(
         Func<object?, PacketContext<TestPacket>, ValueTask<object?>> invoker,
         int timeoutMs = 0,
-        bool requireEncryption = false)
-        => CreateDescriptor<TestPacket>(invoker, timeoutMs, requireEncryption);
+        bool requireEncryption = false,
+        PermissionLevel permission = PermissionLevel.NONE)
+        => CreateDescriptor<TestPacket>(invoker, timeoutMs, requireEncryption, permission);
 
     public static PacketHandler<TPacket> CreateDescriptor<TPacket>(
         Func<object?, PacketContext<TPacket>, ValueTask<object?>> invoker,
         int timeoutMs = 0,
-        bool requireEncryption = false)
+        bool requireEncryption = false,
+        PermissionLevel permission = PermissionLevel.NONE)
         where TPacket : IPacket
     {
         PacketTimeoutAttribute? timeout = timeoutMs > 0 ? new PacketTimeoutAttribute(timeoutMs) : null;
@@ -29,7 +31,7 @@ internal static class PacketHandlerFactory
         PacketMetadata metadata = new(
             opCode: new PacketOpcodeAttribute((ushort)1),
             timeout: timeout,
-            permission: new PacketPermissionAttribute(PermissionLevel.NONE),
+            permission: new PacketPermissionAttribute(permission),
             encryption: encryption,
             rateLimit: null,
             transport: null);

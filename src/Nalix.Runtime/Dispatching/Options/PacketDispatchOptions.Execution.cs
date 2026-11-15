@@ -88,7 +88,9 @@ public sealed partial class PacketDispatchOptions<TPacket>
         // Permission / encryption policy check — sync, no allocation.
         if (!descriptor.CanExecute(context, out ProtocolReason denyReason))
         {
-            // Cold path: denied — requires async I/O to send directive.
+            // Cold path: denied — count it toward the connection's error budget so a peer that keeps
+            // sending unauthorized opcodes is disconnected at MaxErrorThreshold, then send the directive.
+            context.Connection.IncrementErrorCount();
             return SendDenyControlAsync(this, descriptor, context, denyReason);
         }
 
