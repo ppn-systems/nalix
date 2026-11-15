@@ -11,6 +11,12 @@ internal static class TcpLifecycleAllocationProbe
 {
     public static void Run()
     {
+        if (System.Environment.GetEnvironmentVariable("PROBE_SEND_ONLY") == "1")
+        {
+            RunSendMedians();
+            return;
+        }
+
         TcpTransportLifecycleBenchmarks b = new();
         b.Setup();
         try
@@ -25,6 +31,38 @@ internal static class TcpLifecycleAllocationProbe
         {
             b.Cleanup();
         }
+    }
+
+    /// <summary>Median of 9 repetitions of 200k sends each, for interleaved A/B runs.</summary>
+    private static void RunSendMedians()
+    {
+        TcpTransportLifecycleBenchmarks b = new();
+        b.Setup();
+        try
+        {
+            MedianNs("Send_Steady", b.Send_Steady);
+            MedianNs("SendAsync_Steady", () => _ = b.SendAsync_Steady());
+        }
+        finally
+        {
+            b.Cleanup();
+        }
+    }
+
+    private static void MedianNs(string name, Action action)
+    {
+        for (int i = 0; i < 200_000; i++) action();
+
+        double[] samples = new double[9];
+        for (int r = 0; r < samples.Length; r++)
+        {
+            long t0 = Stopwatch.GetTimestamp();
+            for (int i = 0; i < 200_000; i++) action();
+            samples[r] = (Stopwatch.GetTimestamp() - t0) * 1e9 / Stopwatch.Frequency / 200_000;
+        }
+
+        Array.Sort(samples);
+        Console.WriteLine($"MEDIAN | {name,-18} | ns/op={samples[4],8:F1} | min={samples[0],8:F1} | max={samples[8],8:F1}");
     }
 
     private static void Measure(string name, int calls, Action action, int opsPerCall = 1)

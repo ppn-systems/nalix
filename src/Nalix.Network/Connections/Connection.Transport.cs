@@ -12,6 +12,7 @@ using Nalix.Abstractions.Security;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Sequencing;
 using Nalix.Network.Internal;
+using Nalix.Network.Internal.Connections;
 using Nalix.Network.Internal.Transport;
 
 namespace Nalix.Network.Connections;
@@ -38,7 +39,31 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
 
     #region Transport Helpers
 
-    private SocketConnection? TcpSocket => Volatile.Read(ref _backing)?.Socket;
+    /// <summary>
+    /// Test seam: invoked after a send has captured its socket and generation, before the write is admitted.
+    /// </summary>
+    internal static Action<SocketConnection>? s_afterSendCaptureHook;
+
+    /// <summary>
+    /// Captures the socket of this connection's session together with its generation. The generation is read before
+    /// <c>_backing</c> is checked again: <see cref="Dispose"/> clears <c>_backing</c> before the instance can be returned to
+    /// the pool, so a passed check proves the generation belongs to this connection's session.
+    /// </summary>
+    private bool TryCaptureSendTarget(out SocketConnection socket, out int generation)
+    {
+        ConnectionBacking? backing = Volatile.Read(ref _backing);
+        SocketConnection? captured = backing?.Socket;
+        generation = captured?.Generation ?? 0;
+        if (captured is null || !ReferenceEquals(Volatile.Read(ref _backing), backing))
+        {
+            socket = null!;
+            return false;
+        }
+
+        socket = captured;
+        s_afterSendCaptureHook?.Invoke(captured);
+        return true;
+    }
 
     private SequenceCounter TcpSendSequence => Volatile.Read(ref _backing)?.SendSequence ?? s_detachedSequence;
 
@@ -87,10 +112,9 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
             throw new ArgumentException("Message must not be empty.", nameof(message));
         }
 
-        SocketConnection? socket = this.TcpSocket;
-        ObjectDisposedException.ThrowIf(socket is null, typeof(Connection));
+        ObjectDisposedException.ThrowIf(!this.TryCaptureSendTarget(out SocketConnection socket, out int generation), typeof(Connection));
 
-        SocketConnection.SendResult result = socket.Send(message);
+        SocketConnection.SendResult result = socket.Send(message, generation);
 
         if (result is SocketConnection.SendResult.PeerClosed or SocketConnection.SendResult.Aborted)
         {
@@ -107,7 +131,19 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     ValueTask IConnection.ITransport.SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
-        => this.SEND_ASYNC(message, cancellationToken, acquireLock: true);
+    {
+        if (message.IsEmpty)
+        {
+            return ValueTask.FromException(new ArgumentException("Message must not be empty.", nameof(message)));
+        }
+
+        if (!this.TryCaptureSendTarget(out SocketConnection socket, out int generation))
+        {
+            return ValueTask.FromException(new ObjectDisposedException(nameof(Connection)));
+        }
+
+        return this.SEND_ASYNC(socket, generation, message, cancellationToken, acquireLock: true);
+    }
 
     /// <inheritdoc/>
     [StackTraceHidden]
@@ -140,7 +176,19 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
 
     /// <inheritdoc/>
     ValueTask IConnection.ITransport.SendAsyncCore(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
-        => this.SEND_ASYNC(message, cancellationToken, acquireLock: false);
+    {
+        if (message.IsEmpty)
+        {
+            return ValueTask.FromException(new ArgumentException("Message must not be empty.", nameof(message)));
+        }
+
+        if (!this.TryCaptureSendTarget(out SocketConnection socket, out int generation))
+        {
+            return ValueTask.FromException(new ObjectDisposedException(nameof(Connection)));
+        }
+
+        return this.SEND_ASYNC(socket, generation, message, cancellationToken, acquireLock: false);
+    }
 
     /// <inheritdoc/>
     /// <remarks>
@@ -152,16 +200,19 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     {
         ArgumentNullException.ThrowIfNull(frame);
 
-        SocketConnection? socket = this.TcpSocket;
-        if (socket is not null
-            && frame is BufferLease lease
+        if (!this.TryCaptureSendTarget(out SocketConnection socket, out int generation))
+        {
+            return ValueTask.FromException(new ObjectDisposedException(nameof(Connection)));
+        }
+
+        if (frame is BufferLease lease
             && socket.CanSendWithReservedHeader(lease.Length)
             && lease.TryGetSegmentWithHeader(BufferLease.TransportHeadroom, out ArraySegment<byte> segment))
         {
-            return COMPLETE_SEND(socket.SendWithReservedHeaderAsync(segment.Array!, segment.Offset, lease.Length, cancellationToken));
+            return COMPLETE_SEND(socket.SendWithReservedHeaderAsync(segment.Array!, segment.Offset, lease.Length, generation, cancellationToken));
         }
 
-        return this.SEND_ASYNC(frame.Memory, cancellationToken, acquireLock: false);
+        return this.SEND_ASYNC(socket, generation, frame.Memory, cancellationToken, acquireLock: false);
 
         static ValueTask COMPLETE_SEND(ValueTask<SocketConnection.SendResult> vt)
         {
@@ -195,10 +246,11 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     /// </remarks>
     ValueTask IConnection.ITransport.SendAsyncCore(ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
     {
-        SocketConnection? socket = this.TcpSocket;
-        if (socket is not null && frames.Length > 1 && socket.CanSendBatch(frames.Span))
+        if (frames.Length > 1
+            && this.TryCaptureSendTarget(out SocketConnection socket, out int generation)
+            && socket.CanSendBatch(frames.Span))
         {
-            return COMPLETE_SEND(socket.SendBatchAsync(frames, cancellationToken));
+            return COMPLETE_SEND(socket.SendBatchAsync(frames, generation, cancellationToken));
         }
 
         return SEND_SEQUENTIAL_ASYNC(this, frames, cancellationToken);
@@ -225,25 +277,14 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
 
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ValueTask SEND_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken, bool acquireLock)
+    private ValueTask SEND_ASYNC(SocketConnection socket, int generation, ReadOnlyMemory<byte> message, CancellationToken cancellationToken, bool acquireLock)
     {
-        if (message.IsEmpty)
-        {
-            return ValueTask.FromException(new ArgumentException("Message must not be empty.", nameof(message)));
-        }
-
-        SocketConnection? socket = this.TcpSocket;
-        if (socket is null)
-        {
-            return ValueTask.FromException(new ObjectDisposedException(nameof(Connection)));
-        }
-
         if (acquireLock)
         {
-            return this.SEND_WITH_LOCK_ASYNC(message, cancellationToken);
+            return this.SEND_WITH_LOCK_ASYNC(socket, generation, message, cancellationToken);
         }
 
-        ValueTask<SocketConnection.SendResult> vt = socket.SendAsync(message, cancellationToken);
+        ValueTask<SocketConnection.SendResult> vt = socket.SendAsync(message, generation, cancellationToken);
         if (vt.IsCompletedSuccessfully)
         {
             SocketConnection.SendResult result = vt.Result;
@@ -274,14 +315,14 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ValueTask SEND_WITH_LOCK_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
+    private ValueTask SEND_WITH_LOCK_ASYNC(SocketConnection socket, int generation, ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
         if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
         {
             ValueTask vt;
             try
             {
-                vt = this.SEND_ASYNC(message, cancellationToken, acquireLock: false);
+                vt = this.SEND_ASYNC(socket, generation, message, cancellationToken, acquireLock: false);
             }
             catch
             {
@@ -298,7 +339,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
             return AWAIT_WITH_RELEASE_ASYNC(_sendLock, vt);
         }
 
-        return AWAIT_ACQUIRE_AND_SEND_ASYNC(this, message, cancellationToken);
+        return AWAIT_ACQUIRE_AND_SEND_ASYNC(this, socket, generation, message, cancellationToken);
 
         static async ValueTask AWAIT_WITH_RELEASE_ASYNC(SemaphoreSlim sendLock, ValueTask vt)
         {
@@ -312,12 +353,12 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
             }
         }
 
-        static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(Connection connection, ReadOnlyMemory<byte> msg, CancellationToken ct)
+        static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(Connection connection, SocketConnection socket, int generation, ReadOnlyMemory<byte> msg, CancellationToken ct)
         {
             await connection._sendLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                await connection.SEND_ASYNC(msg, ct, acquireLock: false).ConfigureAwait(false);
+                await connection.SEND_ASYNC(socket, generation, msg, ct, acquireLock: false).ConfigureAwait(false);
             }
             finally
             {
@@ -331,7 +372,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     void IConnection.ITransport.BeginReceive(CancellationToken cancellationToken)
     {
-        SocketConnection? socket = this.TcpSocket;
+        SocketConnection? socket = Volatile.Read(ref _backing)?.Socket;
         ObjectDisposedException.ThrowIf(socket is null || this.IsDisposed, typeof(Connection));
         socket.BeginReceive(cancellationToken);
     }
@@ -342,7 +383,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     void IConnection.ITransport.UseFraming(TransportFraming framing)
     {
         _tcpFraming = framing;
-        SocketConnection? socket = this.TcpSocket;
+        SocketConnection? socket = Volatile.Read(ref _backing)?.Socket;
         ObjectDisposedException.ThrowIf(socket is null, typeof(Connection));
         socket.SetFraming(framing);
     }

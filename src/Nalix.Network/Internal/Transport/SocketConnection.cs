@@ -60,6 +60,7 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
 
     internal void Initialize(Socket socket, IConnection owner)
     {
+        Volatile.Write(ref _returnedToPool, 0);
         _socket = socket;
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _connectionOwner = owner as Connection;
@@ -173,6 +174,11 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     private PooledSocketReceiveContext _recvCtx = null!;
 
     private int _generation;
+
+    // Sends admitted for the current session that have not finished yet. An instance whose sends are still in flight
+    // is not returned to the pool, so a stale sender can never write into a later session.
+    private int _sendsInFlight;
+    private int _returnedToPool;
 
     private int _packetCount;
     private long _bytesSent;
@@ -1041,7 +1047,12 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             //    out of circulation.
             this.INVOKE_CLOSE_ONCE();
 
-            // 7. Dispose remaining resources.
+            // 7. Dispose remaining resources. Taking the write lock waits for a synchronous write that was admitted before
+            //    _disposed was set; the shutdown above has already unblocked it. Later writes see _disposed and abort.
+            lock (_sendLock)
+            {
+            }
+
             if (Volatile.Read(ref _socketDetached) == 0)
             {
                 _socket.Dispose();
@@ -1067,7 +1078,11 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         }
 #endif
 
-        s_pool.Return(this);
+        // A send admitted before Dispose returns the instance when it finishes (see EXIT_SEND).
+        if (Volatile.Read(ref _sendsInFlight) == 0)
+        {
+            this.RETURN_WHEN_IDLE();
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1159,6 +1174,52 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IS_CURRENT_GENERATION(int generation) => generation == Volatile.Read(ref _generation);
+
+    /// <summary>
+    /// Gets the session generation. It changes every time the instance is returned to the pool, so a caller that read it
+    /// earlier can tell that the instance now serves another connection.
+    /// </summary>
+    internal int Generation => Volatile.Read(ref _generation);
+
+    /// <summary>
+    /// Admits one send for the session <paramref name="generation"/>. Returns <see langword="false"/> when that session is
+    /// over. Pairs with <see cref="EXIT_SEND"/>. The count is incremented before the checks, and <see cref="DISPOSE"/> sets
+    /// the disposed flag before it reads the count, so either this send sees the disposal or the disposal sees this send.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool ENTER_SEND(int generation)
+    {
+        _ = Interlocked.Increment(ref _sendsInFlight);
+        if (this.IS_CURRENT_SESSION(generation))
+        {
+            return true;
+        }
+
+        this.EXIT_SEND();
+        return false;
+    }
+
+    /// <summary>Whether the session <paramref name="generation"/> is still the open session of this instance.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IS_CURRENT_SESSION(int generation)
+        => Volatile.Read(ref _generation) == generation && Volatile.Read(ref _disposed) == 0;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void EXIT_SEND()
+    {
+        if (Interlocked.Decrement(ref _sendsInFlight) == 0 && Volatile.Read(ref _disposed) != 0)
+        {
+            this.RETURN_WHEN_IDLE();
+        }
+    }
+
+    private void RETURN_WHEN_IDLE()
+    {
+        if (Interlocked.Exchange(ref _returnedToPool, 1) == 0)
+        {
+            s_pool.Return(this);
+        }
+    }
 
     [DebuggerStepThrough]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

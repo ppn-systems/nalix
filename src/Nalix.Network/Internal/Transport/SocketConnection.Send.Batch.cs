@@ -41,11 +41,38 @@ internal sealed partial class SocketConnection
     /// </summary>
     /// <param name="frames">The frame payloads; <see cref="CanSendBatch"/> must hold for them.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    public async ValueTask<SendResult> SendBatchAsync(ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
+    public ValueTask<SendResult> SendBatchAsync(ReadOnlyMemory<IBufferLease> frames, int generation, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, nameof(SocketConnection));
 
+        if (!this.ENTER_SEND(generation))
+        {
+            return ValueTask.FromResult(SendResult.Aborted);
+        }
+
+        ValueTask<SendResult> vt;
+        try
+        {
+            vt = this.SEND_BATCH_ADMITTED(frames, cancellationToken);
+        }
+        catch
+        {
+            this.EXIT_SEND();
+            throw;
+        }
+
+        if (vt.IsCompletedSuccessfully)
+        {
+            this.EXIT_SEND();
+            return vt;
+        }
+
+        return this.AWAIT_SEND_THEN_EXIT(vt);
+    }
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<SendResult> SEND_BATCH_ADMITTED(ReadOnlyMemory<IBufferLease> frames, CancellationToken cancellationToken)
+    {
         int index = 0;
         while (index < frames.Length)
         {
