@@ -16,7 +16,6 @@ using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Security;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Sequencing;
-using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Connections;
 using Nalix.Network.Options;
 
@@ -29,12 +28,11 @@ namespace Nalix.Network.Internal.Transport;
 [SkipLocalsInit]
 [DebuggerNonUserCode]
 [EditorBrowsable(EditorBrowsableState.Never)]
-internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, IDisposable
+internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
 {
     #region Static Factory
 
     private static readonly NetworkSocketOptions s_options = ConfigurationManager.Instance.Get<NetworkSocketOptions>();
-    private static readonly ObjectPoolManager s_pool = ObjectPoolManager.Shared;
 
     private readonly ISequenceCounter _sendSequence = new SequenceCounter();
     private readonly ISequenceCounter _receiveSequence = new SequenceCounter();
@@ -81,7 +79,9 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
     /// <summary>
     /// Ensures that the connection has a valid UDP transport bound to the specified socket and remote endpoint.
     /// Reuses the existing transport if it is already bound to the same socket and endpoint.
-    /// If the socket or endpoint changes, the previous transport is returned to the pool before a new one is rented.
+    /// If the socket or endpoint changes, the previous transport is disposed and a new one is created.
+    /// Transports are never pooled: a caller that kept a reference to a disposed transport must not be able to
+    /// send to the endpoint of a later binding.
     /// </summary>
     public static void EnsureUDP(Connection connection, IPEndPoint remoteEndPoint, Socket socket)
     {
@@ -97,20 +97,20 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
                 return;
             }
 
-            // A replacement is required. Clear connection reference first to prevent double-return or race usage.
+            // A replacement is required. Clear connection reference first to prevent double-dispose or race usage.
             connection.SetUdpTransport(null!);
 
             try
             {
-                s_pool.Return(current);
+                current.Dispose();
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                // Suppress non-fatal pool errors during cleanup
+                // Suppress non-fatal errors during cleanup
             }
         }
 
-        SocketUdpTransport transport = s_pool.Get<SocketUdpTransport>();
+        SocketUdpTransport transport = new();
 
         transport.SetSocket(socket);
 
@@ -276,8 +276,7 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
     /// <inheritdoc/>
     public void Send(ReadOnlySpan<byte> message)
     {
-        // Snapshot the target once. ResetForPool may run concurrently and re-Initialize may then rebind
-        // this instance to another endpoint; re-reading the field could send this payload to that endpoint.
+        // Snapshot the target once. Dispose may run concurrently; re-reading the field could observe a torn state.
         EndPoint? endPoint = _endPoint;
         Socket? socket = _socket;
         if (message.IsEmpty || endPoint == null || socket == null)
@@ -357,10 +356,13 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
 
     #endregion Transmission
 
-    #region Pooling
+    #region Disposal
 
-    /// <inheritdoc/>
-    public void ResetForPool()
+    /// <summary>
+    /// Clears the target and releases an owned socket. After this call the instance never sends again, so any
+    /// caller still holding it becomes a no-op instead of reaching another connection's endpoint.
+    /// </summary>
+    public void Dispose()
     {
         _endPoint = null;
 
@@ -379,8 +381,5 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IPoolable, ID
         _receiveSequence.Reset(0);
     }
 
-    /// <inheritdoc/>
-    public void Dispose() => this.ResetForPool();
-
-    #endregion Pooling
+    #endregion Disposal
 }
