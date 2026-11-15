@@ -69,22 +69,23 @@ public sealed class DataReaderWriterExtensionsTests
     }
 
     [Fact]
-    public void WriteEnum_WhenUnderlyingTypeIsUnsupported_ThrowsNotSupportedException()
+    public void WriteEnum_WhenUnderlyingTypeIsEightBytes_RoundTripsFullWidth()
     {
-        DataWriter writer = new(16);
-        NotSupportedException? exception = null;
-        try
-        {
-            writer.WriteEnum(LongEnum.A);
-        }
-        catch (NotSupportedException ex)
-        {
-            exception = ex;
-        }
+        DataWriter writer = new(32);
+        writer.WriteEnum(LongEnum.Min);
+        writer.WriteEnum(ULongEnum.Max);
+        writer.Write(0x5A5A5A5A);
 
-        Assert.NotNull(exception);
-        Assert.Contains("not supported", exception.Message, StringComparison.OrdinalIgnoreCase);
+        byte[] payload = writer.ToArray();
         writer.Dispose();
+
+        Assert.Equal(20, payload.Length);
+
+        DataReader reader = new(payload);
+        Assert.Equal(LongEnum.Min, reader.ReadEnumInt64<LongEnum>());
+        Assert.Equal(ULongEnum.Max, reader.ReadEnumUInt64<ULongEnum>());
+        Assert.Equal(0x5A5A5A5A, reader.ReadInt32());
+        Assert.Equal(0, reader.Remaining());
     }
 
     [Fact]
@@ -159,7 +160,13 @@ public sealed class DataReaderWriterExtensionsTests
 
     private enum LongEnum : long
     {
-        A = 1
+        A = 1,
+        Min = long.MinValue
+    }
+
+    private enum ULongEnum : ulong
+    {
+        Max = ulong.MaxValue
     }
 
     private struct Pair

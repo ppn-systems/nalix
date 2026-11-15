@@ -1,6 +1,7 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
+using System.Globalization;
 using System.Linq;
 using Nalix.Analyzers.Generators;
 using Nalix.Analyzers.Tests.TestSupport;
@@ -61,5 +62,94 @@ public sealed class PacketHandlerGeneratorTests
 
         Assert.Contains("PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel)100)", text);
         Assert.DoesNotContain("PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel)100,", text);
+    }
+
+    private static string Handler(string attributes) => $$"""
+        using System.Threading.Tasks;
+        using Nalix.Abstractions.Networking.Packets;
+        using Nalix.Abstractions.Networking.Protocols;
+        using Nalix.Abstractions.Security;
+        using Nalix.Abstractions;
+        using Nalix.Abstractions.Networking;
+        using Nalix.Abstractions.Networking.Packets;
+        using Nalix.Codec.DataFrames;
+
+        namespace GenHarness.Handlers;
+
+        [Packet]
+        public sealed partial class TestPacket : PacketBase<TestPacket>, IPacketStaticOpcode
+        {
+            public static ushort StaticOpCode => 0x00FD;
+        }
+
+        [PacketHandler("Harness")]
+        public sealed class HarnessHandlers
+        {
+            {{attributes}}
+            [PacketOpcode(0x00FE)]
+            public static ValueTask<TestPacket> HandleAsync(IPacketContext<TestPacket> context) => default;
+        }
+        """;
+
+    private static string GeneratedHandler(string source)
+    {
+        GeneratorDriverHarness.Result result = GeneratorDriverHarness.Run(
+            [new PacketHandlerGenerator(), new PacketSchemaGenerator(), new PacketRegistryGenerator()], source);
+        GeneratorDriverHarness.AssertNoCompileErrors(result);
+        return Assert.Single(result.GeneratedSources.Where(static s => s.HintName.Contains("PacketHandler"))).Text;
+    }
+
+    [Fact]
+    public void Generate_RateLimitNamedArguments_AreForwarded()
+    {
+        string text = GeneratedHandler(Handler(
+            """[PacketRateLimit(5, 2, PolicyId = "auth", HardLockoutSeconds = 900, MaxSoftViolations = 2)]"""));
+
+        Assert.Contains("PacketRateLimitAttribute(5, 2) { PolicyId = \"auth\", HardLockoutSeconds = 900, MaxSoftViolations = 2 }", text);
+    }
+
+    [Fact]
+    public void Generate_RateLimitFractionalBurst_IsInvariantCultureUnderCommaLocale()
+    {
+        CultureInfo previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            string text = GeneratedHandler(Handler("[PacketRateLimit(5, 1.5)]"));
+
+            Assert.Contains("PacketRateLimitAttribute(5, 1.5)", text);
+            Assert.DoesNotContain("1,5", text);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
+    public void Generate_BareEncryptionAttribute_IsForwardedAsEnabled()
+    {
+        string text = GeneratedHandler(Handler("[PacketEncryption]"));
+
+        Assert.Contains("encryption: new global::Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute(true", text);
+        Assert.DoesNotContain("encryption: null", text);
+    }
+
+    [Fact]
+    public void Generate_EncryptionAlgorithmType_IsForwarded()
+    {
+        string text = GeneratedHandler(Handler("[PacketEncryption(true, CipherSuiteType.Chacha20Poly1305)]"));
+
+        Assert.Contains("PacketEncryptionAttribute(true, (global::Nalix.Abstractions.Security.CipherSuiteType)", text);
+    }
+
+    [Fact]
+    public void Generate_TimeoutAndTransport_AreForwarded()
+    {
+        string text = GeneratedHandler(Handler(
+            "[PacketTimeout(1500)]\n            [PacketTransport(NetworkTransport.UDP)]"));
+
+        Assert.Contains("PacketTimeoutAttribute((int)1500)", text);
+        Assert.Contains("PacketTransportAttribute((global::Nalix.Abstractions.Networking.NetworkTransport)", text);
     }
 }

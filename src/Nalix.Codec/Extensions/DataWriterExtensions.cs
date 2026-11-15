@@ -78,12 +78,12 @@ public static class DataWriterExtensions
     #region Enum Types
 
     /// <summary>
-    /// Writes an enum with <see cref="byte"/> underlying type.
+    /// Writes an enum using the width of its underlying type (1, 2, 4 or 8 bytes).
     /// </summary>
     /// <typeparam name="TEnum"></typeparam>
     /// <param name="writer"></param>
     /// <param name="value"></param>
-    /// <exception cref="NotSupportedException">Thrown when <typeparamref name="TEnum"/> uses an unsupported underlying type.</exception>
+    /// <exception cref="NotSupportedException">Thrown when <typeparamref name="TEnum"/> has an underlying size other than 1, 2, 4 or 8 bytes.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteEnum<TEnum>(this ref DataWriter writer, TEnum value) where TEnum : Enum
     {
@@ -112,6 +112,12 @@ public static class DataWriterExtensions
         if (size == sizeof(int))
         {
             writer.Write(Unsafe.As<TEnum, int>(ref valRef));
+            return;
+        }
+
+        if (size == sizeof(ulong))
+        {
+            writer.Write(Unsafe.As<TEnum, ulong>(ref valRef));
             return;
         }
 
