@@ -53,13 +53,16 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
         _receiveSequence.Reset(0);
     }
 
-    #endregion Constructor
-
     /// <summary>
-    /// The pooled counter holder this binding was created with, returned to the pool when the binding is released.
-    /// Only set by owners that pool their counters (see <see cref="UdpSequenceState"/>).
+    /// Creates a transport that owns its two counters. A passthrough connection is never rebound after it is disposed, so its
+    /// counters never outlive one binding and need no pooling.
     /// </summary>
-    internal UdpSequenceState? Lease { get; init; }
+    internal SocketUdpTransport()
+        : this(new SequenceCounter(), new SequenceCounter())
+    {
+    }
+
+    #endregion Constructor
 
     #region Properties
 

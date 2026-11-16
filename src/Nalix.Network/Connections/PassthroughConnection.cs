@@ -18,7 +18,6 @@ using Nalix.Environment.Configuration;
 using Nalix.Environment.Time;
 using Nalix.Framework.Identifiers;
 using Nalix.Framework.Injection;
-using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Internal.Connections;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
@@ -134,8 +133,7 @@ public sealed class PassthroughConnection :
             return;
         }
 
-        UdpSequenceState sequences = ObjectPoolManager.Shared.Get<UdpSequenceState>();
-        SocketUdpTransport transport = new(sequences.Send, sequences.Receive) { Lease = sequences };
+        SocketUdpTransport transport = new();
 
         transport.SetSocket(listenerSocket);
 
@@ -147,7 +145,7 @@ public sealed class PassthroughConnection :
         if (Interlocked.CompareExchange(ref _udpTransport, transport, null) is not null)
         {
             // Another bind won the race; keep its transport and release ours.
-            ReturnLease(transport);
+            transport.Dispose();
             return;
         }
 
@@ -183,21 +181,7 @@ public sealed class PassthroughConnection :
         SocketUdpTransport? transport = Interlocked.Exchange(ref _udpTransport, null);
         if (transport is not null)
         {
-            ReturnLease(transport);
-        }
-    }
-
-    /// <summary>
-    /// Disposes a transport and returns the counters it was bound with to the pool. The transport detaches its counters
-    /// when disposed, so the pool can hand them to another binding right away.
-    /// </summary>
-    private static void ReturnLease(SocketUdpTransport transport)
-    {
-        UdpSequenceState? lease = transport.Lease;
-        transport.Dispose();
-        if (lease is not null)
-        {
-            ObjectPoolManager.Shared.Return(lease);
+            transport.Dispose();
         }
     }
 
