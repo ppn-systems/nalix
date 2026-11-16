@@ -47,7 +47,7 @@ internal sealed partial class SocketConnection
 
         if (!this.ENTER_SEND(generation))
         {
-            return ValueTask.FromResult(SendResult.Aborted);
+            return ValueTask.FromResult(SendResult.SessionClosed);
         }
 
         ValueTask<SendResult> vt;

@@ -44,6 +44,9 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
     private readonly SemaphoreSlim _wsSendLock = new(1, 1);
 #pragma warning restore CA2213
 
+    // 1 while the send lock was handed out as a scope and that scope has not been disposed yet.
+    private int _sendLockScopeHeld;
+
     private int _transportDisposed;
     private int _receiveStarted;
     private Task? _receiveLoopTask;
@@ -133,15 +136,17 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
             if (vt.IsCompletedSuccessfully)
             {
                 _ = _wsSendLock.Release();
+                this.TriggerPostProcessEvent();
                 return default;
             }
 
-            return AWAIT_WITH_RELEASE_ASYNC(_wsSendLock, vt);
+            return AWAIT_WITH_RELEASE_ASYNC(this, vt);
         }
 
         return AWAIT_ACQUIRE_AND_SEND_ASYNC(this, message, cancellationToken);
 
-        static async ValueTask AWAIT_WITH_RELEASE_ASYNC(SemaphoreSlim sendLock, ValueTask vt)
+        // The post-send event runs after the lock is released, so a handler never runs under the write lock.
+        static async ValueTask AWAIT_WITH_RELEASE_ASYNC(WebSocketConnection connection, ValueTask vt)
         {
             try
             {
@@ -149,8 +154,10 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
             }
             finally
             {
-                _ = sendLock.Release();
+                _ = connection._wsSendLock.Release();
             }
+
+            connection.TriggerPostProcessEvent();
         }
 
         static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(WebSocketConnection connection, ReadOnlyMemory<byte> msg, CancellationToken ct)
@@ -164,6 +171,8 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
             {
                 _ = connection._wsSendLock.Release();
             }
+
+            connection.TriggerPostProcessEvent();
         }
     }
 
@@ -174,6 +183,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
     {
         if (!cancellationToken.IsCancellationRequested && _wsSendLock.Wait(0, cancellationToken))
         {
+            Volatile.Write(ref _sendLockScopeHeld, 1);
             return new ValueTask<IAsyncDisposable>(this);
         }
 
@@ -183,6 +193,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
     private async ValueTask<IAsyncDisposable> ACQUIRE_SEND_LOCK_ASYNC(CancellationToken cancellationToken)
     {
         await _wsSendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Volatile.Write(ref _sendLockScopeHeld, 1);
         return this;
     }
 
@@ -192,7 +203,11 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
     /// </summary>
     ValueTask IAsyncDisposable.DisposeAsync()
     {
-        _ = _wsSendLock.Release();
+        if (Interlocked.Exchange(ref _sendLockScopeHeld, 0) == 1)
+        {
+            _ = _wsSendLock.Release();
+        }
+
         return ValueTask.CompletedTask;
     }
 
@@ -205,7 +220,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
             return ValueTask.CompletedTask;
         }
 
-        return this.SEND_CORE_ASYNC(message, cancellationToken);
+        return this.SEND_AND_NOTIFY_ASYNC(message, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -236,7 +251,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
                     batcher?.Uncork();
                 }
 
-                await this.SEND_CORE_ASYNC(frames.Span[i].Memory, cancellationToken).ConfigureAwait(false);
+                await this.SEND_AND_NOTIFY_ASYNC(frames.Span[i].Memory, cancellationToken).ConfigureAwait(false);
             }
 
             completed = true;
@@ -263,11 +278,30 @@ public sealed partial class WebSocketConnection : IConnection.ITransport, IAsync
         }
     }
 
+    /// <summary>
+    /// Writes one WebSocket message and counts its bytes. A write that fails because this connection was closed while it was
+    /// in flight is a no-op, as a send after close is; any other failure propagates.
+    /// </summary>
     private async ValueTask SEND_CORE_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
-        await _webSocket.SendAsync(message, WebSocketMessageType.Binary, true, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _webSocket.SendAsync(message, WebSocketMessageType.Binary, true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex) && this.IsDisposed)
+        {
+            return;
+        }
 
         this.AddBytesSent(message.Length);
+    }
+
+    /// <summary>
+    /// Writes one message on a path that does not hold the send lock, then raises the post-send event.
+    /// </summary>
+    private async ValueTask SEND_AND_NOTIFY_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
+    {
+        await this.SEND_CORE_ASYNC(message, cancellationToken).ConfigureAwait(false);
         this.TriggerPostProcessEvent();
     }
 

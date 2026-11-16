@@ -55,6 +55,12 @@ internal sealed class SocketUdpTransport : IConnection.ITransport, IDisposable
 
     #endregion Constructor
 
+    /// <summary>
+    /// The pooled counter holder this binding was created with, returned to the pool when the binding is released.
+    /// Only set by owners that pool their counters (see <see cref="UdpSequenceState"/>).
+    /// </summary>
+    internal UdpSequenceState? Lease { get; init; }
+
     #region Properties
 
     /// <inheritdoc/>

@@ -23,7 +23,7 @@ namespace Nalix.Network.Connections;
 /// sequence counters are pooled with the connection's backing, and the socket is only reachable while the
 /// connection is alive.
 /// </summary>
-public sealed partial class Connection : IConnection.ITransport, IAsyncDisposable
+public sealed partial class Connection : IConnection.ITransport, IConnection.ISocketTransport, IAsyncDisposable
 {
     #region Transport Fields
 
@@ -33,6 +33,9 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
 #pragma warning disable CA2213 // A SemaphoreSlim without AvailableWaitHandle holds no unmanaged resource; release is via the connection's scope.
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 #pragma warning restore CA2213
+
+    // 1 while the send lock was handed out as a scope and that scope has not been disposed yet.
+    private int _sendLockScopeHeld;
     private TransportFraming _tcpFraming = TransportFraming.None;
 
     #endregion Transport Fields
@@ -69,6 +72,32 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
 
     private SequenceCounter TcpReceiveSequence => Volatile.Read(ref _backing)?.ReceiveSequence ?? s_detachedSequence;
 
+    /// <summary>
+    /// Advances a TCP counter of this connection. The counter is read through the backing, and the backing is checked
+    /// again before the advance: once the connection has closed, its backing may already belong to another connection,
+    /// so a closed connection advances nothing. The window between the check and the advance is a few instructions.
+    /// </summary>
+    private uint NEXT_TCP_SEQUENCE(bool send)
+    {
+        ConnectionBacking? backing = Volatile.Read(ref _backing);
+        if (backing is null)
+        {
+            return 0;
+        }
+
+        s_afterSequenceCaptureHook?.Invoke(backing);
+
+        if (!ReferenceEquals(Volatile.Read(ref _backing), backing))
+        {
+            return 0;
+        }
+
+        return (send ? backing.SendSequence : backing.ReceiveSequence).Next();
+    }
+
+    /// <summary>Test seam: invoked after a sequence advance has read its backing, before the backing is checked again.</summary>
+    internal static Action<ConnectionBacking>? s_afterSequenceCaptureHook;
+
     /// <summary>Gets the UDP send counter of this connection's backing; used when a UDP binding is created.</summary>
     internal SequenceCounter UdpSendSequenceCounter
         => (Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(Connection))).UdpSendSequence;
@@ -78,6 +107,27 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
         => (Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(Connection))).UdpReceiveSequence;
 
     #endregion Transport Helpers
+
+    #region IConnection.ISocketTransport
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The raw socket is needed by the tunneling extension, which unwraps the connection to pipe bytes directly.
+    /// </remarks>
+    System.Net.Sockets.Socket IConnection.ISocketTransport.Socket
+        => (Volatile.Read(ref _backing)?.Socket ?? throw new ObjectDisposedException(nameof(Connection))).Socket;
+
+    /// <inheritdoc/>
+    Task? IConnection.ISocketTransport.ReceiveLoopTask => Volatile.Read(ref _backing)?.Socket?.ReceiveLoopTask;
+
+    /// <inheritdoc/>
+    byte[]? IConnection.ISocketTransport.StolenData => Volatile.Read(ref _backing)?.Socket?.StolenData;
+
+    /// <inheritdoc/>
+    System.Net.Sockets.Socket IConnection.ISocketTransport.Unwrap()
+        => (Volatile.Read(ref _backing)?.Socket ?? throw new ObjectDisposedException(nameof(Connection))).Unwrap();
+
+    #endregion IConnection.ISocketTransport
 
     #region IConnection.ITransport
 
@@ -91,10 +141,10 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     ISequenceCounter ITransportSequencer.ReceiveSequence => this.TcpReceiveSequence;
 
     /// <inheritdoc/>
-    uint ITransportSequencer.NextSendSequence() => this.TcpSendSequence.Next();
+    uint ITransportSequencer.NextSendSequence() => this.NEXT_TCP_SEQUENCE(send: true);
 
     /// <inheritdoc/>
-    uint ITransportSequencer.NextReceiveSequence() => this.TcpReceiveSequence.Next();
+    uint ITransportSequencer.NextReceiveSequence() => this.NEXT_TCP_SEQUENCE(send: false);
 
     /// <inheritdoc/>
     uint ITransportSequencer.CurrentSendSequence => this.TcpSendSequence.Current();
@@ -123,7 +173,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
         }
         else if (result != SocketConnection.SendResult.Success)
         {
-            throw Throw.GetSendFailed();
+            throw SEND_FAILURE(result);
         }
     }
 
@@ -152,6 +202,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     {
         if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
         {
+            Volatile.Write(ref _sendLockScopeHeld, 1);
             return new ValueTask<IAsyncDisposable>(this);
         }
 
@@ -161,16 +212,22 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
     private async ValueTask<IAsyncDisposable> ACQUIRE_SEND_LOCK_ASYNC(CancellationToken cancellationToken)
     {
         await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Volatile.Write(ref _sendLockScopeHeld, 1);
         return this;
     }
 
     /// <summary>
     /// Releases the send lock taken by <see cref="IConnection.ITransport.AcquireSendLockAsync"/>. The connection
-    /// itself is the scope, so acquiring the lock allocates nothing.
+    /// itself is the scope, so acquiring the lock allocates nothing. Only the first dispose of an acquisition releases the
+    /// lock; a repeated dispose is a no-op.
     /// </summary>
     ValueTask IAsyncDisposable.DisposeAsync()
     {
-        _ = _sendLock.Release();
+        if (Interlocked.Exchange(ref _sendLockScopeHeld, 0) == 1)
+        {
+            _ = _sendLock.Release();
+        }
+
         return ValueTask.CompletedTask;
     }
 
@@ -223,7 +280,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
                               or SocketConnection.SendResult.PeerClosed
                               or SocketConnection.SendResult.Aborted
                     ? default
-                    : ValueTask.FromException(Throw.GetSendFailed());
+                    : ValueTask.FromException(SEND_FAILURE(result));
             }
 
             return AWAIT(vt);
@@ -233,7 +290,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
                 SocketConnection.SendResult result = await vt.ConfigureAwait(false);
                 if (result != SocketConnection.SendResult.Success)
                 {
-                    throw Throw.GetSendFailed();
+                    throw SEND_FAILURE(result);
                 }
             }
         }
@@ -270,7 +327,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
                             or SocketConnection.SendResult.PeerClosed
                             or SocketConnection.SendResult.Aborted))
             {
-                throw Throw.GetSendFailed();
+                throw SEND_FAILURE(result);
             }
         }
     }
@@ -296,7 +353,7 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
             }
             else if (result != SocketConnection.SendResult.Success)
             {
-                return ValueTask.FromException(Throw.GetSendFailed());
+                return ValueTask.FromException(SEND_FAILURE(result));
             }
 
             return default;
@@ -309,10 +366,19 @@ public sealed partial class Connection : IConnection.ITransport, IAsyncDisposabl
             SocketConnection.SendResult result = await vt.ConfigureAwait(false);
             if (result != SocketConnection.SendResult.Success)
             {
-                throw Throw.GetSendFailed();
+                throw SEND_FAILURE(result);
             }
         }
     }
+
+    /// <summary>
+    /// The exception for a send that did not succeed. A send refused because the session already ended reports the
+    /// disposed state, as the connection does before its transport is used after close.
+    /// </summary>
+    private static Exception SEND_FAILURE(SocketConnection.SendResult result)
+        => result == SocketConnection.SendResult.SessionClosed
+            ? new ObjectDisposedException(nameof(Connection))
+            : Throw.GetSendFailed();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ValueTask SEND_WITH_LOCK_ASYNC(SocketConnection socket, int generation, ReadOnlyMemory<byte> message, CancellationToken cancellationToken)

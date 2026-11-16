@@ -70,7 +70,6 @@ public sealed class PassthroughConnection :
     private readonly TimingWheel _timingWheel;
 
     private SocketUdpTransport? _udpTransport;
-    private UdpSequenceState? _udpSequences;
     private IObjectMap<AttributeKey, object>? _attributes;
     private EventHandler<IConnectionEventArgs>? _connectionClosed;
 
@@ -136,7 +135,7 @@ public sealed class PassthroughConnection :
         }
 
         UdpSequenceState sequences = ObjectPoolManager.Shared.Get<UdpSequenceState>();
-        SocketUdpTransport transport = new(sequences.Send, sequences.Receive);
+        SocketUdpTransport transport = new(sequences.Send, sequences.Receive) { Lease = sequences };
 
         transport.SetSocket(listenerSocket);
 
@@ -148,12 +147,11 @@ public sealed class PassthroughConnection :
         if (Interlocked.CompareExchange(ref _udpTransport, transport, null) is not null)
         {
             // Another bind won the race; keep its transport and release ours.
-            transport.Dispose();
-            ObjectPoolManager.Shared.Return(sequences);
+            ReturnLease(transport);
             return;
         }
 
-        _udpSequences = sequences;
+        s_afterUdpAttachHook?.Invoke(this);
 
         // Dispose may have run after the check above. It saw no transport and could not release ours,
         // so the transport is released here instead of being left attached to a disposed connection.
@@ -171,6 +169,13 @@ public sealed class PassthroughConnection :
     internal static Action<PassthroughConnection>? s_beforeUdpAttachHook;
 
     /// <summary>
+    /// Test seam: invoked on the binding thread immediately after the transport is attached, before the connection checks
+    /// whether it was disposed in the meantime.
+    /// </summary>
+    [ThreadStatic]
+    internal static Action<PassthroughConnection>? s_afterUdpAttachHook;
+
+    /// <summary>
     /// Atomically detaches the UDP transport (if any) and disposes it exactly once.
     /// </summary>
     private void ReleaseUdpTransport()
@@ -178,14 +183,21 @@ public sealed class PassthroughConnection :
         SocketUdpTransport? transport = Interlocked.Exchange(ref _udpTransport, null);
         if (transport is not null)
         {
-            transport.Dispose();
+            ReturnLease(transport);
+        }
+    }
 
-            // The disposed transport no longer references the counters, so they can be reused by another binding.
-            UdpSequenceState? sequences = Interlocked.Exchange(ref _udpSequences, null);
-            if (sequences is not null)
-            {
-                ObjectPoolManager.Shared.Return(sequences);
-            }
+    /// <summary>
+    /// Disposes a transport and returns the counters it was bound with to the pool. The transport detaches its counters
+    /// when disposed, so the pool can hand them to another binding right away.
+    /// </summary>
+    private static void ReturnLease(SocketUdpTransport transport)
+    {
+        UdpSequenceState? lease = transport.Lease;
+        transport.Dispose();
+        if (lease is not null)
+        {
+            ObjectPoolManager.Shared.Return(lease);
         }
     }
 

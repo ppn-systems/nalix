@@ -321,8 +321,13 @@ public sealed partial class WebSocketConnection :
     }
     internal void UpdateLastPingTime() => this.LastPingTime = Clock.UnixMillisecondsNow();
 
+    /// <summary>Test seam: invoked at the start of the post-send notification, on the thread that completed the send.</summary>
+    internal static Action<WebSocketConnection>? s_postProcessHook;
+
     internal void TriggerPostProcessEvent()
     {
+        s_postProcessHook?.Invoke(this);
+
         // Only pay for event args + a thread-pool hop when someone listens to MessageProcessed.
         if (Volatile.Read(ref _backing)?.MessageProcessed is null)
         {

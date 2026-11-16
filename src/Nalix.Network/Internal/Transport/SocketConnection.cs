@@ -131,7 +131,10 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         Success,
         PeerClosed,
         Aborted,
-        Failed
+        Failed,
+
+        /// <summary>The session that admitted the send has ended, so nothing was written.</summary>
+        SessionClosed
     }
 
     #endregion Nested Types
@@ -942,6 +945,9 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
 
     #region Private Methods
 
+    /// <summary>Test seam: invoked after the socket has been shut down, before the write lock is taken.</summary>
+    internal static Action<SocketConnection>? s_afterShutdownHook;
+
     [DebuggerStepThrough]
     private void DISPOSE(bool disposing)
     {
@@ -949,6 +955,10 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         {
             return;
         }
+
+        // DISPOSE holds a send count for its whole duration. An admitted send that finishes while DISPOSE is still
+        // running must not return the instance to the pool; only this method's final EXIT_SEND can do that.
+        _ = Interlocked.Increment(ref _sendsInFlight);
 
         if (disposing)
         {
@@ -1047,6 +1057,8 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             //    out of circulation.
             this.INVOKE_CLOSE_ONCE();
 
+            s_afterShutdownHook?.Invoke(this);
+
             // 7. Dispose remaining resources. Taking the write lock waits for a synchronous write that was admitted before
             //    _disposed was set; the shutdown above has already unblocked it. Later writes see _disposed and abort.
             lock (_sendLock)
@@ -1078,11 +1090,8 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         }
 #endif
 
-        // A send admitted before Dispose returns the instance when it finishes (see EXIT_SEND).
-        if (Volatile.Read(ref _sendsInFlight) == 0)
-        {
-            this.RETURN_WHEN_IDLE();
-        }
+        // Releases the count taken above. The instance is returned here if no send is still in flight.
+        this.EXIT_SEND();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

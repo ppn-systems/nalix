@@ -82,7 +82,7 @@ internal sealed partial class SocketConnection
                 // so a write either completes before the session ends or observes that it has.
                 if (!this.IS_CURRENT_SESSION(generation))
                 {
-                    return SendResult.Aborted;
+                    return SendResult.SessionClosed;
                 }
 
                 try
@@ -145,7 +145,7 @@ internal sealed partial class SocketConnection
                 // so a write either completes before the session ends or observes that it has.
                 if (!this.IS_CURRENT_SESSION(generation))
                 {
-                    return SendResult.Aborted;
+                    return SendResult.SessionClosed;
                 }
 
                 try
@@ -212,7 +212,7 @@ internal sealed partial class SocketConnection
 
         if (!this.ENTER_SEND(generation))
         {
-            return ValueTask.FromResult(SendResult.Aborted);
+            return ValueTask.FromResult(SendResult.SessionClosed);
         }
 
         ValueTask<SendResult> vt;
@@ -296,7 +296,7 @@ internal sealed partial class SocketConnection
 
         if (!this.ENTER_SEND(generation))
         {
-            return ValueTask.FromResult(SendResult.Aborted);
+            return ValueTask.FromResult(SendResult.SessionClosed);
         }
 
         ValueTask<SendResult> vt;
@@ -602,7 +602,7 @@ internal sealed partial class SocketConnection
                 // so a write either completes before the session ends or observes that it has.
                 if (!this.IS_CURRENT_SESSION(generation))
                 {
-                    return SendResult.Aborted;
+                    return SendResult.SessionClosed;
                 }
 
                 try

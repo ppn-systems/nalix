@@ -92,12 +92,10 @@ public sealed class ConnectionStaleSendRaceTests : IDisposable
 
         resume.Set();
 
-        // A send that re-checks a closed connection reports ObjectDisposedException, which is the inert outcome.
+        // A send refused by the closed session reports the disposed state, as a send on a closed connection does.
         Exception? error = await Record.ExceptionAsync(() => pending.WaitAsync(TimeSpan.FromSeconds(10)));
-        if (error is not null)
-        {
-            error.Should().BeOfType<ObjectDisposedException>();
-        }
+        error.Should().BeOfType<ObjectDisposedException>(
+            "a send refused because its session ended must report the disposed state instead of completing silently");
 
         peerB.Poll(300_000, SelectMode.SelectRead).Should().BeFalse(
             "a send paused on the previous session must not write into the stream of the connection that re-rented the socket");
