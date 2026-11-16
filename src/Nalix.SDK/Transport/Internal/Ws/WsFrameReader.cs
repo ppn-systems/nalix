@@ -10,7 +10,6 @@ using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
-using Nalix.Environment.Fragments;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Options;
 using Nalix.Environment.Sequencing;
@@ -20,7 +19,6 @@ namespace Nalix.SDK.Transport.Internal.Ws;
 
 internal sealed class WsFrameReader : IDisposable
 {
-    private static readonly FragmentOptions s_fragmentOptions = ConfigurationManager.Instance.Get<FragmentOptions>();
     private static readonly SequenceOptions s_sequenceOptions = ConfigurationManager.Instance.Get<SequenceOptions>();
 
     private readonly Action<Exception, ClientWebSocket?> _onError;
@@ -32,12 +30,6 @@ internal sealed class WsFrameReader : IDisposable
     internal SequenceCounter Sequence => _sequence;
     private readonly TransportOptions _options;
     private readonly WebSocketTransportOptions _webSocketOptions;
-
-    private readonly FragmentAssembler _assembler = new()
-    {
-        MaxStreamBytes = s_fragmentOptions.MaxReassemblyBytes,
-        StreamTimeoutMs = s_fragmentOptions.ReassemblyTimeoutMs
-    };
 
     private int _disposed;
 
@@ -105,7 +97,6 @@ internal sealed class WsFrameReader : IDisposable
         }
         finally
         {
-            _assembler.Clear();
             BufferLease.ByteArrayPool.Return(buffer);
             if (disconnectReason != null)
             {
@@ -168,24 +159,9 @@ internal sealed class WsFrameReader : IDisposable
 
     private void PROCESS_FRAME(ReadOnlySpan<byte> frameData, ClientWebSocket socket)
     {
-        if (FragmentAssembler.IsFragmentedFrame(frameData, out FragmentHeader header))
-        {
-            try
-            {
-                ReadOnlySpan<byte> chunkBody = frameData[FragmentHeader.WireSize..];
-                FragmentAssemblyResult? assembled = _assembler.Add(header, chunkBody, out _);
-                if (assembled is not null)
-                {
-                    this.PROCESS_ASSEMBLED_FRAME(assembled.Value.Lease, socket);
-                }
-            }
-            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
-            {
-                _onError?.Invoke(ex, socket);
-            }
-            return;
-        }
-
+        // WebSocket framing is handled natively by the protocol: the receive loop above already
+        // coalesces a message spanning multiple WebSocket frames into one buffer, and the server
+        // never emits Nalix fragment chunks over WebSocket. So every frame here is a whole message.
         BufferLease lease = BufferLease.Rent(frameData.Length);
         frameData.CopyTo(lease.SpanFull);
         lease.CommitLength(frameData.Length);
@@ -244,13 +220,5 @@ internal sealed class WsFrameReader : IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
-        {
-            return;
-        }
-
-        _assembler.Dispose();
-    }
+    public void Dispose() => _ = Interlocked.CompareExchange(ref _disposed, 1, 0);
 }

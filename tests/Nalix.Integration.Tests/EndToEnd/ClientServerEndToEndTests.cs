@@ -236,6 +236,32 @@ public sealed class ClientServerEndToEndTests : IDisposable
         await client.DisconnectAsync().WaitAsync(s_timeout);
     }
 
+    [Fact]
+    public async Task RequestAsync_OverWebSocketWithPayloadLargerThanOneFrame_ReturnsIntact()
+    {
+        ushort port = NextPort();
+        ushort webSocketPort = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: true, webSocketPort: webSocketPort);
+
+        using WebSocketSession client = new(CreateOptions(webSocketPort), new WebSocketTransportOptions { Path = WebSocketPath });
+        await client.ConnectAsync().WaitAsync(s_timeout);
+        await client.HandshakeAsync().AsTask().WaitAsync(s_timeout);
+
+        // ~500 KB of incompressible text: far larger than a single WebSocket receive buffer, so the message
+        // spans many native WebSocket frames both ways. WebSocket framing (not Nalix fragment chunks) must
+        // carry it, and both the server and the SDK reader must reassemble the whole message intact.
+        Random random = new(4321);
+        string text = new([.. Enumerable.Range(0, 500_000).Select(_ => (char)random.Next('a', 'z' + 1))]);
+
+        EchoPacket response = await client.RequestAsync<EchoPacket>(
+            new EchoPacket { Sequence = 9, Text = text }, s_request.WithEncrypt()).AsTask().WaitAsync(s_timeout);
+
+        Assert.Equal(10, response.Sequence);
+        Assert.Equal(text.ToUpperInvariant(), response.Text);
+
+        await client.DisconnectAsync().WaitAsync(s_timeout);
+    }
+
     [Theory]
     [InlineData(false, 2)]
     // 300 padded replies exceed 64 KB, so the coalesced batch spans several socket writes.

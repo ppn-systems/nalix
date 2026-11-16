@@ -31,8 +31,10 @@ namespace Nalix.SDK.Tests.Transport.Internal.Ws;
 public sealed class WsFrameReaderTests
 {
     [Fact]
-    public void Dispose_WhenCreated_DisposesFragmentAssembler()
+    public void Reader_DoesNotHoldAFragmentAssembler()
     {
+        // WebSocket framing is native: the server never sends Nalix fragment chunks over WebSocket,
+        // so the reader must not allocate a per-session FragmentAssembler (see WsFrameReader.PROCESS_FRAME).
         Type wsReaderType = typeof(TcpSession).Assembly.GetType("Nalix.SDK.Transport.Internal.Ws.WsFrameReader")!;
         Type stateType = typeof(TcpSession).Assembly.GetType("Nalix.SDK.Transport.SessionState")!;
         object state = Activator.CreateInstance(stateType)!;
@@ -43,16 +45,9 @@ public sealed class WsFrameReaderTests
         Action<Exception, System.Net.WebSockets.ClientWebSocket?> onDisc = (_, _) => { };
         using IDisposable reader = (IDisposable)ctor.Invoke([wsProvider, new TransportOptions(), state, new WebSocketTransportOptions(), onMsg, onDisc]);
 
-        FieldInfo? assemblerField = wsReaderType.GetField("_assembler", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(assemblerField);
-
-        object? assembler = assemblerField!.GetValue(reader);
-        Assert.NotNull(assembler);
+        Assert.Null(wsReaderType.GetField("_assembler", BindingFlags.Instance | BindingFlags.NonPublic));
 
         reader.Dispose();
-
-        FieldInfo? disposedField = assembler!.GetType().GetField("_disposed", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(disposedField);
-        Assert.True((bool)disposedField!.GetValue(assembler)!);
+        reader.Dispose(); // idempotent
     }
 }
