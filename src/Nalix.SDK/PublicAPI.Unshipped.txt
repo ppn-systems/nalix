@@ -16,3 +16,6 @@ virtual Nalix.SDK.Transport.TransportSession.DisposeAsyncCore() -> System.Thread
 override Nalix.SDK.Transport.TcpSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
 override Nalix.SDK.Transport.UdpSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
 override Nalix.SDK.Transport.WebSocketSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
+Nalix.SDK.SdkTelemetry
+const Nalix.SDK.SdkTelemetry.ActivitySourceName = "Nalix.SDK" -> string!
+const Nalix.SDK.SdkTelemetry.MeterName = "Nalix.SDK" -> string!

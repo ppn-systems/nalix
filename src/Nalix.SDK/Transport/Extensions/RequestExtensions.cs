@@ -121,66 +121,84 @@ public static class RequestExtensions
         options ??= RequestOptions.Default;
         options.Validate();
         long start = Stopwatch.GetTimestamp();
+        string responseType = typeof(TResponse).Name;
+        Activity? activity = SdkTelemetry.StartRequest(request, responseType);
+        int attempts = 0;
 
-        if (!client.IsConnected)
+        try
         {
-            await AwaitReadyOrThrowAsync(client, options.AttemptTimeoutMs(start), typeof(TResponse).Name, ct).ConfigureAwait(false);
-        }
+            if (!client.IsConnected)
+            {
+                await AwaitReadyOrThrowAsync(client, options.AttemptTimeoutMs(start), responseType, ct).ConfigureAwait(false);
+            }
 
-        if (client is TransportSession session)
+            if (client is TransportSession session)
+            {
+                _ = session.StampSequenceId(request);
+            }
+
+            ushort expectedSeqId = request.Header.SequenceId;
+            Exception? lastException = null;
+            int totalAttempts = options.RetryCount + 1;
+            // Without a caller predicate the reply is matched by SequenceId on the raw header (see PendingRequest),
+            // so no closure is allocated and frames for other pending requests are never deserialized.
+            Func<TResponse, bool> effectivePredicate = predicate ?? (static _ => true);
+            ushort matchSequenceId = predicate is null ? expectedSeqId : (ushort)0;
+
+            for (int attempt = 1; attempt <= totalAttempts; attempt++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                if (attempt > 1 && !await options.DelayBeforeRetryAsync(attempt - 1, start, ct).ConfigureAwait(false))
+                {
+                    break;
+                }
+
+                int attemptTimeoutMs = options.AttemptTimeoutMs(start);
+                if (attemptTimeoutMs < 0)
+                {
+                    break;
+                }
+
+                attempts = attempt;
+                if (attempt > 1)
+                {
+                    SdkTelemetry.RecordRetry(responseType);
+                }
+
+                try
+                {
+                    // Delegate the full subscribe -> send -> await -> timeout -> unsubscribe cycle
+                    // to PACKET_AWAITER, which handles deserialization errors, predicate exceptions,
+                    // and disconnect guards consistently across all SDK helpers.
+                    TResponse result = await PacketAwaiter.AwaitAsync(
+                        client,
+                        predicate: effectivePredicate,
+                        timeoutMs: attemptTimeoutMs,
+                        request,
+                        options.ResolveEncrypt(client),
+                        ct,
+                        matchSequenceId).ConfigureAwait(false);
+
+                    SdkTelemetry.CompleteRequest(activity, start, responseType, SdkTelemetry.OutcomeOk, attempts);
+                    return result;
+                }
+                catch (TimeoutException tex) when (attempt < totalAttempts)
+                {
+                    // Only TimeoutException is retryable.
+                    // OperationCanceledException, NetworkException, etc. propagate immediately.
+                    lastException = tex;
+                }
+            }
+
+            throw new TimeoutException(
+                $"[SDK.RequestAsync<{typeof(TResponse).Name}>] No response within the request budget (attempts={totalAttempts}, timeout={options.TimeoutMs}ms each, deadline={options.DeadlineMs}ms).", lastException);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            _ = session.StampSequenceId(request);
+            SdkTelemetry.CompleteRequest(activity, start, responseType, SdkTelemetry.OutcomeOf(ex), attempts, ex);
+            throw;
         }
-
-        ushort expectedSeqId = request.Header.SequenceId;
-        Exception? lastException = null;
-        int totalAttempts = options.RetryCount + 1;
-        // Without a caller predicate the reply is matched by SequenceId on the raw header (see PendingRequest),
-        // so no closure is allocated and frames for other pending requests are never deserialized.
-        Func<TResponse, bool> effectivePredicate = predicate ?? (static _ => true);
-        ushort matchSequenceId = predicate is null ? expectedSeqId : (ushort)0;
-
-        for (int attempt = 1; attempt <= totalAttempts; attempt++)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            if (attempt > 1 && !await options.DelayBeforeRetryAsync(attempt - 1, start, ct).ConfigureAwait(false))
-            {
-                break;
-            }
-
-            int attemptTimeoutMs = options.AttemptTimeoutMs(start);
-            if (attemptTimeoutMs < 0)
-            {
-                break;
-            }
-
-            try
-            {
-                // Delegate the full subscribe -> send -> await -> timeout -> unsubscribe cycle
-                // to PACKET_AWAITER, which handles deserialization errors, predicate exceptions,
-                // and disconnect guards consistently across all SDK helpers.
-                TResponse result = await PacketAwaiter.AwaitAsync(
-                    client,
-                    predicate: effectivePredicate,
-                    timeoutMs: attemptTimeoutMs,
-                    request,
-                    options.ResolveEncrypt(client),
-                    ct,
-                    matchSequenceId).ConfigureAwait(false);
-
-                return result;
-            }
-            catch (TimeoutException tex) when (attempt < totalAttempts)
-            {
-                // Only TimeoutException is retryable.
-                // OperationCanceledException, NetworkException, etc. propagate immediately.
-                lastException = tex;
-            }
-        }
-
-        throw new TimeoutException(
-            $"[SDK.RequestAsync<{typeof(TResponse).Name}>] No response within the request budget (attempts={totalAttempts}, timeout={options.TimeoutMs}ms each, deadline={options.DeadlineMs}ms).", lastException);
     }
 
     /// <summary>
@@ -215,78 +233,109 @@ public static class RequestExtensions
         options ??= RequestOptions.Default;
         options.Validate();
         long start = Stopwatch.GetTimestamp();
+        string responseType = typeof(TResponse).Name;
+        Activity? activity = SdkTelemetry.StartRequest(request, responseType);
+        int attempts = 0;
 
-        if (!client.IsConnected)
+        try
         {
-            try
+            if (!client.IsConnected)
             {
-                await AwaitReadyOrThrowAsync(client, options.AttemptTimeoutMs(start), typeof(TResponse).Name, ct).ConfigureAwait(false);
+                try
+                {
+                    await AwaitReadyOrThrowAsync(client, options.AttemptTimeoutMs(start), responseType, ct).ConfigureAwait(false);
+                }
+                catch (NetworkException ex)
+                {
+                    return DONE(RequestOutcome<TResponse>.Fail(RequestOutcomeKind.NotConnected, ex));
+                }
             }
-            catch (NetworkException ex)
+
+            if (client is TransportSession session)
             {
-                return RequestOutcome<TResponse>.Fail(RequestOutcomeKind.NotConnected, ex);
+                _ = session.StampSequenceId(request);
             }
+
+            ushort expectedSeqId = request.Header.SequenceId;
+            Exception? lastException = null;
+            int totalAttempts = options.RetryCount + 1;
+            // Without a caller predicate the reply is matched by SequenceId on the raw header (see PendingRequest),
+            // so no closure is allocated and frames for other pending requests are never deserialized.
+            Func<TResponse, bool> effectivePredicate = predicate ?? (static _ => true);
+            ushort matchSequenceId = predicate is null ? expectedSeqId : (ushort)0;
+
+            for (int attempt = 1; attempt <= totalAttempts; attempt++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                if (attempt > 1 && !await options.DelayBeforeRetryAsync(attempt - 1, start, ct).ConfigureAwait(false))
+                {
+                    break;
+                }
+
+                int attemptTimeoutMs = options.AttemptTimeoutMs(start);
+                if (attemptTimeoutMs < 0)
+                {
+                    break;
+                }
+
+                attempts = attempt;
+                if (attempt > 1)
+                {
+                    SdkTelemetry.RecordRetry(responseType);
+                }
+
+                try
+                {
+                    TResponse result = await PacketAwaiter.AwaitAsync(
+                        client,
+                        predicate: effectivePredicate,
+                        timeoutMs: attemptTimeoutMs,
+                        sendAsync: token => client.SendAsync(request, encrypt: options.ResolveEncrypt(client), token),
+                        ct,
+                        matchSequenceId).ConfigureAwait(false);
+
+                    return DONE(RequestOutcome<TResponse>.Ok(result));
+                }
+                catch (TimeoutException tex) when (attempt < totalAttempts)
+                {
+                    lastException = tex;
+                }
+                catch (TimeoutException tex)
+                {
+                    return DONE(RequestOutcome<TResponse>.Fail(RequestOutcomeKind.TimedOut, tex));
+                }
+                catch (NetworkException nex)
+                {
+                    return DONE(RequestOutcome<TResponse>.Fail(RequestOutcomeKind.Failed, nex));
+                }
+            }
+
+            return DONE(RequestOutcome<TResponse>.Fail(
+                RequestOutcomeKind.TimedOut,
+                new TimeoutException(
+                    $"[SDK.TryRequestAsync<{typeof(TResponse).Name}>] No response within the request budget (attempts={totalAttempts}, timeout={options.TimeoutMs}ms each, deadline={options.DeadlineMs}ms).",
+                    lastException)));
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            SdkTelemetry.CompleteRequest(activity, start, responseType, SdkTelemetry.OutcomeOf(ex), attempts, ex);
+            throw;
         }
 
-        if (client is TransportSession session)
+        RequestOutcome<TResponse> DONE(RequestOutcome<TResponse> outcome)
         {
-            _ = session.StampSequenceId(request);
+            string tag = outcome.Kind switch
+            {
+                RequestOutcomeKind.Ok => SdkTelemetry.OutcomeOk,
+                RequestOutcomeKind.TimedOut => SdkTelemetry.OutcomeTimeout,
+                RequestOutcomeKind.NotConnected => SdkTelemetry.OutcomeNotConnected,
+                RequestOutcomeKind.Failed => SdkTelemetry.OutcomeNetworkError,
+                _ => SdkTelemetry.OutcomeError,
+            };
+            SdkTelemetry.CompleteRequest(activity, start, responseType, tag, attempts, outcome.Error);
+            return outcome;
         }
-
-        ushort expectedSeqId = request.Header.SequenceId;
-        Exception? lastException = null;
-        int totalAttempts = options.RetryCount + 1;
-        // Without a caller predicate the reply is matched by SequenceId on the raw header (see PendingRequest),
-        // so no closure is allocated and frames for other pending requests are never deserialized.
-        Func<TResponse, bool> effectivePredicate = predicate ?? (static _ => true);
-        ushort matchSequenceId = predicate is null ? expectedSeqId : (ushort)0;
-
-        for (int attempt = 1; attempt <= totalAttempts; attempt++)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            if (attempt > 1 && !await options.DelayBeforeRetryAsync(attempt - 1, start, ct).ConfigureAwait(false))
-            {
-                break;
-            }
-
-            int attemptTimeoutMs = options.AttemptTimeoutMs(start);
-            if (attemptTimeoutMs < 0)
-            {
-                break;
-            }
-
-            try
-            {
-                TResponse result = await PacketAwaiter.AwaitAsync(
-                    client,
-                    predicate: effectivePredicate,
-                    timeoutMs: attemptTimeoutMs,
-                    sendAsync: token => client.SendAsync(request, encrypt: options.ResolveEncrypt(client), token),
-                    ct,
-                    matchSequenceId).ConfigureAwait(false);
-
-                return RequestOutcome<TResponse>.Ok(result);
-            }
-            catch (TimeoutException tex) when (attempt < totalAttempts)
-            {
-                lastException = tex;
-            }
-            catch (TimeoutException tex)
-            {
-                return RequestOutcome<TResponse>.Fail(RequestOutcomeKind.TimedOut, tex);
-            }
-            catch (NetworkException nex)
-            {
-                return RequestOutcome<TResponse>.Fail(RequestOutcomeKind.Failed, nex);
-            }
-        }
-
-        return RequestOutcome<TResponse>.Fail(
-            RequestOutcomeKind.TimedOut,
-            new TimeoutException(
-                $"[SDK.TryRequestAsync<{typeof(TResponse).Name}>] No response within the request budget (attempts={totalAttempts}, timeout={options.TimeoutMs}ms each, deadline={options.DeadlineMs}ms).",
-                lastException));
     }
 
     /// <summary>

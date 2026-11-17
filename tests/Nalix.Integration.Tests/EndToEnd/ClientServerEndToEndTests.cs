@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -209,6 +210,39 @@ public sealed class ClientServerEndToEndTests : IDisposable
     {
         await using TcpSession client = new(CreateOptions(NextPort()));
         Assert.False(client.IsConnected);
+    }
+
+    [Fact]
+    public async Task RequestAsync_WhenItSucceeds_EmitsOkRequestActivity()
+    {
+        ushort port = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: false);
+        using TcpSession client = new(CreateOptions(port));
+        await client.ConnectAsync().WaitAsync(s_timeout);
+
+        using ActivitySource testSource = new("Nalix.Integration.Tests.Telemetry");
+        System.Collections.Concurrent.ConcurrentQueue<Activity> stopped = new();
+        using ActivityListener listener = new()
+        {
+            ShouldListenTo = s => s.Name is Nalix.SDK.SdkTelemetry.ActivitySourceName or "Nalix.Integration.Tests.Telemetry",
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = stopped.Enqueue,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        using (Activity root = testSource.StartActivity("test-root")!)
+        {
+            EchoPacket response = await client.RequestAsync<EchoPacket>(new EchoPacket { Sequence = 1, Text = "otel" }, s_request).AsTask().WaitAsync(s_timeout);
+            Assert.Equal("OTEL", response.Text);
+
+            Activity request = Assert.Single(stopped, a => a.OperationName == "nalix.request" && a.ParentSpanId == root.SpanId);
+            Assert.Equal("ok", request.GetTagItem("nalix.request.outcome"));
+            Assert.Equal(1, request.GetTagItem("nalix.request.attempts"));
+            Assert.Equal((int)EchoPacket.OpCode, request.GetTagItem("nalix.opcode"));
+            Assert.Equal(ActivityStatusCode.Unset, request.Status);
+        }
+
+        await client.DisconnectAsync().WaitAsync(s_timeout);
     }
 
     [Fact]
