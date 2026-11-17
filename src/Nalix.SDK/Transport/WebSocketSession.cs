@@ -375,6 +375,21 @@ public class WebSocketSession : TransportSession
     public override async Task SendAsync(ReadOnlyMemory<byte> payload, bool? encrypt = null, CancellationToken ct = default)
         => await _sender.SendAsync(payload, encrypt, ct).ConfigureAwait(false);
 
+    internal override bool DeliversRekeyReliably => true;
+
+    internal override async Task SendThenSwitchAsync(IPacket packet, Action afterWrite, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+        _ = this.StampSequenceId(packet);
+
+        BufferLease lease = BufferLease.Rent(packet.Length);
+        lease.CommitLength(packet.Serialize(lease.SpanFull));
+        if (!await _sender.SendThenAsync(lease, this.State.EncryptionEnabled, afterWrite, ct).ConfigureAwait(false))
+        {
+            throw new NetworkException("Failed to send WebSocket packet: the frame was not delivered to the socket.");
+        }
+    }
+
     /// <inheritdoc/>
     public override void ResetSequenceCounters()
     {

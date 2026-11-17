@@ -52,11 +52,19 @@ internal sealed class WsFrameSender : IDisposable
     public Task<bool> SendAsync(IBufferLease lease, bool? encrypt = null, CancellationToken ct = default)
         => this.SEND_CORE(lease, encrypt ?? _state.EncryptionEnabled, sync: false, ct);
 
+    /// <summary>
+    /// Sends <paramref name="lease"/> and runs <paramref name="afterWrite"/> while still holding the send lock, so no
+    /// other frame is encrypted or written between the two. Used by rekey to switch the key right after the
+    /// SESSION_REKEY frame, before any later frame is encrypted.
+    /// </summary>
+    internal Task<bool> SendThenAsync(IBufferLease lease, bool encrypt, Action afterWrite, CancellationToken ct)
+        => this.SEND_CORE(lease, encrypt, sync: false, ct, afterWrite);
+
     #endregion
 
     #region Core Implementation
 
-    private async Task<bool> SEND_CORE(IBufferLease lease, bool encrypt, bool sync, CancellationToken ct)
+    private async Task<bool> SEND_CORE(IBufferLease lease, bool encrypt, bool sync, CancellationToken ct, Action? afterWrite = null)
     {
         IBufferLease current = lease;
 
@@ -74,8 +82,25 @@ internal sealed class WsFrameSender : IDisposable
             plaintextLease.ZeroOnDispose = true;
         }
 
+        bool lockTaken = false;
         try
         {
+            // The send lock covers encryption as well as the write: frames reach the wire in the order of their
+            // sequence numbers and of the key they were encrypted with, so a key switch (rekey) can never let an
+            // older-key frame follow the switch.
+            if (sync)
+            {
+#pragma warning disable CA1849 // The synchronous Send() API takes this path; it must not await.
+                _sendLock.Wait(ct);
+#pragma warning restore CA1849
+            }
+            else
+            {
+                await _sendLock.WaitAsync(ct).ConfigureAwait(false);
+            }
+
+            lockTaken = true;
+
             if (encrypt && _sequence.IsApproachingOverflow())
             {
                 throw new CipherException(
@@ -98,9 +123,16 @@ internal sealed class WsFrameSender : IDisposable
                 SdkLog.Trace("SDK.WsFrameSender", $"Sending WebSocket frame opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(current.Span):X4} length={current.Length} encrypted={encrypt}.");
             }
 
-            return sync
+            bool sent = sync
                 ? this.SEND_RAW(current.Memory, originatingSocket)
                 : await this.SEND_RAW_ASYNC(current.Memory, originatingSocket, ct).ConfigureAwait(false);
+
+            if (sent)
+            {
+                afterWrite?.Invoke();
+            }
+
+            return sent;
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
@@ -109,6 +141,11 @@ internal sealed class WsFrameSender : IDisposable
         }
         finally
         {
+            if (lockTaken)
+            {
+                _ = _sendLock.Release();
+            }
+
             if (!ReferenceEquals(current, lease))
             {
                 current.Dispose();
@@ -118,6 +155,7 @@ internal sealed class WsFrameSender : IDisposable
         }
     }
 
+    // The caller (SEND_CORE) holds the send lock.
     private bool SEND_RAW(ReadOnlyMemory<byte> frame, ClientWebSocket socket)
     {
         if (Volatile.Read(ref _disposed) != 0 || socket.State != WebSocketState.Open)
@@ -125,14 +163,8 @@ internal sealed class WsFrameSender : IDisposable
             return false;
         }
 
-        _sendLock.Wait();
         try
         {
-            if (Volatile.Read(ref _disposed) != 0 || socket.State != WebSocketState.Open)
-            {
-                return false;
-            }
-
             socket.SendAsync(frame, WebSocketMessageType.Binary, true, CancellationToken.None).AsTask().GetAwaiter().GetResult();
             return true;
         }
@@ -141,12 +173,9 @@ internal sealed class WsFrameSender : IDisposable
             _onError?.Invoke(ex, socket);
             return false;
         }
-        finally
-        {
-            _ = _sendLock.Release();
-        }
     }
 
+    // The caller (SEND_CORE) holds the send lock.
     private async Task<bool> SEND_RAW_ASYNC(ReadOnlyMemory<byte> frame, ClientWebSocket socket, CancellationToken ct)
     {
         if (Volatile.Read(ref _disposed) != 0 || socket.State != WebSocketState.Open)
@@ -154,14 +183,8 @@ internal sealed class WsFrameSender : IDisposable
             return false;
         }
 
-        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (Volatile.Read(ref _disposed) != 0 || socket.State != WebSocketState.Open)
-            {
-                return false;
-            }
-
             await socket.SendAsync(frame, WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
             return true;
         }
@@ -169,10 +192,6 @@ internal sealed class WsFrameSender : IDisposable
         {
             _onError?.Invoke(ex, socket);
             return false;
-        }
-        finally
-        {
-            _ = _sendLock.Release();
         }
     }
 

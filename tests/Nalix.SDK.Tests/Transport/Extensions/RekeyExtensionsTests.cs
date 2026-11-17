@@ -28,8 +28,51 @@ public sealed class RekeyExtensionsTests
         Assert.Equal(previousSecret, session.State.Secret);
     }
 
-    private sealed class TimeoutSession : TransportSession
+    [Fact]
+    public async Task RekeyAsync_OnOrderedTransportWhenAckTimesOut_KeepsTheNewSecret()
     {
+        // On TCP/WebSocket the server switches as soon as it reads SESSION_REKEY, so a late acknowledgement must not
+        // send the client back to the old key (that is what left the two sides on different keys).
+        Bytes32 previousSecret = Secret(0x42);
+        TimeoutSession session = new(ordered: true);
+        session.State.Secret = previousSecret;
+        session.Options.ConnectTimeoutMillis = 50;
+
+        _ = await Assert.ThrowsAsync<TimeoutException>(async () => await session.RekeyAsync());
+
+        Assert.NotEqual(previousSecret, session.State.Secret);
+        Assert.Equal(1, session.ResetCount);
+    }
+
+    [Fact]
+    public async Task RekeyAsync_WhenTheRequestCannotBeSent_KeepsTheSecretAndSequenceCounters()
+    {
+        // Nothing reached the server, so neither the key nor the replay windows may change; resetting the counters
+        // here used to desynchronise them from the server's.
+        Bytes32 previousSecret = Secret(0x42);
+        TimeoutSession session = new(ordered: true, failSend: true);
+        session.State.Secret = previousSecret;
+        session.Options.ConnectTimeoutMillis = 50;
+
+        _ = await Assert.ThrowsAnyAsync<Exception>(async () => await session.RekeyAsync());
+
+        Assert.Equal(previousSecret, session.State.Secret);
+        Assert.Equal(0, session.ResetCount);
+    }
+
+    private static Bytes32 Secret(byte fill)
+    {
+        byte[] secretBytes = new byte[Bytes32.Size];
+        Array.Fill(secretBytes, fill);
+        return new Bytes32(secretBytes);
+    }
+
+    private sealed class TimeoutSession(bool ordered = false, bool failSend = false) : TransportSession
+    {
+        public int ResetCount { get; private set; }
+
+        internal override bool DeliversRekeyReliably => ordered;
+
         public override TransportOptions Options { get; } = new();
         public override bool IsConnected => true;
 
@@ -46,7 +89,7 @@ public sealed class RekeyExtensionsTests
         public override Task DisconnectAsync() => Task.CompletedTask;
 
         public override Task SendAsync(IPacket packet, CancellationToken ct = default)
-            => Task.CompletedTask;
+            => failSend ? Task.FromException(new InvalidOperationException("socket closed")) : Task.CompletedTask;
 
         public override Task SendAsync(IPacket packet, bool? encrypt = null, CancellationToken ct = default)
             => Task.CompletedTask;
@@ -54,7 +97,7 @@ public sealed class RekeyExtensionsTests
         public override Task SendAsync(ReadOnlyMemory<byte> payload, bool? encrypt = null, CancellationToken ct = default)
             => Task.CompletedTask;
 
-        public override void ResetSequenceCounters() { }
+        public override void ResetSequenceCounters() => this.ResetCount++;
 
         protected override void Dispose(bool disposing) { }
     }

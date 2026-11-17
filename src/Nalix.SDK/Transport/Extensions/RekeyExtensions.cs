@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
@@ -41,29 +42,65 @@ public static class RekeyExtensions
         Control rekeyPacket = lease.Value;
         rekeyPacket.Initialize(ControlType.SESSION_REKEY, seqId, PacketFlags.SYSTEM, ProtocolReason.NONE);
 
+        TransportSession? transport = session as TransportSession;
+        bool switched = false;
+
+        void SWITCH_KEY()
+        {
+            // Switch to the new key and reset the sequence counters so that every later frame uses the new state.
+            session.State.Secret = newKey;
+            session.ResetSequenceCounters();
+            switched = true;
+        }
+
+        SdkLog.Debug(Tag, "Rotating the session key.");
+
         try
         {
-            // Send the SESSION_REKEY packet and await the SESSION_REKEY_ACK from the server.
-            // We use AwaitAsync to ensure the server has processed the new key before we switch our local state.
+            // Send SESSION_REKEY and await SESSION_REKEY_ACK. On TCP/WebSocket the key switch runs under the send lock
+            // right after the request is written, so no frame encrypted with the old key can follow it on the wire.
             using Control ack = await PacketAwaiter.AwaitAsync<Control>(
                 session,
                 predicate: p => p.Type == ControlType.SESSION_REKEY_ACK && p.SequenceId == seqId,
                 sendAsync: async token =>
                 {
-                    await session.SendAsync(rekeyPacket, token).ConfigureAwait(false);
-
-                    // Immediately switch to the new key and reset sequence counters for outbound frames
-                    // so that subsequent frames (including any other concurrent sends) use the new state.
-                    session.State.Secret = newKey;
-                    session.ResetSequenceCounters();
+                    if (transport is not null)
+                    {
+                        await transport.SendThenSwitchAsync(rekeyPacket, SWITCH_KEY, token).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await session.SendAsync(rekeyPacket, token).ConfigureAwait(false);
+                        SWITCH_KEY();
+                    }
                 },
                 timeoutMs: session.Options.ConnectTimeoutMillis > 0 ? session.Options.ConnectTimeoutMillis : 5000,
                 ct: ct).ConfigureAwait(false);
+
+            SdkLog.Info(Tag, "Session key rotated.");
         }
-        catch
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            session.State.Secret = previousKey;
-            session.ResetSequenceCounters();
+            if (!switched)
+            {
+                // SESSION_REKEY never left: the server still uses the current key and nothing changed locally.
+                SdkLog.Warn(Tag, "Key rotation failed before the request was sent; the session keeps its current key.", ex);
+            }
+            else if (transport is { DeliversRekeyReliably: true })
+            {
+                // The request was written on an ordered transport, and the server switches as soon as it reads it. The
+                // acknowledgement is only late or lost: going back to the old key would leave the two sides on different
+                // keys, so the new key is kept.
+                SdkLog.Warn(Tag, "No acknowledgement for the key rotation; keeping the new key, which the server switched to when it read the request.", ex);
+            }
+            else
+            {
+                // Unordered transport: the request may never have arrived, and the server ignores it on UDP.
+                session.State.Secret = previousKey;
+                session.ResetSequenceCounters();
+                SdkLog.Warn(Tag, "Key rotation was not acknowledged on an unordered transport; the previous key was restored.", ex);
+            }
+
             throw;
         }
         finally
@@ -75,4 +112,6 @@ public static class RekeyExtensions
             Bytes32.Wipe(ref newKey);
         }
     }
+
+    private const string Tag = "SDK.Rekey";
 }

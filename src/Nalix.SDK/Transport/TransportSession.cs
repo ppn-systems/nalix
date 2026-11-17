@@ -519,6 +519,24 @@ public abstract class TransportSession : IDisposable, IAsyncDisposable, ITranspo
     private protected virtual Task FaultFromKeepAliveAsync(Exception ex) => Task.CompletedTask;
 
     /// <summary>
+    /// Gets whether a SESSION_REKEY sent on this transport is guaranteed to reach the server in order (TCP, WebSocket).
+    /// The server switches keys as soon as it reads the request, so once it is written the new key is in effect on both
+    /// sides even if the acknowledgement is late. Over UDP the server ignores the request.
+    /// </summary>
+    internal virtual bool DeliversRekeyReliably => false;
+
+    /// <summary>
+    /// Sends <paramref name="packet"/> and then runs <paramref name="afterWrite"/>. Reliable transports override this to
+    /// run <paramref name="afterWrite"/> under their send lock, so no other frame is encrypted between the packet and
+    /// the key switch.
+    /// </summary>
+    internal virtual async Task SendThenSwitchAsync(IPacket packet, Action afterWrite, CancellationToken ct)
+    {
+        await this.SendAsync(packet, ct).ConfigureAwait(false);
+        afterWrite();
+    }
+
+    /// <summary>
     /// Reserves the next outbound <c>SequenceId</c> from this session's counter.
     /// The value <c>0</c> (meaning "unset") is skipped when the counter wraps.
     /// </summary>

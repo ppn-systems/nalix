@@ -451,6 +451,21 @@ public class TcpSession : TransportSession
     public override async Task SendAsync(ReadOnlyMemory<byte> payload, bool? encrypt = null, CancellationToken ct = default)
         => await _sender.SendAsync(payload, encrypt, ct).ConfigureAwait(false);
 
+    internal override bool DeliversRekeyReliably => true;
+
+    internal override async Task SendThenSwitchAsync(IPacket packet, Action afterWrite, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+        _ = this.StampSequenceId(packet);
+
+        BufferLease lease = BufferLease.Rent(packet.Length);
+        lease.CommitLength(packet.Serialize(lease.SpanFull));
+        if (!await _sender.SendThenAsync(lease, this.State.EncryptionEnabled, afterWrite, ct).ConfigureAwait(false))
+        {
+            throw new NetworkException("Failed to send TCP packet: the frame was not delivered to the socket.");
+        }
+    }
+
     /// <inheritdoc/>
     /// <remarks>Waits for the receive loop to finish, which the public <see cref="DisconnectAsync"/> does not.</remarks>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose",
