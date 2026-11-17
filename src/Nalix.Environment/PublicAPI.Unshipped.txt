@@ -1,2 +1,4 @@
 #nullable enable
 *REMOVED*const Nalix.Environment.Fragments.FragmentHeader.Magic = 240 -> byte
+*REMOVED*const Nalix.Environment.Fragments.FragmentHeader.WireSize = 8 -> int
+const Nalix.Environment.Fragments.FragmentHeader.WireSize = 13 -> int
