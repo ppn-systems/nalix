@@ -11,3 +11,8 @@ Nalix.SDK.Options.RequestOptions.RetryDelayMs.get -> int
 Nalix.SDK.Options.RequestOptions.RetryDelayMs.init -> void
 Nalix.SDK.Options.RequestOptions.WithDeadline(int ms) -> Nalix.SDK.Options.RequestOptions!
 Nalix.SDK.Options.RequestOptions.WithRetryDelay(int ms) -> Nalix.SDK.Options.RequestOptions!
+Nalix.SDK.Transport.TransportSession.DisposeAsync() -> System.Threading.Tasks.ValueTask
+virtual Nalix.SDK.Transport.TransportSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
+override Nalix.SDK.Transport.TcpSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
+override Nalix.SDK.Transport.UdpSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
+override Nalix.SDK.Transport.WebSocketSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask

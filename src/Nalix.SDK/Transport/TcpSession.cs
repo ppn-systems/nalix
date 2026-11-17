@@ -445,6 +445,31 @@ public class TcpSession : TransportSession
         => await _sender.SendAsync(payload, encrypt, ct).ConfigureAwait(false);
 
     /// <inheritdoc/>
+    /// <remarks>Waits for the receive loop to finish, which the public <see cref="DisconnectAsync"/> does not.</remarks>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose",
+        Justification = "Replaces the base disconnect (DisconnectAsync) with one that also waits for the receive loop.")]
+    protected override async ValueTask DisposeAsyncCore()
+    {
+        if (Volatile.Read(ref _disposed) == 1)
+        {
+            return;
+        }
+
+        this.MarkIntentionalDisconnect();
+        this.StopKeepAlive();
+
+        await _connectionLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ = _connectionLock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
         if (!disposing || Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
