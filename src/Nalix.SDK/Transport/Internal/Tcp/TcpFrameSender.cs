@@ -6,6 +6,7 @@ using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Transforms;
@@ -66,11 +67,19 @@ internal sealed class TcpFrameSender : IDisposable
     public Task<bool> SendAsync(IBufferLease lease, bool? encrypt = null, CancellationToken ct = default)
         => this.SEND_CORE(lease, encrypt ?? _state.EncryptionEnabled, sync: false, ct);
 
+    /// <summary>
+    /// Sends <paramref name="lease"/> and runs <paramref name="afterWrite"/> while still holding the send lock, so no
+    /// other frame is encrypted or written between the two. Used by rekey to switch the key right after the
+    /// SESSION_REKEY frame, before any later frame is encrypted.
+    /// </summary>
+    internal Task<bool> SendThenAsync(IBufferLease lease, bool encrypt, Action afterWrite, CancellationToken ct)
+        => this.SEND_CORE(lease, encrypt, sync: false, ct, afterWrite);
+
     #endregion
 
     #region Core Implementation
 
-    private async Task<bool> SEND_CORE(IBufferLease lease, bool encrypt, bool sync, CancellationToken ct)
+    private async Task<bool> SEND_CORE(IBufferLease lease, bool encrypt, bool sync, CancellationToken ct, Action? afterWrite = null)
     {
         IBufferLease current = lease;
 
@@ -88,8 +97,27 @@ internal sealed class TcpFrameSender : IDisposable
             plaintextLease.ZeroOnDispose = true;
         }
 
+        bool lockTaken = false;
         try
         {
+            // The send lock covers encryption as well as the write: frames reach the wire in the order of their
+            // sequence numbers and of the key they were encrypted with, so a key switch (rekey) can never let an
+            // older-key frame follow the switch.
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            if (sync)
+            {
+#pragma warning disable CA1849 // The synchronous Send() API takes this path; it must not await.
+                _sendLock.Wait(ct);
+#pragma warning restore CA1849
+            }
+            else
+            {
+                await _sendLock.WaitAsync(ct).ConfigureAwait(false);
+            }
+
+            lockTaken = true;
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
             if (encrypt && _sequence.IsApproachingOverflow())
             {
                 throw new CipherException(
@@ -105,9 +133,21 @@ internal sealed class TcpFrameSender : IDisposable
                 encrypt ? _sequence.Next() : null,
                 _options.Algorithm);
 
-            return current.Length >= _fragmentOptions.MaxChunkSize
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Frames.Sent) && current.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Frames.Sent, new DiagnosticLog("SDK.TcpFrameSender:Send", $"sent transport=tcp opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(current.Span):X4} length={current.Length} encrypted={encrypt}"));
+            }
+
+            bool sent = current.Length >= _fragmentOptions.MaxChunkSize
                 ? await this.SEND_FRAGMENTED_ASYNC(current.Memory, sync, ct).ConfigureAwait(false)
                 : await this.SEND_SINGLE_FRAME_ASYNC(current.Memory, sync, ct).ConfigureAwait(false);
+
+            if (sent)
+            {
+                afterWrite?.Invoke();
+            }
+
+            return sent;
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
@@ -116,6 +156,11 @@ internal sealed class TcpFrameSender : IDisposable
         }
         finally
         {
+            if (lockTaken)
+            {
+                _ = _sendLock.Release();
+            }
+
             if (!ReferenceEquals(current, lease))
             {
                 current.Dispose();
@@ -199,28 +244,18 @@ internal sealed class TcpFrameSender : IDisposable
 
     #region Low-level Send
 
+    // The caller (SEND_CORE) holds the send lock.
     private bool SEND_RAW(byte[] frame, int length)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        _sendLock.Wait();
-        try
-        {
-            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-            return SEND_LOOP(_getSocket(), frame, length);
-        }
-        finally { _ = _sendLock.Release(); }
+        return SEND_LOOP(_getSocket(), frame, length);
     }
 
-    private async Task<bool> SEND_RAW_ASYNC(byte[] frame, int length, CancellationToken ct)
+    // The caller (SEND_CORE) holds the send lock.
+    private Task<bool> SEND_RAW_ASYNC(byte[] frame, int length, CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-            return await SEND_LOOP_ASYNC(_getSocket(), frame, length, ct).ConfigureAwait(false);
-        }
-        finally { _ = _sendLock.Release(); }
+        return SEND_LOOP_ASYNC(_getSocket(), frame, length, ct);
     }
 
     private static bool SEND_LOOP(Socket socket, byte[] buffer, int length)

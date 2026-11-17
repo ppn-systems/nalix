@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
@@ -494,9 +495,17 @@ public abstract class TransportSession : IDisposable, IAsyncDisposable, ITranspo
                 catch (Exception ex) when (Nalix.Abstractions.Exceptions.ExceptionClassifier.IsNonFatal(ex))
                 {
                     consecutiveMisses++;
+                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.KeepAlive.Missed))
+                    {
+                        DiagnosticsEvents.Write(DiagnosticsEvents.KeepAlive.Missed, new DiagnosticLog("SDK.TransportSession:KeepAlive", $"pong-missed misses={consecutiveMisses} threshold={Math.Max(1, this.Options.KeepAliveMissThreshold)}", ex));
+                    }
                     int threshold = Math.Max(1, this.Options.KeepAliveMissThreshold);
                     if (consecutiveMisses >= threshold && !ct.IsCancellationRequested && this.IsConnected)
                     {
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.KeepAlive.Failed))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.KeepAlive.Failed, new DiagnosticLog("SDK.TransportSession:KeepAlive", $"keepalive-failed misses={consecutiveMisses}"));
+                        }
                         await this.FaultFromKeepAliveAsync(
                             new Nalix.Abstractions.Exceptions.NetworkException(
                                 $"Keepalive failed after {consecutiveMisses} missed PONG response(s): {ex.Message}", ex)).ConfigureAwait(false);
@@ -515,6 +524,24 @@ public abstract class TransportSession : IDisposable, IAsyncDisposable, ITranspo
     /// allowing <see cref="ReconnectSupervisor"/> to recover the session.
     /// </summary>
     private protected virtual Task FaultFromKeepAliveAsync(Exception ex) => Task.CompletedTask;
+
+    /// <summary>
+    /// Gets whether a SESSION_REKEY sent on this transport is guaranteed to reach the server in order (TCP, WebSocket).
+    /// The server switches keys as soon as it reads the request, so once it is written the new key is in effect on both
+    /// sides even if the acknowledgement is late. Over UDP the server ignores the request.
+    /// </summary>
+    internal virtual bool DeliversRekeyReliably => false;
+
+    /// <summary>
+    /// Sends <paramref name="packet"/> and then runs <paramref name="afterWrite"/>. Reliable transports override this to
+    /// run <paramref name="afterWrite"/> under their send lock, so no other frame is encrypted between the packet and
+    /// the key switch.
+    /// </summary>
+    internal virtual async Task SendThenSwitchAsync(IPacket packet, Action afterWrite, CancellationToken ct)
+    {
+        await this.SendAsync(packet, ct).ConfigureAwait(false);
+        afterWrite();
+    }
 
     /// <summary>
     /// Reserves the next outbound <c>SequenceId</c> from this session's counter.

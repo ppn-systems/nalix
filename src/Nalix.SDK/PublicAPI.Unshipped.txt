@@ -19,3 +19,55 @@ override Nalix.SDK.Transport.WebSocketSession.DisposeAsyncCore() -> System.Threa
 Nalix.SDK.SdkTelemetry
 const Nalix.SDK.SdkTelemetry.ActivitySourceName = "Nalix.SDK" -> string!
 const Nalix.SDK.SdkTelemetry.MeterName = "Nalix.SDK" -> string!
+static Nalix.SDK.Transport.Extensions.TransportSessionSubscriptions.On<TPacket>(this Nalix.SDK.Transport.ITransportSession! client, System.Func<TPacket!, System.Threading.Tasks.Task!>! handler) -> System.IDisposable!
+static Nalix.SDK.Transport.Extensions.TransportSessionSubscriptions.On(this Nalix.SDK.Transport.ITransportSession! client, System.Func<Nalix.Abstractions.Networking.Packets.IPacket!, bool>! predicate, System.Func<Nalix.Abstractions.Networking.Packets.IPacket!, System.Threading.Tasks.Task!>! handler) -> System.IDisposable!
+Nalix.SDK.DiagnosticsEvents
+const Nalix.SDK.DiagnosticsEvents.ListenerName = "SDK" -> string!
+static readonly Nalix.SDK.DiagnosticsEvents.Source -> System.Diagnostics.DiagnosticListener!
+static Nalix.SDK.DiagnosticsEvents.Write<T>(string! name, T payload) -> void
+Nalix.SDK.DiagnosticsEvents.Session
+const Nalix.SDK.DiagnosticsEvents.Session.Connecting = "Session.Connecting" -> string!
+const Nalix.SDK.DiagnosticsEvents.Session.Connected = "Session.Connected" -> string!
+const Nalix.SDK.DiagnosticsEvents.Session.ConnectFailed = "Session.ConnectFailed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Session.Disconnected = "Session.Disconnected" -> string!
+const Nalix.SDK.DiagnosticsEvents.Session.TransportError = "Session.TransportError" -> string!
+Nalix.SDK.DiagnosticsEvents.Handshake
+const Nalix.SDK.DiagnosticsEvents.Handshake.Started = "Handshake.Started" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.ProofOfWorkRequested = "Handshake.ProofOfWorkRequested" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.TofuTrusted = "Handshake.TofuTrusted" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.TofuPersisted = "Handshake.TofuPersisted" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.TofuNotPersisted = "Handshake.TofuNotPersisted" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.ProofInvalid = "Handshake.ProofInvalid" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.Completed = "Handshake.Completed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.Failed = "Handshake.Failed" -> string!
+Nalix.SDK.DiagnosticsEvents.Resumption
+const Nalix.SDK.DiagnosticsEvents.Resumption.Resumed = "Resumption.Resumed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Resumption.Declined = "Resumption.Declined" -> string!
+const Nalix.SDK.DiagnosticsEvents.Resumption.Failed = "Resumption.Failed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Resumption.ProofInvalid = "Resumption.ProofInvalid" -> string!
+const Nalix.SDK.DiagnosticsEvents.Resumption.Fallback = "Resumption.Fallback" -> string!
+Nalix.SDK.DiagnosticsEvents.Reconnect
+const Nalix.SDK.DiagnosticsEvents.Reconnect.Scheduled = "Reconnect.Scheduled" -> string!
+const Nalix.SDK.DiagnosticsEvents.Reconnect.AttemptFailed = "Reconnect.AttemptFailed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Reconnect.Succeeded = "Reconnect.Succeeded" -> string!
+const Nalix.SDK.DiagnosticsEvents.Reconnect.GaveUp = "Reconnect.GaveUp" -> string!
+Nalix.SDK.DiagnosticsEvents.KeepAlive
+const Nalix.SDK.DiagnosticsEvents.KeepAlive.Missed = "KeepAlive.Missed" -> string!
+const Nalix.SDK.DiagnosticsEvents.KeepAlive.Failed = "KeepAlive.Failed" -> string!
+Nalix.SDK.DiagnosticsEvents.Rekey
+const Nalix.SDK.DiagnosticsEvents.Rekey.Started = "Rekey.Started" -> string!
+const Nalix.SDK.DiagnosticsEvents.Rekey.Completed = "Rekey.Completed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Rekey.Failed = "Rekey.Failed" -> string!
+Nalix.SDK.DiagnosticsEvents.Requests
+const Nalix.SDK.DiagnosticsEvents.Requests.Retrying = "Requests.Retrying" -> string!
+const Nalix.SDK.DiagnosticsEvents.Requests.Failed = "Requests.Failed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Requests.InboundFrameFailed = "Requests.InboundFrameFailed" -> string!
+Nalix.SDK.DiagnosticsEvents.Frames
+const Nalix.SDK.DiagnosticsEvents.Frames.Sent = "Frames.Sent" -> string!
+const Nalix.SDK.DiagnosticsEvents.Frames.Received = "Frames.Received" -> string!
+const Nalix.SDK.DiagnosticsEvents.Frames.ReplayRejected = "Frames.ReplayRejected" -> string!
+Nalix.SDK.DiagnosticsEvents.Subscriptions
+const Nalix.SDK.DiagnosticsEvents.Subscriptions.HandlerFailed = "Subscriptions.HandlerFailed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Subscriptions.HandlerCanceled = "Subscriptions.HandlerCanceled" -> string!
+const Nalix.SDK.DiagnosticsEvents.Subscriptions.UnexpectedPacket = "Subscriptions.UnexpectedPacket" -> string!
+const Nalix.SDK.DiagnosticsEvents.Subscriptions.DisposeFailed = "Subscriptions.DisposeFailed" -> string!

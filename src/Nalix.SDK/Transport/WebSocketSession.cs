@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
@@ -185,7 +186,15 @@ public class WebSocketSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connecting))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.WebSocketSession:Connect", $"connecting uri={uri} timeout-ms={this.Options.ConnectTimeoutMillis}"));
+            }
             await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.WebSocketSession:Connect", $"connected uri={uri}"));
+            }
             connected = true;
             if (raiseConnected)
             {
@@ -208,6 +217,10 @@ public class WebSocketSession : TransportSession
             // the one signal. During an outage every failed retry would otherwise raise one, making
             // "one OnDisconnected per real transport close" not a guarantee callers can build on.
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.ConnectFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.ConnectFailed, new DiagnosticLog("SDK.WebSocketSession:Connect", "connect-failed", ex));
+            }
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"WebSocket Connection failed: {ex.Message}", ex);
         }
@@ -313,6 +326,10 @@ public class WebSocketSession : TransportSession
             this.StopKeepAlive();
 
             NetworkException disconnectEx = new("The WebSocket session was disconnected.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Disconnected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Disconnected, new DiagnosticLog("SDK.WebSocketSession:Disconnect", "disconnected"));
+            }
             this.DispatchPendingDisconnect(disconnectEx);
 
             // #393: a socket that never reached OnConnected (a failed/timed-out/refused connect
@@ -370,6 +387,21 @@ public class WebSocketSession : TransportSession
     /// <inheritdoc/>
     public override async Task SendAsync(ReadOnlyMemory<byte> payload, bool? encrypt = null, CancellationToken ct = default)
         => await _sender.SendAsync(payload, encrypt, ct).ConfigureAwait(false);
+
+    internal override bool DeliversRekeyReliably => true;
+
+    internal override async Task SendThenSwitchAsync(IPacket packet, Action afterWrite, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+        _ = this.StampSequenceId(packet);
+
+        BufferLease lease = BufferLease.Rent(packet.Length);
+        lease.CommitLength(packet.Serialize(lease.SpanFull));
+        if (!await _sender.SendThenAsync(lease, this.State.EncryptionEnabled, afterWrite, ct).ConfigureAwait(false))
+        {
+            throw new NetworkException("Failed to send WebSocket packet: the frame was not delivered to the socket.");
+        }
+    }
 
     /// <inheritdoc/>
     public override void ResetSequenceCounters()
@@ -450,6 +482,10 @@ public class WebSocketSession : TransportSession
             return;
         }
 
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.TransportError))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Session.TransportError, new DiagnosticLog("SDK.WebSocketSession:HandleError", "transport-error", ex));
+        }
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually

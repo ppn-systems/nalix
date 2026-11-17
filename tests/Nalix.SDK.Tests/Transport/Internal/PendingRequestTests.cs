@@ -114,6 +114,28 @@ public sealed class PendingRequestTests
     }
 
     [Fact]
+    public void OnMessageReceived_WithCorruptFrameOfTheExpectedOpcode_ReportsAndKeepsWaiting()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Requests.InboundFrameFailed);
+
+        // The header carries the expected opcode but the body is cut short, so deserialization fails.
+        byte[] frame = new TimeSync().Serialize();
+        using BufferLease lease = BufferLease.CopyFrom(frame.AsSpan(0, Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize + 1));
+
+        PendingRequest<TimeSync> request = PendingRequest<TimeSync>.Rent(session, _ => true);
+        request.Subscribe();
+        ValueTask<TimeSync> task = request.WaitAsync(0, CancellationToken.None);
+
+        request.OnMessageReceived(lease);
+
+        Assert.False(task.IsCompleted);
+        Assert.Contains(capture.Events, e => e.Log.Tag == "SDK.PendingRequest:OnMessageReceived");
+        request.Return(wasAwaited: false);
+    }
+
+    [Fact]
     public async Task OnTimeout_WhenTimerFiresBeforeDeadline_StillTimesOutAtDeadline()
     {
         using RaisableFakeSession session = new();

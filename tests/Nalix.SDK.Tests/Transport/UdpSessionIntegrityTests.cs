@@ -224,5 +224,13 @@ public sealed class UdpSessionIntegrityTests : IDisposable
         }
     }
 
-    public void Dispose() => InstanceManager.Instance.Clear(dispose: false);
+    // Subscribes to every SDK diagnostic while these tests run, so the diagnostics on the reconnect, resume,
+    // handshake and request paths they take are built and written (and cannot throw) instead of skipped.
+    private readonly DiagnosticCapture _diagnostics = new(string.Empty);
+
+    public void Dispose()
+    {
+        _diagnostics.Dispose();
+        InstanceManager.Instance.Clear(dispose: false);
+    }
 }
