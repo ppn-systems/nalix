@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -119,10 +120,11 @@ public static class RequestExtensions
 
         options ??= RequestOptions.Default;
         options.Validate();
+        long start = Stopwatch.GetTimestamp();
 
         if (!client.IsConnected)
         {
-            await AwaitReadyOrThrowAsync(client, options.TimeoutMs, typeof(TResponse).Name, ct).ConfigureAwait(false);
+            await AwaitReadyOrThrowAsync(client, options.AttemptTimeoutMs(start), typeof(TResponse).Name, ct).ConfigureAwait(false);
         }
 
         if (client is TransportSession session)
@@ -142,6 +144,17 @@ public static class RequestExtensions
         {
             ct.ThrowIfCancellationRequested();
 
+            if (attempt > 1 && !await options.DelayBeforeRetryAsync(attempt - 1, start, ct).ConfigureAwait(false))
+            {
+                break;
+            }
+
+            int attemptTimeoutMs = options.AttemptTimeoutMs(start);
+            if (attemptTimeoutMs < 0)
+            {
+                break;
+            }
+
             try
             {
                 // Delegate the full subscribe -> send -> await -> timeout -> unsubscribe cycle
@@ -150,7 +163,7 @@ public static class RequestExtensions
                 TResponse result = await PacketAwaiter.AwaitAsync(
                     client,
                     predicate: effectivePredicate,
-                    timeoutMs: options.TimeoutMs,
+                    timeoutMs: attemptTimeoutMs,
                     request,
                     options.ResolveEncrypt(client),
                     ct,
@@ -167,7 +180,7 @@ public static class RequestExtensions
         }
 
         throw new TimeoutException(
-            $"[SDK.RequestAsync<{typeof(TResponse).Name}>] No response after {totalAttempts} attempt(s) (timeout={options.TimeoutMs}ms each).", lastException);
+            $"[SDK.RequestAsync<{typeof(TResponse).Name}>] No response within the request budget (attempts={totalAttempts}, timeout={options.TimeoutMs}ms each, deadline={options.DeadlineMs}ms).", lastException);
     }
 
     /// <summary>
@@ -201,12 +214,13 @@ public static class RequestExtensions
 
         options ??= RequestOptions.Default;
         options.Validate();
+        long start = Stopwatch.GetTimestamp();
 
         if (!client.IsConnected)
         {
             try
             {
-                await AwaitReadyOrThrowAsync(client, options.TimeoutMs, typeof(TResponse).Name, ct).ConfigureAwait(false);
+                await AwaitReadyOrThrowAsync(client, options.AttemptTimeoutMs(start), typeof(TResponse).Name, ct).ConfigureAwait(false);
             }
             catch (NetworkException ex)
             {
@@ -231,12 +245,23 @@ public static class RequestExtensions
         {
             ct.ThrowIfCancellationRequested();
 
+            if (attempt > 1 && !await options.DelayBeforeRetryAsync(attempt - 1, start, ct).ConfigureAwait(false))
+            {
+                break;
+            }
+
+            int attemptTimeoutMs = options.AttemptTimeoutMs(start);
+            if (attemptTimeoutMs < 0)
+            {
+                break;
+            }
+
             try
             {
                 TResponse result = await PacketAwaiter.AwaitAsync(
                     client,
                     predicate: effectivePredicate,
-                    timeoutMs: options.TimeoutMs,
+                    timeoutMs: attemptTimeoutMs,
                     sendAsync: token => client.SendAsync(request, encrypt: options.ResolveEncrypt(client), token),
                     ct,
                     matchSequenceId).ConfigureAwait(false);
@@ -260,7 +285,7 @@ public static class RequestExtensions
         return RequestOutcome<TResponse>.Fail(
             RequestOutcomeKind.TimedOut,
             new TimeoutException(
-                $"[SDK.TryRequestAsync<{typeof(TResponse).Name}>] No response after {totalAttempts} attempt(s) (timeout={options.TimeoutMs}ms each).",
+                $"[SDK.TryRequestAsync<{typeof(TResponse).Name}>] No response within the request budget (attempts={totalAttempts}, timeout={options.TimeoutMs}ms each, deadline={options.DeadlineMs}ms).",
                 lastException));
     }
 
