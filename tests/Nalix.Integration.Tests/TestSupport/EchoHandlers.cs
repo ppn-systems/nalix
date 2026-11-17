@@ -15,11 +15,15 @@ namespace Nalix.Integration.Tests.TestSupport;
 [PacketHandler("Integration.EndToEnd.Echo")]
 public static class EchoHandlers
 {
+    /// <summary>Whether the last <see cref="EchoPacket"/> request arrived encrypted on the wire.</summary>
+    public static volatile bool LastEchoEncryptedOnWire;
+
     [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(EchoPacket.OpCode)]
     public static async ValueTask HandleEchoAsync(IPacketContext<EchoPacket> context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        LastEchoEncryptedOnWire = context.EncryptedOnWire;
 
         using PacketScope<EchoPacket> lease = PacketFactory<EchoPacket>.Acquire();
         EchoPacket response = lease.Value;

@@ -42,7 +42,7 @@ public sealed record RequestOptions
     /// <summary>Default timeout in milliseconds (5 000 ms).</summary>
     public const int DefaultTimeoutMs = 5_000;
 
-    /// <summary>Ready-made instance with sensible defaults (no retry, no encrypt).</summary>
+    /// <summary>Ready-made instance with sensible defaults (no retry, encryption per <see cref="TransportOptions.EncryptRequestsByDefault"/>).</summary>
     public static RequestOptions Default { get; } = new();
 
     // ── Properties ───────────────────────────────────────────────────────────
@@ -67,10 +67,15 @@ public sealed record RequestOptions
     public int RetryCount { get; init; }
 
     /// <summary>
-    /// When <see langword="true"/> the outbound frame is encrypted before transmission.
-    /// Requires a transport session that supports encrypted frame sending.
+    /// Whether the outbound request frame is encrypted.
+    /// <list type="bullet">
+    /// <item><description><see langword="true"/>: always encrypt (requires a completed handshake).</description></item>
+    /// <item><description><see langword="false"/>: never encrypt, e.g. when the transport is already wrapped in TLS.</description></item>
+    /// <item><description><see langword="null"/> (default): use <see cref="TransportOptions.EncryptRequestsByDefault"/>;
+    /// when that is enabled the request follows the session's encryption state.</description></item>
+    /// </list>
     /// </summary>
-    public bool Encrypt { get; init; }
+    public bool? Encrypt { get; init; }
 
     // ── Validation ───────────────────────────────────────────────────────────
 
@@ -109,6 +114,14 @@ public sealed record RequestOptions
     /// <summary>
     /// Returns a new <see cref="RequestOptions"/> with <see cref="Encrypt"/> changed.
     /// </summary>
-    /// <param name="encrypt">Whether to encrypt outbound frames.</param>
-    public RequestOptions WithEncrypt(bool encrypt = true) => this with { Encrypt = encrypt };
+    /// <param name="encrypt">Whether to encrypt outbound frames; <see langword="null"/> restores the session default.</param>
+    public RequestOptions WithEncrypt(bool? encrypt = true) => this with { Encrypt = encrypt };
+
+    /// <summary>
+    /// Resolves <see cref="Encrypt"/> for <paramref name="client"/>: an explicit value wins; otherwise
+    /// <see langword="null"/> (follow the session state) when <see cref="TransportOptions.EncryptRequestsByDefault"/>
+    /// is enabled, and <see langword="false"/> when it is not.
+    /// </summary>
+    internal bool? ResolveEncrypt(ITransportSession client)
+        => this.Encrypt ?? (client is TransportSession { Options.EncryptRequestsByDefault: true } ? null : false);
 }

@@ -84,7 +84,7 @@ public static class TimeSyncExtensions
 
         TimeSync res = await session.RequestAsync<TimeSync>(
             req,
-            options: RequestOptions.Default.WithTimeout(timeoutMs),
+            options: RequestOptions.Default.WithTimeout(timeoutMs).WithEncrypt(false),
             predicate: p => p.Type == ControlType.TIMESYNCRESPONSE && p.SequenceId == seq,
             ct: ct).ConfigureAwait(false);
 

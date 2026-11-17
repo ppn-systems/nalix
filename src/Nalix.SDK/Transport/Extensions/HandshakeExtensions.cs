@@ -121,7 +121,7 @@ public static class HandshakeExtensions
 
                 using ProofOfWorkChallenge challenge = await session.RequestAsync<ProofOfWorkChallenge>(
                     powReq,
-                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis),
+                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis).WithEncrypt(false),
                     predicate: null,
                     ct: ct).ConfigureAwait(false);
 
@@ -142,7 +142,7 @@ public static class HandshakeExtensions
                 // Re-send SessionInit and wait for SessionChallenge
                 serverHello = await session.RequestAsync<SessionChallenge>(
                     clientHello,
-                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis),
+                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis).WithEncrypt(false),
                     predicate: null,
                     ct: ct).ConfigureAwait(false);
             }
@@ -178,7 +178,7 @@ public static class HandshakeExtensions
 
                 using SessionTofu keyResponse = await session.RequestAsync<SessionTofu>(
                     request,
-                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis),
+                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis).WithEncrypt(false),
                     predicate: null,
                     ct: ct).ConfigureAwait(false);
 
@@ -235,7 +235,7 @@ public static class HandshakeExtensions
             {
                 using SessionEstablished serverFinish = await session.RequestAsync<SessionEstablished>(
                     clientFinish,
-                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis),
+                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis).WithEncrypt(false),
                     predicate: null,
                     ct: ct).ConfigureAwait(false);
 
