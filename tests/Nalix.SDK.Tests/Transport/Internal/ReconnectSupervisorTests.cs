@@ -121,5 +121,13 @@ public sealed class ReconnectSupervisorTests : IDisposable
         return builder.Build();
     }
 
-    public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
+    // Subscribes to every SDK diagnostic while these tests run, so the diagnostics on the reconnect, resume,
+    // handshake and request paths they take are built and written (and cannot throw) instead of skipped.
+    private readonly DiagnosticCapture _diagnostics = new(string.Empty);
+
+    public void Dispose()
+    {
+        _diagnostics.Dispose();
+        Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
+    }
 }

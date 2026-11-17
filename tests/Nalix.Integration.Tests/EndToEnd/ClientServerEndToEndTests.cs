@@ -245,6 +245,61 @@ public sealed class ClientServerEndToEndTests : IDisposable
         await client.DisconnectAsync().WaitAsync(s_timeout);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RekeyAsync_OnTcpAndWebSocket_RotatesTheKeyAndKeepsTheSessionUsable(bool webSocket)
+    {
+        ushort port = NextPort();
+        ushort webSocketPort = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: true, webSocketPort: webSocketPort);
+
+        using TransportSession client = webSocket
+            ? new WebSocketSession(CreateOptions(webSocketPort), new WebSocketTransportOptions { Path = WebSocketPath })
+            : new TcpSession(CreateOptions(port));
+        await client.ConnectAsync().WaitAsync(s_timeout);
+        await client.HandshakeAsync().AsTask().WaitAsync(s_timeout);
+        Nalix.Abstractions.Primitives.Bytes32 before = client.State.Secret;
+
+        await client.RekeyAsync().AsTask().WaitAsync(s_timeout);
+
+        Assert.NotEqual(before, client.State.Secret);
+        EchoPacket response = await client.RequestAsync<EchoPacket>(
+            new EchoPacket { Sequence = 1, Text = "after rekey" }, s_request.WithEncrypt()).AsTask().WaitAsync(s_timeout);
+        Assert.Equal("AFTER REKEY", response.Text);
+        Assert.True(client.IsConnected);
+    }
+
+    [Fact]
+    public async Task HandshakeAsync_WithWrongPinnedServerKey_FailsWithoutEncrypting()
+    {
+        ushort port = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: true);
+
+        TransportOptions options = CreateOptions(port);
+        options.ServerPublicKey = new string('a', 64);
+        using TcpSession client = new(options);
+        await client.ConnectAsync().WaitAsync(s_timeout);
+
+        _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.HandshakeAsync().AsTask().WaitAsync(s_timeout));
+        Assert.False(client.State.EncryptionEnabled);
+    }
+
+    [Fact]
+    public async Task TryRequestAsync_WhenCanceled_Throws()
+    {
+        ushort port = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: false);
+        using TcpSession client = new(CreateOptions(port));
+        await client.ConnectAsync().WaitAsync(s_timeout);
+
+        using CancellationTokenSource canceled = new();
+        await canceled.CancelAsync();
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await client.TryRequestAsync<EchoPacket>(new EchoPacket { Sequence = 1, Text = "x" }, s_request, ct: canceled.Token));
+    }
+
     [Fact]
     public async Task RequestAsync_FromManyConcurrentClients_EachReceivesOwnResponses()
     {

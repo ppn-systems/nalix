@@ -116,6 +116,116 @@ public sealed class AsyncSubscriptionTests
         }
     }
 
+    [Fact]
+    public void On_WithSyncHandlerThatThrows_ReportsHandlerFailed()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        session.SetNextPacket(new Control());
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Subscriptions.HandlerFailed);
+
+        using (session.On<Control>((Action<Control>)(_ => throw new InvalidOperationException("sync handler boom"))))
+        {
+            session.RaiseMessage();
+        }
+
+        Assert.Contains(capture.Events, e => e.Log.Exception?.Message == "sync handler boom" && e.Log.Tag == "SDK.TransportSessionSubscriptions:On");
+    }
+
+    [Fact]
+    public void OnExact_WithOtherPacketTypeOrThrowingHandler_ReportsBoth()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        session.SetNextPacket(new Control());
+        using DiagnosticCapture capture = new("Subscriptions.");
+
+        using (session.OnExact<Directive>(_ => { }))
+        using (session.OnExact<Control>(_ => throw new InvalidOperationException("exact boom")))
+        {
+            session.RaiseMessage();
+        }
+
+        Assert.Contains(capture.Events, e => e.Name == DiagnosticsEvents.Subscriptions.UnexpectedPacket && e.Log.Message.Contains("expected=Directive", StringComparison.Ordinal));
+        Assert.Contains(capture.Events, e => e.Name == DiagnosticsEvents.Subscriptions.HandlerFailed && e.Log.Exception?.Message == "exact boom");
+    }
+
+    [Fact]
+    public void On_WithTaskHandlerThatThrowsSynchronously_ReportsHandlerFailed()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        session.SetNextPacket(new Control());
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Subscriptions.HandlerFailed);
+
+        // A non-async lambda returning Task that throws before producing one.
+        using (session.On<Control>((Func<Control, Task>)(_ => throw new InvalidOperationException("no task"))))
+        {
+            session.RaiseMessage();
+        }
+
+        Assert.Contains(capture.Events, e => e.Log.Exception?.Message == "no task");
+    }
+
+    [Fact]
+    public void On_WithTaskHandlerThatCompletesSynchronously_ReportsNothing()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        session.SetNextPacket(new Control());
+        using DiagnosticCapture capture = new("Subscriptions.");
+        int calls = 0;
+
+        using (session.On<Control>(_ =>
+        {
+            calls++;
+            return Task.CompletedTask;
+        }))
+        {
+            session.RaiseMessage();
+        }
+
+        Assert.Equal(1, calls);
+        Assert.Empty(capture.Events);
+    }
+
+    [Fact]
+    public async Task On_WithAsyncHandlerThatIsCanceled_ReportsHandlerCanceled()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        session.SetNextPacket(new Control());
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Subscriptions.HandlerCanceled);
+
+        using (session.On<Control>(async _ =>
+        {
+            await Task.Yield();
+            throw new OperationCanceledException("canceled handler");
+        }))
+        {
+            session.RaiseMessage();
+            await WaitUntilAsync(() => capture.Events.Any(e => e.Log.Exception?.Message == "canceled handler"));
+        }
+    }
+
+    [Fact]
+    public void OnOnce_WithThrowingHandler_ReportsHandlerFailed()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        session.SetNextPacket(new Control());
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Subscriptions.HandlerFailed);
+
+#pragma warning disable CS0618 // OnOnce is obsolete but still shipped.
+        using (session.OnOnce<Control>(_ => true, _ => throw new InvalidOperationException("once boom")))
+#pragma warning restore CS0618
+        {
+            session.RaiseMessage();
+        }
+
+        Assert.Contains(capture.Events, e => e.Log.Exception?.Message == "once boom" && e.Log.Tag == "SDK.TransportSessionSubscriptions:OnOnce");
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         for (int i = 0; i < 100 && !condition(); i++)
