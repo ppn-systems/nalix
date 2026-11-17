@@ -150,6 +150,7 @@ internal sealed class ReconnectSupervisor
                     {
                         // The connection dropped while the resume/re-auth callbacks were running (and the
                         // drop was swallowed); publishing ready now would hand out a dead session.
+                        SdkTelemetry.RecordReconnect(SdkTelemetry.ReconnectFailed);
                         attempt = 0;
                         continue;
                     }
@@ -157,6 +158,7 @@ internal sealed class ReconnectSupervisor
                     _readyTcs = null;
                 }
 
+                SdkTelemetry.RecordReconnect(reason == ProtocolReason.NONE ? SdkTelemetry.ReconnectResumed : SdkTelemetry.ReconnectHandshake);
                 _ = tcs.TrySetResult(true);
                 _session.NotifyReady();
                 return;
@@ -170,6 +172,8 @@ internal sealed class ReconnectSupervisor
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
+                SdkTelemetry.RecordReconnect(SdkTelemetry.ReconnectFailed);
+
                 // Keep retrying until attempts are exhausted; transient connect/handshake
                 // failures are expected during an outage.
             }
