@@ -23,19 +23,21 @@ namespace Nalix.Network.Connections;
 /// sequence counters are pooled with the connection's backing, and the socket is only reachable while the
 /// connection is alive.
 /// </summary>
-public sealed partial class Connection : IConnection.ITransport, IConnection.ISocketTransport, IAsyncDisposable
+public sealed partial class Connection : IConnection.ITransport, IConnection.ISocketTransport
 {
     #region Transport Fields
 
     /// <summary>Replaces the counters of a closed connection so stale callers never touch the next owner's counters.</summary>
     private static readonly SequenceCounter s_detachedSequence = new();
 
-#pragma warning disable CA2213 // A SemaphoreSlim without AvailableWaitHandle holds no unmanaged resource; release is via the connection's scope.
-    private readonly SemaphoreSlim _sendLock = new(1, 1);
-#pragma warning restore CA2213
+    private SemaphoreSlim _sendLock => _sendLockScope.Lock;
 
-    // 1 while the send lock was handed out as a scope and that scope has not been disposed yet.
-    private int _sendLockScopeHeld;
+    // The scope handed out by AcquireSendLockAsync. A separate object, not the connection itself: if the connection
+    // implemented IAsyncDisposable, `await using` (or any disposer that prefers DisposeAsync) would release the lock
+    // instead of closing the connection. One per connection, as master allocated one per Initialize.
+#pragma warning disable CA2213 // Holds only a SemaphoreSlim without AvailableWaitHandle: no unmanaged resource.
+    private readonly SendLockScope _sendLockScope = new();
+#pragma warning restore CA2213
     private TransportFraming _tcpFraming = TransportFraming.None;
 
     #endregion Transport Fields
@@ -202,8 +204,7 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
     {
         if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
         {
-            Volatile.Write(ref _sendLockScopeHeld, 1);
-            return new ValueTask<IAsyncDisposable>(this);
+            return new ValueTask<IAsyncDisposable>(_sendLockScope.Enter());
         }
 
         return this.ACQUIRE_SEND_LOCK_ASYNC(cancellationToken);
@@ -212,23 +213,37 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
     private async ValueTask<IAsyncDisposable> ACQUIRE_SEND_LOCK_ASYNC(CancellationToken cancellationToken)
     {
         await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        Volatile.Write(ref _sendLockScopeHeld, 1);
-        return this;
+        return _sendLockScope.Enter();
     }
 
     /// <summary>
-    /// Releases the send lock taken by <see cref="IConnection.ITransport.AcquireSendLockAsync"/>. The connection
-    /// itself is the scope, so acquiring the lock allocates nothing. Only the first dispose of an acquisition releases the
-    /// lock; a repeated dispose is a no-op.
+    /// Releases the send lock taken by <see cref="IConnection.ITransport.AcquireSendLockAsync"/>. Only the first dispose
+    /// of an acquisition releases the lock; a repeated dispose is a no-op.
     /// </summary>
-    ValueTask IAsyncDisposable.DisposeAsync()
+    private sealed class SendLockScope : IAsyncDisposable
     {
-        if (Interlocked.Exchange(ref _sendLockScopeHeld, 0) == 1)
+#pragma warning disable CA2213 // A SemaphoreSlim without AvailableWaitHandle holds no unmanaged resource.
+        public readonly SemaphoreSlim Lock = new(1, 1);
+#pragma warning restore CA2213
+
+        // 1 while the lock was handed out through this scope and the scope has not been disposed yet.
+        private int _held;
+
+        public SendLockScope Enter()
         {
-            _ = _sendLock.Release();
+            Volatile.Write(ref _held, 1);
+            return this;
         }
 
-        return ValueTask.CompletedTask;
+        public ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _held, 0) == 1)
+            {
+                _ = this.Lock.Release();
+            }
+
+            return ValueTask.CompletedTask;
+        }
     }
 
     /// <inheritdoc/>

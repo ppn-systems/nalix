@@ -565,6 +565,12 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
                 continue;
             }
 
+            // A connection that closed while the broadcast was sending to it is normal churn, not a failure.
+            if (exception is ObjectDisposedException)
+            {
+                continue;
+            }
+
             IConnection owner = owners[i];
             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Error))
             {

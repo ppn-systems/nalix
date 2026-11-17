@@ -52,6 +52,29 @@ public sealed class ConnectionSendLockScopeTests : IDisposable
         await blocked;
     }
 
+    [Theory]
+    [InlineData(typeof(Connection))]
+    [InlineData(typeof(WebSocketConnection))]
+    public void Connection_IsNotIAsyncDisposable(Type connectionType)
+    {
+        // Regression: when the connection itself was the send-lock scope, `await using` (and any disposer that prefers
+        // DisposeAsync, such as PacketScope) only released the lock, so the connection, its socket and its pooled state leaked.
+        connectionType.Should().NotBeAssignableTo<IAsyncDisposable>(
+            "DisposeAsync on a connection would release the send lock instead of closing the connection");
+    }
+
+    [Fact]
+    public async Task AcquireSendLockAsync_ReturnsAScopeThatIsNotTheConnection()
+    {
+        Connection connection = CreateConnection();
+
+        IAsyncDisposable scope = await connection.TCP.AcquireSendLockAsync();
+        await scope.DisposeAsync();
+
+        scope.Should().NotBeSameAs(connection, "disposing the send-lock scope must never be confused with disposing the connection");
+        connection.IsDisposed.Should().BeFalse();
+    }
+
     private Connection CreateConnection()
     {
         Socket listener = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
