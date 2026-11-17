@@ -139,6 +139,32 @@ public sealed class ClientServerEndToEndTests : IDisposable
         await client.DisconnectAsync().WaitAsync(s_timeout);
     }
 
+    [Theory]
+    // EncryptRequestsByDefault, RequestOptions.Encrypt, expected encrypted on the wire
+    [InlineData(false, null, false)]  // default: TLS-wrapped deployments keep requests unencrypted
+    [InlineData(true, null, true)]    // opted in: follow the session (handshake done -> encrypted)
+    [InlineData(true, false, false)]  // explicit false wins over the session default
+    [InlineData(false, true, true)]   // explicit true wins over the session default
+    public async Task RequestAsync_AfterHandshake_EncryptsPerOptionAndSessionDefault(bool encryptByDefault, bool? encrypt, bool expectedEncrypted)
+    {
+        ushort port = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: true);
+
+        TransportOptions options = CreateOptions(port);
+        options.EncryptRequestsByDefault = encryptByDefault;
+        using TcpSession client = new(options);
+        await client.ConnectAsync().WaitAsync(s_timeout);
+        await client.HandshakeAsync().AsTask().WaitAsync(s_timeout);
+
+        EchoPacket response = await client.RequestAsync<EchoPacket>(
+            new EchoPacket { Sequence = 1, Text = "enc" }, RequestOptions.Default.WithTimeout(5_000).WithEncrypt(encrypt)).AsTask().WaitAsync(s_timeout);
+
+        Assert.Equal("ENC", response.Text);
+        Assert.Equal(expectedEncrypted, EchoHandlers.LastEchoEncryptedOnWire);
+
+        await client.DisconnectAsync().WaitAsync(s_timeout);
+    }
+
     [Fact]
     public async Task RequestAsync_FromManyConcurrentClients_EachReceivesOwnResponses()
     {

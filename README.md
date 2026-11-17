@@ -161,7 +161,7 @@ HelloResponsePacket response = await session.RequestAsync<HelloResponsePacket>(
     RequestOptions.Default.WithTimeout(5_000));
 ```
 
-To encrypt the connection, add `.UseSecureConnections()` to the server builder and `await session.HandshakeAsync();` after connecting on the client. See [`samples/SecureMultiTransportHelloWorld`](samples/SecureMultiTransportHelloWorld).
+To encrypt the connection, add `.UseSecureConnections()` to the server builder and `await session.HandshakeAsync();` after connecting on the client. Requests are then encrypted when you set `TransportOptions.EncryptRequestsByDefault = true` (or pass `RequestOptions.Default.WithEncrypt()` per call); it defaults to `false` so deployments that already wrap the transport in TLS are not encrypted twice. See [`samples/SecureMultiTransportHelloWorld`](samples/SecureMultiTransportHelloWorld).
 
 Run it: `dotnet run --project samples/HelloWorld/HelloWorld.Server`, then `dotnet run --project samples/HelloWorld/HelloWorld.Client` in a second terminal. The snippets above are trimmed from the sample (doc comments, logging and Ctrl+C handling removed) and use the current `MapTcp` API; the sample itself builds and runs as-is against its pinned package version.
 

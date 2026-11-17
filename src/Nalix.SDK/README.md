@@ -59,6 +59,7 @@ using IDisposable subscription = session.On<ChatMessage>(message =>
 
 - Use one `TransportSession` per active client connection.
 - Request helpers correlate responses and clean up pending waiters on timeout.
+- After `HandshakeAsync()`, a request is encrypted only when `RequestOptions.Encrypt` is `true`, or when it is left `null` and `TransportOptions.EncryptRequestsByDefault` is enabled. The default (`false`) leaves encryption to an outer TLS layer.
 - WebSocket clients are useful for browser-compatible deployments behind reverse proxies.
 
 ## Documentation

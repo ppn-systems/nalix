@@ -1,1 +1,7 @@
 #nullable enable
+*REMOVED*Nalix.SDK.Options.RequestOptions.Encrypt.get -> bool
+*REMOVED*Nalix.SDK.Options.RequestOptions.WithEncrypt(bool encrypt = true) -> Nalix.SDK.Options.RequestOptions!
+Nalix.SDK.Options.RequestOptions.Encrypt.get -> bool?
+Nalix.SDK.Options.RequestOptions.WithEncrypt(bool? encrypt = true) -> Nalix.SDK.Options.RequestOptions!
+Nalix.SDK.Options.TransportOptions.EncryptRequestsByDefault.get -> bool
+Nalix.SDK.Options.TransportOptions.EncryptRequestsByDefault.set -> void

@@ -125,7 +125,7 @@ public static class StreamExtensions
         try
         {
             // Send the request
-            await client.SendAsync(request, encrypt: options.Encrypt, ct: ct).ConfigureAwait(false);
+            await client.SendAsync(request, encrypt: options.ResolveEncrypt(client), ct: ct).ConfigureAwait(false);
 
             inactivityCts?.CancelAfter(inactivityTimeoutMs);
 

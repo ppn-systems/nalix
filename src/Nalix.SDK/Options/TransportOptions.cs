@@ -88,6 +88,15 @@ public sealed partial class TransportOptions : ConfigurationLoader
     public int MaxUdpDatagramSize { get; set; } = 1400;
 
     /// <summary>
+    /// Gets or sets whether requests that do not choose (<see cref="RequestOptions.Encrypt"/> is <see langword="null"/>)
+    /// follow the session's encryption state, i.e. are encrypted once the handshake has completed.
+    /// Default <see langword="false"/>: such requests are sent unencrypted, which suits deployments that already wrap
+    /// the transport in TLS. Enable it when the Nalix handshake is the only encryption layer.
+    /// </summary>
+    [IniComment("Encrypt requests that do not set RequestOptions.Encrypt once the handshake completed. Keep false when the transport is wrapped in TLS.")]
+    public bool EncryptRequestsByDefault { get; set; }
+
+    /// <summary>
     /// Gets or sets the pinned Server Identity Public Key (required for protecting against MitM attacks).
     /// </summary>
     [IniComment("Pinned X25519 Public Key representation in HEX for Identity Authentication (MitM protection).")]
