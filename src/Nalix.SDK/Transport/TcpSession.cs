@@ -445,6 +445,29 @@ public class TcpSession : TransportSession
         => await _sender.SendAsync(payload, encrypt, ct).ConfigureAwait(false);
 
     /// <inheritdoc/>
+    /// <inheritdoc/>
+    /// <remarks>Waits for the receive loop to finish, which the public <see cref="DisconnectAsync"/> does not.</remarks>
+    protected override async ValueTask DisposeAsyncCore()
+    {
+        if (Volatile.Read(ref _disposed) == 1)
+        {
+            return;
+        }
+
+        this.MarkIntentionalDisconnect();
+        this.StopKeepAlive();
+
+        await _connectionLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ = _connectionLock.Release();
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (!disposing || Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)

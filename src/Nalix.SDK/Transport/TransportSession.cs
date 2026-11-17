@@ -20,7 +20,7 @@ namespace Nalix.SDK.Transport;
 /// Derived sessions expose a consistent lifecycle for connecting, disconnecting,
 /// sending packets, and receiving transport events.
 /// </remarks>
-public abstract class TransportSession : IDisposable, ITransportSession
+public abstract class TransportSession : IDisposable, IAsyncDisposable, ITransportSession
 {
     #region Properties
 
@@ -660,6 +660,33 @@ public abstract class TransportSession : IDisposable, ITransportSession
     /// </summary>
     /// <param name="disposing"><see langword="true"/> when called from <see cref="Dispose()"/>.</param>
     protected abstract void Dispose(bool disposing);
+
+    /// <summary>
+    /// Disconnects gracefully, waiting until the transport and its receive loop have shut down, then releases all
+    /// resources. Unlike <see cref="Dispose()"/>, which starts the disconnect and returns, this completes only after
+    /// the session is fully closed. Safe to call more than once and together with <see cref="Dispose()"/>; the
+    /// disconnect is application-initiated, so it never starts an auto-reconnect.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await this.DisposeAsyncCore().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (Nalix.Abstractions.Exceptions.ExceptionClassifier.IsNonFatal(ex))
+        {
+            // A disconnect that fails while closing must not prevent the resources from being released.
+        }
+
+        this.Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Performs the asynchronous part of <see cref="DisposeAsync"/>: closes the transport and waits for it to stop.
+    /// The default calls <see cref="DisconnectAsync"/>.
+    /// </summary>
+    protected virtual ValueTask DisposeAsyncCore() => new(this.DisconnectAsync());
 
     #endregion Methods
 }

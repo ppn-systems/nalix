@@ -165,6 +165,52 @@ public sealed class ClientServerEndToEndTests : IDisposable
         await client.DisconnectAsync().WaitAsync(s_timeout);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DisposeAsync_OnConnectedSession_ClosesBeforeReturningAndDoesNotReconnect(bool webSocket)
+    {
+        ushort port = NextPort();
+        ushort webSocketPort = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: true, webSocketPort: webSocketPort);
+
+        TransportOptions options = CreateOptions(webSocket ? webSocketPort : port);
+        options.AutoReconnectEnabled = true;
+        TransportSession client = webSocket
+            ? new WebSocketSession(options, new WebSocketTransportOptions { Path = WebSocketPath })
+            : new TcpSession(options);
+
+        int disconnected = 0;
+        int connected = 0;
+        client.OnDisconnected += (_, _) => Interlocked.Increment(ref disconnected);
+        await client.ConnectAsync().WaitAsync(s_timeout);
+        await client.HandshakeAsync().AsTask().WaitAsync(s_timeout);
+        client.OnConnected += (_, _) => Interlocked.Increment(ref connected);
+
+        await client.DisposeAsync().AsTask().WaitAsync(s_timeout);
+
+        // The session is closed and the disconnect was reported once. (That the receive loop has stopped too is
+        // covered by TcpSessionDisposeAsyncTests, which can observe the loop.)
+        Assert.False(client.IsConnected);
+        Assert.Equal(1, Volatile.Read(ref disconnected));
+
+        // Disposal is application-initiated: auto-reconnect must not bring the session back.
+        await Task.Delay(500);
+        Assert.Equal(0, Volatile.Read(ref connected));
+
+        // Idempotent, also mixed with Dispose().
+        await client.DisposeAsync();
+        client.Dispose();
+        Assert.Equal(1, Volatile.Read(ref disconnected));
+    }
+
+    [Fact]
+    public async Task DisposeAsync_OnSessionThatNeverConnected_DoesNotThrow()
+    {
+        await using TcpSession client = new(CreateOptions(NextPort()));
+        Assert.False(client.IsConnected);
+    }
+
     [Fact]
     public async Task RequestAsync_FromManyConcurrentClients_EachReceivesOwnResponses()
     {
