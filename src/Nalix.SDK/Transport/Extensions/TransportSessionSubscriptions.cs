@@ -4,6 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
@@ -41,6 +42,8 @@ public static class TransportSessionSubscriptions
     /// <param name="disposeAfter">Whether to dispose the packet after the handler returns.</param>
     /// <returns>An <see cref="IDisposable"/> that removes the subscription when disposed.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0027:API with optional parameter(s) should have the most parameters amongst its public overloads",
+        Justification = "The other three-parameter overload, On(predicate, Func<IPacket, Task>), takes a delegate where this one takes a bool, so calls cannot become ambiguous.")]
     public static IDisposable On<TPacket>(this ITransportSession client, Action<TPacket> handler, bool disposeAfter = true)
         where TPacket : class, IPacket, IPacketStaticOpcode
     {
@@ -145,6 +148,108 @@ public static class TransportSessionSubscriptions
 
         client.OnMessageReceived += Wrapper;
         return new Unsub(() => client.OnMessageReceived -= Wrapper);
+    }
+
+    /// <summary>
+    /// Subscribes an asynchronous handler to strongly-typed packets. This is the overload C# picks for an
+    /// <c>async</c> lambda, so <c>session.On&lt;T&gt;(async p =&gt; ...)</c> is no longer an <c>async void</c> lambda:
+    /// an exception thrown by the handler is logged (<see cref="DiagnosticsEvents.Internal.Error"/>) instead of
+    /// crashing the process.
+    /// </summary>
+    /// <remarks>
+    /// The handler runs on the receive loop until its first <c>await</c>, so packets are delivered in order and the
+    /// loop is released as soon as the handler awaits. Handlers of consecutive packets can then overlap. The packet is
+    /// disposed only after the returned task completes; to keep it longer, use the synchronous overload with
+    /// <c>disposeAfter: false</c>.
+    /// </remarks>
+    /// <typeparam name="TPacket">The packet type to receive.</typeparam>
+    /// <param name="client">The transport session to subscribe to.</param>
+    /// <param name="handler">The asynchronous callback invoked for each received packet.</param>
+    /// <returns>An <see cref="IDisposable"/> that removes the subscription when disposed.</returns>
+    public static IDisposable On<TPacket>(this ITransportSession client, Func<TPacket, Task> handler)
+        where TPacket : class, IPacket, IPacketStaticOpcode
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(handler);
+
+        string api = $"On<{typeof(TPacket).Name}>";
+
+        // The synchronous subscription keeps ownership off (disposeAfter: false) so the packet outlives the
+        // handler's first await; RUN_ASYNC_HANDLER disposes it when the task completes.
+        return client.On<TPacket>(packet => RUN_ASYNC_HANDLER(handler, packet, dispose: true, api), disposeAfter: false);
+    }
+
+    /// <summary>
+    /// Subscribes an asynchronous handler to packets matching <paramref name="predicate"/>. As with the synchronous
+    /// overload the handler owns the packet. Exceptions thrown by the handler are logged instead of crashing the process.
+    /// </summary>
+    /// <param name="client">The transport session to subscribe to.</param>
+    /// <param name="predicate">Selects the packets to deliver.</param>
+    /// <param name="handler">The asynchronous callback invoked for each matching packet.</param>
+    /// <returns>An <see cref="IDisposable"/> that removes the subscription when disposed.</returns>
+    public static IDisposable On(this ITransportSession client, Func<IPacket, bool> predicate, Func<IPacket, Task> handler)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(predicate);
+        ArgumentNullException.ThrowIfNull(handler);
+
+        return client.On(predicate, packet => RUN_ASYNC_HANDLER(handler, packet, dispose: false, "On(predicate)"));
+    }
+
+    /// <summary>
+    /// Starts an asynchronous handler and observes it: a synchronous throw or a faulted task is logged, and the packet
+    /// is disposed (when <paramref name="dispose"/>) after the task has completed.
+    /// </summary>
+    private static void RUN_ASYNC_HANDLER<TPacket>(Func<TPacket, Task> handler, TPacket packet, bool dispose, string api)
+        where TPacket : IPacket
+    {
+        Task task;
+        try
+        {
+            task = handler(packet) ?? Task.CompletedTask;
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            SdkLog.Error("SDK.Subscriptions", $"{api} handler failed.", ex);
+            DISPOSE(packet, dispose);
+            return;
+        }
+
+        if (task.IsCompletedSuccessfully)
+        {
+            DISPOSE(packet, dispose);
+            return;
+        }
+
+        _ = OBSERVE_ASYNC(task, packet, dispose, api);
+
+        static async Task OBSERVE_ASYNC(Task task, TPacket packet, bool dispose, string api)
+        {
+            try
+            {
+                await task.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex)
+            {
+                SdkLog.Debug("SDK.Subscriptions", $"{api} handler was canceled.", ex);
+            }
+            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+            {
+                SdkLog.Error("SDK.Subscriptions", $"{api} handler failed.", ex);
+            }
+            finally
+            {
+                DISPOSE(packet, dispose);
+            }
+        }
+
+        static void DISPOSE(TPacket packet, bool dispose)
+        {
+            if (dispose && packet is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+        }
     }
 
     // ── On with predicate ────────────────────────────────────────────────────

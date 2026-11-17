@@ -20,7 +20,7 @@ namespace Nalix.SDK.Transport.Extensions;
 /// <remarks>
 /// Before this existed, every such screen hand-rolled the same five steps: stamp a
 /// <c>SequenceId</c>, open a <see cref="TaskCompletionSource{T}"/> per response type, subscribe them
-/// all via <see cref="TransportSessionSubscriptions.On{TPacket}"/> before sending, apply one shared
+/// all via <see cref="TransportSessionSubscriptions.On{TPacket}(ITransportSession, Action{TPacket}, bool)"/> before sending, apply one shared
 /// timeout to every TCS, then await the header followed by each stream. Each copy risked a subtly
 /// different mistake (a TCS built without
 /// <see cref="TaskCreationOptions.RunContinuationsAsynchronously"/>, a timeout that only covered some

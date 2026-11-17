@@ -30,3 +30,5 @@ const Nalix.SDK.DiagnosticsEvents.Internal.Error = "Internal.Error" -> string!
 static readonly Nalix.SDK.DiagnosticsEvents.Source -> System.Diagnostics.DiagnosticListener!
 static Nalix.SDK.DiagnosticsEvents.Write<T>(string! name, T payload) -> void
 static Nalix.SDK.DiagnosticsEvents.SubscribeLogs(System.Action<string!, Nalix.Abstractions.Diagnostics.DiagnosticLog>! onLog, string! minimumLevel = "Internal.Information") -> System.IDisposable!
+static Nalix.SDK.Transport.Extensions.TransportSessionSubscriptions.On<TPacket>(this Nalix.SDK.Transport.ITransportSession! client, System.Func<TPacket!, System.Threading.Tasks.Task!>! handler) -> System.IDisposable!
+static Nalix.SDK.Transport.Extensions.TransportSessionSubscriptions.On(this Nalix.SDK.Transport.ITransportSession! client, System.Func<Nalix.Abstractions.Networking.Packets.IPacket!, bool>! predicate, System.Func<Nalix.Abstractions.Networking.Packets.IPacket!, System.Threading.Tasks.Task!>! handler) -> System.IDisposable!
