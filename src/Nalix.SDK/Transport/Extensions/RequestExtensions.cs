@@ -133,10 +133,10 @@ public static class RequestExtensions
         ushort expectedSeqId = request.Header.SequenceId;
         Exception? lastException = null;
         int totalAttempts = options.RetryCount + 1;
-        Func<TResponse, bool> effectivePredicate = predicate
-            ?? (expectedSeqId != 0
-                ? response => response.Header.SequenceId == expectedSeqId
-                : static _ => true);
+        // Without a caller predicate the reply is matched by SequenceId on the raw header (see PendingRequest),
+        // so no closure is allocated and frames for other pending requests are never deserialized.
+        Func<TResponse, bool> effectivePredicate = predicate ?? (static _ => true);
+        ushort matchSequenceId = predicate is null ? expectedSeqId : (ushort)0;
 
         for (int attempt = 1; attempt <= totalAttempts; attempt++)
         {
@@ -153,7 +153,8 @@ public static class RequestExtensions
                     timeoutMs: options.TimeoutMs,
                     request,
                     options.ResolveEncrypt(client),
-                    ct).ConfigureAwait(false);
+                    ct,
+                    matchSequenceId).ConfigureAwait(false);
 
                 return result;
             }
@@ -221,10 +222,10 @@ public static class RequestExtensions
         ushort expectedSeqId = request.Header.SequenceId;
         Exception? lastException = null;
         int totalAttempts = options.RetryCount + 1;
-        Func<TResponse, bool> effectivePredicate = predicate
-            ?? (expectedSeqId != 0
-                ? response => response.Header.SequenceId == expectedSeqId
-                : static _ => true);
+        // Without a caller predicate the reply is matched by SequenceId on the raw header (see PendingRequest),
+        // so no closure is allocated and frames for other pending requests are never deserialized.
+        Func<TResponse, bool> effectivePredicate = predicate ?? (static _ => true);
+        ushort matchSequenceId = predicate is null ? expectedSeqId : (ushort)0;
 
         for (int attempt = 1; attempt <= totalAttempts; attempt++)
         {
@@ -237,7 +238,8 @@ public static class RequestExtensions
                     predicate: effectivePredicate,
                     timeoutMs: options.TimeoutMs,
                     sendAsync: token => client.SendAsync(request, encrypt: options.ResolveEncrypt(client), token),
-                    ct).ConfigureAwait(false);
+                    ct,
+                    matchSequenceId).ConfigureAwait(false);
 
                 return RequestOutcome<TResponse>.Ok(result);
             }

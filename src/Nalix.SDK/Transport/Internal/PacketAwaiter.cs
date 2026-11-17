@@ -26,17 +26,18 @@ internal static class PacketAwaiter
     /// <param name="timeoutMs"></param>
     /// <param name="sendAsync"></param>
     /// <param name="ct"></param>
+    /// <param name="expectedSequenceId">When non-zero, frames whose header carries another SequenceId are skipped before deserialization.</param>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="TimeoutException"></exception>
     /// <exception cref="OperationCanceledException"></exception>
     public static ValueTask<TPkt> AwaitAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate,
-        int timeoutMs, Func<CancellationToken, Task> sendAsync, CancellationToken ct)
+        int timeoutMs, Func<CancellationToken, Task> sendAsync, CancellationToken ct, ushort expectedSequenceId = 0)
         where TPkt : class, IPacket, IPacketStaticOpcode
     {
         ArgumentNullException.ThrowIfNull(sendAsync);
 
-        return CoreAsync(client, predicate, timeoutMs, request: null, encrypt: null, sendAsync, ct);
+        return CoreAsync(client, predicate, timeoutMs, request: null, encrypt: null, sendAsync, ct, expectedSequenceId);
     }
 
     /// <summary>
@@ -51,23 +52,24 @@ internal static class PacketAwaiter
     /// <param name="request">The packet to send once the subscription is in place.</param>
     /// <param name="encrypt">Per-send encryption override, or <see langword="null"/> for the session default.</param>
     /// <param name="ct">Cancels the exchange.</param>
+    /// <param name="expectedSequenceId">When non-zero, frames whose header carries another SequenceId are skipped before deserialization.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="timeoutMs"/> is negative.</exception>
     /// <exception cref="TimeoutException">Thrown when no matching packet arrives in time.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="ct"/> is cancelled.</exception>
     public static ValueTask<TPkt> AwaitAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate,
-        int timeoutMs, IPacket request, bool? encrypt, CancellationToken ct)
+        int timeoutMs, IPacket request, bool? encrypt, CancellationToken ct, ushort expectedSequenceId = 0)
         where TPkt : class, IPacket, IPacketStaticOpcode
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return CoreAsync(client, predicate, timeoutMs, request, encrypt, sendAsync: null, ct);
+        return CoreAsync(client, predicate, timeoutMs, request, encrypt, sendAsync: null, ct, expectedSequenceId);
     }
 
     [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder<>))]
     private static async ValueTask<TPkt> CoreAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate, int timeoutMs,
-        IPacket? request, bool? encrypt, Func<CancellationToken, Task>? sendAsync, CancellationToken ct)
+        IPacket? request, bool? encrypt, Func<CancellationToken, Task>? sendAsync, CancellationToken ct, ushort expectedSequenceId)
         where TPkt : class, IPacket, IPacketStaticOpcode
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -79,7 +81,7 @@ internal static class PacketAwaiter
         }
 
         bool wasAwaited = false;
-        PendingRequest<TPkt> pending = PendingRequest<TPkt>.Rent(client, predicate);
+        PendingRequest<TPkt> pending = PendingRequest<TPkt>.Rent(client, predicate, expectedSequenceId);
         pending.Subscribe();
 
         try
