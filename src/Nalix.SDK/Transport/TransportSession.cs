@@ -494,9 +494,11 @@ public abstract class TransportSession : IDisposable, IAsyncDisposable, ITranspo
                 catch (Exception ex) when (Nalix.Abstractions.Exceptions.ExceptionClassifier.IsNonFatal(ex))
                 {
                     consecutiveMisses++;
+                    SdkLog.Warn("SDK.KeepAlive", $"Missed PONG ({consecutiveMisses}/{Math.Max(1, this.Options.KeepAliveMissThreshold)}).", ex);
                     int threshold = Math.Max(1, this.Options.KeepAliveMissThreshold);
                     if (consecutiveMisses >= threshold && !ct.IsCancellationRequested && this.IsConnected)
                     {
+                        SdkLog.Error("SDK.KeepAlive", $"Keepalive failed after {consecutiveMisses} missed PONG response(s); closing the connection.");
                         await this.FaultFromKeepAliveAsync(
                             new Nalix.Abstractions.Exceptions.NetworkException(
                                 $"Keepalive failed after {consecutiveMisses} missed PONG response(s): {ex.Message}", ex)).ConfigureAwait(false);

@@ -57,6 +57,10 @@ public static class HandshakeExtensions
             throw new NetworkException("ServerPublicKey is required when AllowTofu is disabled.");
         }
 
+        SdkLog.Debug("SDK.Handshake", string.IsNullOrEmpty(session.Options.ServerPublicKey)
+            ? "Handshake started; no ServerPublicKey configured, the server key will be trusted on first use (TOFU)."
+            : "Handshake started with a pinned ServerPublicKey.");
+
         X25519.X25519KeyPair clientKey = X25519.GenerateKeyPair();
 
         Span<byte> clientNonceBytes = stackalloc byte[Bytes32.Size];
@@ -131,6 +135,7 @@ public static class HandshakeExtensions
                 }
 
                 // Bounded by the same linked token as the handshake, so ConnectTimeoutMillis also bounds the solve.
+                SdkLog.Debug("SDK.Handshake", $"Server requested proof-of-work (difficulty {challenge.Difficulty}).");
                 long solution = ProofOfWorkSolver.SolveChallenge(challenge.Nonce.AsSpan(), challenge.Difficulty, challenge.TimestampTicks, cts.Token);
 
                 using ProofOfWorkProof proof = new();
@@ -189,6 +194,10 @@ public static class HandshakeExtensions
 
                 pinnedServerKey = keyResponse.PublicKey;
                 tofuFetchedKeyHex = pinnedServerKey.ToString();
+
+                SdkLog.Warn("SDK.Handshake",
+                    $"Trusting the server key {tofuFetchedKeyHex} on first use (TOFU): it arrived over an unauthenticated channel, so an " +
+                    "active man-in-the-middle on this connection would not be detected. Set TransportOptions.ServerPublicKey to pin it.");
             }
             else
             {
@@ -213,6 +222,7 @@ public static class HandshakeExtensions
             Bytes32 expectedProof = HandshakeX25519.ComputeServerProof(masterSecret, transcriptHash);
             if (serverHello.Proof != expectedProof)
             {
+                SdkLog.Error("SDK.Handshake", "SessionChallenge proof is invalid. Possible man-in-the-middle attack; the handshake is aborted.");
                 throw new NetworkException("SessionChallenge proof is invalid. Possible Man-in-the-Middle attack.");
             }
 
@@ -255,23 +265,37 @@ public static class HandshakeExtensions
                 {
                     session.Options.ServerPublicKey = tofuFetchedKeyHex;
 
-                    if (session.Options.PersistTofuKey && !OperatingSystem.IsBrowser())
+                    if (!session.Options.PersistTofuKey)
+                    {
+                        SdkLog.Warn("SDK.Handshake", "The TOFU server key is kept in memory only (PersistTofuKey is disabled); the next process start trusts again.");
+                    }
+                    else if (OperatingSystem.IsBrowser())
+                    {
+                        SdkLog.Warn("SDK.Handshake", "The TOFU server key cannot be persisted in the browser; every page load trusts again. Configure ServerPublicKey.");
+                    }
+                    else
                     {
                         try
                         {
                             ConfigurationManager.Instance.UpdateValue<TransportOptions>(nameof(TransportOptions.ServerPublicKey), tofuFetchedKeyHex);
                             ConfigurationManager.Instance.Flush();
+                            SdkLog.Info("SDK.Handshake", "The TOFU server key was saved to the configuration; later connections are pinned to it.");
                         }
                         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
                         {
-                            // Ignore persistence failure on unsupported platforms
+                            SdkLog.Warn("SDK.Handshake", "Could not persist the TOFU server key; the next process start trusts again.", ex);
                         }
                     }
                 }
 
                 session.State.EncryptionEnabled = true;
                 session.State.SessionToken = serverFinish.SessionToken;
+                SdkLog.Info("SDK.Handshake", $"Handshake complete; session encrypted with {session.Options.Algorithm}.");
                 transportSession?.NotifyReady();
+            }
+            // Logs non-fatal failures and never handles them (returns false), so the cleanup below still runs for every exception.
+            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex) && LOG_FAILURE(ex))
+            {
             }
             catch
             {
@@ -289,6 +313,12 @@ public static class HandshakeExtensions
             Bytes32.Wipe(ref sharedSecretSE);
             Bytes32.Wipe(ref masterSecret);
             Bytes32.Wipe(ref sessionKey);
+        }
+
+        static bool LOG_FAILURE(Exception ex)
+        {
+            SdkLog.Warn("SDK.Handshake", "Handshake failed.", ex);
+            return false;
         }
     }
 }

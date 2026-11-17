@@ -175,7 +175,9 @@ public class TcpSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
+            SdkLog.Debug("SDK.TcpSession", $"Connecting to {effectiveHost}:{effectivePort} (timeout {this.Options.ConnectTimeoutMillis} ms).");
             await _socket.ConnectAsync(effectiveHost, effectivePort, connectCts.Token).ConfigureAwait(false);
+            SdkLog.Info("SDK.TcpSession", $"Connected to {effectiveHost}:{effectivePort}.");
 
             if (_socket.LocalEndPoint is IPEndPoint localEp)
             {
@@ -198,6 +200,7 @@ public class TcpSession : TransportSession
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
+            SdkLog.Warn("SDK.TcpSession", $"Connection to {effectiveHost}:{effectivePort} failed.", ex);
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"Connection failed: {ex.Message}", ex);
         }
@@ -252,7 +255,9 @@ public class TcpSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
+            SdkLog.Debug("SDK.TcpSession", $"Connecting to {effectiveHost}:{effectivePort} (timeout {this.Options.ConnectTimeoutMillis} ms).");
             await _socket.ConnectAsync(effectiveHost, effectivePort, connectCts.Token).ConfigureAwait(false);
+            SdkLog.Info("SDK.TcpSession", $"Connected to {effectiveHost}:{effectivePort}.");
 
             if (_socket.LocalEndPoint is IPEndPoint localEp)
             {
@@ -275,6 +280,7 @@ public class TcpSession : TransportSession
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected).ConfigureAwait(false);
+            SdkLog.Warn("SDK.TcpSession", $"Connection to {(string.IsNullOrWhiteSpace(host) ? this.Options.Address : host)}:{port ?? this.Options.Port} failed.", ex);
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"Connection failed: {ex.Message}", ex);
         }
@@ -381,6 +387,7 @@ public class TcpSession : TransportSession
             this.StopKeepAlive();
 
             NetworkException disconnectEx = new("The TCP session was disconnected.");
+            SdkLog.Info("SDK.TcpSession", raiseDisconnected ? "Disconnected." : "Disconnected (notification suppressed during an internal transition).");
             this.DispatchPendingDisconnect(disconnectEx);
 
             if (raiseDisconnected)
@@ -505,6 +512,7 @@ public class TcpSession : TransportSession
             return;
         }
 
+        SdkLog.Warn("SDK.TcpSession", "Transport error; closing the connection.", ex);
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually

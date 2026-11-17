@@ -185,7 +185,9 @@ public class WebSocketSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
+            SdkLog.Debug("SDK.WebSocketSession", $"Connecting to {uri} (timeout {this.Options.ConnectTimeoutMillis} ms).");
             await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
+            SdkLog.Info("SDK.WebSocketSession", $"Connected to {uri}.");
             connected = true;
             if (raiseConnected)
             {
@@ -208,6 +210,7 @@ public class WebSocketSession : TransportSession
             // the one signal. During an outage every failed retry would otherwise raise one, making
             // "one OnDisconnected per real transport close" not a guarantee callers can build on.
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
+            SdkLog.Warn("SDK.WebSocketSession", "WebSocket connection failed.", ex);
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"WebSocket Connection failed: {ex.Message}", ex);
         }
@@ -313,6 +316,7 @@ public class WebSocketSession : TransportSession
             this.StopKeepAlive();
 
             NetworkException disconnectEx = new("The WebSocket session was disconnected.");
+            SdkLog.Info("SDK.WebSocketSession", "Disconnected.");
             this.DispatchPendingDisconnect(disconnectEx);
 
             // #393: a socket that never reached OnConnected (a failed/timed-out/refused connect
@@ -450,6 +454,7 @@ public class WebSocketSession : TransportSession
             return;
         }
 
+        SdkLog.Warn("SDK.WebSocketSession", "Transport error; closing the connection.", ex);
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually

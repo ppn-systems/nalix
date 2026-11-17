@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Nalix.Abstractions;
@@ -89,7 +88,7 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                Trace.TraceError("Nalix.SDK.TransportSessionSubscriptions.On<{0}> failed: {1}", typeof(TPacket).Name, ex);
+                SdkLog.Error("SDK.Subscriptions", $"On<{typeof(TPacket).Name}> handler failed.", ex);
             }
         }
 
@@ -124,10 +123,7 @@ public static class TransportSessionSubscriptions
                 {
                     if (p is not TPacket t)
                     {
-                        Trace.TraceError(
-                            "Nalix.SDK.TransportSessionSubscriptions.OnExact<{0}> received unexpected packet {1}.",
-                            typeof(TPacket).Name,
-                            p?.GetType().Name ?? "null");
+                        SdkLog.Warn("SDK.Subscriptions", $"OnExact<{typeof(TPacket).Name}> received unexpected packet {p?.GetType().Name ?? "null"}.");
                         return;
                     }
 
@@ -143,7 +139,7 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                Trace.TraceError("Nalix.SDK.TransportSessionSubscriptions.OnExact<{0}> failed: {1}", typeof(TPacket).Name, ex);
+                SdkLog.Error("SDK.Subscriptions", $"OnExact<{typeof(TPacket).Name}> handler failed.", ex);
             }
         }
 
@@ -182,7 +178,7 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                Trace.TraceError("Nalix.SDK.TransportSessionSubscriptions.On(predicate) failed: {0}", ex);
+                SdkLog.Error("SDK.Subscriptions", "On(predicate) handler failed.", ex);
             }
         }
 
@@ -259,7 +255,7 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                Trace.TraceError("Nalix.SDK.TransportSessionSubscriptions.OnOnce<{0}> failed: {1}", typeof(TPacket).Name, ex);
+                SdkLog.Error("SDK.Subscriptions", $"OnOnce<{typeof(TPacket).Name}> handler failed.", ex);
             }
         }
 
@@ -314,7 +310,7 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception callbackEx) when (ExceptionClassifier.IsNonFatal(callbackEx))
             {
-                Trace.TraceError("Nalix.SDK.TransportSessionSubscriptions.SubscribeTemp<{0}> disconnect handler failed: {1}", typeof(TPacket).Name, callbackEx);
+                SdkLog.Error("SDK.Subscriptions", $"SubscribeTemp<{typeof(TPacket).Name}> disconnect handler failed.", callbackEx);
             }
         }
 
@@ -362,7 +358,7 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception callbackEx) when (ExceptionClassifier.IsNonFatal(callbackEx))
             {
-                Trace.TraceError("Nalix.SDK.TransportSessionSubscriptions.SubscribeTemp<{0}> predicate disconnect handler failed: {1}", typeof(TPacket).Name, callbackEx);
+                SdkLog.Error("SDK.Subscriptions", $"SubscribeTemp<{typeof(TPacket).Name}> predicate disconnect handler failed.", callbackEx);
             }
         }
 
@@ -462,7 +458,7 @@ public sealed class CompositeSubscription : IDisposable
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                Trace.TraceError("Nalix.SDK.CompositeSubscription.Dispose failed: {0}", ex);
+                SdkLog.Warn("SDK.Subscriptions", "CompositeSubscription.Dispose: a subscription failed to dispose.", ex);
             }
         }
     }

@@ -183,6 +183,7 @@ internal sealed class WsFrameReader : IDisposable
 
             if (!_sequence.IsValid(seq, s_sequenceOptions.TcpWindow))
             {
+                SdkLog.Debug("SDK.WsFrameReader", $"Dropped an inbound frame outside the replay window (seq {seq}, current {_sequence.Current()}).");
                 if (Codec.DiagnosticsEvents.Source.IsEnabled(Codec.DiagnosticsEvents.Sequence.Rejected))
                 {
                     Codec.DiagnosticsEvents.Write(Codec.DiagnosticsEvents.Sequence.Rejected, new
@@ -198,6 +199,11 @@ internal sealed class WsFrameReader : IDisposable
             if (seq.HasValue)
             {
                 _sequence.UpdateTo(seq.Value);
+            }
+
+            if (SdkLog.IsEnabled(DiagnosticsEvents.Internal.Trace) && lease.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
+            {
+                SdkLog.Trace("SDK.WsFrameReader", $"Received WebSocket frame opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(lease.Span):X4} length={lease.Length} seq={seq}.");
             }
 
             _onMessage(lease);

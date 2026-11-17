@@ -19,3 +19,14 @@ override Nalix.SDK.Transport.WebSocketSession.DisposeAsyncCore() -> System.Threa
 Nalix.SDK.SdkTelemetry
 const Nalix.SDK.SdkTelemetry.ActivitySourceName = "Nalix.SDK" -> string!
 const Nalix.SDK.SdkTelemetry.MeterName = "Nalix.SDK" -> string!
+Nalix.SDK.DiagnosticsEvents
+Nalix.SDK.DiagnosticsEvents.Internal
+const Nalix.SDK.DiagnosticsEvents.ListenerName = "SDK" -> string!
+const Nalix.SDK.DiagnosticsEvents.Internal.Trace = "Internal.Trace" -> string!
+const Nalix.SDK.DiagnosticsEvents.Internal.Debug = "Internal.Debug" -> string!
+const Nalix.SDK.DiagnosticsEvents.Internal.Information = "Internal.Information" -> string!
+const Nalix.SDK.DiagnosticsEvents.Internal.Warning = "Internal.Warning" -> string!
+const Nalix.SDK.DiagnosticsEvents.Internal.Error = "Internal.Error" -> string!
+static readonly Nalix.SDK.DiagnosticsEvents.Source -> System.Diagnostics.DiagnosticListener!
+static Nalix.SDK.DiagnosticsEvents.Write<T>(string! name, T payload) -> void
+static Nalix.SDK.DiagnosticsEvents.SubscribeLogs(System.Action<string!, Nalix.Abstractions.Diagnostics.DiagnosticLog>! onLog, string! minimumLevel = "Internal.Information") -> System.IDisposable!

@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
@@ -367,10 +366,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            Trace.TraceError(
-                "Nalix.SDK.PendingRequest<{0}> failed to handle an inbound frame: {1}",
-                typeof(TPkt).Name,
-                ex);
+            SdkLog.Warn("SDK.Request", $"PendingRequest<{typeof(TPkt).Name}> could not handle an inbound frame (opcode {_opcode}).", ex);
         }
     }
 

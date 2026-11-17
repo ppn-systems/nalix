@@ -74,6 +74,7 @@ public static class ResumeExtensions
 
             if (response.Reason != ProtocolReason.NONE)
             {
+                SdkLog.Info("SDK.Resume", $"The server declined to resume the session: {response.Reason}.");
                 return response.Reason;
             }
 
@@ -85,28 +86,34 @@ public static class ResumeExtensions
 
             if (response.Proof != new Bytes32(expectedResponseProofBytes))
             {
+                SdkLog.Error("SDK.Resume", "Session resume response proof is invalid (possible man-in-the-middle or clock skew).");
                 throw new NetworkException("Session resume response proof is invalid. Possible Man-in-the-Middle attack or clock skew.");
             }
 
             session.State.SessionToken = response.SessionToken;
             session.State.EncryptionEnabled = true;
+            SdkLog.Info("SDK.Resume", "Session resumed.");
             transportSession?.NotifyReady();
             return ProtocolReason.NONE;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            SdkLog.Debug("SDK.Resume", "Session resume was canceled.", ex);
             return ProtocolReason.CANCELLED;
         }
-        catch (TimeoutException)
+        catch (TimeoutException ex)
         {
+            SdkLog.Warn("SDK.Resume", "Session resume timed out.", ex);
             return ProtocolReason.TIMEOUT;
         }
-        catch (NetworkException)
+        catch (NetworkException ex)
         {
+            SdkLog.Warn("SDK.Resume", "Session resume failed with a network error.", ex);
             return ProtocolReason.NETWORK_ERROR;
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
+            SdkLog.Warn("SDK.Resume", "Session resume was attempted in an invalid state.", ex);
             return ProtocolReason.STATE_VIOLATION;
         }
         finally
@@ -180,6 +187,8 @@ public static class ResumeExtensions
                 {
                     throw new NetworkException($"Session resume failed: {reason}");
                 }
+
+                SdkLog.Info("SDK.Resume", $"Resume failed ({reason}); reconnecting for a full handshake.");
 
                 if (transportSession is not null)
                 {

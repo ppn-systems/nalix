@@ -179,7 +179,9 @@ public class UdpSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
+            SdkLog.Debug("SDK.UdpSession", $"Binding UDP to {_remoteEndPoint}.");
             await _socket.ConnectAsync(_remoteEndPoint, connectCts.Token).ConfigureAwait(false);
+            SdkLog.Info("SDK.UdpSession", $"UDP bound to {_remoteEndPoint}.");
 
             _loopCts = new CancellationTokenSource();
 
@@ -192,6 +194,7 @@ public class UdpSession : TransportSession
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+            SdkLog.Warn("SDK.UdpSession", "UDP connection failed.", ex);
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"UDP Connection failed: {ex.Message}", ex);
         }
@@ -266,6 +269,7 @@ public class UdpSession : TransportSession
             catch (ObjectDisposedException) { /* ignored */ }
 
             NetworkException disconnectEx = new("The UDP session was disconnected.");
+            SdkLog.Info("SDK.UdpSession", "Disconnected.");
             this.DispatchPendingDisconnect(disconnectEx);
             this.OnDisconnected?.Invoke(this, disconnectEx);
         }
@@ -376,6 +380,7 @@ public class UdpSession : TransportSession
             return;
         }
 
+        SdkLog.Warn("SDK.UdpSession", "Transport error; closing the connection.", ex);
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually

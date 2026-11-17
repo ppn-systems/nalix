@@ -105,6 +105,11 @@ internal sealed class TcpFrameSender : IDisposable
                 encrypt ? _sequence.Next() : null,
                 _options.Algorithm);
 
+            if (SdkLog.IsEnabled(DiagnosticsEvents.Internal.Trace) && current.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
+            {
+                SdkLog.Trace("SDK.TcpFrameSender", $"Sending TCP frame opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(current.Span):X4} length={current.Length} encrypted={encrypt}.");
+            }
+
             return current.Length >= _fragmentOptions.MaxChunkSize
                 ? await this.SEND_FRAGMENTED_ASYNC(current.Memory, sync, ct).ConfigureAwait(false)
                 : await this.SEND_SINGLE_FRAME_ASYNC(current.Memory, sync, ct).ConfigureAwait(false);

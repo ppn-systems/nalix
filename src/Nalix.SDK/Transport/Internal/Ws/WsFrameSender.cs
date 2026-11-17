@@ -93,6 +93,11 @@ internal sealed class WsFrameSender : IDisposable
                 seqToUse,
                 _options.Algorithm);
 
+            if (SdkLog.IsEnabled(DiagnosticsEvents.Internal.Trace) && current.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
+            {
+                SdkLog.Trace("SDK.WsFrameSender", $"Sending WebSocket frame opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(current.Span):X4} length={current.Length} encrypted={encrypt}.");
+            }
+
             return sync
                 ? this.SEND_RAW(current.Memory, originatingSocket)
                 : await this.SEND_RAW_ASYNC(current.Memory, originatingSocket, ct).ConfigureAwait(false);
