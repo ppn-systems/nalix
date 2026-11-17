@@ -59,6 +59,10 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     private Func<TPkt, bool>? _predicate;
     private ushort _opcode;
 
+    // Non-zero when the reply is matched by SequenceId. Checked on the raw header before deserializing, so a frame
+    // meant for another pending request of the same opcode costs a header read instead of a full deserialization.
+    private ushort _expectedSequenceId;
+
     // Fallback delegates used only when the session is a custom/mock ITransportSession that does not
     // participate in TransportSession's direct pending-request table.
     private readonly EventHandler<IBufferLease> _onMessage;
@@ -90,7 +94,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     /// Rents a pooled instance (or allocates one if the pool is empty) and binds it to
     /// <paramref name="session"/> and <paramref name="predicate"/> for one request.
     /// </summary>
-    internal static PendingRequest<TPkt> Rent(ITransportSession session, Func<TPkt, bool> predicate)
+    internal static PendingRequest<TPkt> Rent(ITransportSession session, Func<TPkt, bool> predicate, ushort expectedSequenceId = 0)
     {
         if (!s_pool.TryDequeue(out PendingRequest<TPkt>? pending))
         {
@@ -103,6 +107,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
         pending._directSession = session is TransportSession { HasDirectPendingDispatch: true } direct ? direct : null;
         pending._predicate = predicate;
         pending._opcode = TPkt.StaticOpCode;
+        pending._expectedSequenceId = expectedSequenceId;
         pending._completed = 0;
         pending._subscribed = 0;
         pending._timeoutMs = 0;
@@ -299,6 +304,11 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
         ref readonly PacketHeader header = ref buffer.Span.AsHeaderRef();
         if (header.OpCode != _opcode)
+        {
+            return;
+        }
+
+        if (_expectedSequenceId != 0 && header.SequenceId != _expectedSequenceId)
         {
             return;
         }

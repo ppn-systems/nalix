@@ -31,12 +31,12 @@ internal static class PacketAwaiter
     /// <exception cref="OperationCanceledException"></exception>
     public static ValueTask<TPkt> AwaitAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate,
-        int timeoutMs, Func<CancellationToken, Task> sendAsync, CancellationToken ct)
+        int timeoutMs, Func<CancellationToken, Task> sendAsync, CancellationToken ct, ushort expectedSequenceId = 0)
         where TPkt : class, IPacket, IPacketStaticOpcode
     {
         ArgumentNullException.ThrowIfNull(sendAsync);
 
-        return CoreAsync(client, predicate, timeoutMs, request: null, encrypt: null, sendAsync, ct);
+        return CoreAsync(client, predicate, timeoutMs, request: null, encrypt: null, sendAsync, ct, expectedSequenceId);
     }
 
     /// <summary>
@@ -56,18 +56,18 @@ internal static class PacketAwaiter
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="ct"/> is cancelled.</exception>
     public static ValueTask<TPkt> AwaitAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate,
-        int timeoutMs, IPacket request, bool? encrypt, CancellationToken ct)
+        int timeoutMs, IPacket request, bool? encrypt, CancellationToken ct, ushort expectedSequenceId = 0)
         where TPkt : class, IPacket, IPacketStaticOpcode
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return CoreAsync(client, predicate, timeoutMs, request, encrypt, sendAsync: null, ct);
+        return CoreAsync(client, predicate, timeoutMs, request, encrypt, sendAsync: null, ct, expectedSequenceId);
     }
 
     [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder<>))]
     private static async ValueTask<TPkt> CoreAsync<TPkt>(
         ITransportSession client, Func<TPkt, bool> predicate, int timeoutMs,
-        IPacket? request, bool? encrypt, Func<CancellationToken, Task>? sendAsync, CancellationToken ct)
+        IPacket? request, bool? encrypt, Func<CancellationToken, Task>? sendAsync, CancellationToken ct, ushort expectedSequenceId)
         where TPkt : class, IPacket, IPacketStaticOpcode
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -79,7 +79,7 @@ internal static class PacketAwaiter
         }
 
         bool wasAwaited = false;
-        PendingRequest<TPkt> pending = PendingRequest<TPkt>.Rent(client, predicate);
+        PendingRequest<TPkt> pending = PendingRequest<TPkt>.Rent(client, predicate, expectedSequenceId);
         pending.Subscribe();
 
         try
