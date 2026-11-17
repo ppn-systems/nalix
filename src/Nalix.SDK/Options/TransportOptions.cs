@@ -109,10 +109,12 @@ public sealed partial class TransportOptions : ConfigurationLoader
     public bool AllowTofu { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets whether a TOFU-fetched server public key should be persisted to disk after handshake verification succeeds.
+    /// Gets or sets whether a TOFU-fetched server public key is saved to the configuration after the handshake succeeds,
+    /// so later process starts are pinned to it instead of trusting again. Default <see langword="true"/>.
+    /// Not possible in the browser; configure <see cref="ServerPublicKey"/> there.
     /// </summary>
-    [IniComment("Persist TOFU-discovered ServerPublicKey to configuration storage after a verified handshake")]
-    public bool PersistTofuKey { get; set; } = false;
+    [IniComment("Persist the TOFU-discovered ServerPublicKey after a verified handshake so later starts are pinned (default true)")]
+    public bool PersistTofuKey { get; set; } = true;
 
     /// <summary>
     /// Gets or sets whether the SDK should attempt a session resume before performing a new handshake.
