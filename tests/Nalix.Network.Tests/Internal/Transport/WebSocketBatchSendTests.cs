@@ -116,7 +116,7 @@ public sealed class WebSocketBatchSendTests
     {
         RecordingStream inner = new();
         IConnection.ITransport transport = CreateTransport(inner, out WebSocketConnection connection);
-        await ((WebSocketTransport)transport).WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+        await connection.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
         int writesAfterClose = inner.Writes;
 
         await SendBatchAsync(transport, CreatePayloads(count: 3, length: 40));

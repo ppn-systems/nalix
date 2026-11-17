@@ -34,7 +34,7 @@ namespace Nalix.Network.Connections;
 /// Represents a network connection that manages WebSocket communication, stream
 /// transformation, and event handling.
 /// </summary>
-public sealed class WebSocketConnection :
+public sealed partial class WebSocketConnection :
     IConnection,
     IConnectionErrorTracked,
     IConnectionTrafficMetrics,
@@ -63,8 +63,6 @@ public sealed class WebSocketConnection :
         s_limitOptions = ConfigurationManager.Instance.Get<ConnectionGuardOptions>();
         s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
         s_callbackOptions = ConfigurationManager.Instance.Get<NetworkCallbackOptions>();
-
-        NetworkPoolInitializer.InitializeWebSocket();
     }
 
     /// <summary>
@@ -98,8 +96,7 @@ public sealed class WebSocketConnection :
         this.NetworkEndpoint = SocketEndpoint.FromEndPoint(remoteEndPoint ?? new IPEndPoint(IPAddress.Loopback, 0));
 
         // Transport owns WebSocket — ownership transfer
-        _backing.WsTransport = s_pool.Get<WebSocketTransport>();
-        _backing.WsTransport.Initialize(this, webSocket, writeBatcher);
+        this.InitializeTransport(webSocket, writeBatcher);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
         {
@@ -130,7 +127,7 @@ public sealed class WebSocketConnection :
     public IOpCodeExtractor PacketClassifier { get; }
 
     /// <inheritdoc/>
-    public IConnection.ITransport TCP => Volatile.Read(ref _backing)?.WsTransport ?? throw new ObjectDisposedException(nameof(WebSocketConnection));
+    public IConnection.ITransport TCP => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(WebSocketConnection));
 
     /// <inheritdoc/>
     public IConnection.ITransport? UDP => null;
@@ -324,8 +321,13 @@ public sealed class WebSocketConnection :
     }
     internal void UpdateLastPingTime() => this.LastPingTime = Clock.UnixMillisecondsNow();
 
+    /// <summary>Test seam: invoked at the start of the post-send notification, on the thread that completed the send.</summary>
+    internal static Action<WebSocketConnection>? s_postProcessHook;
+
     internal void TriggerPostProcessEvent()
     {
+        s_postProcessHook?.Invoke(this);
+
         // Only pay for event args + a thread-pool hop when someone listens to MessageProcessed.
         if (Volatile.Read(ref _backing)?.MessageProcessed is null)
         {
@@ -589,15 +591,10 @@ public sealed class WebSocketConnection :
                 try { b.Attributes?.Return(); b.Attributes = null; }
                 catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
 
-                // Transport.Dispose() handles WebSocket Abort + Dispose
+                // Closes the WebSocket and stops the receive loop.
                 try
                 {
-                    if (b.WsTransport != null)
-                    {
-                        b.WsTransport.Dispose();
-                        s_pool.Return(b.WsTransport);
-                        b.WsTransport = null;
-                    }
+                    this.DisposeTransport();
                 }
                 catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
 

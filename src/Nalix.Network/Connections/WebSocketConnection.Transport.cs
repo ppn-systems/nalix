@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
@@ -17,133 +16,113 @@ using Nalix.Environment.Configuration;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Options;
 using Nalix.Environment.Sequencing;
-using Nalix.Network.Connections;
+using Nalix.Network.Internal;
+using Nalix.Network.Internal.Transport;
 using Nalix.Network.Options;
 
-#pragma warning disable CA2213 // Disposable fields should be disposed
-
-namespace Nalix.Network.Internal.Transport;
+namespace Nalix.Network.Connections;
 
 /// <summary>
-/// Adapter class that implements <see cref="IConnection.ITransport"/> for WebSocket.
+/// The WebSocket transport of a <see cref="WebSocketConnection"/>. The connection is its own transport: it is created
+/// once per connection and never pooled, so a caller that kept <see cref="TCP"/> cannot reach a later connection.
+/// Its sequence counters are pooled with the connection's backing; after the connection is disposed every send is a
+/// no-op.
 /// </summary>
-[SkipLocalsInit]
-[DebuggerNonUserCode]
-[EditorBrowsable(EditorBrowsableState.Never)]
-internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, IDisposable
+public sealed partial class WebSocketConnection : IConnection.ITransport
 {
-    #region Fields
+    #region Transport Fields
 
-    private WebSocketConnection _owner = null!;
-    private NetworkWebSocketOptions _options = null!;
+    /// <summary>Replaces the counters of a closed connection so stale callers never touch the next owner's counters.</summary>
+    private static readonly SequenceCounter s_detachedSequence = new();
 
-    private int _disposed;
+    private static readonly FragmentOptions s_fragmentOptions = ConfigurationManager.Instance.Get<FragmentOptions>();
+
+    private WebSocket _webSocket;
+    private CoalescingWriteStream? _writeBatcher;
+    private NetworkWebSocketOptions _wsOptions;
+    private SemaphoreSlim _wsSendLock => _sendLockScope.Lock;
+
+    // The scope handed out by AcquireSendLockAsync. A separate object, not the connection itself: if the connection
+    // implemented IAsyncDisposable, `await using` (or any disposer that prefers DisposeAsync) would release the lock
+    // instead of closing the connection. One per connection, as master allocated one per Initialize.
+#pragma warning disable CA2213 // Holds only a SemaphoreSlim without AvailableWaitHandle: no unmanaged resource.
+    private readonly SendLockScope _sendLockScope = new();
+#pragma warning restore CA2213
+
+    private int _transportDisposed;
     private int _receiveStarted;
     private Task? _receiveLoopTask;
 
-    private ISequenceCounter _sendSequence = null!;
-    private ISequenceCounter _receiveSequence = null!;
+    #endregion Transport Fields
 
-    private WebSocket _webSocket = null!;
-    private CoalescingWriteStream? _writeBatcher;
-    private SemaphoreSlim _sendLock = null!;
-#pragma warning disable CA2213 // Scoped wrapper over _sendLock; does not own standalone unmanaged resources
-    private SendLockScope _sendLockScope = null!;
-#pragma warning restore CA2213
+    #region Transport Helpers
 
+    private SequenceCounter WsSendSequence => Volatile.Read(ref _backing)?.SendSequence ?? s_detachedSequence;
+
+    private SequenceCounter WsReceiveSequence => Volatile.Read(ref _backing)?.ReceiveSequence ?? s_detachedSequence;
+
+    /// <summary>Gets the underlying WebSocket of this connection.</summary>
     internal WebSocket WebSocket => _webSocket;
-    internal SemaphoreSlim SendLock => _sendLock;
 
-    #endregion Fields
+    /// <summary>Gets the lock that serializes sends on the WebSocket.</summary>
+    internal SemaphoreSlim SendLock => _wsSendLock;
 
-    #region Constructor
-
-    public WebSocketTransport()
-    {
-    }
-
-    public void Initialize(WebSocketConnection owner, WebSocket webSocket, CoalescingWriteStream? writeBatcher = null)
+    /// <summary>
+    /// Wires the WebSocket into this connection. Called once from the constructor.
+    /// </summary>
+    private void InitializeTransport(WebSocket webSocket, CoalescingWriteStream? writeBatcher)
     {
         _writeBatcher = writeBatcher;
-        _sendSequence = new SequenceCounter();
-        _receiveSequence = new SequenceCounter();
-        _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _webSocket = webSocket ?? throw new ArgumentNullException(nameof(webSocket));
-        _options = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
-        _sendLock = new SemaphoreSlim(1, 1);
-        _sendLockScope = new SendLockScope(_sendLock);
-        _disposed = 0;
-        _receiveStarted = 0;
-        _receiveLoopTask = null;
+        _wsOptions = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
     }
 
-    public void ResetForPool()
-    {
-        _owner = null!;
-        _webSocket = null!;
-        _writeBatcher = null;
-        _options = null!;
-        _sendSequence = null!;
-        _receiveSequence = null!;
-        _disposed = 0;
-        _receiveStarted = 0;
-        _receiveLoopTask = null;
+    #endregion Transport Helpers
 
-        try { _sendLock?.Dispose(); }
-        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
-
-        _sendLockScope = null!;
-        _sendLock = null!;
-    }
-
-    #endregion Constructor
-
-    #region Properties
+    #region IConnection.ITransport
 
     /// <inheritdoc/>
-    public TransportFraming Framing => TransportFraming.None;
+    TransportFraming IConnection.ITransport.Framing => TransportFraming.None;
 
     /// <inheritdoc/>
-    public ISequenceCounter SendSequence => _sendSequence;
+    ISequenceCounter ITransportSequencer.SendSequence => this.WsSendSequence;
 
     /// <inheritdoc/>
-    public ISequenceCounter ReceiveSequence => _receiveSequence;
+    ISequenceCounter ITransportSequencer.ReceiveSequence => this.WsReceiveSequence;
 
     /// <inheritdoc/>
-    public uint NextSendSequence() => _sendSequence.Next();
+    uint ITransportSequencer.NextSendSequence() => this.WsSendSequence.Next();
 
     /// <inheritdoc/>
-    public uint NextReceiveSequence() => _receiveSequence.Next();
+    uint ITransportSequencer.NextReceiveSequence() => this.WsReceiveSequence.Next();
 
     /// <inheritdoc/>
-    public uint CurrentSendSequence => _sendSequence.Current();
+    uint ITransportSequencer.CurrentSendSequence => this.WsSendSequence.Current();
 
     /// <inheritdoc/>
-    public uint CurrentReceiveSequence => _receiveSequence.Current();
+    uint ITransportSequencer.CurrentReceiveSequence => this.WsReceiveSequence.Current();
 
-    #endregion Properties
-
-    #region APIs
-
+    /// <inheritdoc/>
     [StackTraceHidden]
-    public void Send(ReadOnlySpan<byte> message) => Throw.WebSocketSyncSendNotSupported();
+    void IConnection.ITransport.Send(ReadOnlySpan<byte> message) => Throw.WebSocketSyncSendNotSupported();
 
+    /// <inheritdoc/>
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ValueTask SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default)
+    ValueTask IConnection.ITransport.SendAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
-        // Peer already closed/closing -- swallow here (same as SocketTcpTransport's
+        // Peer already closed/closing -- swallow here (same as the TCP transport's
         // PeerClosed/Aborted swallow) instead of throwing, so callers several layers up
         // (dispatch/control-send paths) don't have to catch-and-classify this by exception
         // message string.
-        if (_owner.IsDisposed || _webSocket.State != WebSocketState.Open)
+        if (this.IsDisposed || _webSocket.State != WebSocketState.Open)
         {
             return default;
         }
 
         // WebSockets handle framing natively, so we just send the message as binary.
         // A SemaphoreSlim is used because WebSocket.SendAsync doesn't support concurrent calls.
-        if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
+        if (!cancellationToken.IsCancellationRequested && _wsSendLock.Wait(0, cancellationToken))
         {
             ValueTask vt;
             try
@@ -152,22 +131,24 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
             }
             catch
             {
-                _ = _sendLock.Release();
+                _ = _wsSendLock.Release();
                 throw;
             }
 
             if (vt.IsCompletedSuccessfully)
             {
-                _ = _sendLock.Release();
+                _ = _wsSendLock.Release();
+                this.TriggerPostProcessEvent();
                 return default;
             }
 
-            return AWAIT_WITH_RELEASE_ASYNC(_sendLock, vt);
+            return AWAIT_WITH_RELEASE_ASYNC(this, vt);
         }
 
         return AWAIT_ACQUIRE_AND_SEND_ASYNC(this, message, cancellationToken);
 
-        static async ValueTask AWAIT_WITH_RELEASE_ASYNC(SemaphoreSlim sendLock, ValueTask vt)
+        // The post-send event runs after the lock is released, so a handler never runs under the write lock.
+        static async ValueTask AWAIT_WITH_RELEASE_ASYNC(WebSocketConnection connection, ValueTask vt)
         {
             try
             {
@@ -175,21 +156,25 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
             }
             finally
             {
-                _ = sendLock.Release();
+                _ = connection._wsSendLock.Release();
             }
+
+            connection.TriggerPostProcessEvent();
         }
 
-        static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(WebSocketTransport transport, ReadOnlyMemory<byte> msg, CancellationToken ct)
+        static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(WebSocketConnection connection, ReadOnlyMemory<byte> msg, CancellationToken ct)
         {
-            await transport._sendLock.WaitAsync(ct).ConfigureAwait(false);
+            await connection._wsSendLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                await transport.SEND_CORE_ASYNC(msg, ct).ConfigureAwait(false);
+                await connection.SEND_CORE_ASYNC(msg, ct).ConfigureAwait(false);
             }
             finally
             {
-                _ = transport._sendLock.Release();
+                _ = connection._wsSendLock.Release();
             }
+
+            connection.TriggerPostProcessEvent();
         }
     }
 
@@ -198,9 +183,9 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     ValueTask<IAsyncDisposable> IConnection.ITransport.AcquireSendLockAsync(CancellationToken cancellationToken)
     {
-        if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
+        if (!cancellationToken.IsCancellationRequested && _wsSendLock.Wait(0, cancellationToken))
         {
-            return new ValueTask<IAsyncDisposable>(_sendLockScope);
+            return new ValueTask<IAsyncDisposable>(_sendLockScope.Enter());
         }
 
         return this.ACQUIRE_SEND_LOCK_ASYNC(cancellationToken);
@@ -208,20 +193,36 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
     private async ValueTask<IAsyncDisposable> ACQUIRE_SEND_LOCK_ASYNC(CancellationToken cancellationToken)
     {
-        await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return _sendLockScope;
+        await _wsSendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        return _sendLockScope.Enter();
     }
 
     /// <summary>
-    /// Releases a <see cref="WebSocketTransport"/> send lock previously acquired via
-    /// <see cref="ACQUIRE_SEND_LOCK_ASYNC"/>.
+    /// Releases the send lock taken by <see cref="IConnection.ITransport.AcquireSendLockAsync"/>. Only the first dispose
+    /// of an acquisition releases the lock; a repeated dispose is a no-op.
     /// </summary>
-    private sealed class SendLockScope(SemaphoreSlim sendLock) : IAsyncDisposable
+    private sealed class SendLockScope : IAsyncDisposable
     {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#pragma warning disable CA2213 // A SemaphoreSlim without AvailableWaitHandle holds no unmanaged resource.
+        public readonly SemaphoreSlim Lock = new(1, 1);
+#pragma warning restore CA2213
+
+        // 1 while the lock was handed out through this scope and the scope has not been disposed yet.
+        private int _held;
+
+        public SendLockScope Enter()
+        {
+            Volatile.Write(ref _held, 1);
+            return this;
+        }
+
         public ValueTask DisposeAsync()
         {
-            _ = sendLock.Release();
+            if (Interlocked.Exchange(ref _held, 0) == 1)
+            {
+                _ = this.Lock.Release();
+            }
+
             return ValueTask.CompletedTask;
         }
     }
@@ -230,12 +231,12 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     [StackTraceHidden]
     ValueTask IConnection.ITransport.SendAsyncCore(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
-        if (_owner.IsDisposed || _webSocket.State != WebSocketState.Open)
+        if (this.IsDisposed || _webSocket.State != WebSocketState.Open)
         {
             return ValueTask.CompletedTask;
         }
 
-        return this.SEND_CORE_ASYNC(message, cancellationToken);
+        return this.SEND_AND_NOTIFY_ASYNC(message, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -256,7 +257,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         {
             for (int i = 0; i <= last; i++)
             {
-                if (_owner.IsDisposed || _webSocket.State != WebSocketState.Open)
+                if (this.IsDisposed || _webSocket.State != WebSocketState.Open)
                 {
                     return;
                 }
@@ -266,7 +267,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
                     batcher?.Uncork();
                 }
 
-                await this.SEND_CORE_ASYNC(frames.Span[i].Memory, cancellationToken).ConfigureAwait(false);
+                await this.SEND_AND_NOTIFY_ASYNC(frames.Span[i].Memory, cancellationToken).ConfigureAwait(false);
             }
 
             completed = true;
@@ -293,18 +294,40 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         }
     }
 
+    /// <summary>
+    /// Writes one WebSocket message and counts its bytes. A write that fails because this connection was closed while it was
+    /// in flight is a no-op, as a send after close is; any other failure propagates.
+    /// </summary>
     private async ValueTask SEND_CORE_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
-        await _webSocket.SendAsync(message, WebSocketMessageType.Binary, true, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _webSocket.SendAsync(message, WebSocketMessageType.Binary, true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex) && this.IsDisposed)
+        {
+            return;
+        }
 
-        _owner.AddBytesSent(message.Length);
-        _owner.TriggerPostProcessEvent();
+        this.AddBytesSent(message.Length);
     }
 
-    [StackTraceHidden]
-    public void BeginReceive(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Writes one message for <see cref="IConnection.ITransport.SendAsyncCore(ReadOnlyMemory{byte}, CancellationToken)"/>,
+    /// then raises the post-send event. The caller may hold the send lock here (the packet pipeline does), so the event
+    /// only queues its handlers; it must not do blocking work inline.
+    /// </summary>
+    private async ValueTask SEND_AND_NOTIFY_ASYNC(ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
-        ObjectDisposedException.ThrowIf(_owner.IsDisposed, nameof(WebSocketConnection));
+        await this.SEND_CORE_ASYNC(message, cancellationToken).ConfigureAwait(false);
+        this.TriggerPostProcessEvent();
+    }
+
+    /// <inheritdoc/>
+    [StackTraceHidden]
+    void IConnection.ITransport.BeginReceive(CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(this.IsDisposed, nameof(WebSocketConnection));
 
         if (Interlocked.CompareExchange(ref _receiveStarted, 1, 0) != 0)
         {
@@ -315,16 +338,14 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
     }
 
     /// <inheritdoc/>
-    public void UseFraming(TransportFraming framing)
+    void IConnection.ITransport.UseFraming(TransportFraming framing)
     {
         // TODO: Review framing behavior. WebSocket currently relies on its built-in message framing.
     }
 
-    #endregion APIs
+    #endregion IConnection.ITransport
 
     #region Receive Loop
-
-    private static readonly FragmentOptions s_fragmentOptions = ConfigurationManager.Instance.Get<FragmentOptions>();
 
     private static int GET_RECEIVE_BUFFER_SIZE()
     {
@@ -338,11 +359,9 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
     private async Task RECEIVE_LOOP_ASYNC(CancellationToken cancellationToken = default)
     {
-        // This transport is pooled: after Dispose() it can be re-initialized for another connection while this loop is
-        // still unwinding. Work only with the owner and socket this loop started with, never with the fields.
-        WebSocketConnection owner = _owner;
+        WebSocketConnection owner = this;
         WebSocket webSocket = _webSocket;
-        NetworkWebSocketOptions options = _options;
+        NetworkWebSocketOptions options = _wsOptions;
 
         // Allocate a buffer matching FragmentOptions.MaxChunkSize (typically 1.4KB) to eliminate 64KB per-connection bloat.
         int length = GET_RECEIVE_BUFFER_SIZE();
@@ -384,7 +403,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
                 else
                 {
                     // Slow path: the message is larger than the buffer, we need to assemble it
-                    await this.HANDLE_LARGE_MESSAGE_ASYNC(owner, webSocket, options, buffer, result.Count, cancellationToken).ConfigureAwait(false);
+                    await HANDLE_LARGE_MESSAGE_ASYNC(owner, webSocket, options, buffer, result.Count, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -410,7 +429,7 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
         }
     }
 
-    private async Task HANDLE_LARGE_MESSAGE_ASYNC(
+    private static async Task HANDLE_LARGE_MESSAGE_ASYNC(
         WebSocketConnection owner, WebSocket webSocket, NetworkWebSocketOptions options, byte[] initialBuffer, int initialBytes, CancellationToken cancellationToken)
     {
         if (initialBytes > options.MaxMessageSize)
@@ -517,24 +536,28 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
             {
                 LOG_RECEIVE_LOOP_FAULT(ex, "after-dispose");
             }
-        }, _owner, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }, this, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     private static void LOG_RECEIVE_LOOP_FAULT(Exception ex, string phase)
     {
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Debug))
         {
-            DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Debug, new DiagnosticLog("NW.WebSocketTransport:Internal", $"receive-loop-faulted-{phase} phase={phase}", ex));
+            DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Debug, new DiagnosticLog("NW.WebSocketConnection:Internal", $"receive-loop-faulted-{phase} phase={phase}", ex));
         }
     }
 
     #endregion Receive Loop
 
-    #region Dispose
+    #region Transport Disposal
 
-    public void Dispose()
+    /// <summary>
+    /// Stops the receive loop and closes the WebSocket. Runs once, when the connection is disposed. After this the
+    /// connection reports <see cref="IsDisposed"/>, so every send becomes a no-op.
+    /// </summary>
+    private void DisposeTransport()
     {
-        if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
+        if (Interlocked.CompareExchange(ref _transportDisposed, 1, 0) != 0)
         {
             return;
         }
@@ -547,17 +570,14 @@ internal sealed class WebSocketTransport : IConnection.ITransport, IPoolable, ID
 
         try
         {
-            if (_webSocket is not null)
+            if (_webSocket.State == WebSocketState.Open)
             {
-                if (_webSocket.State == WebSocketState.Open)
-                {
-                    _webSocket.Abort();
-                }
-                _webSocket.Dispose();
+                _webSocket.Abort();
             }
+            _webSocket.Dispose();
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
     }
 
-    #endregion Dispose
+    #endregion Transport Disposal
 }

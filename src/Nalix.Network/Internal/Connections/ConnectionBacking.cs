@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
+using Nalix.Environment.Sequencing;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Pooling;
@@ -29,9 +30,14 @@ internal sealed class ConnectionBacking : IPoolStateTracked
 
     public SocketConnection? Socket;
     public SlidingWindow? UdpReplayWindow;
-    public SocketTcpTransport? TcpTransport;
     public SocketUdpTransport? UdpTransport;
-    public WebSocketTransport? WsTransport;
+
+    // Sequence counters are pooled with the backing so a connection that is not pooled itself
+    // (Connection / WebSocketConnection) owns no per-connection counter objects.
+    public readonly SequenceCounter SendSequence = new();
+    public readonly SequenceCounter ReceiveSequence = new();
+    public readonly SequenceCounter UdpSendSequence = new();
+    public readonly SequenceCounter UdpReceiveSequence = new();
 
     public long BytesSent;
     public long BytesReceived;
@@ -89,10 +95,13 @@ internal sealed class ConnectionBacking : IPoolStateTracked
     public void ResetForPool()
     {
         Socket = null;
-        TcpTransport = null;
         UdpTransport = null;
         UdpReplayWindow = null;
-        WsTransport = null;
+
+        SendSequence.Reset(0);
+        ReceiveSequence.Reset(0);
+        UdpSendSequence.Reset(0);
+        UdpReceiveSequence.Reset(0);
 
         BytesSent = 0;
         BytesReceived = 0;

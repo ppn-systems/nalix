@@ -149,6 +149,8 @@ public sealed class PassthroughConnection :
             return;
         }
 
+        s_afterUdpAttachHook?.Invoke(this);
+
         // Dispose may have run after the check above. It saw no transport and could not release ours,
         // so the transport is released here instead of being left attached to a disposed connection.
         if (this.IsDisposed)
@@ -163,6 +165,13 @@ public sealed class PassthroughConnection :
     /// </summary>
     [ThreadStatic]
     internal static Action<PassthroughConnection>? s_beforeUdpAttachHook;
+
+    /// <summary>
+    /// Test seam: invoked on the binding thread immediately after the transport is attached, before the connection checks
+    /// whether it was disposed in the meantime.
+    /// </summary>
+    [ThreadStatic]
+    internal static Action<PassthroughConnection>? s_afterUdpAttachHook;
 
     /// <summary>
     /// Atomically detaches the UDP transport (if any) and disposes it exactly once.

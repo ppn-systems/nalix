@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\src\Nalix.Codec\Nalix.Codec.csproj" />
     <ProjectReference Include="..\..\extensions\Nalix.Observability\Nalix.Observability.csproj" />
     <ProjectReference Include="..\..\extensions\Nalix.Observability.Contracts\Nalix.Observability.Contracts.csproj" />
+    <ProjectReference Include="..\..\extensions\Nalix.Tunneling\Nalix.Tunneling.csproj" />
   </ItemGroup>
 
 </Project>

@@ -19,7 +19,7 @@ public sealed class UdpTransportLifecycleTests
         Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
 
-        SocketUdpTransport transport = new();
+        SocketUdpTransport transport = new(new Nalix.Environment.Sequencing.SequenceCounter(), new Nalix.Environment.Sequencing.SequenceCounter());
         transport.SetSocket(socket);
         IPEndPoint remote = new(IPAddress.Loopback, ((IPEndPoint)socket.LocalEndPoint!).Port);
         transport.Initialize(ref remote);
@@ -64,7 +64,7 @@ public sealed class UdpTransportLifecycleTests
     [Fact]
     public void Send_WithoutInitialize_DoesNotThrow()
     {
-        SocketUdpTransport transport = new();
+        SocketUdpTransport transport = new(new Nalix.Environment.Sequencing.SequenceCounter(), new Nalix.Environment.Sequencing.SequenceCounter());
         Action act = () => transport.Send(new byte[] { 1, 2, 3 });
         act.Should().NotThrow();
     }
@@ -73,7 +73,7 @@ public sealed class UdpTransportLifecycleTests
     public void Dispose_AfterUse_SendsNothingAndReleasesOwnedSocket()
     {
         // Owned socket: Initialize() created it internally (no SetSocket call).
-        SocketUdpTransport owned = new();
+        SocketUdpTransport owned = new(new Nalix.Environment.Sequencing.SequenceCounter(), new Nalix.Environment.Sequencing.SequenceCounter());
         using Socket receiver = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         receiver.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         IPEndPoint remote = new(IPAddress.Loopback, ((IPEndPoint)receiver.LocalEndPoint!).Port);
@@ -92,7 +92,7 @@ public sealed class UdpTransportLifecycleTests
         // Shared socket: SetSocket() means the transport does not own it and must not dispose it.
         using Socket shared = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         shared.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        SocketUdpTransport sharedTransport = new();
+        SocketUdpTransport sharedTransport = new(new Nalix.Environment.Sequencing.SequenceCounter(), new Nalix.Environment.Sequencing.SequenceCounter());
         sharedTransport.SetSocket(shared);
         sharedTransport.Dispose();
 
