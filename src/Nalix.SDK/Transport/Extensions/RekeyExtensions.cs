@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
@@ -53,7 +54,10 @@ public static class RekeyExtensions
             switched = true;
         }
 
-        SdkLog.Debug(Tag, "Rotating the session key.");
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Started))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Started, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-start"));
+        }
 
         try
         {
@@ -77,28 +81,40 @@ public static class RekeyExtensions
                 timeoutMs: session.Options.ConnectTimeoutMillis > 0 ? session.Options.ConnectTimeoutMillis : 5000,
                 ct: ct).ConfigureAwait(false);
 
-            SdkLog.Info(Tag, "Session key rotated.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Completed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Completed, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-completed"));
+            }
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             if (!switched)
             {
                 // SESSION_REKEY never left: the server still uses the current key and nothing changed locally.
-                SdkLog.Warn(Tag, "Key rotation failed before the request was sent; the session keeps its current key.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Failed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Failed, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-failed stage=send key=unchanged", ex));
+                }
             }
             else if (transport is { DeliversRekeyReliably: true })
             {
                 // The request was written on an ordered transport, and the server switches as soon as it reads it. The
                 // acknowledgement is only late or lost: going back to the old key would leave the two sides on different
                 // keys, so the new key is kept.
-                SdkLog.Warn(Tag, "No acknowledgement for the key rotation; keeping the new key, which the server switched to when it read the request.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Failed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Failed, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-unacknowledged transport=ordered key=new", ex));
+                }
             }
             else
             {
                 // Unordered transport: the request may never have arrived, and the server ignores it on UDP.
                 session.State.Secret = previousKey;
                 session.ResetSequenceCounters();
-                SdkLog.Warn(Tag, "Key rotation was not acknowledged on an unordered transport; the previous key was restored.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Failed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Failed, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-unacknowledged transport=unordered key=restored", ex));
+                }
             }
 
             throw;
@@ -112,6 +128,4 @@ public static class RekeyExtensions
             Bytes32.Wipe(ref newKey);
         }
     }
-
-    private const string Tag = "SDK.Rekey";
 }

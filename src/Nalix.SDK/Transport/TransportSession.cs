@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
@@ -494,11 +495,17 @@ public abstract class TransportSession : IDisposable, IAsyncDisposable, ITranspo
                 catch (Exception ex) when (Nalix.Abstractions.Exceptions.ExceptionClassifier.IsNonFatal(ex))
                 {
                     consecutiveMisses++;
-                    SdkLog.Warn("SDK.KeepAlive", $"Missed PONG ({consecutiveMisses}/{Math.Max(1, this.Options.KeepAliveMissThreshold)}).", ex);
+                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.KeepAlive.Missed))
+                    {
+                        DiagnosticsEvents.Write(DiagnosticsEvents.KeepAlive.Missed, new DiagnosticLog("SDK.TransportSession:KeepAlive", $"pong-missed misses={consecutiveMisses} threshold={Math.Max(1, this.Options.KeepAliveMissThreshold)}", ex));
+                    }
                     int threshold = Math.Max(1, this.Options.KeepAliveMissThreshold);
                     if (consecutiveMisses >= threshold && !ct.IsCancellationRequested && this.IsConnected)
                     {
-                        SdkLog.Error("SDK.KeepAlive", $"Keepalive failed after {consecutiveMisses} missed PONG response(s); closing the connection.");
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.KeepAlive.Failed))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.KeepAlive.Failed, new DiagnosticLog("SDK.TransportSession:KeepAlive", $"keepalive-failed misses={consecutiveMisses}"));
+                        }
                         await this.FaultFromKeepAliveAsync(
                             new Nalix.Abstractions.Exceptions.NetworkException(
                                 $"Keepalive failed after {consecutiveMisses} missed PONG response(s): {ex.Message}", ex)).ConfigureAwait(false);

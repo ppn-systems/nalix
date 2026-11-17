@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.SDK.Transport.Extensions;
@@ -109,9 +110,10 @@ internal sealed class ReconnectSupervisor
             int delay = (int)Math.Min(maxDelay, baseDelay * Math.Pow(2, attempt - 1));
             delay = (int)(delay * (0.8 + (_jitter.NextDouble() * 0.4))); // +/-20% jitter
 
-            SdkLog.Info("SDK.Reconnect", maxAttempts > 0
-                ? $"Reconnect attempt {attempt}/{maxAttempts} in {delay} ms."
-                : $"Reconnect attempt {attempt} in {delay} ms.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Reconnect.Scheduled))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Reconnect.Scheduled, new DiagnosticLog("SDK.ReconnectSupervisor:Run", $"reconnect-scheduled attempt={attempt} max={maxAttempts} delay-ms={delay}"));
+            }
 
             try
             {
@@ -155,7 +157,10 @@ internal sealed class ReconnectSupervisor
                         // The connection dropped while the resume/re-auth callbacks were running (and the
                         // drop was swallowed); publishing ready now would hand out a dead session.
                         SdkTelemetry.RecordReconnect(SdkTelemetry.ReconnectFailed);
-                        SdkLog.Warn("SDK.Reconnect", "The connection dropped again while the resume/re-authentication callbacks ran; retrying.");
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Reconnect.AttemptFailed))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.Reconnect.AttemptFailed, new DiagnosticLog("SDK.ReconnectSupervisor:Run", $"reconnect-dropped-during-callbacks attempt={attempt}"));
+                        }
                         attempt = 0;
                         continue;
                     }
@@ -164,9 +169,10 @@ internal sealed class ReconnectSupervisor
                 }
 
                 SdkTelemetry.RecordReconnect(reason == ProtocolReason.NONE ? SdkTelemetry.ReconnectResumed : SdkTelemetry.ReconnectHandshake);
-                SdkLog.Info("SDK.Reconnect", reason == ProtocolReason.NONE
-                    ? $"Reconnected after {attempt} attempt(s); the session was resumed."
-                    : $"Reconnected after {attempt} attempt(s) with a fresh handshake (resume: {reason}).");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Reconnect.Succeeded))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Reconnect.Succeeded, new DiagnosticLog("SDK.ReconnectSupervisor:Run", $"reconnected attempts={attempt} resumed={reason == ProtocolReason.NONE} reason={reason}"));
+                }
                 _ = tcs.TrySetResult(true);
                 _session.NotifyReady();
                 return;
@@ -181,7 +187,10 @@ internal sealed class ReconnectSupervisor
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
                 SdkTelemetry.RecordReconnect(SdkTelemetry.ReconnectFailed);
-                SdkLog.Warn("SDK.Reconnect", $"Reconnect attempt {attempt} failed.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Reconnect.AttemptFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Reconnect.AttemptFailed, new DiagnosticLog("SDK.ReconnectSupervisor:Run", $"reconnect-attempt-failed attempt={attempt}", ex));
+                }
 
                 // Keep retrying until attempts are exhausted; transient connect/handshake
                 // failures are expected during an outage.
@@ -193,7 +202,10 @@ internal sealed class ReconnectSupervisor
         bool stoppedByApp = _session.IntentionalDisconnectEpoch != startEpoch;
         if (!stoppedByApp && _session.Options.AutoReconnectEnabled)
         {
-            SdkLog.Error("SDK.Reconnect", $"Auto-reconnect gave up after {attempt} attempt(s).");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Reconnect.GaveUp))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Reconnect.GaveUp, new DiagnosticLog("SDK.ReconnectSupervisor:Run", $"reconnect-gave-up attempts={attempt}"));
+            }
         }
         _ = tcs.TrySetException(stoppedByApp
             ? new OperationCanceledException("Auto-reconnect stopped: DisconnectAsync() was called.")

@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
@@ -179,9 +180,15 @@ public class UdpSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
-            SdkLog.Debug("SDK.UdpSession", $"Binding UDP to {_remoteEndPoint}.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connecting))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.UdpSession:Connect", $"connecting endpoint={_remoteEndPoint}"));
+            }
             await _socket.ConnectAsync(_remoteEndPoint, connectCts.Token).ConfigureAwait(false);
-            SdkLog.Info("SDK.UdpSession", $"UDP bound to {_remoteEndPoint}.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.UdpSession:Connect", $"connected endpoint={_remoteEndPoint}"));
+            }
 
             _loopCts = new CancellationTokenSource();
 
@@ -194,7 +201,10 @@ public class UdpSession : TransportSession
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
-            SdkLog.Warn("SDK.UdpSession", "UDP connection failed.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.ConnectFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.ConnectFailed, new DiagnosticLog("SDK.UdpSession:Connect", "connect-failed", ex));
+            }
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"UDP Connection failed: {ex.Message}", ex);
         }
@@ -269,7 +279,10 @@ public class UdpSession : TransportSession
             catch (ObjectDisposedException) { /* ignored */ }
 
             NetworkException disconnectEx = new("The UDP session was disconnected.");
-            SdkLog.Info("SDK.UdpSession", "Disconnected.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Disconnected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Disconnected, new DiagnosticLog("SDK.UdpSession:Disconnect", "disconnected"));
+            }
             this.DispatchPendingDisconnect(disconnectEx);
             this.OnDisconnected?.Invoke(this, disconnectEx);
         }
@@ -380,7 +393,10 @@ public class UdpSession : TransportSession
             return;
         }
 
-        SdkLog.Warn("SDK.UdpSession", "Transport error; closing the connection.", ex);
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.TransportError))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Session.TransportError, new DiagnosticLog("SDK.UdpSession:HandleError", "transport-error", ex));
+        }
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually

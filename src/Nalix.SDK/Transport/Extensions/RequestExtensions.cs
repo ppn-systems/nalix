@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.SDK.Options;
@@ -164,7 +165,10 @@ public static class RequestExtensions
                 if (attempt > 1)
                 {
                     SdkTelemetry.RecordRetry(responseType);
-                    SdkLog.Debug("SDK.Request", $"{responseType}: attempt {attempt - 1} timed out; retrying (attempt {attempt}/{totalAttempts}, wait {attemptTimeoutMs} ms).");
+                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Requests.Retrying))
+                    {
+                        DiagnosticsEvents.Write(DiagnosticsEvents.Requests.Retrying, new DiagnosticLog("SDK.RequestExtensions:RequestAsync", $"retry type={responseType} attempt={attempt}/{totalAttempts} timeout-ms={attemptTimeoutMs}"));
+                    }
                 }
 
                 try
@@ -198,7 +202,10 @@ public static class RequestExtensions
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             SdkTelemetry.CompleteRequest(activity, start, responseType, SdkTelemetry.OutcomeOf(ex), attempts, ex);
-            SdkLog.Debug("SDK.Request", $"{responseType} request failed after {attempts} attempt(s): {SdkTelemetry.OutcomeOf(ex)}.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Requests.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Requests.Failed, new DiagnosticLog("SDK.RequestExtensions:RequestAsync", $"request-failed type={responseType} attempts={attempts} outcome={SdkTelemetry.OutcomeOf(ex)}", ex));
+            }
             throw;
         }
     }
@@ -285,7 +292,10 @@ public static class RequestExtensions
                 if (attempt > 1)
                 {
                     SdkTelemetry.RecordRetry(responseType);
-                    SdkLog.Debug("SDK.Request", $"{responseType}: attempt {attempt - 1} timed out; retrying (attempt {attempt}/{totalAttempts}, wait {attemptTimeoutMs} ms).");
+                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Requests.Retrying))
+                    {
+                        DiagnosticsEvents.Write(DiagnosticsEvents.Requests.Retrying, new DiagnosticLog("SDK.RequestExtensions:TryRequestAsync", $"retry type={responseType} attempt={attempt}/{totalAttempts} timeout-ms={attemptTimeoutMs}"));
+                    }
                 }
 
                 try
@@ -323,7 +333,10 @@ public static class RequestExtensions
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             SdkTelemetry.CompleteRequest(activity, start, responseType, SdkTelemetry.OutcomeOf(ex), attempts, ex);
-            SdkLog.Debug("SDK.Request", $"{responseType} request failed after {attempts} attempt(s): {SdkTelemetry.OutcomeOf(ex)}.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Requests.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Requests.Failed, new DiagnosticLog("SDK.RequestExtensions:TryRequestAsync", $"request-failed type={responseType} attempts={attempts} outcome={SdkTelemetry.OutcomeOf(ex)}", ex));
+            }
             throw;
         }
 

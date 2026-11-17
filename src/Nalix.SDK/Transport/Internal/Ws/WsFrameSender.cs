@@ -5,6 +5,7 @@ using System;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Transforms;
@@ -118,9 +119,9 @@ internal sealed class WsFrameSender : IDisposable
                 seqToUse,
                 _options.Algorithm);
 
-            if (SdkLog.IsEnabled(DiagnosticsEvents.Internal.Trace) && current.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Frames.Sent) && current.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
             {
-                SdkLog.Trace("SDK.WsFrameSender", $"Sending WebSocket frame opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(current.Span):X4} length={current.Length} encrypted={encrypt}.");
+                DiagnosticsEvents.Write(DiagnosticsEvents.Frames.Sent, new DiagnosticLog("SDK.WsFrameSender:Send", $"sent transport=websocket opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(current.Span):X4} length={current.Length} encrypted={encrypt}"));
             }
 
             bool sent = sync

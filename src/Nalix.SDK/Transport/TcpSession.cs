@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
@@ -175,9 +176,15 @@ public class TcpSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
-            SdkLog.Debug("SDK.TcpSession", $"Connecting to {effectiveHost}:{effectivePort} (timeout {this.Options.ConnectTimeoutMillis} ms).");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connecting))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.TcpSession:Connect", $"connecting host={effectiveHost} port={effectivePort} timeout-ms={this.Options.ConnectTimeoutMillis}"));
+            }
             await _socket.ConnectAsync(effectiveHost, effectivePort, connectCts.Token).ConfigureAwait(false);
-            SdkLog.Info("SDK.TcpSession", $"Connected to {effectiveHost}:{effectivePort}.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.TcpSession:Connect", $"connected host={effectiveHost} port={effectivePort}"));
+            }
 
             if (_socket.LocalEndPoint is IPEndPoint localEp)
             {
@@ -200,7 +207,10 @@ public class TcpSession : TransportSession
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
-            SdkLog.Warn("SDK.TcpSession", $"Connection to {effectiveHost}:{effectivePort} failed.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.ConnectFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.ConnectFailed, new DiagnosticLog("SDK.TcpSession:Connect", $"connect-failed host={effectiveHost} port={effectivePort}", ex));
+            }
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"Connection failed: {ex.Message}", ex);
         }
@@ -255,9 +265,15 @@ public class TcpSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
-            SdkLog.Debug("SDK.TcpSession", $"Connecting to {effectiveHost}:{effectivePort} (timeout {this.Options.ConnectTimeoutMillis} ms).");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connecting))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.TcpSession:Connect", $"connecting host={effectiveHost} port={effectivePort} timeout-ms={this.Options.ConnectTimeoutMillis} proxy-v2=true"));
+            }
             await _socket.ConnectAsync(effectiveHost, effectivePort, connectCts.Token).ConfigureAwait(false);
-            SdkLog.Info("SDK.TcpSession", $"Connected to {effectiveHost}:{effectivePort}.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.TcpSession:Connect", $"connected host={effectiveHost} port={effectivePort} proxy-v2=true"));
+            }
 
             if (_socket.LocalEndPoint is IPEndPoint localEp)
             {
@@ -280,7 +296,10 @@ public class TcpSession : TransportSession
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected).ConfigureAwait(false);
-            SdkLog.Warn("SDK.TcpSession", $"Connection to {(string.IsNullOrWhiteSpace(host) ? this.Options.Address : host)}:{port ?? this.Options.Port} failed.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.ConnectFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.ConnectFailed, new DiagnosticLog("SDK.TcpSession:Connect", $"connect-failed host={(string.IsNullOrWhiteSpace(host) ? this.Options.Address : host)} port={port ?? this.Options.Port} proxy-v2=true", ex));
+            }
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"Connection failed: {ex.Message}", ex);
         }
@@ -387,7 +406,10 @@ public class TcpSession : TransportSession
             this.StopKeepAlive();
 
             NetworkException disconnectEx = new("The TCP session was disconnected.");
-            SdkLog.Info("SDK.TcpSession", raiseDisconnected ? "Disconnected." : "Disconnected (notification suppressed during an internal transition).");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Disconnected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Disconnected, new DiagnosticLog("SDK.TcpSession:Disconnect", $"disconnected notified={raiseDisconnected}"));
+            }
             this.DispatchPendingDisconnect(disconnectEx);
 
             if (raiseDisconnected)
@@ -527,7 +549,10 @@ public class TcpSession : TransportSession
             return;
         }
 
-        SdkLog.Warn("SDK.TcpSession", "Transport error; closing the connection.", ex);
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.TransportError))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Session.TransportError, new DiagnosticLog("SDK.TcpSession:HandleError", "transport-error", ex));
+        }
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually

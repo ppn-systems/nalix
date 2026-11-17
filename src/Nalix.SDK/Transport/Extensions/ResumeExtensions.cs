@@ -5,6 +5,7 @@ using System;
 using System.Buffers.Binary;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
@@ -74,7 +75,10 @@ public static class ResumeExtensions
 
             if (response.Reason != ProtocolReason.NONE)
             {
-                SdkLog.Info("SDK.Resume", $"The server declined to resume the session: {response.Reason}.");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Declined))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Declined, new DiagnosticLog("SDK.ResumeExtensions:Resume", $"resume-declined reason={response.Reason}"));
+                }
                 return response.Reason;
             }
 
@@ -86,34 +90,52 @@ public static class ResumeExtensions
 
             if (response.Proof != new Bytes32(expectedResponseProofBytes))
             {
-                SdkLog.Error("SDK.Resume", "Session resume response proof is invalid (possible man-in-the-middle or clock skew).");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.ProofInvalid))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.ProofInvalid, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-proof-invalid"));
+                }
                 throw new NetworkException("Session resume response proof is invalid. Possible Man-in-the-Middle attack or clock skew.");
             }
 
             session.State.SessionToken = response.SessionToken;
             session.State.EncryptionEnabled = true;
-            SdkLog.Info("SDK.Resume", "Session resumed.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Resumed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Resumed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resumed"));
+            }
             transportSession?.NotifyReady();
             return ProtocolReason.NONE;
         }
         catch (OperationCanceledException ex)
         {
-            SdkLog.Debug("SDK.Resume", "Session resume was canceled.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Failed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-failed reason=canceled", ex));
+            }
             return ProtocolReason.CANCELLED;
         }
         catch (TimeoutException ex)
         {
-            SdkLog.Warn("SDK.Resume", "Session resume timed out.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Failed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-failed reason=timeout", ex));
+            }
             return ProtocolReason.TIMEOUT;
         }
         catch (NetworkException ex)
         {
-            SdkLog.Warn("SDK.Resume", "Session resume failed with a network error.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Failed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-failed reason=network-error", ex));
+            }
             return ProtocolReason.NETWORK_ERROR;
         }
         catch (InvalidOperationException ex)
         {
-            SdkLog.Warn("SDK.Resume", "Session resume was attempted in an invalid state.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Failed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-failed reason=invalid-state", ex));
+            }
             return ProtocolReason.STATE_VIOLATION;
         }
         finally
@@ -188,7 +210,10 @@ public static class ResumeExtensions
                     throw new NetworkException($"Session resume failed: {reason}");
                 }
 
-                SdkLog.Info("SDK.Resume", $"Resume failed ({reason}); reconnecting for a full handshake.");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Fallback))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Fallback, new DiagnosticLog("SDK.ResumeExtensions:ConnectWithResume", $"resume-fallback reason={reason}"));
+                }
 
                 if (transportSession is not null)
                 {

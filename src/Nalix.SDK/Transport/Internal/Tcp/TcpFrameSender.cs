@@ -6,6 +6,7 @@ using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Transforms;
@@ -132,9 +133,9 @@ internal sealed class TcpFrameSender : IDisposable
                 encrypt ? _sequence.Next() : null,
                 _options.Algorithm);
 
-            if (SdkLog.IsEnabled(DiagnosticsEvents.Internal.Trace) && current.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Frames.Sent) && current.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
             {
-                SdkLog.Trace("SDK.TcpFrameSender", $"Sending TCP frame opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(current.Span):X4} length={current.Length} encrypted={encrypt}.");
+                DiagnosticsEvents.Write(DiagnosticsEvents.Frames.Sent, new DiagnosticLog("SDK.TcpFrameSender:Send", $"sent transport=tcp opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(current.Span):X4} length={current.Length} encrypted={encrypt}"));
             }
 
             bool sent = current.Length >= _fragmentOptions.MaxChunkSize

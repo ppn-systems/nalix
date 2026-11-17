@@ -6,6 +6,7 @@ using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Transforms;
@@ -203,7 +204,10 @@ internal sealed class TcpFrameReader : IDisposable
 
             if (!_sequence.IsValid(seq, s_sequenceOptions.TcpWindow))
             {
-                SdkLog.Debug("SDK.TcpFrameReader", $"Dropped an inbound frame outside the replay window (seq {seq}, current {_sequence.Current()}).");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Frames.ReplayRejected))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Frames.ReplayRejected, new DiagnosticLog("SDK.TcpFrameReader:Receive", $"replay-rejected transport=tcp seq={seq} current={_sequence.Current()}"));
+                }
                 if (Codec.DiagnosticsEvents.Source.IsEnabled(Codec.DiagnosticsEvents.Sequence.Rejected))
                 {
                     Codec.DiagnosticsEvents.Write(Codec.DiagnosticsEvents.Sequence.Rejected, new
@@ -221,9 +225,9 @@ internal sealed class TcpFrameReader : IDisposable
                 _sequence.UpdateTo(seq.Value);
             }
 
-            if (SdkLog.IsEnabled(DiagnosticsEvents.Internal.Trace) && lease.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Frames.Received) && lease.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
             {
-                SdkLog.Trace("SDK.TcpFrameReader", $"Received TCP frame opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(lease.Span):X4} length={lease.Length} seq={seq}.");
+                DiagnosticsEvents.Write(DiagnosticsEvents.Frames.Received, new DiagnosticLog("SDK.TcpFrameReader:Receive", $"received transport=tcp opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(lease.Span):X4} length={lease.Length} seq={seq}"));
             }
 
             _onMessage(lease);

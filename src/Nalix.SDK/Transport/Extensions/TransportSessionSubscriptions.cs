@@ -5,6 +5,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
@@ -91,7 +92,10 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                SdkLog.Error("SDK.Subscriptions", $"On<{typeof(TPacket).Name}> handler failed.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerFailed, new DiagnosticLog("SDK.TransportSessionSubscriptions:On", $"handler-failed type={typeof(TPacket).Name}", ex));
+                }
             }
         }
 
@@ -126,7 +130,10 @@ public static class TransportSessionSubscriptions
                 {
                     if (p is not TPacket t)
                     {
-                        SdkLog.Warn("SDK.Subscriptions", $"OnExact<{typeof(TPacket).Name}> received unexpected packet {p?.GetType().Name ?? "null"}.");
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.UnexpectedPacket))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.UnexpectedPacket, new DiagnosticLog("SDK.TransportSessionSubscriptions:OnExact", $"unexpected-packet expected={typeof(TPacket).Name} actual={p?.GetType().Name ?? "null"}"));
+                        }
                         return;
                     }
 
@@ -142,7 +149,10 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                SdkLog.Error("SDK.Subscriptions", $"OnExact<{typeof(TPacket).Name}> handler failed.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerFailed, new DiagnosticLog("SDK.TransportSessionSubscriptions:OnExact", $"handler-failed type={typeof(TPacket).Name}", ex));
+                }
             }
         }
 
@@ -153,7 +163,7 @@ public static class TransportSessionSubscriptions
     /// <summary>
     /// Subscribes an asynchronous handler to strongly-typed packets. This is the overload C# picks for an
     /// <c>async</c> lambda, so <c>session.On&lt;T&gt;(async p =&gt; ...)</c> is no longer an <c>async void</c> lambda:
-    /// an exception thrown by the handler is logged (<see cref="DiagnosticsEvents.Internal.Error"/>) instead of
+    /// an exception thrown by the handler is reported (<see cref="DiagnosticsEvents.Subscriptions.HandlerFailed"/>) instead of
     /// crashing the process.
     /// </summary>
     /// <remarks>
@@ -210,7 +220,10 @@ public static class TransportSessionSubscriptions
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            SdkLog.Error("SDK.Subscriptions", $"{api} handler failed.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerFailed, new DiagnosticLog("SDK.TransportSessionSubscriptions:OnAsync", $"handler-failed api={api}", ex));
+            }
             DISPOSE(packet, dispose);
             return;
         }
@@ -231,11 +244,17 @@ public static class TransportSessionSubscriptions
             }
             catch (OperationCanceledException ex)
             {
-                SdkLog.Debug("SDK.Subscriptions", $"{api} handler was canceled.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerCanceled))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerCanceled, new DiagnosticLog("SDK.TransportSessionSubscriptions:OnAsync", $"handler-canceled api={api}", ex));
+                }
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                SdkLog.Error("SDK.Subscriptions", $"{api} handler failed.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerFailed, new DiagnosticLog("SDK.TransportSessionSubscriptions:OnAsync", $"handler-failed api={api}", ex));
+                }
             }
             finally
             {
@@ -283,7 +302,10 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                SdkLog.Error("SDK.Subscriptions", "On(predicate) handler failed.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerFailed, new DiagnosticLog("SDK.TransportSessionSubscriptions:OnPredicate", "handler-failed", ex));
+                }
             }
         }
 
@@ -360,7 +382,10 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                SdkLog.Error("SDK.Subscriptions", $"OnOnce<{typeof(TPacket).Name}> handler failed.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerFailed, new DiagnosticLog("SDK.TransportSessionSubscriptions:OnOnce", $"handler-failed type={typeof(TPacket).Name}", ex));
+                }
             }
         }
 
@@ -415,7 +440,10 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception callbackEx) when (ExceptionClassifier.IsNonFatal(callbackEx))
             {
-                SdkLog.Error("SDK.Subscriptions", $"SubscribeTemp<{typeof(TPacket).Name}> disconnect handler failed.", callbackEx);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerFailed, new DiagnosticLog("SDK.TransportSessionSubscriptions:SubscribeTemp", $"disconnect-handler-failed type={typeof(TPacket).Name}", callbackEx));
+                }
             }
         }
 
@@ -463,7 +491,10 @@ public static class TransportSessionSubscriptions
             }
             catch (Exception callbackEx) when (ExceptionClassifier.IsNonFatal(callbackEx))
             {
-                SdkLog.Error("SDK.Subscriptions", $"SubscribeTemp<{typeof(TPacket).Name}> predicate disconnect handler failed.", callbackEx);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.HandlerFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.HandlerFailed, new DiagnosticLog("SDK.TransportSessionSubscriptions:SubscribeTemp", $"disconnect-handler-failed type={typeof(TPacket).Name} predicate=true", callbackEx));
+                }
             }
         }
 
@@ -563,7 +594,10 @@ public sealed class CompositeSubscription : IDisposable
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
-                SdkLog.Warn("SDK.Subscriptions", "CompositeSubscription.Dispose: a subscription failed to dispose.", ex);
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Subscriptions.DisposeFailed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Subscriptions.DisposeFailed, new DiagnosticLog("SDK.CompositeSubscription:Dispose", "dispose-failed", ex));
+                }
             }
         }
     }

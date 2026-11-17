@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,8 +30,8 @@ public sealed class AsyncSubscriptionTests
         session.EnsureRegistry();
         session.SetNextPacket(new Control());
 
-        ConcurrentQueue<DiagnosticLog> errors = new();
-        using IDisposable logs = DiagnosticsEvents.SubscribeLogs((_, log) => errors.Enqueue(log), DiagnosticsEvents.Internal.Error);
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Subscriptions.HandlerFailed);
+        IEnumerable<DiagnosticLog> errors = capture.Events.Select(e => e.Log);
         TaskCompletionSource ran = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         using (session.On<Control>(async _ =>
@@ -47,8 +47,8 @@ public sealed class AsyncSubscriptionTests
         }
 
         DiagnosticLog error = errors.First(e => e.Exception?.Message == "async handler boom");
-        Assert.Equal("SDK.Subscriptions", error.Tag);
-        Assert.Contains("On<Control>", error.Message, StringComparison.Ordinal);
+        Assert.Equal("SDK.TransportSessionSubscriptions:OnAsync", error.Tag);
+        Assert.Contains("api=On<Control>", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -58,8 +58,8 @@ public sealed class AsyncSubscriptionTests
         session.EnsureRegistry();
         session.SetNextPacket(new Control());
 
-        ConcurrentQueue<DiagnosticLog> errors = new();
-        using IDisposable logs = DiagnosticsEvents.SubscribeLogs((_, log) => errors.Enqueue(log), DiagnosticsEvents.Internal.Error);
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Subscriptions.HandlerFailed);
+        IEnumerable<DiagnosticLog> errors = capture.Events.Select(e => e.Log);
 
 #pragma warning disable CS1998 // The handler is async on purpose and throws before any await.
         using (session.On<Control>(async _ => throw new InvalidOperationException("sync part boom")))
@@ -102,8 +102,8 @@ public sealed class AsyncSubscriptionTests
         session.EnsureRegistry();
         session.SetNextPacket(new Control());
 
-        ConcurrentQueue<DiagnosticLog> errors = new();
-        using IDisposable logs = DiagnosticsEvents.SubscribeLogs((_, log) => errors.Enqueue(log), DiagnosticsEvents.Internal.Error);
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Subscriptions.HandlerFailed);
+        IEnumerable<DiagnosticLog> errors = capture.Events.Select(e => e.Log);
 
         using (session.On(static (IPacket p) => p is Control, async _ =>
         {

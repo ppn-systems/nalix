@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
@@ -57,9 +58,10 @@ public static class HandshakeExtensions
             throw new NetworkException("ServerPublicKey is required when AllowTofu is disabled.");
         }
 
-        SdkLog.Debug("SDK.Handshake", string.IsNullOrEmpty(session.Options.ServerPublicKey)
-            ? "Handshake started; no ServerPublicKey configured, the server key will be trusted on first use (TOFU)."
-            : "Handshake started with a pinned ServerPublicKey.");
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.Started))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.Started, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", $"handshake-start server-key={(string.IsNullOrEmpty(session.Options.ServerPublicKey) ? "tofu" : "pinned")}"));
+        }
 
         X25519.X25519KeyPair clientKey = X25519.GenerateKeyPair();
 
@@ -135,7 +137,10 @@ public static class HandshakeExtensions
                 }
 
                 // Bounded by the same linked token as the handshake, so ConnectTimeoutMillis also bounds the solve.
-                SdkLog.Debug("SDK.Handshake", $"Server requested proof-of-work (difficulty {challenge.Difficulty}).");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.ProofOfWorkRequested))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.ProofOfWorkRequested, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", $"pow-requested difficulty={challenge.Difficulty}"));
+                }
                 long solution = ProofOfWorkSolver.SolveChallenge(challenge.Nonce.AsSpan(), challenge.Difficulty, challenge.TimestampTicks, cts.Token);
 
                 using ProofOfWorkProof proof = new();
@@ -195,9 +200,10 @@ public static class HandshakeExtensions
                 pinnedServerKey = keyResponse.PublicKey;
                 tofuFetchedKeyHex = pinnedServerKey.ToString();
 
-                SdkLog.Warn("SDK.Handshake",
-                    $"Trusting the server key {tofuFetchedKeyHex} on first use (TOFU): it arrived over an unauthenticated channel, so an " +
-                    "active man-in-the-middle on this connection would not be detected. Set TransportOptions.ServerPublicKey to pin it.");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuTrusted))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuTrusted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", $"tofu-trusted server-key={tofuFetchedKeyHex} authenticated=false"));
+                }
             }
             else
             {
@@ -222,7 +228,10 @@ public static class HandshakeExtensions
             Bytes32 expectedProof = HandshakeX25519.ComputeServerProof(masterSecret, transcriptHash);
             if (serverHello.Proof != expectedProof)
             {
-                SdkLog.Error("SDK.Handshake", "SessionChallenge proof is invalid. Possible man-in-the-middle attack; the handshake is aborted.");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.ProofInvalid))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.ProofInvalid, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "server-proof-invalid possible-mitm=true"));
+                }
                 throw new NetworkException("SessionChallenge proof is invalid. Possible Man-in-the-Middle attack.");
             }
 
@@ -267,11 +276,17 @@ public static class HandshakeExtensions
 
                     if (!session.Options.PersistTofuKey)
                     {
-                        SdkLog.Warn("SDK.Handshake", "The TOFU server key is kept in memory only (PersistTofuKey is disabled); the next process start trusts again.");
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuNotPersisted))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuNotPersisted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "tofu-not-persisted reason=disabled"));
+                        }
                     }
                     else if (OperatingSystem.IsBrowser())
                     {
-                        SdkLog.Warn("SDK.Handshake", "The TOFU server key cannot be persisted in the browser; every page load trusts again. Configure ServerPublicKey.");
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuNotPersisted))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuNotPersisted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "tofu-not-persisted reason=browser"));
+                        }
                     }
                     else
                     {
@@ -279,18 +294,27 @@ public static class HandshakeExtensions
                         {
                             ConfigurationManager.Instance.UpdateValue<TransportOptions>(nameof(TransportOptions.ServerPublicKey), tofuFetchedKeyHex);
                             ConfigurationManager.Instance.Flush();
-                            SdkLog.Info("SDK.Handshake", "The TOFU server key was saved to the configuration; later connections are pinned to it.");
+                            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuPersisted))
+                            {
+                                DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuPersisted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "tofu-persisted"));
+                            }
                         }
                         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
                         {
-                            SdkLog.Warn("SDK.Handshake", "Could not persist the TOFU server key; the next process start trusts again.", ex);
+                            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuNotPersisted))
+                            {
+                                DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuNotPersisted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "tofu-not-persisted reason=error", ex));
+                            }
                         }
                     }
                 }
 
                 session.State.EncryptionEnabled = true;
                 session.State.SessionToken = serverFinish.SessionToken;
-                SdkLog.Info("SDK.Handshake", $"Handshake complete; session encrypted with {session.Options.Algorithm}.");
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.Completed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.Completed, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", $"handshake-complete algorithm={session.Options.Algorithm}"));
+                }
                 transportSession?.NotifyReady();
             }
             // Logs non-fatal failures and never handles them (returns false), so the cleanup below still runs for every exception.
@@ -317,7 +341,10 @@ public static class HandshakeExtensions
 
         static bool LOG_FAILURE(Exception ex)
         {
-            SdkLog.Warn("SDK.Handshake", "Handshake failed.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.Failed, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "handshake-failed", ex));
+            }
             return false;
         }
     }

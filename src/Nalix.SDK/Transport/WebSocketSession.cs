@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
@@ -185,9 +186,15 @@ public class WebSocketSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
-            SdkLog.Debug("SDK.WebSocketSession", $"Connecting to {uri} (timeout {this.Options.ConnectTimeoutMillis} ms).");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connecting))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.WebSocketSession:Connect", $"connecting uri={uri} timeout-ms={this.Options.ConnectTimeoutMillis}"));
+            }
             await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
-            SdkLog.Info("SDK.WebSocketSession", $"Connected to {uri}.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.WebSocketSession:Connect", $"connected uri={uri}"));
+            }
             connected = true;
             if (raiseConnected)
             {
@@ -210,7 +217,10 @@ public class WebSocketSession : TransportSession
             // the one signal. During an outage every failed retry would otherwise raise one, making
             // "one OnDisconnected per real transport close" not a guarantee callers can build on.
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
-            SdkLog.Warn("SDK.WebSocketSession", "WebSocket connection failed.", ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.ConnectFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.ConnectFailed, new DiagnosticLog("SDK.WebSocketSession:Connect", "connect-failed", ex));
+            }
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"WebSocket Connection failed: {ex.Message}", ex);
         }
@@ -316,7 +326,10 @@ public class WebSocketSession : TransportSession
             this.StopKeepAlive();
 
             NetworkException disconnectEx = new("The WebSocket session was disconnected.");
-            SdkLog.Info("SDK.WebSocketSession", "Disconnected.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Disconnected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Disconnected, new DiagnosticLog("SDK.WebSocketSession:Disconnect", "disconnected"));
+            }
             this.DispatchPendingDisconnect(disconnectEx);
 
             // #393: a socket that never reached OnConnected (a failed/timed-out/refused connect
@@ -469,7 +482,10 @@ public class WebSocketSession : TransportSession
             return;
         }
 
-        SdkLog.Warn("SDK.WebSocketSession", "Transport error; closing the connection.", ex);
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.TransportError))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Session.TransportError, new DiagnosticLog("SDK.WebSocketSession:HandleError", "transport-error", ex));
+        }
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually
