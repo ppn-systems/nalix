@@ -47,7 +47,7 @@ internal static class NetworkStore
                     }
 
                     line = line.Trim();
-                    if (string.IsNullOrEmpty(line) || line.StartsWith('#'))
+                    if (string.IsNullOrEmpty(line) || line is ['#', ..])
                     {
                         continue;
                     }

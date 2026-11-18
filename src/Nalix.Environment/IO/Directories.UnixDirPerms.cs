@@ -289,7 +289,7 @@ public static partial class Directories
 
         string baseFull = Path.GetFullPath(baseDir);
 
-        if (!baseFull.EndsWith(Path.DirectorySeparatorChar))
+        if (!baseFull.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal))
         {
             baseFull += Path.DirectorySeparatorChar;
         }

@@ -44,7 +44,7 @@ public sealed class FileCertificateStore : ICertificateStore
                 }
 
                 string trimmed = line.Trim();
-                if (trimmed.StartsWith('#'))
+                if (trimmed is ['#', ..])
                 {
                     continue;
                 }
