@@ -770,7 +770,7 @@ public sealed class ConfigurationManager : IDisposable
 
         // SEC-25: Ensure base directory check is robust against prefix-matching attacks.
         // C:\Config vs C:\Config_Evil
-        if (!normalizedBaseDir.EndsWith(Path.DirectorySeparatorChar))
+        if (!normalizedBaseDir.AsSpan().EndsWith(Path.DirectorySeparatorChar))
         {
             normalizedBaseDir += Path.DirectorySeparatorChar;
         }

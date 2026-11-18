@@ -131,15 +131,22 @@ public sealed class WorkerWakeSignalTests
             w.GetAwaiter().GetResult();
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 10_000; i++)
+        // Best of three rounds: the runtime can charge a one-off allocation (tiering/OSR of this loop) to the
+        // thread, while a real per-wait allocation shows up in every round.
+        long allocated = long.MaxValue;
+        for (int round = 0; round < 3 && allocated != 0; round++)
         {
-            ValueTask w = signal.WaitAsync();
-            _ = signal.Set();
-            w.GetAwaiter().GetResult();
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 10_000; i++)
+            {
+                ValueTask w = signal.WaitAsync();
+                _ = signal.Set();
+                w.GetAwaiter().GetResult();
+            }
+
+            allocated = Math.Min(allocated, GC.GetAllocatedBytesForCurrentThread() - before);
         }
 
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal(0, allocated);
     }
 

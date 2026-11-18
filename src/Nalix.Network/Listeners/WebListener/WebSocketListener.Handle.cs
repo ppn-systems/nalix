@@ -453,7 +453,7 @@ public abstract partial class WebSocketListenerBase
             return false;
         }
 
-        if (requestPath.Length == path.Length || path.EndsWith('/'))
+        if (requestPath.Length == path.Length || path.AsSpan().EndsWith('/'))
         {
             return true;
         }

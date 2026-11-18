@@ -25,7 +25,7 @@ Level 4 : Nalix.Hosting                 -> Abstractions, Framework, Codec, Runti
 
 ## Global Rules
 
-- **Language:** C# 14 on .NET 10 (`net10.0`). Analyzers/generators target `netstandard2.0`.
+- **Language:** C# 14; libraries and tests multi-target `net10.0;net11.0` from the same sources (no per-target code). Analyzers/generators target `netstandard2.0`. Code must compile without new warnings on both targets.
 - **Namespaces:** File-scoped only.
 - **Nullable:** Enabled everywhere — never disable.
 - **Classes:** Prefer `sealed` unless inheritance is required.

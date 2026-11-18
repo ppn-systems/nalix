@@ -16,7 +16,7 @@
 
 ---
 
-**Nalix** is low-latency binary realtime networking for .NET 10 — for Blazor WebAssembly, MAUI and game servers — with a pooled, near-zero-allocation hot path (~56 B per message on the server over TCP, the lowest of the frameworks measured below) and built-in X25519 + AEAD encryption.
+**Nalix** is low-latency binary realtime networking for .NET 10 and .NET 11 — for Blazor WebAssembly, MAUI and game servers — with a pooled, near-zero-allocation hot path (~56 B per message on the server over TCP, the lowest of the frameworks measured below) and built-in X25519 + AEAD encryption.
 
 You define packets as plain C# classes, write handlers keyed by opcode, and talk to the server over TCP, UDP or WebSocket from the Nalix client SDK. There is no HTTP layer in between.
 
@@ -68,7 +68,7 @@ How Nalix compares with the usual .NET choices for realtime traffic (competitor 
 
 - You need **HTTP/REST interop**, proxies or API gateways that understand HTTP semantics. Use gRPC or plain ASP.NET Core.
 - You have **polyglot clients** (JavaScript, Go, Python, Java). The only client SDK is .NET; gRPC and SignalR have clients for many languages.
-- You are on **.NET 8/9 or .NET Framework**. Nalix targets .NET 10 only.
+- You are on **.NET 8/9 or .NET Framework**. Nalix targets .NET 10 and .NET 11 (.NET 8 and 9 reached end of support on November 10, 2026).
 - You are building a **Unity** client. Unity does not run .NET 10, so the SDK cannot be used there today; MagicOnion supports Unity.
 
 ---
@@ -182,11 +182,11 @@ Runnable end-to-end projects, from beginner to production-grade:
 
 | Requirement | Version |
 | :--- | :--- |
-| .NET SDK | [10.0+](https://dotnet.microsoft.com/download/dotnet/10.0) — **.NET 10 only** |
+| .NET SDK | [10.0+](https://dotnet.microsoft.com/download/dotnet/10.0) — packages target **.NET 10 and .NET 11**; building the repository needs the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) |
 | C# Language | 14+ |
 | IDE | [Visual Studio 2026](https://visualstudio.microsoft.com/downloads/) / [VS Code](https://code.visualstudio.com/) / [Rider](https://www.jetbrains.com/rider/) |
 
-Every package targets `net10.0` only. The hot path relies on recent runtime and language features (C# 14, `Span<T>`/`ref struct` APIs, static abstract interface members for packet opcodes and formatters), and a single target keeps the packages trimmable and Native AOT-compatible without multi-targeting shims.
+Every package targets `net10.0` and `net11.0`, built from the same sources with no per-target code. The hot path relies on recent runtime and language features (C# 14, `Span<T>`/`ref struct` APIs, static abstract interface members for packet opcodes and formatters), so older runtimes are not targeted; both targets stay trimmable and Native AOT-compatible.
 
 ---
 
