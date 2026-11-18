@@ -721,7 +721,7 @@ public sealed partial class TaskManager : ITaskManager, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(group, nameof(group));
 
-        bool isPrefix = group is [.., '*'];
+        bool isPrefix = group.AsSpan().EndsWith('*');
         string matchGroup = isPrefix ? group[..^1] : group;
 
         List<Task> tasks = new();
