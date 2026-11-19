@@ -2,6 +2,9 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -39,6 +42,13 @@ public class WebSocketSession : TransportSession
     private string? _connectingHost;
     private ushort _connectingPort;
     private int _disposed;
+
+    // When a subclass supplies a pre-resolved dial endpoint (see ResolveDialEndpointAsync), the TCP socket is
+    // opened through this invoker's ConnectCallback. ClientWebSocket does not take ownership of the invoker, so
+    // it must outlive the socket and is torn down together with it in DisconnectInternalAsync.
+#pragma warning disable CA2213
+    private HttpMessageInvoker? _connectInvoker;
+#pragma warning restore CA2213
 
     #endregion Fields
 
@@ -152,6 +162,16 @@ public class WebSocketSession : TransportSession
         return this.ConnectCoreAsync(effectiveHost, effectivePort, raiseConnected: false, ct);
     }
 
+    /// <summary>
+    /// Lets a subclass supply a pre-resolved IP endpoint to dial for this connection while the request URI keeps
+    /// the original hostname, so TLS SNI and the HTTP <c>Host</c> header stay the hostname. Returning
+    /// <see langword="null"/> (the default) uses the normal <see cref="ClientWebSocket"/> resolution. This exists
+    /// so a transport can resolve the host itself over a specific, locked network interface and avoid the OS
+    /// resolver picking a different interface.
+    /// </summary>
+    protected virtual ValueTask<IPEndPoint?> ResolveDialEndpointAsync(string host, ushort port, CancellationToken ct)
+        => ValueTask.FromResult<IPEndPoint?>(null);
+
     private async Task ConnectCoreAsync(string effectiveHost, ushort effectivePort, bool raiseConnected, CancellationToken ct)
     {
         await _connectionLock.WaitAsync(ct).ConfigureAwait(false);
@@ -190,7 +210,38 @@ public class WebSocketSession : TransportSession
             {
                 DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.WebSocketSession:Connect", $"connecting uri={uri} timeout-ms={this.Options.ConnectTimeoutMillis}"));
             }
-            await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
+
+            IPEndPoint? dialEndpoint = await this.ResolveDialEndpointAsync(effectiveHost, effectivePort, connectCts.Token).ConfigureAwait(false);
+            if (dialEndpoint is not null)
+            {
+                // Dial the pre-resolved IP via a custom ConnectCallback; the URI (and thus TLS SNI + Host header)
+                // keeps the hostname. The invoker owns the TCP socket and must live as long as the ClientWebSocket,
+                // so it is stored and disposed alongside the socket in DisconnectInternalAsync.
+                IPEndPoint endpointToDial = dialEndpoint;
+                SocketsHttpHandler handler = new()
+                {
+                    ConnectCallback = async (context, cbCt) =>
+                    {
+                        Socket tcp = new(SocketType.Stream, ProtocolType.Tcp) { NoDelay = this.Options.NoDelay };
+                        try
+                        {
+                            await tcp.ConnectAsync(endpointToDial, cbCt).ConfigureAwait(false);
+                            return new NetworkStream(tcp, ownsSocket: true);
+                        }
+                        catch
+                        {
+                            tcp.Dispose();
+                            throw;
+                        }
+                    },
+                };
+                _connectInvoker = new HttpMessageInvoker(handler);
+                await _socket.ConnectAsync(uri, _connectInvoker, connectCts.Token).ConfigureAwait(false);
+            }
+            else
+            {
+                await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
+            }
             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
             {
                 DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.WebSocketSession:Connect", $"connected uri={uri}"));
@@ -265,6 +316,7 @@ public class WebSocketSession : TransportSession
         ClientWebSocket? socket;
         CancellationTokenSource? loopCts;
         Task? loopTask;
+        HttpMessageInvoker? invoker;
 
         if (expectedSocket is not null)
         {
@@ -278,12 +330,14 @@ public class WebSocketSession : TransportSession
 
             loopCts = Interlocked.Exchange(ref _loopCts, null);
             loopTask = Interlocked.Exchange(ref _loopTask, null);
+            invoker = Interlocked.Exchange(ref _connectInvoker, null);
         }
         else
         {
             loopCts = Interlocked.Exchange(ref _loopCts, null);
             loopTask = Interlocked.Exchange(ref _loopTask, null);
             socket = Interlocked.Exchange(ref _socket, null);
+            invoker = Interlocked.Exchange(ref _connectInvoker, null);
         }
 
         try
@@ -341,6 +395,10 @@ public class WebSocketSession : TransportSession
                 this.OnDisconnected?.Invoke(this, disconnectEx);
             }
         }
+
+        // The ConnectCallback invoker (if any) is tied to this connection's socket; dispose it unconditionally
+        // here — after the socket — so it is never leaked, including when the socket was already cleared.
+        invoker?.Dispose();
 
         if (waitForLoop && loopTask is { IsCompleted: false })
         {
