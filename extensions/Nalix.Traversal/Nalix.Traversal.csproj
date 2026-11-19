@@ -22,7 +22,7 @@ Nalix.Traversal provides NAT traversal, STUN signaling, and UDP hole punching ca
 	<Import Project="..\..\src\Package.Build.props" />
 
 	<ItemGroup>
-		<InternalsVisibleTo Include="Nalix.Traversal.Tests" />
+		<InternalsVisibleTo Include="Nalix.Traversal.Tests" Condition="'$(NalixInternalsVisibleTo)' != 'false'" />
 	</ItemGroup>
 
 	<ItemGroup>
