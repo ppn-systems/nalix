@@ -80,10 +80,7 @@ public sealed class PassthroughConnection :
 
     #region Constructor
 
-    static PassthroughConnection()
-    {
-        s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
-    }
+    static PassthroughConnection() => s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
 
     /// <summary>
     /// Initializes a new instance of <see cref="PassthroughConnection"/>.
@@ -155,7 +152,7 @@ public sealed class PassthroughConnection :
         // so the transport is released here instead of being left attached to a disposed connection.
         if (this.IsDisposed)
         {
-            ReleaseUdpTransport();
+            this.ReleaseUdpTransport();
         }
     }
 
@@ -179,10 +176,7 @@ public sealed class PassthroughConnection :
     private void ReleaseUdpTransport()
     {
         SocketUdpTransport? transport = Interlocked.Exchange(ref _udpTransport, null);
-        if (transport is not null)
-        {
-            transport.Dispose();
-        }
+        transport?.Dispose();
     }
 
     #endregion UDP Transport
@@ -456,7 +450,7 @@ public sealed class PassthroughConnection :
             }
         }
 
-        ReleaseUdpTransport();
+        this.ReleaseUdpTransport();
 
         try { _attributes?.Return(); }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }

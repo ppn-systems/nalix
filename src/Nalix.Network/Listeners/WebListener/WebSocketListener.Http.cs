@@ -11,7 +11,6 @@ using System.Text;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Environment.Memory;
 using Nalix.Network.Internal.WebSockets;
-using Nalix.Network.Options;
 
 #pragma warning disable IDE0079
 #pragma warning disable CA1031

@@ -5,8 +5,8 @@ using System;
 using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
-using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
 using Nalix.Environment.Extensions;
@@ -336,7 +336,7 @@ public abstract class TransportSession : IDisposable, IAsyncDisposable, ITranspo
     /// </summary>
     internal void MarkIntentionalDisconnect()
     {
-        Interlocked.Exchange(ref _intentionalDisconnect, 1);
+        _ = Interlocked.Exchange(ref _intentionalDisconnect, 1);
         _ = Interlocked.Increment(ref _intentionalDisconnectEpoch);
     }
 

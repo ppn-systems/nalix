@@ -258,7 +258,7 @@ public static class HeaderStreamExtensions
     /// <summary>
     /// Sends the request and, if the send itself fails, faults the header TCS and the stream TCS
     /// with the same wrapped exception instead of leaving them to hang until the caller's timeout —
-    /// mirroring how <see cref="PacketAwaiter"/> handles a failed send phase for a single-response
+    /// mirroring how <see cref="Internal.PacketAwaiter"/> handles a failed send phase for a single-response
     /// request. One statically-typed overload per arity, deliberately not unified via <c>object</c>
     /// or <c>dynamic</c>, which would defeat AOT/trimming on the WASM targets this SDK ships to.
     /// </summary>

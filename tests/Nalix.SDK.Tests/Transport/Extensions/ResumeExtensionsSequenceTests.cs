@@ -50,7 +50,7 @@ public sealed class ResumeExtensionsSequenceTests : IDisposable
         NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
         builder.UseSessionStore(store);
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<IntegrationTestProtocol>().OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSystemControl();
         builder.UseTimeSync();

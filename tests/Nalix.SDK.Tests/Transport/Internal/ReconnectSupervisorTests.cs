@@ -114,7 +114,7 @@ public sealed class ReconnectSupervisorTests : IDisposable
     private static NetworkApplication BuildSecureServer(int port)
     {
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<IntegrationTestProtocol>().OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSystemControl();
         builder.UseTimeSync();

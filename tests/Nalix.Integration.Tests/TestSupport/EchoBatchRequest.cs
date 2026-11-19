@@ -16,7 +16,7 @@ namespace Nalix.Integration.Tests.TestSupport;
 [SerializePackable(SerializeLayout.Explicit)]
 public sealed partial class EchoBatchRequest : PacketBase<EchoBatchRequest>, IPacketStaticOpcode
 {
-    public const ushort OpCode = 0x7E02;
+    public new const ushort OpCode = 0x7E02;
 
     public static ushort StaticOpCode => OpCode;
 

@@ -240,12 +240,12 @@ public sealed class WebSocketEchoAndGroupTests : IDisposable
             byte[] msgAlpha = CreatePayload(System.Text.Encoding.UTF8.GetBytes("ALPHA_MSG"));
             byte[] msgBeta = CreatePayload(System.Text.Encoding.UTF8.GetBytes("BETA_MSG"));
 
-#pragma warning disable CS0618
+#pragma warning disable NALIX_NET001 // exercises the raw pre-serialized overload on purpose
             await hub.MulticastAsync(groupStore, "alpha", msgAlpha);
             clientEvents.Enqueue($"alpha multicast done +{clock.ElapsedMilliseconds}ms");
             await hub.MulticastAsync(groupStore, "beta", msgBeta);
             clientEvents.Enqueue($"beta multicast done +{clock.ElapsedMilliseconds}ms");
-#pragma warning restore CS0618
+#pragma warning restore NALIX_NET001
 
             await Task.Delay(1000);
 

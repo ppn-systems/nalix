@@ -22,7 +22,6 @@ using Nalix.Framework.Identifiers;
 using Nalix.Framework.Injection;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Internal.Connections;
-using Nalix.Network.Internal.Initialization;
 using Nalix.Network.Internal.Pooling;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;

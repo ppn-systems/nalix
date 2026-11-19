@@ -38,8 +38,8 @@ public sealed class IniConfigTests : IDisposable
         using IniConfig config = new IniConfig(_path);
 
         // Use reflection to check private _comments dictionary size
-        var commentsField = typeof(IniConfig).GetField("_comments", BindingFlags.NonPublic | BindingFlags.Instance);
-        var comments = (Dictionary<string, string>)commentsField.GetValue(config);
+        var commentsField = typeof(IniConfig).GetField("_comments", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var comments = (Dictionary<string, string>)commentsField.GetValue(config)!;
 
         Assert.Single(comments); // Initially has 1 comment
 

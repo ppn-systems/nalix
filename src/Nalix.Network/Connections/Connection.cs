@@ -626,11 +626,8 @@ public sealed partial class Connection :
 
             try
             {
-                if (backing.UdpTransport != null)
-                {
-                    backing.UdpTransport.Dispose();
-                    backing.UdpTransport = null;
-                }
+                backing.UdpTransport?.Dispose();
+                backing.UdpTransport = null;
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { LOG_ERROR(ex, "udptransport"); }
 

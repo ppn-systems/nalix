@@ -405,7 +405,7 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     /// </summary>
     [DebuggerStepThrough]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ArraySegment<byte> AsSegment()
+    internal ArraySegment<byte> AsSegment()
         => _buffer is null ? default : new ArraySegment<byte>(_buffer, _start, this.Length);
 
 #endif

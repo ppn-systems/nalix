@@ -292,7 +292,9 @@ public partial class TaskManager
 
         // Recurring jobs use a one-per-loop gate when NonReentrant is enabled so an
         // overrun does not overlap with the next scheduled tick.
+#pragma warning disable CA2213 // Disposed by the owning TaskManager (CancelRecurring/Dispose) only after the loop has observed cancellation.
         public readonly SemaphoreSlim Gate = new(1, 1);
+#pragma warning restore CA2213
 
         // Owning manager, set once the state is registered; lets handle disposal unregister it.
         public TaskManager? Owner;

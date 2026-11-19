@@ -164,9 +164,9 @@ public sealed class PacketContextBridgeLeakTests
         public IConnection.ITransport TCP => null!;
         public IConnection.ITransport? UDP => null;
 
-        public event EventHandler<IConnectionEventArgs>? ConnectionClosed;
-        public event EventHandler<IConnectionEventArgs>? MessageProcessing;
-        public event EventHandler<IConnectionEventArgs>? MessageProcessed;
+        public event EventHandler<IConnectionEventArgs>? ConnectionClosed { add { } remove { } }
+        public event EventHandler<IConnectionEventArgs>? MessageProcessing { add { } remove { } }
+        public event EventHandler<IConnectionEventArgs>? MessageProcessed { add { } remove { } }
 
         public void Disconnect(string? reason = null) { }
         public void Dispose() => IsDisposed = true;

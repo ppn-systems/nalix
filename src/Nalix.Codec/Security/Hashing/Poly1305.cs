@@ -807,7 +807,7 @@ public ref struct Poly1305
         h4 = (h4 & mask) | g4;
 
         // Repack the limbs into four 32-bit words.
-        h0 = h0 | (h1 << 26);
+        h0 |= h1 << 26;
         h1 = (h1 >> 6) | (h2 << 20);
         h2 = (h2 >> 12) | (h3 << 14);
         h3 = (h3 >> 18) | (h4 << 8);

@@ -588,7 +588,7 @@ public sealed partial class ConnectionGuard : IConnectionGuard, IProofOfWorkPoli
 
         if (_maxGlobalConnections > -1)
         {
-            _ = Interlocked.Decrement(ref (args.Connection is Connections.PassthroughConnection ? ref _passthroughConnections : ref _globalConnections));
+            _ = Interlocked.Decrement(ref args.Connection is Connections.PassthroughConnection ? ref _passthroughConnections : ref _globalConnections);
         }
 
         DateTime now = Clock.NowUtc();

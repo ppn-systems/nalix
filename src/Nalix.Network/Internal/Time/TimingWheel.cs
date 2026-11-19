@@ -506,7 +506,7 @@ internal sealed class TimingWheel : IActivatable
                     connection.AcceptedAtMs = nowMs;
                 }
 
-                long delayMs = Math.Min(connection.IdleTimeoutMs, HandshakeRemainingMs(connection, nowMs));
+                long delayMs = Math.Min(connection.IdleTimeoutMs, this.HandshakeRemainingMs(connection, nowMs));
                 long baseTick = Volatile.Read(ref _tick);
                 long ticks = Math.Max(1, delayMs / _tickMs);
 
@@ -767,7 +767,7 @@ internal sealed class TimingWheel : IActivatable
                         long nowMs = Clock.UnixMillisecondsNow();
                         long idleMs = nowMs - connection.LastPingTime;
                         long idleRemainingMs = connection.IdleTimeoutMs - idleMs;
-                        long handshakeRemainingMs = HandshakeRemainingMs(connection, nowMs);
+                        long handshakeRemainingMs = this.HandshakeRemainingMs(connection, nowMs);
 
                         if (idleRemainingMs <= 0 || handshakeRemainingMs <= 0)
                         {

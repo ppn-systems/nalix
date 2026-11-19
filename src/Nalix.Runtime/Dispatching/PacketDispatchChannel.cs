@@ -386,7 +386,7 @@ public sealed class PacketDispatchChannel
         writer.WriteNumber("ReadyConnections", _dispatch.ReadyConnections);
         writer.WriteNumber("WakeSignals", Interlocked.Read(ref _wakeSignals));
         writer.WriteNumber("WakeReads", Interlocked.Read(ref _wakeReadSignals));
-        writer.WriteNumber("IdleWorkers", this.IdleWorkers);
+        writer.WriteNumber(nameof(this.IdleWorkers), this.IdleWorkers);
         writer.WriteString("PacketRegistryType", nameof(PacketRegistry));
 
         Span<int> priorities = stackalloc int[(int)PacketPriority.URGENT + 1];
