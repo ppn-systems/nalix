@@ -46,8 +46,14 @@
 		exercise the same tests. A strong-name-signed assembly cannot grant IVT by simple name (CS1726) and a
 		shipped package should not expose internals anyway, so signed builds skip the grant. Test and analysis
 		builds must therefore stay unsigned (they do not need the signing key).
+		The NuGet release build passes /p:NalixInternalsVisibleTo=false so the shipped assemblies do not carry the
+		test and benchmark assembly names either; every other build (including Release test runs) keeps the grant.
 	-->
-	<ItemGroup Condition="'$(SignAssembly)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Generators'">
+	<PropertyGroup>
+		<NalixInternalsVisibleTo Condition="'$(NalixInternalsVisibleTo)' == ''">true</NalixInternalsVisibleTo>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(NalixInternalsVisibleTo)' == 'true' And '$(SignAssembly)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Generators'">
 		<InternalsVisibleTo Include="Nalix.Abstractions.Tests" />
 		<InternalsVisibleTo Include="Nalix.Codec.Tests" />
 		<InternalsVisibleTo Include="Nalix.Environment.Tests" />

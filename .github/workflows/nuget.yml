@@ -72,8 +72,9 @@ jobs:
         run: echo "$SIGNING_KEY" | base64 -d > ./src/Nalix.snk
 
       # Rebuild everything from scratch so the packed assemblies are the signed, version-stamped ones.
+      # NalixInternalsVisibleTo=false keeps the test/benchmark assembly names out of the shipped assemblies.
       - name: Build
-        run: dotnet build ./src/Nalix.sln --configuration Release --no-restore --no-incremental /p:Version=${{ env.VERSION }}
+        run: dotnet build ./src/Nalix.sln --configuration Release --no-restore --no-incremental /p:Version=${{ env.VERSION }} /p:NalixInternalsVisibleTo=false
 
       - name: Pack
         run: dotnet pack ./src/Nalix.sln --configuration Release --no-build --output ./out /p:Version=${{ env.VERSION }}
