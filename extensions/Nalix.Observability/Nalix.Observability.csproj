@@ -12,7 +12,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<InternalsVisibleTo Include="Nalix.Observability.Tests" />
+		<InternalsVisibleTo Include="Nalix.Observability.Tests" Condition="'$(NalixInternalsVisibleTo)' != 'false'" />
 	</ItemGroup>
 	
 	<ItemGroup>

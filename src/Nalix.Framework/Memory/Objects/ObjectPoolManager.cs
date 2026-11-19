@@ -62,8 +62,6 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static ObjectPoolManager ThrowSharedNotConfigured() => throw new InvalidOperationException("ObjectPoolManager.Shared was used before the host configured it.");
 
-    internal static void ResetSharedForTests() => Volatile.Write(ref s_shared, null);
-
     #endregion Static
 
     #region Fields
