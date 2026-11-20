@@ -2,6 +2,11 @@
 
 > Status: **draft for review**. No code yet. This document proposes the protocol that replaces the
 > current "UDP companion transport" of `Connection`. Nothing here is implemented.
+>
+> **Decisions after the first review** (details in [udp-removal-plan.md](udp-removal-plan.md)): the datagram session
+> implements `IConnection`; `IConnection` becomes single-transport and today's UDP is removed first; no new project
+> (engine in `Nalix.Environment`, crypto in `Nalix.Codec`); defaults as proposed; `KeepStream` is an option; Unity is out
+> of scope. Where this document still lists those points as open, the decision above wins.
 
 ## 1. Goals and non-goals
 
