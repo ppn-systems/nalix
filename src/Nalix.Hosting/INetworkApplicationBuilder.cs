@@ -118,6 +118,14 @@ public interface INetworkApplicationBuilder
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods)] Type controllerType);
 
     /// <summary>
+    /// Adds a listener that the application activates and deactivates together with the protocol
+    /// listeners, for extensions that run their own sockets (for example a raw UDP relay).
+    /// </summary>
+    /// <param name="factory">Creates the listener when the application is activated.</param>
+    /// <returns>The current builder instance.</returns>
+    INetworkApplicationBuilder AddListener(Func<IListener> factory);
+
+    /// <summary>
     /// Binds a TCP protocol using a fluent builder for port and factory configuration.
     /// </summary>
     /// <typeparam name="TProtocol">The protocol type to host.</typeparam>

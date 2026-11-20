@@ -1,1 +1,3 @@
 #nullable enable
+Nalix.Hosting.INetworkApplicationBuilder.AddListener(System.Func<Nalix.Abstractions.Networking.IListener!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.AddListener(System.Func<Nalix.Abstractions.Networking.IListener!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!

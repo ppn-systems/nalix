@@ -49,6 +49,11 @@ internal sealed class HostingBuilderContext
     public List<WebSocketProtocolBinding> WebSocketBindings { get; } = [];
 
     /// <summary>
+    /// Gets the factories of listeners added with <see cref="INetworkApplicationBuilder.AddListener"/>.
+    /// </summary>
+    public List<Func<IListener>> CustomListeners { get; } = [];
+
+    /// <summary>
     /// Gets the configuration delegates applied to
     /// <see cref="PacketDispatchOptions{TPacket}"/>.
     /// </summary>

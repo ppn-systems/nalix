@@ -281,6 +281,14 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
     }
 
     /// <inheritdoc />
+    public INetworkApplicationBuilder AddListener(Func<IListener> factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        _state.CustomListeners.Add(factory);
+        return this;
+    }
+
+    /// <inheritdoc />
     public IWebSocketBindingBuilder MapWebSocket<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol
@@ -445,6 +453,11 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
 
                 return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.WEBSOCKET);
             });
+        }
+
+        foreach (Func<IListener> factory in _state.CustomListeners)
+        {
+            serverFactories.Add(_ => new ListenerBinding(factory(), protocol: null, protocolType: null, transport: null));
         }
 
         return new NetworkApplication(_state.Logger, PrepareCallbacks, DispatchFactory, serverFactories);

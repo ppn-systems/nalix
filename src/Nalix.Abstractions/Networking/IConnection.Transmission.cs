@@ -9,6 +9,7 @@ namespace Nalix.Abstractions.Networking;
 
 public partial interface IConnection
 {
+#pragma warning disable CS0618 // The default implementation forwards to the obsolete alias until it is removed.
     /// <summary>
     /// Gets the primary transport of this connection (the TCP stream or the WebSocket).
     /// For socket-based connections, cast to <see cref="ISocketTransport"/> for direct socket access.
@@ -16,7 +17,6 @@ public partial interface IConnection
     /// <remarks>
     /// The default implementation returns <see cref="TCP"/>, so existing implementations keep working.
     /// </remarks>
-#pragma warning disable CS0618 // Default implementation forwards to the obsolete alias until it is removed.
     ITransport Transport => this.TCP;
 #pragma warning restore CS0618
 
