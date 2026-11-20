@@ -42,7 +42,10 @@ public sealed class DatagramSession : TransportSession
     private readonly Lock _engineLock = new();
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly byte[] _sendBuffer = new byte[DatagramEngine.MaxDatagramSize];
-    private readonly List<(BufferLease Message, DeliveryMethod Method, byte Channel)> _deliveries = [];
+    private readonly Lock _dispatchLock = new();
+    private List<(BufferLease Message, DeliveryMethod Method, byte Channel)> _deliveries = [];
+    private List<(BufferLease Message, DeliveryMethod Method, byte Channel)> _dispatching = [];
+    private int _dispatchRequested;
 
     private Socket? _socket;
     private DatagramEngine? _engine;
@@ -450,10 +453,36 @@ public sealed class DatagramSession : TransportSession
         }
     }
 
-    /// <summary>Runs message and close handlers outside the engine lock.</summary>
+    /// <summary>
+    /// Runs message and close handlers outside the engine lock, one thread at a time and in delivery order (the
+    /// receive loop and the timer both call this). A thread that finds another dispatching leaves a request that
+    /// the dispatching thread picks up before it returns.
+    /// </summary>
     private void DispatchDeliveries()
     {
-        (BufferLease Message, DeliveryMethod Method, byte Channel)[] batch;
+        _ = Interlocked.Exchange(ref _dispatchRequested, 1);
+
+        // Re-check after leaving: a request made while this thread was finishing would otherwise be lost.
+        while (Volatile.Read(ref _dispatchRequested) == 1 && _dispatchLock.TryEnter())
+        {
+            try
+            {
+                while (Interlocked.Exchange(ref _dispatchRequested, 0) == 1)
+                {
+                    this.DispatchBatch();
+                }
+            }
+            finally
+            {
+                _dispatchLock.Exit();
+            }
+        }
+    }
+
+    /// <summary>Delivers what the engine produced so far. Called under the dispatch lock.</summary>
+    private void DispatchBatch()
+    {
+        List<(BufferLease Message, DeliveryMethod Method, byte Channel)> batch;
         Exception? closed;
         lock (_engineLock)
         {
@@ -462,8 +491,10 @@ public sealed class DatagramSession : TransportSession
                 return;
             }
 
-            batch = [.. _deliveries];
-            _deliveries.Clear();
+            // Swap the two lists: no allocation per datagram.
+            batch = _deliveries;
+            _deliveries = _dispatching;
+            _dispatching = batch;
             closed = _closeError;
             _closeError = null;
         }
@@ -493,6 +524,8 @@ public sealed class DatagramSession : TransportSession
                 message.Dispose();
             }
         }
+
+        batch.Clear();
 
         if (closed is not null)
         {

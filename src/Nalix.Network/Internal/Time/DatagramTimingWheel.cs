@@ -191,21 +191,7 @@ internal sealed class DatagramTimingWheel
             {
                 ctx.Beat();
 
-                long now = NowTick();
-                long tick = Volatile.Read(ref _currentTick);
-
-                // After a long stall every bucket is visited once; entries keep their own tick, so none is lost.
-                if (now - tick > WheelSize)
-                {
-                    tick = now - WheelSize;
-                }
-
-                while (tick < now)
-                {
-                    tick++;
-                    this.ProcessBucket(tick, now);
-                    Volatile.Write(ref _currentTick, tick);
-                }
+                this.Advance(NowTick());
             }
         }
         catch (OperationCanceledException)
@@ -220,6 +206,31 @@ internal sealed class DatagramTimingWheel
             }
 
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Processes every tick up to <paramref name="now"/>. Called by the wheel worker; tests call it directly.
+    /// </summary>
+    internal void Advance(long now)
+    {
+        long tick = Volatile.Read(ref _currentTick);
+
+        // After a long stall every bucket is visited once; entries keep their own tick, so none is lost.
+        if (now - tick > WheelSize)
+        {
+            tick = now - WheelSize;
+        }
+
+        while (tick < now)
+        {
+            tick++;
+
+            // Publish the tick before processing its bucket: ToTick then returns tick + 1 at the earliest, so an
+            // entry scheduled during processing never lands behind the bucket's snapshot (which would delay it
+            // by a full revolution).
+            Volatile.Write(ref _currentTick, tick);
+            this.ProcessBucket(tick, now);
         }
     }
 

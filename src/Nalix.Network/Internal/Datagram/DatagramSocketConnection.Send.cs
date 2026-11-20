@@ -38,20 +38,43 @@ internal sealed partial class DatagramSocketConnection
         return queued;
     }
 
-    /// <summary>Starts a graceful close and sends the CLOSE frame.</summary>
+    /// <summary>Starts a graceful close and sends the CLOSE frame before returning.</summary>
+    /// <remarks>
+    /// The frame is sent here, under the engine lock, rather than through <see cref="Flush"/>: the caller usually
+    /// disposes the session right after, and a drain running on another thread would then stop at the disposed
+    /// check without sending it. The send lock is not taken because a handler running inline under the engine lock
+    /// may call this, and a draining thread holds the send lock while it waits for the engine lock.
+    /// </remarks>
     public void Close(string? reason)
     {
-        lock (_engineLock)
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(DatagramEngine.MaxDatagramSize);
+        try
         {
-            if (_disposed)
+            lock (_engineLock)
             {
-                return;
+                if (_disposed)
+                {
+                    return;
+                }
+
+                long now = DatagramEngine.NowMicros();
+                _engine.Close(DatagramCloseCode.NoError, reason, now);
+
+                int length;
+                while ((length = _engine.Poll(buffer, now, out SocketAddress? to)) > 0)
+                {
+                    if ((to ?? _engine.ActivePath) is { } target)
+                    {
+                        _listener.SendTo(buffer.AsSpan(0, length), target);
+                        _owner.IncrementBytesSent(length);
+                    }
+                }
             }
-
-            _engine.Close(DatagramCloseCode.NoError, reason, DatagramEngine.NowMicros());
         }
-
-        this.Flush();
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>Sends everything the engine produces now and re-arms the deadline.</summary>

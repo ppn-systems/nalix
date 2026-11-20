@@ -4,8 +4,11 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Exceptions;
+using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Codec.DataFrames;
 using Nalix.Environment.Configuration;
@@ -13,6 +16,7 @@ using Nalix.Framework.Injection;
 using Nalix.Hosting;
 using Nalix.Hosting.Protocols;
 using Nalix.Integration.Tests.TestSupport;
+using Nalix.Network.Connections;
 using Nalix.Network.Listeners.Datagram;
 using Nalix.Network.Options;
 using Nalix.SDK.Options;
@@ -178,6 +182,115 @@ public sealed class DatagramEndToEndTests : IDisposable
         Assert.Contains("Established         : 1", listener.GenerateReport(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ServerDisconnect_WhileAnotherThreadIsDraining_StillSendsClose()
+    {
+        (ushort tcpPort, ushort udpPort) = (NextPort(), NextPort());
+        await using NetworkApplication app = await this.StartServerAsync(tcpPort, udpPort);
+        IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()!;
+
+        using TcpSession stream = await ConnectStreamAsync(tcpPort);
+        using DatagramSession datagram = new(stream);
+        TaskCompletionSource disconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        datagram.OnDisconnected += (_, _) => disconnected.TrySetResult();
+        await datagram.ConnectAsync().WaitAsync(s_timeout);
+
+        DatagramConnection server = hub.ListConnections().OfType<DatagramConnection>().Single();
+
+        // Hold the session's send lock, as a thread in the middle of a drain does, while Disconnect runs elsewhere.
+        object socket = typeof(DatagramConnection).GetField("_socket", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(server)!;
+        Lock sendLock = (Lock)socket.GetType().GetField("_sendLock", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(socket)!;
+
+        sendLock.Enter();
+        try
+        {
+            Assert.True(Task.Run(() => server.Disconnect("test")).Wait(s_timeout), "Disconnect must not wait for the drain.");
+        }
+        finally
+        {
+            sendLock.Exit();
+        }
+
+        // Without the CLOSE frame the client only notices after the 15 s idle timeout.
+        await disconnected.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.False(datagram.IsConnected);
+    }
+
+    [Fact]
+    public async Task ConnectionGuard_SlotsOfDatagramSessions_AreReleasedOnEveryClosePath()
+    {
+        (ushort tcpPort, ushort udpPort) = (NextPort(), NextPort());
+        CountingGuard guard = new();
+        await using NetworkApplication app = await this.StartServerAsync(tcpPort, udpPort, guard);
+        IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()!;
+        DatagramListener listener = (DatagramListener)InstanceManager.Instance.GetExistingInstance<IDatagramTicketIssuer>()!;
+
+        using (TcpSession stream = await ConnectStreamAsync(tcpPort))
+        {
+            // Closed by the client.
+            using (DatagramSession datagram = new(stream))
+            {
+                await datagram.ConnectAsync().WaitAsync(s_timeout);
+                await datagram.DisconnectAsync().WaitAsync(s_timeout);
+            }
+
+            await WaitUntilAsync(() => listener.SessionCount == 0);
+
+            // Closed by the server.
+            using (DatagramSession datagram = new(stream))
+            {
+                await datagram.ConnectAsync().WaitAsync(s_timeout);
+                hub.ListConnections().OfType<DatagramConnection>().Single().Disconnect("test");
+            }
+
+            await WaitUntilAsync(() => listener.SessionCount == 0);
+            Assert.Equal(2, listener.Metrics.TotalAccepted);
+        }
+
+        // One slot for the stream connection and one per datagram session, each released once.
+        await WaitUntilAsync(() => guard.Released == guard.Accepted);
+        Assert.Equal(3, guard.Accepted);
+    }
+
+    /// <summary>Admits everything and counts slots taken and released.</summary>
+    private sealed class CountingGuard : IConnectionGuard
+    {
+        private int _accepted;
+        private int _released;
+
+        public int Accepted => Volatile.Read(ref _accepted);
+
+        public int Released => Volatile.Read(ref _released);
+
+        public bool TryAccept(System.Net.IPEndPoint endPoint)
+        {
+            _ = Interlocked.Increment(ref _accepted);
+            return true;
+        }
+
+        public void Release(System.Net.IPEndPoint endPoint) => Interlocked.Increment(ref _released);
+
+        public void OnConnectionClosed(object? sender, IConnectionEventArgs args) => Interlocked.Increment(ref _released);
+
+        public void BanEndpoint(System.Net.IPAddress address, TimeSpan duration)
+        {
+        }
+
+        public bool IsTrustedProxy(System.Net.IPEndPoint? endPoint) => false;
+
+        public string GenerateReport() => string.Empty;
+
+        public void WriteReportData(System.Text.Json.Utf8JsonWriter writer)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private static async Task<TcpSession> ConnectStreamAsync(ushort port)
     {
         TcpSession stream = new(CreateOptions(port));
@@ -186,10 +299,15 @@ public sealed class DatagramEndToEndTests : IDisposable
         return stream;
     }
 
-    private async Task<NetworkApplication> StartServerAsync(ushort tcpPort, ushort udpPort)
+    private async Task<NetworkApplication> StartServerAsync(ushort tcpPort, ushort udpPort, IConnectionGuard? guard = null)
     {
         NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
         _ = builder.UseSecureConnections(_certificatePath).UseTimeSync();
+        if (guard is not null)
+        {
+            _ = builder.UseConnectionGuard(guard);
+        }
+
         _ = builder.MapHandlers(typeof(EchoHandlers));
         _ = builder.MapTcp<DefaultProtocol>().OnPort(tcpPort).Bind();
         _ = builder.MapDatagram<DefaultProtocol>().OnPort(udpPort).Bind();

@@ -125,12 +125,24 @@ public sealed partial class DatagramListener
     /// <summary>
     /// Stops receiving, closes every session and discards the pending tickets.
     /// </summary>
-    /// <param name="cancellationToken">Unused; shutdown does not block.</param>
+    /// <param name="cancellationToken">Cancels waiting for an activation in progress.</param>
     public void Deactivate(CancellationToken cancellationToken = default)
     {
         if (Interlocked.CompareExchange(ref _state, (int)ListenerState.STOPPING, (int)ListenerState.RUNNING) != (int)ListenerState.RUNNING)
         {
-            return;
+            if (this.State != ListenerState.STARTING)
+            {
+                return;
+            }
+
+            // Activate holds the lock while STARTING: wait for it to finish, then stop what it started.
+            _lock.Wait(cancellationToken);
+            _ = _lock.Release();
+
+            if (Interlocked.CompareExchange(ref _state, (int)ListenerState.STOPPING, (int)ListenerState.RUNNING) != (int)ListenerState.RUNNING)
+            {
+                return;
+            }
         }
 
         // Sessions send their CLOSE through the socket, so close them before the socket goes away.

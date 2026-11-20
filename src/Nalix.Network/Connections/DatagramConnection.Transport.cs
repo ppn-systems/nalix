@@ -26,6 +26,7 @@ public sealed partial class DatagramConnection : IDatagramTransport
     private DatagramListener _listener;
     private DatagramSocketConnection _socket;
     private DeliveryView?[] _views = [];
+    private IPEndPoint? _guardSlot;
 
     /// <summary>Gets the session statistics of the protocol engine.</summary>
     public string EngineReport => _socket.Report;
@@ -145,6 +146,15 @@ public sealed partial class DatagramConnection : IDatagramTransport
         this.IncrementBytesReceived(datagram.Length);
         return true;
     }
+
+    /// <summary>
+    /// Hands the session the connection guard slot taken for <paramref name="endPoint"/>; the listener releases it
+    /// exactly once, through <see cref="DetachGuardSlot"/>, when the session is disposed.
+    /// </summary>
+    internal void AttachGuardSlot(IPEndPoint endPoint) => Volatile.Write(ref _guardSlot, endPoint);
+
+    /// <summary>Takes back the guard slot; returns <see langword="null"/> when it was already taken.</summary>
+    internal IPEndPoint? DetachGuardSlot() => Interlocked.Exchange(ref _guardSlot, null);
 
     /// <summary>A message delivered by the engine.</summary>
     internal void OnEngineMessage(BufferLease message) => this.TriggerProcessEvent(message);

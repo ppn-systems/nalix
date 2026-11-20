@@ -19,8 +19,13 @@ public sealed partial class DatagramListener
         Socket socket = this.CreateUnboundSocket();
         try
         {
-            socket.ExclusiveAddressUse = OperatingSystem.IsWindows() || !_socketOptions.ReuseAddress;
-            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, _socketOptions.ReuseAddress);
+            // Never SO_REUSEADDR here, whatever NetworkSocketOptions.ReuseAddress says (it exists for TCP TIME_WAIT):
+            // on a UDP socket it lets another socket bind the same port and take a share of its datagrams.
+            if (OperatingSystem.IsWindows())
+            {
+                socket.ExclusiveAddressUse = true;
+            }
+
             socket.ReceiveBufferSize = _options.SocketReceiveBufferSize;
             socket.SendBufferSize = _options.SocketSendBufferSize;
             TrySetDontFragment(socket);

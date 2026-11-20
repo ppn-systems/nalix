@@ -84,6 +84,56 @@ public sealed class DatagramTimingWheelTests
         }
     }
 
+    [Fact]
+    public async Task Advance_WhenATargetIsScheduledWhileItsBucketIsProcessed_FiresItOnTheNextTick()
+    {
+        // Not activated: the test drives the ticks.
+        DatagramTimingWheel wheel = new("test.dgram.timers");
+        long start = wheel.CurrentTick;
+
+        Target late = new();
+        ReentrantTarget trigger = new(() => late.Arm(wheel, 0)); // already due: scheduled at the earliest tick
+        trigger.Arm(wheel, (start + 1) * 1000);
+
+        wheel.Advance(start + 1); // processing this bucket schedules `late`
+        await trigger.Fired.Task.WaitAsync(s_timeout);
+        Assert.Equal(start + 2, late.ScheduledTick);
+
+        wheel.Advance(start + 2);
+        await late.Fired.Task.WaitAsync(s_timeout);
+    }
+
+    /// <summary>Runs an action the first time the wheel reads its tick, i.e. in the middle of processing its bucket.</summary>
+    private sealed class ReentrantTarget(Action onRead) : DatagramTimingWheel.ITarget
+    {
+        private long _tick = long.MaxValue;
+        private int _read;
+
+        public TaskCompletionSource Fired { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public long ScheduledTick
+        {
+            get
+            {
+                if (Interlocked.Exchange(ref _read, 1) == 0)
+                {
+                    onRead();
+                }
+
+                return Volatile.Read(ref _tick);
+            }
+        }
+
+        public void Arm(DatagramTimingWheel wheel, long deadlineMicros)
+        {
+            long tick = wheel.ToTick(deadlineMicros);
+            Volatile.Write(ref _tick, tick);
+            wheel.Schedule(this, tick);
+        }
+
+        public void Execute() => _ = this.Fired.TrySetResult();
+    }
+
     private sealed class Target : DatagramTimingWheel.ITarget
     {
         private long _tick = long.MaxValue;

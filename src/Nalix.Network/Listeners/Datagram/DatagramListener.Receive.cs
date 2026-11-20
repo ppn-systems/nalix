@@ -156,6 +156,18 @@ public sealed partial class DatagramListener
             return true;
         }
 
+        if (_guard is not null)
+        {
+            // The session owns the slot from here; it is released when the session is disposed (OnConnectionClosed),
+            // which may already have happened: the engine can close the session from another thread at any time.
+            connection.AttachGuardSlot(remote);
+            if (connection.IsDisposed)
+            {
+                this.ReleaseGuardSlot(connection);
+                return true;
+            }
+        }
+
         _ = _sessions.TryAdd(connectionId, connection);
         this.Accept(connection, ticket.OnAccepted);
         return true;
@@ -165,12 +177,6 @@ public sealed partial class DatagramListener
     {
         try
         {
-            if (_guard is not null)
-            {
-                // Releases the slot taken by TryAccept when the session closes.
-                connection.ConnectionClosed += _guard.OnConnectionClosed;
-            }
-
             connection.ConnectionClosed += this.HandleConnectionClosed;
             connection.MessageProcessed += _protocol.PostProcessMessage;
             connection.MessageProcessing += _protocol.FrameProcessor.ProcessFrame;
@@ -208,11 +214,6 @@ public sealed partial class DatagramListener
         connection.ConnectionClosed -= this.HandleConnectionClosed;
         connection.MessageProcessed -= _protocol.PostProcessMessage;
         connection.MessageProcessing -= _protocol.FrameProcessor.ProcessFrame;
-
-        if (_guard is not null)
-        {
-            connection.ConnectionClosed -= _guard.OnConnectionClosed;
-        }
     }
 
     #endregion Accept
@@ -240,9 +241,20 @@ public sealed partial class DatagramListener
         }
     }
 
-    /// <summary>Removes a disposed session from the routing table.</summary>
+    /// <summary>Removes a disposed session from the routing table and releases its guard slot. Called once per session.</summary>
     internal void OnConnectionClosed(DatagramConnection connection)
-        => _ = _sessions.TryRemove(new KeyValuePair<ulong, DatagramConnection>(connection.DatagramConnectionId, connection));
+    {
+        _ = _sessions.TryRemove(new KeyValuePair<ulong, DatagramConnection>(connection.DatagramConnectionId, connection));
+        this.ReleaseGuardSlot(connection);
+    }
+
+    private void ReleaseGuardSlot(DatagramConnection connection)
+    {
+        if (connection.DetachGuardSlot() is { } endPoint)
+        {
+            _guard?.Release(endPoint);
+        }
+    }
 
     private void SweepExpiredTickets()
     {
