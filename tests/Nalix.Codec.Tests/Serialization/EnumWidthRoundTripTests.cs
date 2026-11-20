@@ -75,7 +75,7 @@ public sealed class EnumWidthRoundTripTests
         WidthDto dto = new() { S64 = LongEnum.Value, U64 = ULongEnum.Value };
 
         byte[] bytes = LiteSerializer.Serialize(dto);
-        WidthDto result = LiteSerializer.Deserialize<WidthDto>(bytes, out _);
+        WidthDto result = LiteSerializer.Deserialize<WidthDto>(bytes, out _)!;
 
         Assert.Equal(LongEnum.Value, result.S64);
         Assert.Equal(ULongEnum.Value, result.U64);

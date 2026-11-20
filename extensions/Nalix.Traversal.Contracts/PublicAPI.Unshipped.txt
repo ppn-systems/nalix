@@ -1,1 +1,7 @@
 #nullable enable
+Nalix.Traversal.Packets.ReflectorAllocated.PeerId.get -> ulong
+Nalix.Traversal.Packets.ReflectorAllocated.PeerId.set -> void
+Nalix.Traversal.Packets.ReflectorAllocated.RequestNonce.get -> ulong
+Nalix.Traversal.Packets.ReflectorAllocated.RequestNonce.set -> void
+Nalix.Traversal.Packets.ReflectorInit.RequestNonce.get -> ulong
+Nalix.Traversal.Packets.ReflectorInit.RequestNonce.set -> void

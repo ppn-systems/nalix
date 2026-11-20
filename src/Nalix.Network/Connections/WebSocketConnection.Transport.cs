@@ -3,6 +3,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -40,7 +41,6 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
     private WebSocket _webSocket;
     private CoalescingWriteStream? _writeBatcher;
     private NetworkWebSocketOptions _wsOptions;
-    private SemaphoreSlim _wsSendLock => _sendLockScope.Lock;
 
     // The scope handed out by AcquireSendLockAsync. A separate object, not the connection itself: if the connection
     // implemented IAsyncDisposable, `await using` (or any disposer that prefers DisposeAsync) would release the lock
@@ -65,11 +65,12 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
     internal WebSocket WebSocket => _webSocket;
 
     /// <summary>Gets the lock that serializes sends on the WebSocket.</summary>
-    internal SemaphoreSlim SendLock => _wsSendLock;
+    internal SemaphoreSlim SendLock => _sendLockScope.Lock;
 
     /// <summary>
     /// Wires the WebSocket into this connection. Called once from the constructor.
     /// </summary>
+    [MemberNotNull(nameof(_webSocket), nameof(_wsOptions))]
     private void InitializeTransport(WebSocket webSocket, CoalescingWriteStream? writeBatcher)
     {
         _writeBatcher = writeBatcher;
@@ -122,7 +123,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
 
         // WebSockets handle framing natively, so we just send the message as binary.
         // A SemaphoreSlim is used because WebSocket.SendAsync doesn't support concurrent calls.
-        if (!cancellationToken.IsCancellationRequested && _wsSendLock.Wait(0, cancellationToken))
+        if (!cancellationToken.IsCancellationRequested && this.SendLock.Wait(0, cancellationToken))
         {
             ValueTask vt;
             try
@@ -131,13 +132,13 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
             }
             catch
             {
-                _ = _wsSendLock.Release();
+                _ = this.SendLock.Release();
                 throw;
             }
 
             if (vt.IsCompletedSuccessfully)
             {
-                _ = _wsSendLock.Release();
+                _ = this.SendLock.Release();
                 this.TriggerPostProcessEvent();
                 return default;
             }
@@ -156,7 +157,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
             }
             finally
             {
-                _ = connection._wsSendLock.Release();
+                _ = connection.SendLock.Release();
             }
 
             connection.TriggerPostProcessEvent();
@@ -164,14 +165,14 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
 
         static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(WebSocketConnection connection, ReadOnlyMemory<byte> msg, CancellationToken ct)
         {
-            await connection._wsSendLock.WaitAsync(ct).ConfigureAwait(false);
+            await connection.SendLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
                 await connection.SEND_CORE_ASYNC(msg, ct).ConfigureAwait(false);
             }
             finally
             {
-                _ = connection._wsSendLock.Release();
+                _ = connection.SendLock.Release();
             }
 
             connection.TriggerPostProcessEvent();
@@ -183,7 +184,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     ValueTask<IAsyncDisposable> IConnection.ITransport.AcquireSendLockAsync(CancellationToken cancellationToken)
     {
-        if (!cancellationToken.IsCancellationRequested && _wsSendLock.Wait(0, cancellationToken))
+        if (!cancellationToken.IsCancellationRequested && this.SendLock.Wait(0, cancellationToken))
         {
             return new ValueTask<IAsyncDisposable>(_sendLockScope.Enter());
         }
@@ -193,7 +194,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
 
     private async ValueTask<IAsyncDisposable> ACQUIRE_SEND_LOCK_ASYNC(CancellationToken cancellationToken)
     {
-        await _wsSendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await this.SendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         return _sendLockScope.Enter();
     }
 

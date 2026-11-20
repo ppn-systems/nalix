@@ -220,7 +220,9 @@ internal sealed class CancellableValueTaskSource<T> : IValueTaskSource<T>, IPool
                 _core.SetResult(result);
             }
         }
+#pragma warning disable NALIX073 // Deliberately catches fatal exceptions too: the awaiter is completed first, then they are rethrown below.
         catch (Exception ex)
+#pragma warning restore NALIX073
         {
             // Always complete the awaiter (even for fatal exceptions) so it can never hang.
             if (Interlocked.CompareExchange(ref _resultSet, 1, 0) == 0)

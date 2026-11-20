@@ -71,7 +71,8 @@
 		<InternalsVisibleTo Include="Nalix.Runtime.Benchmarks" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(PublishAot)' != 'true' And '$(DisableNalixAnalyzers)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Tests'">
+	<!-- Every Nalix analyzer rule needs Nalix.Codec symbols, so projects that do not reference Codec (Abstractions, Environment, Framework, Network) would only get NALIX105. -->
+	<ItemGroup Condition="'$(PublishAot)' != 'true' And '$(DisableNalixAnalyzers)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Tests' And '$(MSBuildProjectName)' != 'Nalix.Abstractions' And '$(MSBuildProjectName)' != 'Nalix.Environment' And '$(MSBuildProjectName)' != 'Nalix.Framework' And '$(MSBuildProjectName)' != 'Nalix.Network'">
 		<ProjectReference Include="$(MSBuildThisFileDirectory)..\analyzers\Nalix.Analyzers\Nalix.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" AdditionalProperties="Configuration=$(Configuration)" />
 		<ProjectReference Include="$(MSBuildThisFileDirectory)..\analyzers\Nalix.Analyzers.CodeFixes\Nalix.Analyzers.CodeFixes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" AdditionalProperties="Configuration=$(Configuration)" />
 	</ItemGroup>

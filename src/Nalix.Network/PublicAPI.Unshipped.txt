@@ -1,1 +1,7 @@
 #nullable enable
+Nalix.Network.Listeners.Web.HttpRequestView.Authorization.get -> System.ReadOnlySpan<byte>
+Nalix.Network.Listeners.Web.HttpRequestView.Authorization.init -> void
+Nalix.Network.Options.ConnectionGuardOptions.ErrorWindow.get -> System.TimeSpan
+Nalix.Network.Options.ConnectionGuardOptions.ErrorWindow.set -> void
+Nalix.Network.Options.NetworkWebSocketOptions.DevOpsBearerToken.get -> string!
+Nalix.Network.Options.NetworkWebSocketOptions.DevOpsBearerToken.set -> void

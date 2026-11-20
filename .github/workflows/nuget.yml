@@ -1,6 +1,8 @@
 name: "Publish: NuGet"
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 on:
   release:
@@ -13,12 +15,15 @@ on:
 
 permissions:
   contents: read
-  packages: write
+
 jobs:
-  publish:
-    name: "Publish NuGet (tag only)"
+  # Test, build and pack. Holds no publishing credentials.
+  pack:
+    name: "Test & Pack"
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -33,6 +38,7 @@ jobs:
             11.0.x
 
       - name: Extract version
+        id: version
         shell: bash
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
@@ -46,7 +52,7 @@ jobs:
             echo "::error::Invalid version '$version' (expected SemVer, e.g. 1.2.3 or 1.2.3-rc.1)"
             exit 1
           fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -74,37 +80,79 @@ jobs:
       # Rebuild everything from scratch so the packed assemblies are the signed, version-stamped ones.
       # NalixInternalsVisibleTo=false keeps the test/benchmark assembly names out of the shipped assemblies.
       - name: Build
-        run: dotnet build ./src/Nalix.sln --configuration Release --no-restore --no-incremental /p:Version=${{ env.VERSION }} /p:NalixInternalsVisibleTo=false
+        run: dotnet build ./src/Nalix.sln --configuration Release --no-restore --no-incremental /p:Version=${{ steps.version.outputs.version }} /p:NalixInternalsVisibleTo=false
 
       - name: Pack
-        run: dotnet pack ./src/Nalix.sln --configuration Release --no-build --output ./out /p:Version=${{ env.VERSION }}
+        run: dotnet pack ./src/Nalix.sln --configuration Release --no-build --output ./out /p:Version=${{ steps.version.outputs.version }}
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f ./src/Nalix.snk
 
       - name: Verify package exists
         shell: bash
         run: |
           count=$(ls ./out/*.nupkg 2>/dev/null | wc -l)
           if [ "$count" -eq 0 ]; then
-            echo "❌ No .nupkg files found in ./out" && exit 1
+            echo "::error::No .nupkg files found in ./out" && exit 1
           fi
-          echo "✅ Found $count package(s):"
-          ls ./out/*.nupkg
+          echo "Found $count package(s):"
+          ls ./out/*.nupkg ./out/*.snupkg 2>/dev/null
 
-      # -----------------------------------------------------------------------
-      # Push to NuGet.org
-      # -----------------------------------------------------------------------
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: |
+            ./out/*.nupkg
+            ./out/*.snupkg
+          if-no-files-found: error
+          retention-days: 7
+
+  # Publish only. Runs in the 'production' environment, which the nuget.org trusted publishing policy is bound to
+  # (owner ppn-systems, repository nalix, workflow nuget.yml, environment production).
+  publish:
+    name: "Publish"
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      id-token: write   # OIDC token exchanged for a short-lived nuget.org API key (trusted publishing)
+      packages: write   # GitHub Packages push with GITHUB_TOKEN
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-packages
+          path: ./out
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      # Requested right before the push: the temporary key is valid for one hour and each OIDC token mints one key.
+      - name: NuGet login (OIDC to temporary API key)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: phcnguyen   # nuget.org profile name of the policy owner (not an email address)
+
+      # Pushing the .nupkg also pushes the matching .snupkg next to it.
       - name: Push to NuGet.org
         run: |
           dotnet nuget push ./out/*.nupkg \
-            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 
-      # -----------------------------------------------------------------------
-      # Push to GitHub Packages
-      # -----------------------------------------------------------------------
       - name: Push to GitHub Packages
         run: |
           dotnet nuget push ./out/*.nupkg \
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
-            --skip-duplicate
+            --skip-duplicate \
+            --no-symbols

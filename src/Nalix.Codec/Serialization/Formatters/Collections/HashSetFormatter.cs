@@ -181,13 +181,13 @@ internal sealed class HashSetFormatter<
         {
             if (reader.IsFailed)
             {
-                return null!;
+                return null;
             }
 
             T item = GetElementFormatter().Deserialize(ref reader);
             if (reader.IsFailed)
             {
-                return null!;
+                return null;
             }
 
             _ = set.Add(item);

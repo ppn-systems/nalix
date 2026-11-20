@@ -2,3 +2,5 @@
 *REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.ACKNOWLEDGED = 64 -> Nalix.Abstractions.Networking.Packets.PacketFlags
 *REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.RELIABLE = 16 -> Nalix.Abstractions.Networking.Packets.PacketFlags
 *REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.UNRELIABLE = 32 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_CHALLENGE = 241 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_PROOF = 242 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode

@@ -83,7 +83,7 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     public byte[] Rent(int minimumLength = 256)
     {
         byte[] array = _pool.Rent(minimumLength);
-        UntrackFree(array);
+        this.UntrackFree(array);
         _ = Interlocked.Increment(ref _rentCount);
         _ = Interlocked.Add(ref _totalBytesRented, array.Length);
 
@@ -91,7 +91,7 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
         {
             BufferSentinel sentinel = new(array, _config.EnableBufferLeakStackTrace);
             _activeSentinels.Add(array, sentinel);
-            TrackSentinel(sentinel);
+            this.TrackSentinel(sentinel);
         }
 
         return array;
@@ -106,7 +106,7 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
         {
             if (_trackedSentinels >= _sentinelPruneAt)
             {
-                PruneSentinelTrackerLocked();
+                this.PruneSentinelTrackerLocked();
             }
 
             _sentinelTracker.Add(new WeakReference<BufferSentinel>(sentinel));
@@ -205,7 +205,7 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
         }
 
         // Reject a double return before anything else: the buffer may already belong to another renter.
-        if (!TrackFree(array))
+        if (!this.TrackFree(array))
         {
             return;
         }

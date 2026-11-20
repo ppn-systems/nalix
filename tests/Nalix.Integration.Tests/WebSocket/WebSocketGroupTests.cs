@@ -141,9 +141,9 @@ public sealed class WebSocketGroupTests : IDisposable
             Assert.Equal(2, hub.Count);
 
             byte[] broadcastMessage = CreatePayload("Hello Everyone");
-#pragma warning disable CS0618
+#pragma warning disable NALIX_NET001 // exercises the raw pre-serialized overload on purpose
             await hub.BroadcastAsync(broadcastMessage);
-#pragma warning restore CS0618
+#pragma warning restore NALIX_NET001
 
             await Task.WhenAll(client1Tcs.Task, client2Tcs.Task).WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -225,9 +225,9 @@ public sealed class WebSocketGroupTests : IDisposable
             await groupStore.AddToGroupAsync("vip_room", serverConnInGroup!);
 
             byte[] multicastMessage = CreatePayload("VIP Only");
-#pragma warning disable CS0618
+#pragma warning disable NALIX_NET001 // exercises the raw pre-serialized overload on purpose
             await hub.MulticastAsync(groupStore, "vip_room", multicastMessage);
-#pragma warning restore CS0618
+#pragma warning restore NALIX_NET001
 
             Task completed = await Task.WhenAny(inGroupTcs.Task, Task.Delay(2000));
             Assert.Same(inGroupTcs.Task, completed);

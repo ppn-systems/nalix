@@ -30,7 +30,7 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
     /// <summary>Replaces the counters of a closed connection so stale callers never touch the next owner's counters.</summary>
     private static readonly SequenceCounter s_detachedSequence = new();
 
-    private SemaphoreSlim _sendLock => _sendLockScope.Lock;
+    private SemaphoreSlim SendLock => _sendLockScope.Lock;
 
     // The scope handed out by AcquireSendLockAsync. A separate object, not the connection itself: if the connection
     // implemented IAsyncDisposable, `await using` (or any disposer that prefers DisposeAsync) would release the lock
@@ -202,7 +202,7 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     ValueTask<IAsyncDisposable> IConnection.ITransport.AcquireSendLockAsync(CancellationToken cancellationToken)
     {
-        if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
+        if (!cancellationToken.IsCancellationRequested && this.SendLock.Wait(0, cancellationToken))
         {
             return new ValueTask<IAsyncDisposable>(_sendLockScope.Enter());
         }
@@ -212,7 +212,7 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
 
     private async ValueTask<IAsyncDisposable> ACQUIRE_SEND_LOCK_ASYNC(CancellationToken cancellationToken)
     {
-        await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await this.SendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         return _sendLockScope.Enter();
     }
 
@@ -266,7 +266,7 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
     /// <remarks>
     /// When the lease reserved <see cref="BufferLease.TransportHeadroom"/> bytes in front of the payload,
     /// the 2-byte length prefix is written into that space and the frame is sent in place, skipping the
-    /// rent + copy that <see cref="SocketConnection.SendAsync(ReadOnlyMemory{byte}, CancellationToken)"/> needs.
+    /// rent + copy that <see cref="SocketConnection.SendAsync(ReadOnlyMemory{byte}, int, CancellationToken)"/> needs.
     /// </remarks>
     ValueTask IConnection.ITransport.SendAsyncCore(IBufferLease frame, CancellationToken cancellationToken)
     {
@@ -398,7 +398,7 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ValueTask SEND_WITH_LOCK_ASYNC(SocketConnection socket, int generation, ReadOnlyMemory<byte> message, CancellationToken cancellationToken)
     {
-        if (!cancellationToken.IsCancellationRequested && _sendLock.Wait(0, cancellationToken))
+        if (!cancellationToken.IsCancellationRequested && this.SendLock.Wait(0, cancellationToken))
         {
             ValueTask vt;
             try
@@ -407,17 +407,17 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
             }
             catch
             {
-                _ = _sendLock.Release();
+                _ = this.SendLock.Release();
                 throw;
             }
 
             if (vt.IsCompletedSuccessfully)
             {
-                _ = _sendLock.Release();
+                _ = this.SendLock.Release();
                 return default;
             }
 
-            return AWAIT_WITH_RELEASE_ASYNC(_sendLock, vt);
+            return AWAIT_WITH_RELEASE_ASYNC(this.SendLock, vt);
         }
 
         return AWAIT_ACQUIRE_AND_SEND_ASYNC(this, socket, generation, message, cancellationToken);
@@ -436,14 +436,14 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
 
         static async ValueTask AWAIT_ACQUIRE_AND_SEND_ASYNC(Connection connection, SocketConnection socket, int generation, ReadOnlyMemory<byte> msg, CancellationToken ct)
         {
-            await connection._sendLock.WaitAsync(ct).ConfigureAwait(false);
+            await connection.SendLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
                 await connection.SEND_ASYNC(socket, generation, msg, ct, acquireLock: false).ConfigureAwait(false);
             }
             finally
             {
-                _ = connection._sendLock.Release();
+                _ = connection.SendLock.Release();
             }
         }
     }

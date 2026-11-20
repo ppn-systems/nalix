@@ -227,7 +227,8 @@ public sealed partial class PacketDispatchOptions<TPacket>
     private static async ValueTask SendStreamResponseAsync(
         PacketContext<TPacket> context, IAsyncEnumerable<IPacket> stream, CancellationToken ct)
     {
-        await using IAsyncEnumerator<IPacket> enumerator = stream.GetAsyncEnumerator(ct);
+        IAsyncEnumerator<IPacket> enumerator = stream.GetAsyncEnumerator(ct);
+        await using ConfiguredAsyncDisposable enumeratorScope = enumerator.ConfigureAwait(false);
 
         bool hasCurrent = await enumerator.MoveNextAsync().ConfigureAwait(false);
 

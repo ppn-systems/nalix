@@ -1,1 +1,3 @@
 #nullable enable
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadEnumInt64<TEnum>(this ref Nalix.Environment.Memory.DataReader reader) -> TEnum
+static Nalix.Codec.Extensions.DataReaderExtensions.ReadEnumUInt64<TEnum>(this ref Nalix.Environment.Memory.DataReader reader) -> TEnum

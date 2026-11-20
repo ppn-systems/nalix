@@ -62,7 +62,7 @@ TestEnvironment.SetupCertificate();
         builder.UseSessionService(sessionService);
         builder.UseSessionStore(store);
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
-        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.MapTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSessions();
 
@@ -138,7 +138,7 @@ TestEnvironment.SetupCertificate();
         builder.UseSessionService(sessionService);
         builder.UseSessionStore(store);
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
-        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.MapTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSessions();
 
@@ -204,7 +204,7 @@ TestEnvironment.SetupCertificate();
         builder.UseSessionService(sessionService);
         builder.UseSessionStore(store);
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
-        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.MapTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSessions();
 
@@ -276,7 +276,7 @@ TestEnvironment.SetupCertificate();
         builder.UseSessionService(sessionService);
         builder.UseSessionStore(store);
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
-        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.MapTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSessions();
 

@@ -46,6 +46,7 @@ public abstract class PacketBase<[DynamicallyAccessedMembers(DynamicallyAccessed
     /// Debug only: 1 once the instance has been returned to its pool and not yet rented again, so a second
     /// <see cref="Dispose()"/> can be reported instead of silently doing nothing.
     /// </summary>
+    [SerializeIgnore]
     private int _isReturned;
 #endif
 

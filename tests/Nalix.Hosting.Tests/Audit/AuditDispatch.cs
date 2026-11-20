@@ -19,7 +19,7 @@ internal static class AuditDispatch
         int port = TestUtils.GetFreePort();
 
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
         builder.MapHandlers<THandler>();
 
         using NetworkApplication app = builder.Build();

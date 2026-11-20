@@ -290,7 +290,9 @@ public sealed class WebSocketGroupBroadcastTests : IDisposable
         hub.RegisterConnection(ws2);
 
         byte[] payload = [1, 2, 3, 4];
+#pragma warning disable NALIX_NET001 // exercises the raw pre-serialized overload on purpose
         await hub.BroadcastWhereAsync(payload, conn => conn.UserId == "user1");
+#pragma warning restore NALIX_NET001
 
         socket1.SentBuffers.Should().ContainSingle();
         socket2.SentBuffers.Should().BeEmpty();

@@ -40,6 +40,7 @@ internal sealed partial class SocketConnection
     /// shared buffer so the batch costs one socket write per <see cref="MaxBatchBytes"/> instead of one per frame.
     /// </summary>
     /// <param name="frames">The frame payloads; <see cref="CanSendBatch"/> must hold for them.</param>
+    /// <param name="generation">The connection generation the caller captured; the send is rejected once the pooled instance has been reused for another connection.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     public ValueTask<SendResult> SendBatchAsync(ReadOnlyMemory<IBufferLease> frames, int generation, CancellationToken cancellationToken)
     {

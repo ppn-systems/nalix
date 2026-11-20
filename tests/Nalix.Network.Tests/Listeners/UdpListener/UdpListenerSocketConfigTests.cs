@@ -36,6 +36,6 @@ public sealed class UdpListenerSocketConfigTests
         configure.Invoke(listener, [socket]);
 
         socket.ExclusiveAddressUse.Should().BeTrue("a UDP listener must not allow another socket to share its address by default");
-        ((int)socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress)).Should().Be(0);
+        ((int)socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress)!).Should().Be(0);
     }
 }

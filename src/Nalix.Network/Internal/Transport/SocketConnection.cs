@@ -15,7 +15,6 @@ using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
-using Nalix.Abstractions.Security;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Fragments;
 using Nalix.Environment.Memory;
@@ -27,8 +26,6 @@ using Nalix.Network.Internal.Pooling;
 using Nalix.Network.Options;
 
 #pragma warning disable CA2213 // Disposable fields should be disposed
-
-#nullable enable
 
 namespace Nalix.Network.Internal.Transport;
 

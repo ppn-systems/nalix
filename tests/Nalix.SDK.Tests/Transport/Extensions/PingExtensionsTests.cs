@@ -30,7 +30,7 @@ public sealed class PingExtensionsTests : IDisposable
     {
         int port = TestEnvironment.GetFreePort();
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<IntegrationTestProtocol>().OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSystemControl();
         builder.UseTimeSync();

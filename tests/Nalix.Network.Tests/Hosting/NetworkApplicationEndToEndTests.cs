@@ -69,7 +69,7 @@ public sealed class NetworkApplicationEndToEndTests
         builder.UseSecureConnections(certPath);
 
         // Listen on loopback with our test protocol
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<IntegrationTestProtocol>().OnPort((ushort)port);
 
         builder.MapHandlers<IntegrationTestController>();
 
@@ -148,8 +148,8 @@ public sealed class NetworkApplicationEndToEndTests
         builder.UseSystemControl();
 
         // Listen on TCP and UDP
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
-        builder.ListenUdp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapUdp<IntegrationTestProtocol>().OnPort((ushort)port);
 
         builder.MapHandlers<IntegrationTestController2>();
 

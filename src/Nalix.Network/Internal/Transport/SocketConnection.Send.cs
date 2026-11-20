@@ -24,6 +24,7 @@ internal sealed partial class SocketConnection
     /// stack; larger ones use a pooled heap buffer.
     /// </summary>
     /// <param name="data"></param>
+    /// <param name="generation">The connection generation the caller captured; the send is rejected once the pooled instance has been reused for another connection.</param>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public SendResult Send(ReadOnlySpan<byte> data, int generation)
@@ -197,6 +198,7 @@ internal sealed partial class SocketConnection
     /// Sends data asynchronously. Uses a pooled heap buffer for framing.
     /// </summary>
     /// <param name="data"></param>
+    /// <param name="generation">The connection generation the caller captured; the send is rejected once the pooled instance has been reused for another connection.</param>
     /// <param name="cancellationToken"></param>
     /// <returns><see langword="true"/> if the data was sent successfully.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
@@ -280,6 +282,7 @@ internal sealed partial class SocketConnection
     /// <param name="buffer">The array holding <c>[header space][payload]</c>. Owned by the caller; not returned to any pool.</param>
     /// <param name="offset">Offset of the reserved header space (the payload starts at <c>offset + 2</c>).</param>
     /// <param name="payloadLength">Payload length in bytes.</param>
+    /// <param name="generation">The connection generation the caller captured; the send is rejected once the pooled instance has been reused for another connection.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The send result. The caller must keep <paramref name="buffer"/> alive until it completes.</returns>
     /// <remarks>

@@ -97,7 +97,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             options.WithMiddleware(new BoundaryTrackingMiddleware(counters));
         });
 
-        builder.ListenWebSocket<DefaultProtocol>()
+        builder.MapWebSocket<DefaultProtocol>()
                .OnPort(port)
                .WithPath("/ws/")
                .WithFactory(dispatch => new InstrumentedProtocol(dispatch, counters));

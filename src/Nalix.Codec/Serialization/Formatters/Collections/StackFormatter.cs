@@ -186,13 +186,13 @@ internal sealed class StackFormatter<
         {
             if (reader.IsFailed)
             {
-                return null!;
+                return null;
             }
 
             buffer[i] = GetElementFormatter().Deserialize(ref reader);
             if (reader.IsFailed)
             {
-                return null!;
+                return null;
             }
         }
 

@@ -376,9 +376,9 @@ public sealed class PacketSenderTests
         public int Disconnects { get; private set; }
         public IConnection.ITransport TCP => FakeTcp;
         public IConnection.ITransport? UDP => FakeUdp;
-        public event EventHandler<IConnectionEventArgs>? ConnectionClosed;
-        public event EventHandler<IConnectionEventArgs>? MessageProcessing;
-        public event EventHandler<IConnectionEventArgs>? MessageProcessed;
+        public event EventHandler<IConnectionEventArgs>? ConnectionClosed { add { } remove { } }
+        public event EventHandler<IConnectionEventArgs>? MessageProcessing { add { } remove { } }
+        public event EventHandler<IConnectionEventArgs>? MessageProcessed { add { } remove { } }
         public void Disconnect(string? reason = null) => Disconnects++;
         public void Dispose() => IsDisposed = true;
         public int ErrorCount => 0;
