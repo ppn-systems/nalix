@@ -15,7 +15,6 @@ public sealed class TaskNamingTests
     public void Tags_WhenRead_ExposesExpectedPublicConstants()
     {
         Assert.Equal("tcp", TaskNaming.Tags.Tcp);
-        Assert.Equal("udp", TaskNaming.Tags.Udp);
         Assert.Equal("net", TaskNaming.Tags.Net);
         Assert.Equal("time", TaskNaming.Tags.Time);
         Assert.Equal("sync", TaskNaming.Tags.Sync);

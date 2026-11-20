@@ -31,7 +31,7 @@ public sealed class MiddlewarePipelineTests
         PacketMetadata metadata = new(
             new PacketOpcodeAttribute(0x0001), timeout: null,
             permission: new PacketPermissionAttribute(PermissionLevel.NONE),
-            encryption: null, rateLimit: null, transport: null);
+            encryption: null, rateLimit: null);
         return new PacketHandler<IPacket>(0x0001, metadata, null, "TestHandler", typeof(void),
             (obj, ctx) => invoker(ctx), null);
     }

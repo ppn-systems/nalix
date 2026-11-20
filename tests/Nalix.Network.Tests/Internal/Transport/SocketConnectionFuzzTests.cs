@@ -73,7 +73,7 @@ public sealed class SocketConnectionFuzzTests
 
         connection.MessageProcessing += (_, _) => { };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         System.Random rng = new(Seed);
         for (int i = 0; i < Iterations; i++)
@@ -138,7 +138,7 @@ public sealed class SocketConnectionFuzzTests
             }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         byte[] unknownOpFrame = CreateFrame(CreateHeaderedPayload(0xFFFF, 0, 0, 1, [1, 2]));
         await scope.ClientSocket.SendAsync(unknownOpFrame);
@@ -173,7 +173,7 @@ public sealed class SocketConnectionFuzzTests
             { processObserved.TrySetResult(args.Lease?.Length ?? -1); }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         byte[] frame = CreateFrame(CreateHeaderedPayload(0x0002, flags, priority, 7, [1, 2, 3, 4]));
         await scope.ClientSocket.SendAsync(frame);
@@ -198,7 +198,7 @@ public sealed class SocketConnectionFuzzTests
         connection.MessageProcessing += (_, _) => { };
         connection.ConnectionClosed += (_, _) => closed.TrySetResult(true);
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         // Declare a much larger frame than is actually sent, then shut down the client's send side.
         byte[] header = new byte[2];
@@ -239,7 +239,7 @@ public sealed class SocketConnectionFuzzTests
             }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         byte[] first = CreateFrame(CreateHeaderedPayload(0x0003, 0, 0, 1, [1, 1, 1, 1]));
         byte[] second = CreateFrame(CreateHeaderedPayload(0x0003, 0, 0, 2, [2, 2, 2, 2]));

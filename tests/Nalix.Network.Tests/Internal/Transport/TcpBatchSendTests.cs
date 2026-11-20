@@ -64,7 +64,7 @@ public sealed class TcpBatchSendTests
 
         try
         {
-            IConnection.ITransport transport = connection.TCP;
+            IConnection.ITransport transport = connection.Transport;
             Task send = transport.SendAsyncCore(new ReadOnlyMemory<IBufferLease>(frames), CancellationToken.None).AsTask();
 
             if (payloadLength < 32_000)
@@ -119,7 +119,7 @@ public sealed class TcpBatchSendTests
 
         try
         {
-            await connection.TCP.SendAsyncCore(new ReadOnlyMemory<IBufferLease>(frames), CancellationToken.None);
+            await connection.Transport.SendAsyncCore(new ReadOnlyMemory<IBufferLease>(frames), CancellationToken.None);
 
             // The whole batch (10 x 102 bytes) was one write, so one receive returns all of it.
             byte[] buffer = new byte[4096];

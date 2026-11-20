@@ -43,7 +43,7 @@ public sealed class WebSocketConnectionSendTests : IDisposable
         int lockCountDuringNotification = -1;
         WebSocketConnection.s_postProcessHook = c => lockCountDuringNotification = c.SendLock.CurrentCount;
 
-        await connection.TCP.SendAsync(Payload);
+        await connection.Transport.SendAsync(Payload);
 
         lockCountDuringNotification.Should().Be(1,
             "the post-send notification must run after the write lock is released, so a handler never runs under the lock");
@@ -56,7 +56,7 @@ public sealed class WebSocketConnectionSendTests : IDisposable
 
         using PendingWebSocket socket = new();
         WebSocketConnection connection = new(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        Task pending = connection.TCP.SendAsync(Payload).AsTask();
+        Task pending = connection.Transport.SendAsync(Payload).AsTask();
 
         connection.Dispose();
 

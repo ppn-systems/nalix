@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Security;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
@@ -121,29 +122,15 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
             return;
         }
 
-        uint window;
         uint? seq = null;
         bool exchanged = false;
-        ISequenceCounter counter;
+        uint window = _sequenceOptions.TcpWindow;
+        ISequenceCounter counter = args.Connection.Transport.ReceiveSequence;
         IBufferLease current = lease;
 
-        if (current.IsReliable)
-        {
-            window = _sequenceOptions.TcpWindow;
-            counter = args.Connection.TCP.ReceiveSequence;
-
-        }
-        else
-        {
-            if (args.Connection.UDP is not { } udp)
-            {
-                _logger.DiscardUnreliableFrame();
-                return;
-            }
-
-            window = _sequenceOptions.UdpWindow;
-            counter = udp.ReceiveSequence;
-        }
+        // A datagram session authenticates every datagram and has its own replay window; its messages may
+        // arrive in any order (unordered and sequenced methods), so the stream sequence check does not apply.
+        bool datagram = args.Connection.Transport is IDatagramTransport;
 
         try
         {
@@ -155,16 +142,20 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
                 return;
             }
 
-            if (!counter.IsValid(seq, window: window))
+            if (datagram)
+            {
+                current.EncryptedOnWire = true;
+            }
+            else if (!counter.IsValid(seq, window: window))
             {
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
-                    _logger.RejectedSequence(current.IsReliable ? "TCP" : "UDP", seq, counter.Current());
+                    _logger.RejectedSequence("stream", seq, counter.Current());
                 }
                 return;
             }
 
-            if (seq.HasValue)
+            if (seq.HasValue && !datagram)
             {
                 counter.UpdateTo(seq.Value);
             }

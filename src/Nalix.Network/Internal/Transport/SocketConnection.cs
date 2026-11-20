@@ -766,7 +766,6 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
          * handler to finish.
          */
         BufferLease lease = BufferLease.CopyFrom(rawPayloadSpan);
-        lease.IsReliable = true;
 
         // Safety: The application protocol (FramePipeline) requires a valid packet header.
         // If the payload is too small, it's a malformed packet that would cause OOB reads.
@@ -834,7 +833,6 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             if (assembled is not null)
             {
                 BufferLease assembledLease = assembled.Value.Lease;
-                assembledLease.IsReliable = true;
 
                 if (assembledLease.Length < PacketConstants.HeaderSize)
                 {

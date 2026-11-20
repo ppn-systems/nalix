@@ -68,7 +68,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             Func<Task> act = async () => await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("sync boom");
         }
@@ -107,7 +107,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             observedException.Should().BeOfType<InvalidOperationException>().Which.Message.Should().Be("async boom");
             observedOpCode.Should().Be(descriptor.OpCode);
@@ -141,7 +141,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             Assert.False(invoked);
             Assert.Equal(1, connection.ErrorCount);
@@ -173,7 +173,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             Assert.True(invoked);
             Assert.Equal(0, connection.ErrorCount);
@@ -205,7 +205,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             Assert.False(invoked);
             Assert.Equal(1, connection.ErrorCount);
@@ -236,7 +236,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new ValidatingPacket(valid: false), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new ValidatingPacket(valid: false), connection, encryptedOnWire: false).AsTask();
 
             Assert.False(invoked);
             Assert.Equal(1, connection.ErrorCount);
@@ -266,7 +266,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new ValidatingPacket(valid: true), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new ValidatingPacket(valid: true), connection, encryptedOnWire: false).AsTask();
 
             Assert.True(invoked);
             Assert.Equal(0, connection.ErrorCount);
@@ -300,7 +300,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             Func<Task> act = async () => await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false, token: cts.Token).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false, token: cts.Token).AsTask();
 
             await act.Should().ThrowAsync<OperationCanceledException>();
             invoked.Should().BeFalse("a pre-cancelled token must short-circuit before the handler runs");
@@ -342,7 +342,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, request, connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, request, connection, encryptedOnWire: false).AsTask();
 
             connection.FakeTcp.SentMessages.Should().HaveCount(3,
                 "every item the handler's stream yields must be sent as its own packet");
@@ -400,7 +400,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             connection.FakeTcp.SentMessages.Should().HaveCount(2);
             yielded[0].IsEndOfStream.Should().BeFalse();

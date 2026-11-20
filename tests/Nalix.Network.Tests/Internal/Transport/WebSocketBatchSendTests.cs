@@ -88,7 +88,7 @@ public sealed class WebSocketBatchSendTests
         WebSocket webSocket = WebSocket.CreateFromStream(inner, new WebSocketCreationOptions { IsServer = true });
         WebSocketConnection connection = new(webSocket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
 
-        await SendBatchAsync(connection.TCP, payloads);
+        await SendBatchAsync(connection.Transport, payloads);
 
         _ = inner.Writes.Should().Be(payloads.Length);
     }
@@ -231,7 +231,6 @@ public sealed class WebSocketBatchSendTests
     private sealed class ThrowingLease : IBufferLease
     {
         public int Length => 40;
-        public bool IsReliable { get; set; }
         public bool EncryptedOnWire { get; set; }
         public int Capacity => 40;
         public Span<byte> Span => throw new InvalidOperationException("lease failed");
@@ -254,7 +253,7 @@ public sealed class WebSocketBatchSendTests
         CoalescingWriteStream stream = new(inner);
         WebSocket webSocket = WebSocket.CreateFromStream(stream, new WebSocketCreationOptions { IsServer = true });
         connection = new WebSocketConnection(webSocket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0), timingWheel: null, stream);
-        return connection.TCP;
+        return connection.Transport;
     }
 
     private static async Task SendBatchAsync(IConnection.ITransport transport, byte[][] payloads)

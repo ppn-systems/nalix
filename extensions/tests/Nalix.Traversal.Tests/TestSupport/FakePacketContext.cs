@@ -11,7 +11,6 @@ namespace Nalix.Traversal.Tests.TestSupport;
 internal sealed class FakePacketContext<TPacket>(TPacket packet, IConnection connection, IPacketSender sender) : IPacketContext<TPacket>
     where TPacket : IPacket
 {
-    public bool IsReliable => true;
 
     public bool EncryptedOnWire => false;
 

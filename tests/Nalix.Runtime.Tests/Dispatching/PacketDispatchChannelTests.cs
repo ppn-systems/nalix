@@ -117,8 +117,7 @@ public sealed class PacketDispatchChannelTests
             timeout: null,
             permission: new PacketPermissionAttribute(PermissionLevel.NONE),
             encryption: null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
         Func<object?, PacketContext<IPacket>, ValueTask<object?>> invoker = (_, _) => new ValueTask<object?>(asyncCallback());
 
@@ -140,7 +139,7 @@ public sealed class PacketDispatchChannelTests
         header.Priority = priority;
         header.SequenceId = sequence;
         MemoryMarshal.Write(buffer, in header);
-        return new FakeBufferLease(buffer) { IsReliable = true };
+        return new FakeBufferLease(buffer);
     }
 
 
@@ -152,7 +151,6 @@ public sealed class PacketDispatchChannelTests
 
         public int Length => buffer.Length;
 
-        public bool IsReliable { get; set; }
 
         public bool EncryptedOnWire { get; set; }
 

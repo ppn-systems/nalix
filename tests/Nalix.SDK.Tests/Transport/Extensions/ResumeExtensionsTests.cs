@@ -249,7 +249,7 @@ TestEnvironment.SetupCertificate();
             Assert.Equal(ProtocolReason.NONE, result);
 
             IConnection serverConn = Assert.Single(hub.ListConnections());
-            Assert.Equal(50u, serverConn.TCP.ReceiveSequence.Current());
+            Assert.Equal(50u, serverConn.Transport.ReceiveSequence.Current());
         }
         finally
         {

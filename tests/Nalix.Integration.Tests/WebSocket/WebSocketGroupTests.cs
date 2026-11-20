@@ -79,7 +79,7 @@ public sealed class WebSocketGroupTests : IDisposable
         {
             if (args.Lease != null && args.Lease.Length > 0)
             {
-                args.Connection.TCP.SendAsync(args.Lease.Memory).AsTask().Wait();
+                args.Connection.Transport.SendAsync(args.Lease.Memory).AsTask().Wait();
             }
         }
     }

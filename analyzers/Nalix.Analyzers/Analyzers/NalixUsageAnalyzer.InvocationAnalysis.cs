@@ -363,7 +363,7 @@ public sealed partial class NalixUsageAnalyzer
         bool hasConnectionHub = ContainsInvocation(invocation.Instance, "UseConnectionHub");
         bool hasBufferPoolManager = ContainsInvocation(invocation.Instance, "UseBufferPoolManager");
         bool hasTcpBinding = ContainsInvocation(invocation.Instance, "ListenTcp");
-        bool hasUdpBinding = ContainsInvocation(invocation.Instance, "ListenUdp");
+        bool hasDatagramBinding = ContainsInvocation(invocation.Instance, "MapDatagram");
 
         if (!hasBufferPoolManager)
         {
@@ -380,7 +380,7 @@ public sealed partial class NalixUsageAnalyzer
             Report(context, DiagnosticDescriptors.NetworkHostingMissingTcpBinding, invocation.Syntax.GetLocation());
         }
 
-        if (hasUdpBinding && !hasTcpBinding)
+        if (hasDatagramBinding && !hasTcpBinding)
         {
             Report(context, DiagnosticDescriptors.NetworkHostingUdpWithoutTcpBinding, invocation.Syntax.GetLocation());
         }

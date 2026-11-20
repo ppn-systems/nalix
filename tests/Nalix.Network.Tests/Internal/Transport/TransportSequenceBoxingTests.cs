@@ -33,41 +33,7 @@ public sealed class TransportSequenceBoxingTests : IDisposable
     public void SequenceCounter_OnTcpTransport_ReturnsSameReferenceAndPersistsState()
     {
         // Arrange
-        IConnection.ITransport transport = _connection.TCP;
-
-        // Act & Assert
-        // 1. Same reference check (verifies boxing is eliminated)
-        ISequenceCounter rx1 = transport.ReceiveSequence;
-        ISequenceCounter rx2 = transport.ReceiveSequence;
-        rx1.Should().BeSameAs(rx2);
-
-        ISequenceCounter tx1 = transport.SendSequence;
-        ISequenceCounter tx2 = transport.SendSequence;
-        tx1.Should().BeSameAs(tx2);
-
-        // 2. State persistence checks
-        rx1.IsValid(1).Should().BeTrue();
-        rx1.UpdateTo(1);
-        rx1.Current().Should().Be(1);
-
-        // Next read of property should see the updated state (1)
-        transport.ReceiveSequence.Current().Should().Be(1);
-        transport.ReceiveSequence.IsValid(1).Should().BeFalse(); // Replay check
-
-        // Send sequence increment/monotony
-        tx1.Current().Should().Be(0);
-        tx1.Next().Should().Be(1);
-        tx1.Current().Should().Be(1);
-
-        transport.SendSequence.Current().Should().Be(1);
-        transport.SendSequence.Next().Should().Be(2);
-    }
-
-    [Fact]
-    public void SequenceCounter_OnUdpTransport_ReturnsSameReferenceAndPersistsState()
-    {
-        // Arrange
-        using var transport = new SocketUdpTransport(new Nalix.Environment.Sequencing.SequenceCounter(), new Nalix.Environment.Sequencing.SequenceCounter());
+        IConnection.ITransport transport = _connection.Transport;
 
         // Act & Assert
         // 1. Same reference check (verifies boxing is eliminated)
@@ -103,4 +69,3 @@ public sealed class TransportSequenceBoxingTests : IDisposable
         _socket.Dispose();
     }
 }
-

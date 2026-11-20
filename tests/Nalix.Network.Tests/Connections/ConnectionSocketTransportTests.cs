@@ -15,7 +15,7 @@ using Xunit;
 namespace Nalix.Network.Tests.Connections;
 
 /// <summary>
-/// <see cref="Connection.TCP"/> must expose the raw socket through <see cref="IConnection.ISocketTransport"/>. The tunneling
+/// <see cref="Connection.Transport"/> must expose the raw socket through <see cref="IConnection.ISocketTransport"/>. The tunneling
 /// extension type-tests for that interface to unwrap connections, so losing it breaks tunnels without any compile error.
 /// </summary>
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
@@ -39,7 +39,7 @@ public sealed class ConnectionSocketTransportTests : IDisposable
         Connection connection = new(server, new DummyOpCodeExtractor());
         _resources.Add(connection);
 
-        connection.TCP.Should().BeAssignableTo<IConnection.ISocketTransport>(
+        connection.Transport.Should().BeAssignableTo<IConnection.ISocketTransport>(
             "tunneling unwraps a connection through IConnection.ISocketTransport; a connection without it cannot carry a tunnel");
     }
 
@@ -50,7 +50,7 @@ public sealed class ConnectionSocketTransportTests : IDisposable
         Connection connection = new(server, new DummyOpCodeExtractor());
         _resources.Add(connection);
 
-        IConnection.ISocketTransport transport = (IConnection.ISocketTransport)connection.TCP;
+        IConnection.ISocketTransport transport = (IConnection.ISocketTransport)connection.Transport;
 
         transport.Socket.Should().BeSameAs(server);
     }

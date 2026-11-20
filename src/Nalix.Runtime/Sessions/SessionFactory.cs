@@ -53,10 +53,8 @@ public sealed class SessionFactory : ISessionFactory
         // Capture current transport sequence numbers to allow seamless resume
         ConnectionSequenceState snapshotSeq = new()
         {
-            TcpSendSequence = connection.TCP.SendSequence.Current(),
-            TcpReceiveSequence = connection.TCP.ReceiveSequence.Current(),
-            UdpSendSequence = connection.IsUdpCreated ? connection.UDP!.SendSequence.Current() : 0,
-            UdpReceiveSequence = connection.IsUdpCreated ? connection.UDP!.ReceiveSequence.Current() : 0
+            TcpSendSequence = connection.Transport.SendSequence.Current(),
+            TcpReceiveSequence = connection.Transport.ReceiveSequence.Current(),
         };
 
         attributes[ConnectionAttributes.SequenceState] = snapshotSeq;

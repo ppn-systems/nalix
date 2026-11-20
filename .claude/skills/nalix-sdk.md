@@ -11,7 +11,7 @@
 ## Rules
 
 ### Extension-Based API
-Most SDK functionality lives in **extension methods** on `TransportSession` — not on `TcpSession`/`UdpSession` directly. Import `Nalix.SDK.Transport.Extensions` and `Nalix.SDK.Extensions`.
+Most SDK functionality lives in **extension methods** on `TransportSession` — not on `TcpSession`/`DatagramSession` directly. Import `Nalix.SDK.Transport.Extensions` and `Nalix.SDK.Extensions`.
 
 ### Session Lifecycle Order
 ```

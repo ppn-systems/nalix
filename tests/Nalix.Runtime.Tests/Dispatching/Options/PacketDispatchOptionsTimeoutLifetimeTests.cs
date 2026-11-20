@@ -56,7 +56,7 @@ public sealed class PacketDispatchOptionsTimeoutLifetimeTests
         try
         {
             Task dispatchA = options.ExecuteResolvedHandlerAsync(
-                slow, new TestPacket(), connA, reliable: true, encryptedOnWire: false).AsTask();
+                slow, new TestPacket(), connA, encryptedOnWire: false).AsTask();
 
             // Wait until the timeout fired and the TIMEOUT directive went out.
             for (int i = 0; i < 200 && connA.FakeTcp.SentMessages.Count == 0; i++)
@@ -70,7 +70,7 @@ public sealed class PacketDispatchOptionsTimeoutLifetimeTests
 
             // Another connection dispatches while A's handler is still running.
             await options.ExecuteResolvedHandlerAsync(
-                cheap, new TestPacket(), connB, reliable: true, encryptedOnWire: false).AsTask();
+                cheap, new TestPacket(), connB, encryptedOnWire: false).AsTask();
 
             gate.SetResult();
             object? seen = await observed.Task.WaitAsync(TimeSpan.FromSeconds(5));

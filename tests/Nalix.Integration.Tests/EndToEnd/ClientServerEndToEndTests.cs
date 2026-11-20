@@ -354,30 +354,6 @@ public sealed class ClientServerEndToEndTests : IDisposable
     }
 
     [Fact]
-    public async Task RequestAsync_OverUdpSharingTcpSession_ReturnsHandlerResponse()
-    {
-        ushort port = NextPort();
-        await using NetworkApplication app = await this.StartServerAsync(port, secure: true, udp: true);
-
-        SessionState sharedState = new();
-        using TcpSession tcp = new(CreateOptions(port), sharedState);
-        await tcp.ConnectAsync().WaitAsync(s_timeout);
-        await tcp.HandshakeAsync().AsTask().WaitAsync(s_timeout);
-        using UdpSession udp = new(CreateOptions(port), sharedState);
-        await udp.ConnectAsync().WaitAsync(s_timeout);
-
-        EchoPacket response = await udp.RequestAsync<EchoPacket>(
-            new EchoPacket { Sequence = 99, Text = "udp" }, s_request.WithRetry(2)).AsTask().WaitAsync(s_timeout);
-
-        Assert.Equal(100, response.Sequence);
-        Assert.Equal("UDP", response.Text);
-        Assert.True(tcp.IsConnected);
-
-        await udp.DisconnectAsync().WaitAsync(s_timeout);
-        await tcp.DisconnectAsync().WaitAsync(s_timeout);
-    }
-
-    [Fact]
     public async Task RequestAsync_OverWebSocketAfterHandshake_ReturnsHandlerResponse()
     {
         ushort port = NextPort();
@@ -530,7 +506,7 @@ public sealed class ClientServerEndToEndTests : IDisposable
         ConnectTimeoutMillis = 5_000,
     };
 
-    private async Task<NetworkApplication> StartServerAsync(ushort port, bool secure, bool udp = false, ushort? webSocketPort = null)
+    private async Task<NetworkApplication> StartServerAsync(ushort port, bool secure, ushort? webSocketPort = null)
     {
         NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
         if (secure)
@@ -540,11 +516,6 @@ public sealed class ClientServerEndToEndTests : IDisposable
 
         _ = builder.MapHandlers(typeof(EchoHandlers));
         _ = builder.MapTcp<DefaultProtocol>().OnPort(port).Bind();
-        if (udp)
-        {
-            _ = builder.MapUdp<DefaultProtocol>().OnPort(port).Bind();
-        }
-
         if (webSocketPort is ushort wsPort)
         {
             _ = builder.MapWebSocket<DefaultProtocol>().OnPort(wsPort).WithPath(WebSocketPath).Bind();

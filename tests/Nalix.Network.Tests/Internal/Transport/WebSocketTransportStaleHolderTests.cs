@@ -42,7 +42,7 @@ public sealed class WebSocketTransportStaleHolderTests
         using RecordingWebSocket newSocket = new();
 
         WebSocketConnection oldOwner = new(oldSocket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        IConnection.ITransport stale = oldOwner.TCP;
+        IConnection.ITransport stale = oldOwner.Transport;
         oldOwner.Dispose();
 
         // A new WebSocket session takes over the pooled transport instance.
@@ -61,7 +61,7 @@ public sealed class WebSocketTransportStaleHolderTests
 
         using RecordingWebSocket oldSocket = new();
         WebSocketConnection oldOwner = new(oldSocket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        IConnection.ITransport stale = oldOwner.TCP;
+        IConnection.ITransport stale = oldOwner.Transport;
         oldOwner.Dispose();
 
         Exception? error = await Record.ExceptionAsync(() => stale.SendAsync(Payload).AsTask());

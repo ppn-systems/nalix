@@ -69,7 +69,7 @@ public sealed class PeerSignalHandler
                 forwardedPacket.AddressHigh = context.Packet.AddressHigh;
             }
 
-            await targetConnection.SendAsync(forwardedPacket, NetworkTransport.TCP, enableEncrypt: true, context.CancellationToken).ConfigureAwait(false);
+            await targetConnection.SendAsync(forwardedPacket, enableEncrypt: true, context.CancellationToken).ConfigureAwait(false);
         }
         else
         {

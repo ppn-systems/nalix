@@ -57,16 +57,15 @@ public interface IConnectionBroadcaster
     /// Broadcasts a message to all active connections.
     /// </summary>
     /// <param name="message">The pre-serialized message buffer to broadcast.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous broadcast operation.</returns>
     [Obsolete(
         "This overload sends a pre-serialized buffer and bypasses the normal compression and encryption pipeline. Use the packet-based multicast overload instead.",
         error: false,
         DiagnosticId = "NALIX_NET001")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Existing overload; only the UDP transport parameter was removed.")]
     Task BroadcastAsync(
         ReadOnlyMemory<byte> message,
-        NetworkTransport transport = NetworkTransport.TCP,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -75,18 +74,17 @@ public interface IConnectionBroadcaster
     /// <param name="groupProvider">The connection group provider to use for resolving group members.</param>
     /// <param name="groupName">The name of the group to receive the message.</param>
     /// <param name="message">The pre-serialized message buffer to multicast.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous multicast operation.</returns>
     [Obsolete(
         "This overload sends a pre-serialized buffer and bypasses the normal compression and encryption pipeline. Use the packet-based multicast overload instead.",
         error: false,
         DiagnosticId = "NALIX_NET001")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Existing overload; only the UDP transport parameter was removed.")]
     Task MulticastAsync(
         IConnectionGroupRegistry groupProvider,
         string groupName,
         ReadOnlyMemory<byte> message,
-        NetworkTransport transport = NetworkTransport.TCP,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -96,19 +94,18 @@ public interface IConnectionBroadcaster
     /// <param name="groupName">The name of the group to receive the message.</param>
     /// <param name="excludedConnection">The connection to exclude from the broadcast.</param>
     /// <param name="message">The pre-serialized message buffer to multicast.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous multicast operation.</returns>
     [Obsolete(
         "This overload sends a pre-serialized buffer and bypasses the normal compression and encryption pipeline. Use the packet-based multicast overload instead.",
         error: false,
         DiagnosticId = "NALIX_NET001")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Existing overload; only the UDP transport parameter was removed.")]
     Task MulticastExceptAsync(
         IConnectionGroupRegistry groupProvider,
         string groupName,
         IConnection excludedConnection,
         ReadOnlyMemory<byte> message,
-        NetworkTransport transport = NetworkTransport.TCP,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -116,7 +113,6 @@ public interface IConnectionBroadcaster
     /// </summary>
     /// <param name="message">The pre-serialized message buffer to broadcast.</param>
     /// <param name="predicate">The condition to match connections.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous broadcast operation.</returns>
     [Obsolete(
@@ -126,6 +122,5 @@ public interface IConnectionBroadcaster
     Task BroadcastWhereAsync(
         ReadOnlyMemory<byte> message,
         Func<IConnection, bool> predicate,
-        NetworkTransport transport = NetworkTransport.TCP,
         CancellationToken cancellationToken = default);
 }

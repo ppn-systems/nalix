@@ -60,7 +60,6 @@ public sealed class InlinePacketDispatcherTests
 
         public int Length => buffer.Length;
 
-        public bool IsReliable { get; set; } = true;
 
         public bool EncryptedOnWire { get; set; }
 

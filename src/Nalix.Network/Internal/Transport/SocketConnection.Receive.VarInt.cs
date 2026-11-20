@@ -215,7 +215,6 @@ internal sealed partial class SocketConnection
         ReadOnlySpan<byte> rawPayloadSpan = MemoryExtensions.AsSpan(_buffer, offset, payloadLen);
 
         BufferLease lease = BufferLease.CopyFrom(rawPayloadSpan);
-        lease.IsReliable = true;
 
         if (payloadLen < PacketConstants.HeaderSize)
         {

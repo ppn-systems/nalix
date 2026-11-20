@@ -1,7 +1,6 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
@@ -13,7 +12,7 @@ namespace Nalix.Network.Benchmarks.Connections;
 
 /// <summary>
 /// Cost of the TCP transport lifecycle: creating and disposing a <see cref="Connection"/>, and the steady-state
-/// send path through <see cref="Connection.TCP"/> (which must stay allocation-free per send).
+/// send path through <see cref="Connection.Transport"/> (which must stay allocation-free per send).
 /// </summary>
 [Config(typeof(NalixBenchmarkConfig))]
 public class TcpTransportLifecycleBenchmarks
@@ -26,9 +25,6 @@ public class TcpTransportLifecycleBenchmarks
     private Connection _sendConnection = null!;
     private CancellationTokenSource _drainCts = null!;
     private Task _drainTask = null!;
-    private Socket _udpListener = null!;
-    private Action<PassthroughConnection, Socket, IPEndPoint> _bindUdp = null!;
-    private readonly IPEndPoint _remote = new(IPAddress.Loopback, 9);
 
     private sealed class StubOpCodeExtractor : IOpCodeExtractor
     {
@@ -50,13 +46,6 @@ public class TcpTransportLifecycleBenchmarks
         _serverSocket = acceptTask.GetAwaiter().GetResult();
 
         _sendConnection = new Connection(_serverSocket, new StubOpCodeExtractor());
-
-        _udpListener = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        _udpListener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-
-        // BindUdp is internal. The delegate is built once here, so the timed loop calls it without reflection.
-        MethodInfo bind = typeof(PassthroughConnection).GetMethod("BindUdp", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        _bindUdp = (Action<PassthroughConnection, Socket, IPEndPoint>)bind.CreateDelegate(typeof(Action<PassthroughConnection, Socket, IPEndPoint>));
 
         // Keep the peer drained so the steady-state send never blocks on a full socket buffer.
         _drainCts = new CancellationTokenSource();
@@ -87,7 +76,6 @@ public class TcpTransportLifecycleBenchmarks
         _sendConnection.Dispose();
         _client.Dispose();
         _listener.Dispose();
-        _udpListener.Dispose();
         try { _drainTask.Wait(TimeSpan.FromSeconds(2)); } catch (AggregateException) { }
     }
 
@@ -97,15 +85,6 @@ public class TcpTransportLifecycleBenchmarks
     {
         using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         Connection connection = new(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        connection.Dispose();
-    }
-
-    /// <summary>Creates a UDP-bound passthrough connection and disposes it, as a new UDP client session does.</summary>
-    [Benchmark]
-    public void CreateBindDispose_Passthrough()
-    {
-        PassthroughConnection connection = new(new StubOpCodeExtractor(), _remote);
-        _bindUdp(connection, _udpListener, _remote);
         connection.Dispose();
     }
 
@@ -134,12 +113,12 @@ public class TcpTransportLifecycleBenchmarks
     [Benchmark]
     public void Send_Steady()
     {
-        _sendConnection.TCP.Send(Payload);
+        _sendConnection.Transport.Send(Payload);
     }
 
     [Benchmark]
     public ValueTask SendAsync_Steady()
     {
-        return _sendConnection.TCP.SendAsync(Payload);
+        return _sendConnection.Transport.SendAsync(Payload);
     }
 }

@@ -23,7 +23,6 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Internal.Connections;
 using Nalix.Network.Internal.Initialization;
 using Nalix.Network.Internal.Pooling;
-using Nalix.Network.Internal.Security;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
 using Nalix.Network.Options;
@@ -48,7 +47,6 @@ public sealed partial class Connection :
     private static readonly ObjectPoolManager s_pool;
 
     private static readonly ConnectionGuardOptions s_options;
-    private static readonly DatagramGuardOptions s_datagramOptions;
     private static readonly TimingWheelOptions s_timingWheelOptions;
     private static readonly NetworkCallbackOptions s_callbackOptions;
 
@@ -68,7 +66,6 @@ public sealed partial class Connection :
 
         s_pool = ObjectPoolManager.Shared;
         s_options = ConfigurationManager.Instance.Get<ConnectionGuardOptions>();
-        s_datagramOptions = ConfigurationManager.Instance.Get<DatagramGuardOptions>();
         s_callbackOptions = ConfigurationManager.Instance.Get<NetworkCallbackOptions>();
         s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
 
@@ -150,9 +147,6 @@ public sealed partial class Connection :
     }
 
     /// <inheritdoc/>
-    public bool IsUdpCreated => this.UdpTransport is not null;
-
-    /// <inheritdoc/>
     public bool ExcludeFromIdleTimeout { get; set; }
 
     /// <inheritdoc />
@@ -162,10 +156,7 @@ public sealed partial class Connection :
     public string? UserId { get; set; }
 
     /// <inheritdoc/>
-    public IConnection.ITransport TCP => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(Connection));
-
-    /// <inheritdoc/>
-    public IConnection.ITransport? UDP => Volatile.Read(ref _backing)?.UdpTransport;
+    public IConnection.ITransport Transport => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(Connection));
 
     /// <inheritdoc/>
     public IOpCodeExtractor PacketClassifier { get; }
@@ -242,7 +233,7 @@ public sealed partial class Connection :
     /// </summary>
     /// <remarks>
     /// This value combines data from the underlying <see cref="SocketConnection.BytesSent"/> (TCP)
-    /// and the <see cref="SocketUdpTransport.BytesSent"/> (UDP) if available.
+    /// and bytes counted by the connection itself.
     /// It represents raw wire data, including protocol headers.
     /// </remarks>
     public long BytesSent
@@ -256,7 +247,6 @@ public sealed partial class Connection :
             }
 
             return (backing.Socket?.BytesSent ?? 0)
-                 + (backing.UdpTransport?.BytesSent ?? 0)
                  + Volatile.Read(ref backing.BytesSent);
         }
     }
@@ -266,7 +256,7 @@ public sealed partial class Connection :
     /// </summary>
     /// <remarks>
     /// This value combines data from the underlying <see cref="SocketConnection.BytesReceived"/> (TCP)
-    /// and the <see cref="SocketUdpTransport.BytesReceived"/> (UDP) if available.
+    /// and bytes counted by the connection itself.
     /// It represents raw wire data before any frame processing or decompression.
     /// </remarks>
     public long BytesReceived
@@ -280,7 +270,6 @@ public sealed partial class Connection :
             }
 
             return (backing.Socket?.BytesReceived ?? 0)
-                 + (backing.UdpTransport?.BytesReceived ?? 0)
                  + Volatile.Read(ref backing.BytesReceived);
         }
     }
@@ -301,25 +290,6 @@ public sealed partial class Connection :
     #endregion Properties
 
     #region Internal
-
-    internal SocketUdpTransport? UdpTransport
-    {
-        get => Volatile.Read(ref _backing)?.UdpTransport;
-        private set
-        {
-            ConnectionBacking? backing = Volatile.Read(ref _backing);
-            _ = backing?.UdpTransport = value;
-        }
-    }
-
-    internal SlidingWindow UdpReplayWindow
-    {
-        get
-        {
-            ConnectionBacking backing = Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(Connection));
-            return backing.UdpReplayWindow ??= new(s_datagramOptions.UdpReplayWindowSize);
-        }
-    }
 
     /// <summary>
     /// Injects a packet directly into the process pipeline for testing.
@@ -351,8 +321,6 @@ public sealed partial class Connection :
             lease.Dispose();
         }
     }
-
-    internal void SetUdpTransport(SocketUdpTransport transport) => this.UdpTransport = transport;
 
     internal void InjectPreReadBytes(ReadOnlySpan<byte> preReadData) => Volatile.Read(ref _backing)?.Socket?.InjectPreReadBytes(preReadData);
 
@@ -623,13 +591,6 @@ public sealed partial class Connection :
 
             try { backing.Socket?.Dispose(); }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { LOG_ERROR(ex, "socket"); }
-
-            try
-            {
-                backing.UdpTransport?.Dispose();
-                backing.UdpTransport = null;
-            }
-            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { LOG_ERROR(ex, "udptransport"); }
 
             // DO NOT call backing.ArgsPool.Destroy() or backing.ContextPool.Destroy()
             // in order to safely pool the local pool for reuse.

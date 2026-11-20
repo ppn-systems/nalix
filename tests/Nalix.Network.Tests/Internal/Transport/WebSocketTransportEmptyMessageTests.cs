@@ -36,7 +36,7 @@ public sealed class WebSocketTransportEmptyMessageTests
         using EmptyThenPendingWebSocket socket = new();
         using WebSocketConnection owner = new(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
 
-        IConnection.ITransport transport = owner.TCP;
+        IConnection.ITransport transport = owner.Transport;
         transport.BeginReceive();
 
         await socket.SecondReceiveStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));

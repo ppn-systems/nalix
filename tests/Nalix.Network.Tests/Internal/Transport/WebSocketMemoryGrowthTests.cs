@@ -149,7 +149,7 @@ public sealed class WebSocketMemoryGrowthTests : IDisposable
         socket.EnqueueReceive(data2, endOfMessage: true);
 
         var wsConn = new WebSocketConnection(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        IConnection.ITransport transport = wsConn.TCP;
+        IConnection.ITransport transport = wsConn.Transport;
 
         // Act
         socket.EnqueueReceive(data1, endOfMessage: false);
@@ -181,7 +181,7 @@ public sealed class WebSocketMemoryGrowthTests : IDisposable
         socket.EnqueueReceive(data2, endOfMessage: true);
 
         var wsConn = new WebSocketConnection(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        IConnection.ITransport transport = wsConn.TCP;
+        IConnection.ITransport transport = wsConn.Transport;
 
         // Act
         socket.EnqueueReceive(data1, endOfMessage: false);
@@ -208,7 +208,7 @@ public sealed class WebSocketMemoryGrowthTests : IDisposable
         // We will make the second receive throw a WebSocketException by leaving queue empty
         // so it fails inside HANDLE_LARGE_MESSAGE_ASYNC.
         var wsConn = new WebSocketConnection(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        IConnection.ITransport transport = wsConn.TCP;
+        IConnection.ITransport transport = wsConn.Transport;
 
         // Act
         socket.EnqueueReceive(data1, endOfMessage: false);
@@ -228,7 +228,7 @@ public sealed class WebSocketMemoryGrowthTests : IDisposable
         // Arrange
         var socket = new StubWebSocket();
         var wsConn = new WebSocketConnection(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        IConnection.ITransport transport = wsConn.TCP;
+        IConnection.ITransport transport = wsConn.Transport;
 
         // Act & Assert
         // 1. Same reference check (verifies boxing is eliminated)

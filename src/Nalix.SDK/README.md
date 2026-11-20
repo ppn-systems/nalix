@@ -3,7 +3,7 @@
 Client-side transport sessions, handshakes, request/response helpers, subscriptions, and cipher
 management for Nalix applications.
 
-Nalix.SDK is the client package. It exposes TCP, UDP, and WebSocket sessions, typed request
+Nalix.SDK is the client package. It exposes TCP, WebSocket, and datagram (NDP over UDP) sessions, typed request
 correlation, session resume helpers, subscription dispatch, and runtime cipher updates.
 
 ## Install
@@ -16,7 +16,7 @@ dotnet add package Nalix.SDK
 
 | Area | Purpose | Main types |
 | :--- | :--- | :--- |
-| Transport sessions | Shared client session base and concrete transports | `TransportSession`, `TcpSession`, `UdpSession`, `WebSocketSession` |
+| Transport sessions | Shared client session base and concrete transports | `TransportSession`, `TcpSession`, `WebSocketSession`, `DatagramSession` |
 | Request/response | Correlated typed request matching with timeout support | `RequestAsync<TResponse>`, `RequestOptions` |
 | Handshake and resume | X25519 connection setup and session resumption | `ConnectAsync`, `ConnectWithResumeAsync` |
 | Cipher control | Runtime cipher switching and rotation | `UpdateCipherAsync` |

@@ -19,7 +19,7 @@ namespace Nalix.Network.Connections;
 
 /// <summary>
 /// The TCP transport of a <see cref="Connection"/>. The connection is its own transport: it is created once per
-/// connection and never pooled, so a caller that kept <see cref="TCP"/> cannot reach a later connection. Its
+/// connection and never pooled, so a caller that kept <see cref="Transport"/> cannot reach a later connection. Its
 /// sequence counters are pooled with the connection's backing, and the socket is only reachable while the
 /// connection is alive.
 /// </summary>
@@ -99,14 +99,6 @@ public sealed partial class Connection : IConnection.ITransport, IConnection.ISo
 
     /// <summary>Test seam: invoked after a sequence advance has read its backing, before the backing is checked again.</summary>
     internal static Action<ConnectionBacking>? s_afterSequenceCaptureHook;
-
-    /// <summary>Gets the UDP send counter of this connection's backing; used when a UDP binding is created.</summary>
-    internal SequenceCounter UdpSendSequenceCounter
-        => (Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(Connection))).UdpSendSequence;
-
-    /// <summary>Gets the UDP receive counter of this connection's backing; used when a UDP binding is created.</summary>
-    internal SequenceCounter UdpReceiveSequenceCounter
-        => (Volatile.Read(ref _backing) ?? throw new ObjectDisposedException(nameof(Connection))).UdpReceiveSequence;
 
     #endregion Transport Helpers
 

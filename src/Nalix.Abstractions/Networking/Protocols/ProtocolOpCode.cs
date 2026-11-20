@@ -71,6 +71,11 @@ public enum ProtocolOpCode : ushort
     /// </summary>
     POW_PROOF = 0x000B,
 
+    /// <summary>
+    /// Requests (client) or carries (server) a datagram session ticket over an established stream session.
+    /// </summary>
+    DATAGRAM_TICKET = 0x000C,
+
     #endregion System
 
     #region Extensions

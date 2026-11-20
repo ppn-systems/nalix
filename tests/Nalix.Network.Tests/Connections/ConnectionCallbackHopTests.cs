@@ -42,7 +42,7 @@ public sealed class ConnectionCallbackHopTests
         {
             TransportAsyncCallback.ResetStatistics();
 
-            connection.TCP.Send([7, 8, 9, 10]);
+            connection.Transport.Send([7, 8, 9, 10]);
 
             byte[] buffer = new byte[32];
             int read = await client.ReceiveAsync(buffer, SocketFlags.None);

@@ -118,20 +118,35 @@ public interface INetworkApplicationBuilder
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods)] Type controllerType);
 
     /// <summary>
-    /// Binds a TCP protocol using a fluent builder for port and factory configuration.
+    /// Binds a protocol to a datagram (NDP over UDP) listener. Clients obtain a ticket over an established TCP or
+    /// WebSocket session and then use the datagram session; the ticket handlers are mapped automatically.
     /// </summary>
-    /// <typeparam name="TProtocol">The protocol type to host.</typeparam>
-    /// <returns>A fluent builder to configure the binding.</returns>
-    IProtocolBindingBuilder MapTcp<
+    /// <remarks>
+    /// A datagram session copies the user, permission level and secret of its stream connection when the ticket is
+    /// issued and then lives on its own: disconnecting the stream connection does not close it. To kick a user, also
+    /// disconnect the <c>DatagramConnection</c> instances whose <c>StreamConnectionId</c> matches.
+    /// </remarks>
+    /// <typeparam name="TProtocol">The protocol type whose frame processor receives datagram messages.</typeparam>
+    /// <returns>A fluent builder to configure the port and the protocol factory.</returns>
+    /// <exception cref="InvalidOperationException">A datagram binding is already mapped; only one is supported.</exception>
+    IProtocolBindingBuilder MapDatagram<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol;
+
+    /// <summary>
+    /// Adds a listener that the application activates and deactivates together with the protocol
+    /// listeners, for extensions that run their own sockets (for example a raw UDP relay).
+    /// </summary>
+    /// <param name="factory">Creates the listener when the application is activated.</param>
+    /// <returns>The current builder instance.</returns>
+    INetworkApplicationBuilder AddListener(Func<IListener> factory);
 
     /// <summary>
     /// Binds a TCP protocol using a fluent builder for port and factory configuration.
     /// </summary>
     /// <typeparam name="TProtocol">The protocol type to host.</typeparam>
     /// <returns>A fluent builder to configure the binding.</returns>
-    IProtocolBindingBuilder MapUdp<
+    IProtocolBindingBuilder MapTcp<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol;
 
@@ -153,16 +168,6 @@ public interface INetworkApplicationBuilder
     /// <returns>A fluent builder to configure the binding.</returns>
     [Obsolete("Use MapTcp<TProtocol>() instead. This method will be removed in a future version.")]
     IProtocolBindingBuilder ListenTcp<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
-        where TProtocol : class, IProtocol;
-
-    /// <summary>
-    /// Binds a UDP protocol using a fluent builder for port, factory, and authentication configuration.
-    /// </summary>
-    /// <typeparam name="TProtocol">The protocol type to host.</typeparam>
-    /// <returns>A fluent builder to configure the binding.</returns>
-    [Obsolete("Use MapUdp<TProtocol>() instead. This method will be removed in a future version.")]
-    IProtocolBindingBuilder ListenUdp<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol;
 

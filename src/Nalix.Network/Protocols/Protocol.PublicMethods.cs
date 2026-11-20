@@ -79,10 +79,10 @@ public abstract partial class Protocol
                     DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Trace, new DiagnosticLog("NW.Protocol:OnAccept", $"accepted id=connection-id={connection.ConnectionId}"));
                 }
 
-                connection.TCP.UseFraming(this.Framing);
+                connection.Transport.UseFraming(this.Framing);
 
                 // Start receiving data from the connection
-                connection.TCP.BeginReceive(cancellationToken);
+                connection.Transport.BeginReceive(cancellationToken);
 
                 return;
             }

@@ -4,6 +4,7 @@
 using System;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Diagnostics;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
@@ -30,9 +31,9 @@ public static class ProofOfWorkHandlers
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (!context.IsReliable)
+        if (context.Connection.Transport is IDatagramTransport)
         {
-            // This is a replayed packet, ignore silently.
+            // Session control runs on the stream connection only, not on datagram sessions.
             return;
         }
 

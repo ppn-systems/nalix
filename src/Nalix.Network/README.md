@@ -1,6 +1,6 @@
 # Nalix.Network
 
-Low-level TCP, UDP, WebSocket, connection, protocol, and admission-control infrastructure for
+Low-level TCP, WebSocket, datagram (NDP over UDP), connection, protocol, and admission-control infrastructure for
 Nalix servers.
 
 Nalix.Network owns the transport layer. It accepts sockets, creates connection objects, enforces
@@ -18,9 +18,9 @@ dotnet add package Nalix.Network
 | Area | Purpose | Main types |
 | :--- | :--- | :--- |
 | TCP listeners | High-throughput asynchronous TCP accept loops | `TcpListenerBase` |
-| UDP listeners | Session-aware UDP receive loops with endpoint pinning | `UdpListenerBase` |
+| Datagram listener | NDP sessions over UDP: tickets, session table, AEAD per datagram | `DatagramListener`, `DatagramOptions` |
 | WebSocket listeners | Raw WebSocket listener support for browser and proxy deployments | `WebSocketListenerBase` |
-| Connections | Active connection objects and lifecycle hooks | `Connection`, `WebSocketConnection`, `PassthroughConnection` |
+| Connections | Active connection objects and lifecycle hooks | `Connection`, `WebSocketConnection`, `DatagramConnection` |
 | Connection registry | Sharded active connection storage and broadcast support | `ConnectionHub`, `ConnectionTerminator` |
 | Protocols | Transport-neutral protocol lifecycle base | `Protocol` |
 | Admission control | Per-IP limits, flood protection, bans, and datagram guards | `ConnectionGuard`, `DatagramGuard` |

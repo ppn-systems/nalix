@@ -19,22 +19,12 @@ public sealed class ConnectionSequenceState
     /// </summary>
     public uint TcpReceiveSequence { get; set; }
 
-    /// <summary>
-    /// Stores the last UDP send sequence number (for session resume).
-    /// </summary>
-    public uint UdpSendSequence { get; set; }
 
-    /// <summary>
-    /// Stores the last UDP receive sequence number (for session resume).
-    /// </summary>
-    public uint UdpReceiveSequence { get; set; }
 
     /// <inheritdoc/>
     public void ResetForPool()
     {
         this.TcpSendSequence = 0;
         this.TcpReceiveSequence = 0;
-        this.UdpSendSequence = 0;
-        this.UdpReceiveSequence = 0;
     }
 }

@@ -75,13 +75,6 @@ public sealed partial class NetworkSocketOptions : ConfigurationLoader, IValidat
     public int MaxParallel { get; set; } = 1;
 
     /// <summary>
-    /// Gets or sets the maximum number of parallel connections.
-    /// </summary>
-    [IniComment("Maximum simultaneous parallel listeners/acceptors (1–1024, default 1)")]
-    [ValueRange(1, 1024)]
-    public int MaxParallelUDP { get; set; } = 1;
-
-    /// <summary>
     /// Gets or sets the buffer size for both sending and receiving data.
     /// </summary>
     [IniComment("Send and receive buffer size in bytes (1024–10,485,760)")]
@@ -96,18 +89,9 @@ public sealed partial class NetworkSocketOptions : ConfigurationLoader, IValidat
 
     /// <summary>
     /// Gets or sets whether the TCP listener may reuse an address in TIME_WAIT state.
-    /// UDP uses <see cref="UdpReuseAddress"/> instead.
     /// </summary>
     [IniComment("Allow reuse of a local address in TIME_WAIT state (recommended: true)")]
     public bool ReuseAddress { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets whether the UDP listener may share its address with other sockets (SO_REUSEADDR).
-    /// Disabled by default: sharing lets another local process bind the same port and receive datagrams.
-    /// Ignored on Windows, where the UDP listener always uses exclusive address use.
-    /// </summary>
-    [IniComment("Allow another socket to share the UDP listener address (SO_REUSEADDR); unsafe on shared hosts, ignored on Windows (default: false)")]
-    public bool UdpReuseAddress { get; set; } = false;
 
     /// <summary>
     /// Gets or sets a value indicating whether the DualMode feature is enabled (for IPv6 sockets).
@@ -155,14 +139,6 @@ public sealed partial class NetworkSocketOptions : ConfigurationLoader, IValidat
     /// </summary>
     [IniComment("Enable TCP Fast Open to reduce latency for subsequent connections (default: true)")]
     public bool TcpFastOpen { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets the maximum size (in bytes) allowed for a single UDP datagram.
-    /// Default 1440 avoids IP fragmentation.
-    /// </summary>
-    [IniComment("Maximum allowed UDP datagram size in bytes to avoid fragmentation (default 1440)")]
-    [ValueRange(64, 65507)]
-    public int MaxUdpDatagramSize { get; set; } = 1440;
 
     #endregion Properties
 

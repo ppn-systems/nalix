@@ -119,12 +119,12 @@ public sealed class HostingLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task ListenTcpAndUdp_OnSamePort_AcceptsTcpConnection()
+    public async Task MapTcpAndDatagram_OnSamePort_AcceptsTcpConnection()
     {
         int port = TestUtils.GetFreePort();
         var builder = NetworkApplication.CreateBuilder();
         builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
-        builder.MapUdp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapDatagram<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
 
         using NetworkApplication app = builder.Build();
         await app.ActivateAsync().WaitAsync(TestUtils.Timeout);

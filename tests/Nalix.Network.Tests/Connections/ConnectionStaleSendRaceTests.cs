@@ -63,7 +63,7 @@ public sealed class ConnectionStaleSendRaceTests : IDisposable
     {
         (Socket serverA, _) = CreatePair();
         Connection connectionA = CreateConnection(serverA);
-        IConnection.ITransport staleTransport = connectionA.TCP;
+        IConnection.ITransport staleTransport = connectionA.Transport;
 
         using ManualResetEventSlim paused = new(false);
         using ManualResetEventSlim resume = new(false);

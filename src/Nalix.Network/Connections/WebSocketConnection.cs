@@ -110,8 +110,6 @@ public sealed partial class WebSocketConnection :
     /// <inheritdoc/>
     public bool IsDisposed => _disposed || Volatile.Read(ref _backing) is null;
 
-    /// <inheritdoc/>
-    public bool IsUdpCreated => false; // UDP is not supported over WebSocket
 
     /// <inheritdoc/>
     public bool ExcludeFromIdleTimeout { get; set; }
@@ -126,10 +124,7 @@ public sealed partial class WebSocketConnection :
     public IOpCodeExtractor PacketClassifier { get; }
 
     /// <inheritdoc/>
-    public IConnection.ITransport TCP => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(WebSocketConnection));
-
-    /// <inheritdoc/>
-    public IConnection.ITransport? UDP => null;
+    public IConnection.ITransport Transport => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(WebSocketConnection));
 
     /// <inheritdoc/>
     public INetworkEndpoint NetworkEndpoint { get; }

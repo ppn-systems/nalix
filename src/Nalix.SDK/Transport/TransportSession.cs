@@ -528,7 +528,7 @@ public abstract class TransportSession : IDisposable, IAsyncDisposable, ITranspo
     /// <summary>
     /// Gets whether a SESSION_REKEY sent on this transport is guaranteed to reach the server in order (TCP, WebSocket).
     /// The server switches keys as soon as it reads the request, so once it is written the new key is in effect on both
-    /// sides even if the acknowledgement is late. Over UDP the server ignores the request.
+    /// sides even if the acknowledgement is late. Over a datagram session the server ignores the request.
     /// </summary>
     internal virtual bool DeliversRekeyReliably => false;
 

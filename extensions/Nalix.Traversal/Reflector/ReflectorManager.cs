@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using Nalix.Abstractions.Networking;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Random;
@@ -20,8 +21,18 @@ public sealed class ReflectorSession
     public ulong PeerAId { get; }
     public ulong PeerBId { get; }
 
-    public IConnection? PeerAConnection { get; set; }
-    public IConnection? PeerBConnection { get; set; }
+    private SocketAddress? _peerA;
+    private SocketAddress? _peerB;
+
+    /// <summary>
+    /// Gets the UDP address learned for the first peer that sent a datagram, if any.
+    /// </summary>
+    public IPEndPoint? PeerAEndPoint => ToEndPoint(_peerA);
+
+    /// <summary>
+    /// Gets the UDP address learned for the second peer that sent a datagram, if any.
+    /// </summary>
+    public IPEndPoint? PeerBEndPoint => ToEndPoint(_peerB);
 
     /// <summary>
     /// Byte-level bandwidth limiter for this Reflector session.
@@ -47,6 +58,50 @@ public sealed class ReflectorSession
     }
 
     public void OnConnectionClosed(object? sender, IConnectionEventArgs args) => _manager.RemoveSession(this.Token);
+
+    /// <summary>
+    /// Learns the peer addresses and returns the address of the other peer. Called only from the relay's
+    /// single receive loop.
+    /// </summary>
+    internal bool TryRoute(SocketAddress sender, [NotNullWhen(true)] out SocketAddress? target)
+    {
+        if (_peerA is null || _peerA.Equals(sender))
+        {
+            _peerA ??= Copy(sender);
+            target = _peerB;
+        }
+        else if (_peerB is null || _peerB.Equals(sender))
+        {
+            _peerB ??= Copy(sender);
+            target = _peerA;
+        }
+        else
+        {
+            // Token leaked to a third party: drop.
+            target = null;
+        }
+
+        return target is not null;
+    }
+
+    private static SocketAddress Copy(SocketAddress address)
+    {
+        SocketAddress copy = new(address.Family, address.Size);
+        address.Buffer.Span[..address.Size].CopyTo(copy.Buffer.Span);
+        return copy;
+    }
+
+    private static IPEndPoint? ToEndPoint(SocketAddress? address)
+    {
+        if (address is null)
+        {
+            return null;
+        }
+
+        IPAddress any = address.Family == System.Net.Sockets.AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
+        IPEndPoint endPoint = (IPEndPoint)new IPEndPoint(any, 0).Create(address);
+        return endPoint.Address.IsIPv4MappedToIPv6 ? new IPEndPoint(endPoint.Address.MapToIPv4(), endPoint.Port) : endPoint;
+    }
 
     public void Dispose() => _requester.ConnectionClosed -= this.OnConnectionClosed;
 }

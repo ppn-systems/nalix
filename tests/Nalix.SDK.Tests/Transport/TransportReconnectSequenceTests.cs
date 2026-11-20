@@ -84,23 +84,6 @@ public sealed class TransportReconnectSequenceTests : IDisposable
         }
     }
 
-    [Fact]
-    public async Task ConnectAsync_AfterStaleUdpSocket_ResetsSendSequence()
-    {
-        using UdpSession session = new(new TransportOptions
-        {
-            Address = "127.0.0.1",
-            Port = (ushort)TestEnvironment.GetFreePort()
-        });
-
-        await session.SendAsync(new byte[] { 1 }, encrypt: true);
-        Assert.Equal(1u, CurrentSendSequence(session));
-
-        await session.ConnectAsync();
-
-        Assert.Equal(0u, CurrentSendSequence(session));
-    }
-
     // Subscribes to every SDK diagnostic while these tests run, so the diagnostics on the reconnect, resume,
     // handshake and request paths they take are built and written (and cannot throw) instead of skipped.
     private readonly DiagnosticCapture _diagnostics = new(string.Empty);

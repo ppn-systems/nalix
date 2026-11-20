@@ -27,7 +27,6 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
-using Nalix.Network.Listeners.Udp;
 using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
 using Nalix.Network.Tests.TestSupport;
