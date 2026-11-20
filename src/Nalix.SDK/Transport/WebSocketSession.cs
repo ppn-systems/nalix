@@ -218,6 +218,7 @@ public class WebSocketSession : TransportSession
                 // keeps the hostname. The invoker owns the TCP socket and must live as long as the ClientWebSocket,
                 // so it is stored and disposed alongside the socket in DisconnectInternalAsync.
                 IPEndPoint endpointToDial = dialEndpoint;
+#pragma warning disable CA2000 // Ownership moves to the HttpMessageInvoker below, which disposes the handler with itself.
                 SocketsHttpHandler handler = new()
                 {
                     ConnectCallback = async (context, cbCt) =>
@@ -235,7 +236,8 @@ public class WebSocketSession : TransportSession
                         }
                     },
                 };
-                _connectInvoker = new HttpMessageInvoker(handler);
+#pragma warning restore CA2000
+                _connectInvoker = new HttpMessageInvoker(handler, disposeHandler: true);
                 await _socket.ConnectAsync(uri, _connectInvoker, connectCts.Token).ConfigureAwait(false);
             }
             else
