@@ -5,3 +5,18 @@
 Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_CHALLENGE = 241 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
 Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_PROOF = 242 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
 Nalix.Abstractions.Networking.IConnection.Transport.get -> Nalix.Abstractions.Networking.IConnection.ITransport!
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.ReliableOrdered = 3 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.ReliableSequenced = 4 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.ReliableUnordered = 2 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.Unreliable = 0 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.UnreliableSequenced = 1 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.DiscardPreviousReceiveKey() -> void
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.Seal(ulong packetNumber, System.ReadOnlySpan<byte> header, System.ReadOnlySpan<byte> plaintext, System.Span<byte> destination) -> void
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.SendKeyPhase.get -> bool
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.TagSize.get -> int
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.TryOpen(ulong packetNumber, bool keyPhase, System.ReadOnlySpan<byte> header, System.ReadOnlySpan<byte> ciphertextAndTag, System.Span<byte> plaintext) -> bool
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.UpdateSendKey() -> void
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory.Create(Nalix.Abstractions.Primitives.Bytes32 sessionSecret, ulong connectionId, System.ReadOnlySpan<byte> ticketNonce, bool isServer) -> Nalix.Abstractions.Networking.Datagrams.IDatagramProtection!
