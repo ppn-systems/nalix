@@ -20,3 +20,42 @@ Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.TryOpen(ulong packet
 Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.UpdateSendKey() -> void
 Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory
 Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory.Create(Nalix.Abstractions.Primitives.Bytes32 sessionSecret, ulong connectionId, System.ReadOnlySpan<byte> ticketNonce, bool isServer) -> Nalix.Abstractions.Networking.Datagrams.IDatagramProtection!
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ChannelCount.get -> byte
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ChannelCount.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ChannelReceiveBufferBytes.get -> long
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ChannelReceiveBufferBytes.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ConnectionId.get -> ulong
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ConnectionId.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.DatagramTicketInfo() -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.DatagramTicketInfo(ulong ConnectionId, System.UInt128 Nonce, ushort Port, ushort ExpiresInSeconds, int IdleTimeoutMs, int MaxMessageSize, byte ChannelCount, long ReceiveBufferBytes, long ChannelReceiveBufferBytes) -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Deconstruct(out ulong ConnectionId, out System.UInt128 Nonce, out ushort Port, out ushort ExpiresInSeconds, out int IdleTimeoutMs, out int MaxMessageSize, out byte ChannelCount, out long ReceiveBufferBytes, out long ChannelReceiveBufferBytes) -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Equals(Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo other) -> bool
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ExpiresInSeconds.get -> ushort
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ExpiresInSeconds.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.IdleTimeoutMs.get -> int
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.IdleTimeoutMs.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.MaxMessageSize.get -> int
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.MaxMessageSize.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Nonce.get -> System.UInt128
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Nonce.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Port.get -> ushort
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Port.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ReceiveBufferBytes.get -> long
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ReceiveBufferBytes.init -> void
+Nalix.Abstractions.Networking.Datagrams.IDatagramTicketIssuer
+Nalix.Abstractions.Networking.Datagrams.IDatagramTicketIssuer.IssueTicket(Nalix.Abstractions.Networking.IConnection! streamConnection, System.Action<Nalix.Abstractions.Networking.IConnection!>? onAccepted = null) -> Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo
+Nalix.Abstractions.Networking.Datagrams.IDatagramTransport
+Nalix.Abstractions.Networking.Datagrams.IDatagramTransport.SendAsync(System.ReadOnlyMemory<byte> message, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Datagrams.IDatagramTransport.WithDelivery(Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel) -> Nalix.Abstractions.Networking.IConnection.ITransport!
+Nalix.Abstractions.Networking.NetworkTransport.DATAGRAM = 3 -> Nalix.Abstractions.Networking.NetworkTransport
+Nalix.Abstractions.Networking.Packets.PacketDeliveryAttribute
+Nalix.Abstractions.Networking.Packets.PacketDeliveryAttribute.Channel.get -> byte
+Nalix.Abstractions.Networking.Packets.PacketDeliveryAttribute.Method.get -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Packets.PacketDeliveryAttribute.PacketDeliveryAttribute(Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel = 0) -> void
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.DATAGRAM_TICKET = 12 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+override Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.GetHashCode() -> int
+static Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.operator !=(Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo left, Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo right) -> bool
+static Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.operator ==(Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo left, Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo right) -> bool
+~override Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Equals(object obj) -> bool
+~override Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ToString() -> string

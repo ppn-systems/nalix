@@ -124,6 +124,12 @@ public sealed class ConnectionEventArgs : EventArgs, IConnectionEventArgs, IPool
             webSocketOwner.ReturnEventArgs(this);
             return;
         }
+
+        if (_connection is DatagramConnection datagramOwner)
+        {
+            datagramOwner.ReturnEventArgs(this);
+            return;
+        }
     }
 
     #endregion APIs

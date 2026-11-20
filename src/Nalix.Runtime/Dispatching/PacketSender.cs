@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
 using Nalix.Codec.Options;
@@ -82,7 +83,7 @@ public sealed class PacketSender : IPacketSender
         IConnection connection = this.GET_CONNECTION_OR_THROW();
         IConnection.ITransport transport = GetTransport(connection, _attributes, _isReliable);
 
-        bool needEncrypt = _attributes.Encryption?.IsEncrypted ?? false;
+        bool needEncrypt = NeedsEncryption(connection, _attributes.Encryption?.IsEncrypted ?? false);
         CancellationToken safeToken = ct == default ? _token : ct;
 
         return SEND_CORE_ASYNC(connection, transport, packet, needEncrypt, safeToken);
@@ -119,7 +120,7 @@ public sealed class PacketSender : IPacketSender
         IConnection connection = this.GET_CONNECTION_OR_THROW();
         IConnection.ITransport transport = GetTransport(connection, _attributes, _isReliable);
 
-        bool needEncrypt = _attributes.Encryption?.IsEncrypted ?? false;
+        bool needEncrypt = NeedsEncryption(connection, _attributes.Encryption?.IsEncrypted ?? false);
         CancellationToken safeToken = ct == default ? _token : ct;
 
         return SEND_BATCH_CORE_ASYNC(connection, transport, packets, needEncrypt, safeToken);
@@ -247,15 +248,29 @@ public sealed class PacketSender : IPacketSender
             connection, transport, frames, packets.Length, needEncrypt, s_options.Enabled, s_options.MinSizeToCompress, ct);
     }
 
+    /// <summary>
+    /// A datagram session protects every datagram with its own AEAD, so frames sent on it are not encrypted again.
+    /// </summary>
+    private static bool NeedsEncryption(IConnection connection, bool requested)
+        => requested && connection.Transport is not IDatagramTransport;
+
     private static IConnection.ITransport GetTransport(IConnection connection, PacketMetadata attributes, bool isReliable)
     {
+        // A datagram session sends with the handler's delivery method and channel.
+        if (connection.Transport is IDatagramTransport datagram)
+        {
+            return attributes.GetCustomAttribute<PacketDeliveryAttribute>() is { } delivery
+                ? datagram.WithDelivery(delivery.Method, delivery.Channel)
+                : datagram;
+        }
+
         // Prioritize the transport specified on the handler attribute.
         if (attributes.Transport?.TransportType is { } t)
         {
             return t switch
             {
                 NetworkTransport.UDP => connection.UDP ?? throw new InvalidOperationException("UDP companion transport is not created on this connection."),
-                NetworkTransport.TCP or NetworkTransport.WEBSOCKET or _ => connection.Transport
+                NetworkTransport.TCP or NetworkTransport.WEBSOCKET or NetworkTransport.DATAGRAM or _ => connection.Transport
             };
         }
 

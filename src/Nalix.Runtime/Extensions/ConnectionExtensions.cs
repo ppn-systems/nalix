@@ -142,6 +142,7 @@ public static partial class ConnectionExtensions
             NetworkTransport.UDP => connection.UDP ?? throw new InvalidOperationException("UDP companion transport is not created on this connection."),
             NetworkTransport.TCP => connection.Transport,
             NetworkTransport.WEBSOCKET => connection.Transport,
+            NetworkTransport.DATAGRAM => connection.Transport,
             _ => connection.Transport
         };
 

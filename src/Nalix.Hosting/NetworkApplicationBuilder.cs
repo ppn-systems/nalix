@@ -9,9 +9,11 @@ using Microsoft.Extensions.Logging;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Injection;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Security;
 using Nalix.Codec.DataFrames;
+using Nalix.Codec.Security.Datagram;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Configuration.Binding;
 using Nalix.Environment.Memory;
@@ -20,11 +22,13 @@ using Nalix.Framework.Memory.Buffers;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Hosting.Internal;
 using Nalix.Network.Connections;
+using Nalix.Network.Listeners.Datagram;
 using Nalix.Network.Listeners.Udp;
 using Nalix.Network.Listeners.Web;
 using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
 using Nalix.Runtime.Dispatching;
+using Nalix.Runtime.Handlers;
 using Nalix.Runtime.Routing;
 
 namespace Nalix.Hosting;
@@ -281,6 +285,28 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
     }
 
     /// <inheritdoc />
+    public IProtocolBindingBuilder MapDatagram<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
+        where TProtocol : class, IProtocol
+    {
+        ProtocolBindingBuilder builder = new(this);
+
+        _state.DatagramBindings.Add(new DatagramProtocolBinding(
+            typeof(TProtocol),
+            dispatch => builder.Factory is not null
+                ? builder.Factory(dispatch)
+                : this.CreateProtocol<TProtocol>(dispatch),
+            builder));
+
+        if (_state.DatagramBindings.Count == 1)
+        {
+            _ = this.MapHandlers(typeof(DatagramTicketHandlers));
+        }
+
+        return builder;
+    }
+
+    /// <inheritdoc />
     public INetworkApplicationBuilder AddListener(Func<IListener> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -452,6 +478,24 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
                 }
 
                 return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.WEBSOCKET);
+            });
+        }
+
+        foreach (DatagramProtocolBinding registration in _state.DatagramBindings)
+        {
+            serverFactories.Add(dispatch =>
+            {
+                IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()
+                    ?? throw new InvalidOperationException("IConnectionHub is not registered. Call UseConnectionHub or ensure Build() is invoked.");
+                IProtocol protocol = registration.Factory(dispatch);
+
+                DatagramListener listener = new(
+                    registration.BindingBuilder.Port ?? 0, protocol, hub, ChaCha20Poly1305DatagramProtectionFactory.Instance);
+
+                // The ticket handler finds the listener through the instance manager.
+                InstanceManager.Instance.Register<IDatagramTicketIssuer>(listener);
+
+                return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.DATAGRAM);
             });
         }
 

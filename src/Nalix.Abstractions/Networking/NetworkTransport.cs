@@ -21,5 +21,11 @@ public enum NetworkTransport : byte
     /// <summary>
     /// WebSocket Protocol (Reliable, message-oriented).
     /// </summary>
-    WEBSOCKET
+    WEBSOCKET,
+
+    /// <summary>
+    /// Nalix Datagram Protocol: an authenticated UDP session with reliable, sequenced and unreliable
+    /// delivery on independent channels.
+    /// </summary>
+    DATAGRAM,
 }

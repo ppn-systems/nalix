@@ -1,3 +1,5 @@
 #nullable enable
 Nalix.Hosting.INetworkApplicationBuilder.AddListener(System.Func<Nalix.Abstractions.Networking.IListener!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
 Nalix.Hosting.NetworkApplicationBuilder.AddListener(System.Func<Nalix.Abstractions.Networking.IListener!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.MapDatagram<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.MapDatagram<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!

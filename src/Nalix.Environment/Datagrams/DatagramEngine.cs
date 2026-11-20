@@ -54,7 +54,7 @@ public sealed partial class DatagramEngine : IDisposable
     private readonly Stack<SentPacket> _packetPool = new();
     private readonly List<SentPacket> _scratchPackets = [];
     private readonly List<ReliableReceiver.Delivery> _deliveries = [];
-    private readonly byte[] _plaintext = new byte[ushort.MaxValue];
+    private readonly byte[] _plaintext = new byte[MaxDatagramSize];
     private readonly byte[] _pathResponse = new byte[8];
 
     private DatagramEngineState _state;
@@ -416,7 +416,7 @@ public sealed partial class DatagramEngine : IDisposable
     /// <returns><see langword="true"/> when the datagram authenticated and was processed.</returns>
     public bool Receive(ReadOnlySpan<byte> datagram, SocketAddress? from, long now)
     {
-        if (_state >= DatagramEngineState.Draining || datagram.Length < MinimumDatagramSize ||
+        if (_state >= DatagramEngineState.Draining || datagram.Length < MinimumDatagramSize || datagram.Length > MaxDatagramSize ||
             !DatagramHeader.TryRead(datagram, out DatagramHeader header) || header.ConnectionId != _connectionId)
         {
             this.DatagramsDropped++;

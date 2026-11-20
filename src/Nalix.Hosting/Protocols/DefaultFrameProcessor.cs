@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Security;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
@@ -127,7 +128,11 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
         ISequenceCounter counter;
         IBufferLease current = lease;
 
-        if (current.IsReliable)
+        // A datagram session authenticates every datagram and has its own replay window; its messages may
+        // arrive in any order (unordered and sequenced methods), so the stream sequence check does not apply.
+        bool datagram = args.Connection.Transport is IDatagramTransport;
+
+        if (current.IsReliable || datagram)
         {
             window = _sequenceOptions.TcpWindow;
             counter = args.Connection.Transport.ReceiveSequence;
@@ -155,7 +160,11 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
                 return;
             }
 
-            if (!counter.IsValid(seq, window: window))
+            if (datagram)
+            {
+                current.EncryptedOnWire = true;
+            }
+            else if (!counter.IsValid(seq, window: window))
             {
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
@@ -164,7 +173,7 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
                 return;
             }
 
-            if (seq.HasValue)
+            if (seq.HasValue && !datagram)
             {
                 counter.UpdateTo(seq.Value);
             }

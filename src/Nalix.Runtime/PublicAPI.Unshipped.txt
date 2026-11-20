@@ -1,1 +1,3 @@
 #nullable enable
+Nalix.Runtime.Handlers.DatagramTicketHandlers
+static Nalix.Runtime.Handlers.DatagramTicketHandlers.HandleAsync(Nalix.Abstractions.Networking.Packets.IPacketContext<Nalix.Codec.ProtocolFrames.DatagramTicket!>! context) -> System.Threading.Tasks.ValueTask

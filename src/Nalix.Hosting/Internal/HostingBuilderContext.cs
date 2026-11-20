@@ -49,6 +49,11 @@ internal sealed class HostingBuilderContext
     public List<WebSocketProtocolBinding> WebSocketBindings { get; } = [];
 
     /// <summary>
+    /// Gets the registered datagram (NDP) protocol bindings.
+    /// </summary>
+    public List<DatagramProtocolBinding> DatagramBindings { get; } = [];
+
+    /// <summary>
     /// Gets the factories of listeners added with <see cref="INetworkApplicationBuilder.AddListener"/>.
     /// </summary>
     public List<Func<IListener>> CustomListeners { get; } = [];
@@ -256,3 +261,14 @@ internal sealed record WebSocketProtocolBinding(
     ushort? Port = null,
     string? Path = null,
     object? BindingBuilder = null);
+
+/// <summary>
+/// A datagram (NDP) protocol binding: the protocol and the builder that holds its port and factory.
+/// </summary>
+/// <param name="ProtocolType">The protocol type.</param>
+/// <param name="Factory">Creates the protocol for a dispatch.</param>
+/// <param name="BindingBuilder">The fluent builder with the configured port.</param>
+internal sealed record DatagramProtocolBinding(
+    Type ProtocolType,
+    Func<IPacketDispatch, IProtocol> Factory,
+    ProtocolBindingBuilder BindingBuilder);

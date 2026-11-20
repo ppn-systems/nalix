@@ -27,3 +27,43 @@ static Nalix.Codec.Security.Datagram.DatagramKeySchedule.DeriveKey(Nalix.Abstrac
 static Nalix.Codec.Security.Datagram.DatagramKeySchedule.DeriveNextSecret(Nalix.Abstractions.Primitives.Bytes32 secret) -> Nalix.Abstractions.Primitives.Bytes32
 static Nalix.Codec.Security.HkdfKeccak256.Expand(Nalix.Abstractions.Primitives.Bytes32 prk, System.ReadOnlySpan<byte> info) -> Nalix.Abstractions.Primitives.Bytes32
 static Nalix.Codec.Security.HkdfKeccak256.Extract(System.ReadOnlySpan<byte> salt, System.ReadOnlySpan<byte> ikm) -> Nalix.Abstractions.Primitives.Bytes32
+Nalix.Codec.ProtocolFrames.DatagramTicket
+Nalix.Codec.ProtocolFrames.DatagramTicket.ChannelCount.get -> byte
+Nalix.Codec.ProtocolFrames.DatagramTicket.ChannelCount.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.ChannelReceiveBufferBytes.get -> long
+Nalix.Codec.ProtocolFrames.DatagramTicket.ChannelReceiveBufferBytes.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.ConnectionId.get -> ulong
+Nalix.Codec.ProtocolFrames.DatagramTicket.ConnectionId.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.DatagramTicket() -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.ExpiresInSeconds.get -> ushort
+Nalix.Codec.ProtocolFrames.DatagramTicket.ExpiresInSeconds.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.IdleTimeoutMs.get -> int
+Nalix.Codec.ProtocolFrames.DatagramTicket.IdleTimeoutMs.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.InitializeRefusal(Nalix.Abstractions.Networking.Protocols.ProtocolReason reason) -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.InitializeRequest() -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.InitializeResponse(in Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo ticket) -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.MaxMessageSize.get -> int
+Nalix.Codec.ProtocolFrames.DatagramTicket.MaxMessageSize.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.Nonce.get -> System.UInt128
+Nalix.Codec.ProtocolFrames.DatagramTicket.NonceHigh.get -> ulong
+Nalix.Codec.ProtocolFrames.DatagramTicket.NonceHigh.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.NonceLow.get -> ulong
+Nalix.Codec.ProtocolFrames.DatagramTicket.NonceLow.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.Port.get -> ushort
+Nalix.Codec.ProtocolFrames.DatagramTicket.Port.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.Reason.get -> Nalix.Abstractions.Networking.Protocols.ProtocolReason
+Nalix.Codec.ProtocolFrames.DatagramTicket.Reason.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.ReceiveBufferBytes.get -> long
+Nalix.Codec.ProtocolFrames.DatagramTicket.ReceiveBufferBytes.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.Stage.get -> Nalix.Codec.ProtocolFrames.DatagramTicketStage
+Nalix.Codec.ProtocolFrames.DatagramTicket.Stage.set -> void
+Nalix.Codec.ProtocolFrames.DatagramTicket.ToTicketInfo() -> Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo
+Nalix.Codec.ProtocolFrames.DatagramTicket.Validate(out string? failureReason) -> bool
+Nalix.Codec.ProtocolFrames.DatagramTicketStage
+Nalix.Codec.ProtocolFrames.DatagramTicketStage.NONE = 0 -> Nalix.Codec.ProtocolFrames.DatagramTicketStage
+Nalix.Codec.ProtocolFrames.DatagramTicketStage.REQUEST = 1 -> Nalix.Codec.ProtocolFrames.DatagramTicketStage
+Nalix.Codec.ProtocolFrames.DatagramTicketStage.RESPONSE = 2 -> Nalix.Codec.ProtocolFrames.DatagramTicketStage
+override Nalix.Codec.ProtocolFrames.DatagramTicket.Length.get -> int
+override Nalix.Codec.ProtocolFrames.DatagramTicket.ResetForPool() -> void
+static Nalix.Codec.ProtocolFrames.DatagramTicket.Size.get -> int
+static Nalix.Codec.ProtocolFrames.DatagramTicket.StaticOpCode.get -> ushort

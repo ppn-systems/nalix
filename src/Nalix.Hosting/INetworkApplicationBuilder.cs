@@ -118,6 +118,16 @@ public interface INetworkApplicationBuilder
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods)] Type controllerType);
 
     /// <summary>
+    /// Binds a protocol to a datagram (NDP over UDP) listener. Clients obtain a ticket over an established TCP or
+    /// WebSocket session and then use the datagram session; the ticket handlers are mapped automatically.
+    /// </summary>
+    /// <typeparam name="TProtocol">The protocol type whose frame processor receives datagram messages.</typeparam>
+    /// <returns>A fluent builder to configure the port and the protocol factory.</returns>
+    IProtocolBindingBuilder MapDatagram<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
+        where TProtocol : class, IProtocol;
+
+    /// <summary>
     /// Adds a listener that the application activates and deactivates together with the protocol
     /// listeners, for extensions that run their own sockets (for example a raw UDP relay).
     /// </summary>
