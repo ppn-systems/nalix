@@ -179,7 +179,6 @@ public static class FramePipeline
             // 3. Rent final lease for the fully decompressed packet
             // [SECURITY] Holds decrypted plaintext: scrub the used range when the lease is released.
             BufferLease finalLease = BufferLease.Rent(FrameTransformer.Offset + decompressedSize, zeroOnDispose: true);
-            finalLease.IsReliable = current.IsReliable;
             finalLease.EncryptedOnWire = true;
 
             Span<byte> destFull = finalLease.SpanFull;
@@ -296,7 +295,6 @@ public static class FramePipeline
         // 2. RENT A SINGLE LEASE: capacity = Header + Final Ciphertext + Temp Compressed Data
         int totalRequiredCapacity = FrameTransformer.Offset + maxFinalSize + maxCompSize;
         BufferLease singleLease = BufferLease.Rent(totalRequiredCapacity, zeroOnDispose: false, BufferLease.TransportHeadroom);
-        singleLease.IsReliable = current.IsReliable;
 
         try
         {

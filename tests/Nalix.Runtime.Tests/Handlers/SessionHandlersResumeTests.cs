@@ -65,10 +65,10 @@ public sealed class SessionHandlersResumeTests : IDisposable
         // Frames at or below the last accepted sequence were already processed before the resume.
         for (uint seq = 1; seq <= SavedReceiveSequence; seq++)
         {
-            Assert.False(connection.TCP.ReceiveSequence.IsValid(seq, window: TcpWindow), $"seq {seq} must be rejected as replay");
+            Assert.False(connection.Transport.ReceiveSequence.IsValid(seq, window: TcpWindow), $"seq {seq} must be rejected as replay");
         }
 
-        Assert.True(connection.TCP.ReceiveSequence.IsValid(SavedReceiveSequence + 1, window: TcpWindow));
+        Assert.True(connection.Transport.ReceiveSequence.IsValid(SavedReceiveSequence + 1, window: TcpWindow));
     }
 
     [Fact]
@@ -80,22 +80,8 @@ public sealed class SessionHandlersResumeTests : IDisposable
         await StoreSessionAsync(secret);
         await ResumeAsync(connection, secret);
 
-        Assert.Equal(SavedSendSequence, connection.TCP.SendSequence.Current());
-        Assert.Equal(SavedSendSequence + 1, connection.TCP.SendSequence.Next());
-    }
-
-    [Fact]
-    public async Task HandleAsync_WhenResumedWithUdpUnbound_ClearsStaleUdpSequenceState()
-    {
-        Bytes32 secret = NewSecret(0x3C);
-        FakeConnection connection = new(new FakeTransport(new SequenceCounter(), new SequenceCounter()));
-
-        await StoreSessionAsync(secret, savedUdpSend: 5000, savedUdpReceive: 4000);
-        await ResumeAsync(connection, secret);
-
-        ConnectionSequenceState state = (ConnectionSequenceState)connection.Attributes[ConnectionAttributes.SequenceState];
-        Assert.Equal(0u, state.UdpSendSequence);
-        Assert.Equal(0u, state.UdpReceiveSequence);
+        Assert.Equal(SavedSendSequence, connection.Transport.SendSequence.Current());
+        Assert.Equal(SavedSendSequence + 1, connection.Transport.SendSequence.Next());
     }
 
     private static Bytes32 NewSecret(byte first)
@@ -106,15 +92,13 @@ public sealed class SessionHandlersResumeTests : IDisposable
         return new Bytes32(bytes);
     }
 
-    private async Task StoreSessionAsync(Bytes32 secret, uint savedUdpSend = 0, uint savedUdpReceive = 0)
+    private async Task StoreSessionAsync(Bytes32 secret)
     {
         ObjectMap<AttributeKey, object> attributes = ObjectMap<AttributeKey, object>.Rent();
         attributes[ConnectionAttributes.SequenceState] = new ConnectionSequenceState
         {
             TcpSendSequence = SavedSendSequence,
             TcpReceiveSequence = SavedReceiveSequence,
-            UdpSendSequence = savedUdpSend,
-            UdpReceiveSequence = savedUdpReceive,
         };
 
         SessionEntry entry = new(new SessionSnapshot
@@ -141,7 +125,7 @@ public sealed class SessionHandlersResumeTests : IDisposable
         HmacKeccak256.Compute(secret.AsSpan(), messageBytes, proofBytes);
         request.Proof = new Bytes32(proofBytes);
 
-        PacketContext<SessionResume> context = PacketContextFactory.Create(request, connection, reliable: true, encryptedOnWire: false);
+        PacketContext<SessionResume> context = PacketContextFactory.Create(request, connection, encryptedOnWire: false);
         await SessionHandlers.HandleAsync(context);
     }
 }

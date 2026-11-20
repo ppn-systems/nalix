@@ -108,7 +108,7 @@ public static class RekeyExtensions
             }
             else
             {
-                // Unordered transport: the request may never have arrived, and the server ignores it on UDP.
+                // Unordered transport: the request may never have arrived, and the server ignores it on a datagram session.
                 session.State.Secret = previousKey;
                 session.ResetSequenceCounters();
                 if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Failed))

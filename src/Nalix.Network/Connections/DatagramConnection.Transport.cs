@@ -297,12 +297,7 @@ public sealed partial class DatagramConnection : IDatagramTransport
     /// <summary>Receives the engine's output.</summary>
     private sealed class EngineHandler(DatagramConnection owner) : IDatagramEngineHandler
     {
-        public void OnMessage(BufferLease message, DeliveryMethod method, byte channel)
-        {
-            // Every datagram message passed the session AEAD and replay window.
-            message.IsReliable = true;
-            owner.TriggerProcessEvent(message);
-        }
+        public void OnMessage(BufferLease message, DeliveryMethod method, byte channel) => owner.TriggerProcessEvent(message);
 
         public void OnClosed(DatagramCloseCode code, ulong applicationCode, string reason, bool remote) => owner.OnEngineClosed();
     }

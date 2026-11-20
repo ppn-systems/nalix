@@ -205,12 +205,12 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
         "This overload sends a pre-serialized buffer and bypasses the normal compression and encryption pipeline. Use the packet-based multicast overload instead.",
         error: false,
         DiagnosticId = "NALIX_NET001")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Existing overload; only the UDP transport parameter was removed.")]
     public async Task MulticastExceptAsync(
         IConnectionGroupRegistry groupProvider,
         string groupName,
         IConnection excludedConnection,
         ReadOnlyMemory<byte> message,
-        NetworkTransport transport = NetworkTransport.TCP,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(groupProvider);
@@ -247,7 +247,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
                         continue;
                     }
 
-                    QueueSend(conn, connectionCount, message, transport, cancellationToken, ref tasks, ref owners, ref taskCount);
+                    QueueSend(conn, connectionCount, message, cancellationToken, ref tasks, ref owners, ref taskCount);
                 }
             }
             else
@@ -264,7 +264,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
                         continue;
                     }
 
-                    QueueSend(connection, connectionCount, message, transport, cancellationToken, ref tasks, ref owners, ref taskCount);
+                    QueueSend(connection, connectionCount, message, cancellationToken, ref tasks, ref owners, ref taskCount);
                 }
             }
 
@@ -289,11 +289,11 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
         "This overload sends a pre-serialized buffer and bypasses the normal compression and encryption pipeline. Use the packet-based multicast overload instead.",
         error: false,
         DiagnosticId = "NALIX_NET001")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Existing overload; only the UDP transport parameter was removed.")]
     public async Task MulticastAsync(
         IConnectionGroupRegistry groupProvider,
         string groupName,
         ReadOnlyMemory<byte> message,
-        NetworkTransport transport = NetworkTransport.TCP,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(groupProvider);
@@ -321,7 +321,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
                         break;
                     }
 
-                    QueueSend(list[i], connectionCount, message, transport, cancellationToken, ref tasks, ref owners, ref taskCount);
+                    QueueSend(list[i], connectionCount, message, cancellationToken, ref tasks, ref owners, ref taskCount);
                 }
             }
             else
@@ -333,7 +333,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
                         break;
                     }
 
-                    QueueSend(connection, connectionCount, message, transport, cancellationToken, ref tasks, ref owners, ref taskCount);
+                    QueueSend(connection, connectionCount, message, cancellationToken, ref tasks, ref owners, ref taskCount);
                 }
             }
 
@@ -354,7 +354,6 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
     /// Broadcasts a message to all active connections.
     /// </summary>
     /// <param name="message">The pre-serialized message buffer to broadcast.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous broadcast operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
@@ -363,9 +362,9 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
         "This overload sends a pre-serialized buffer and bypasses the normal compression and encryption pipeline. Use the packet-based multicast overload instead.",
         error: false,
         DiagnosticId = "NALIX_NET001")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Existing overload; only the UDP transport parameter was removed.")]
     public async Task BroadcastAsync(
         ReadOnlyMemory<byte> message,
-        NetworkTransport transport = NetworkTransport.TCP,
         CancellationToken cancellationToken = default)
     {
         if (message.IsEmpty || _disposed)
@@ -399,13 +398,13 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
 
         if (_options.BroadcastBatchSize > 0)
         {
-            await this.BroadcastBatchedAsync(snapshot, message, transport, cancellationToken)
+            await this.BroadcastBatchedAsync(snapshot, message, cancellationToken)
                       .ConfigureAwait(false);
         }
         else
         {
             await this.BroadcastCoreAsync(
-                snapshot, message, predicate: null, transport, cancellationToken,
+                snapshot, message, predicate: null, cancellationToken,
                 nameof(BroadcastAsync)).ConfigureAwait(false);
         }
 
@@ -432,7 +431,6 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
     public async Task BroadcastWhereAsync(
         ReadOnlyMemory<byte> message,
         Func<IConnection, bool> predicate,
-        NetworkTransport transport = NetworkTransport.TCP,
         CancellationToken cancellationToken = default)
     {
         if (message.IsEmpty || _disposed)
@@ -447,7 +445,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
         }
 
         await this.BroadcastCoreAsync(
-            snapshot, message, predicate, transport, cancellationToken,
+            snapshot, message, predicate, cancellationToken,
             nameof(BroadcastWhereAsync)).ConfigureAwait(false);
     }
 
@@ -460,7 +458,6 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
         IConnection connection,
         int connectionCount,
         ReadOnlyMemory<byte> message,
-        NetworkTransport transport,
         CancellationToken cancellationToken,
         ref Task[]? tasks,
         ref IConnection[]? owners,
@@ -472,7 +469,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
         }
 
         IConnection.ITransport? targetTransport =
-            transport == NetworkTransport.UDP ? connection.UDP : connection.Transport;
+            connection.Transport;
 
         if (targetTransport is null)
         {
@@ -586,7 +583,6 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
         RentedConnectionSnapshot snapshot,
         ReadOnlyMemory<byte> message,
         Func<IConnection, bool>? predicate,
-        NetworkTransport transport,
         CancellationToken cancellationToken,
         string operationName)
     {
@@ -610,7 +606,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
                     continue;
                 }
 
-                IConnection.ITransport? targetTransport = transport == NetworkTransport.UDP ? connection.UDP : connection.Transport;
+                IConnection.ITransport? targetTransport = connection.Transport;
                 if (targetTransport == null)
                 {
                     continue;
@@ -655,7 +651,6 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
     private async Task BroadcastBatchedAsync(
         RentedConnectionSnapshot snapshot,
         ReadOnlyMemory<byte> message,
-        NetworkTransport transport,
         CancellationToken cancellationToken)
     {
         int connectionCount = snapshot.Count;
@@ -675,7 +670,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
 
                 IConnection connection = snapshot[i];
 
-                IConnection.ITransport? targetTransport = transport == NetworkTransport.UDP ? connection.UDP : connection.Transport;
+                IConnection.ITransport? targetTransport = connection.Transport;
                 if (targetTransport == null)
                 {
                     continue;

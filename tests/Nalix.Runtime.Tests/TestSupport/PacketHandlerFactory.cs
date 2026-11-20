@@ -35,8 +35,7 @@ internal static class PacketHandlerFactory
             timeout: timeout,
             permission: new PacketPermissionAttribute(permission),
             encryption: encryption,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
         return new PacketHandler<TPacket>(
             opCode: 1,

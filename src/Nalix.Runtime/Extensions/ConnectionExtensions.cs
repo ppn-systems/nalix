@@ -119,16 +119,16 @@ public static partial class ConnectionExtensions
     }
 
     /// <summary>
-    /// Serializes and sends a packet over the specified transport asynchronously, applying the necessary framing (encryption/compression).
+    /// Serializes and sends a packet over the connection transport asynchronously, applying the necessary framing (encryption/compression).
     /// </summary>
     /// <typeparam name="TPacket">The type of the packet.</typeparam>
     /// <param name="connection">The connection to send the packet on.</param>
     /// <param name="packet">The packet to send.</param>
-    /// <param name="transport">The transport to use (defaults to TCP).</param>
     /// <param name="enableEncrypt">Whether to encrypt the packet (defaults to true).</param>
     /// <param name="ct">The cancellation token.</param>
     /// <returns>A task representing the asynchronous send operation.</returns>
-    public static ValueTask SendAsync<TPacket>(this IConnection connection, TPacket packet, NetworkTransport transport = NetworkTransport.TCP, bool enableEncrypt = true, CancellationToken ct = default)
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Existing overload; only the UDP transport parameter was removed.")]
+    public static ValueTask SendAsync<TPacket>(this IConnection connection, TPacket packet, bool enableEncrypt = true, CancellationToken ct = default)
         where TPacket : IPacket
     {
         ArgumentNullException.ThrowIfNull(connection);
@@ -137,16 +137,7 @@ public static partial class ConnectionExtensions
             throw new ArgumentNullException(nameof(packet));
         }
 
-        IConnection.ITransport activeTransport = transport switch
-        {
-            NetworkTransport.UDP => connection.UDP ?? throw new InvalidOperationException("UDP companion transport is not created on this connection."),
-            NetworkTransport.TCP => connection.Transport,
-            NetworkTransport.WEBSOCKET => connection.Transport,
-            NetworkTransport.DATAGRAM => connection.Transport,
-            _ => connection.Transport
-        };
-
-        return PacketSender.SEND_CORE_ASYNC(connection, activeTransport, packet, enableEncrypt, ct);
+        return PacketSender.SEND_CORE_ASYNC(connection, connection.Transport, packet, PacketSender.NeedsEncryption(connection, enableEncrypt), ct);
     }
 }
 

@@ -27,7 +27,6 @@ internal sealed class FakeConnection : IConnection
     public bool Disconnected { get; private set; }
     public string? DisconnectReason { get; private set; }
     public bool IsDisposed { get; private set; }
-    public bool IsUdpCreated => false;
     public ulong ConnectionId { get; }
     public string? UserId { get; set; }
     public long UpTime => 10;
@@ -40,8 +39,7 @@ internal sealed class FakeConnection : IConnection
     public Bytes32 Secret { get; set; }
     public PermissionLevel Level { get; set; }
     public CipherSuiteType Algorithm { get; set; }
-    public IConnection.ITransport TCP => this.FakeTcp;
-    public IConnection.ITransport? UDP => null;
+    public IConnection.ITransport Transport => this.FakeTcp;
 
 #pragma warning disable CS0067
     public event EventHandler<IConnectionEventArgs>? ConnectionClosed;

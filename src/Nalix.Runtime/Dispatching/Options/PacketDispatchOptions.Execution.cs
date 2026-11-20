@@ -426,16 +426,7 @@ public sealed partial class PacketDispatchOptions<TPacket>
     }
 
     private static async ValueTask SendRawAsync(PacketContext<TPacket> context, ReadOnlyMemory<byte> data)
-    {
-        if (context.IsReliable || context.Connection.UDP is null)
-        {
-            await context.Connection.Transport.SendAsync(data).ConfigureAwait(false);
-        }
-        else
-        {
-            await context.Connection.UDP.SendAsync(data).ConfigureAwait(false);
-        }
-    }
+        => await context.Connection.Transport.SendAsync(data).ConfigureAwait(false);
 
     #endregion Terminal Handler Static Helpers
 

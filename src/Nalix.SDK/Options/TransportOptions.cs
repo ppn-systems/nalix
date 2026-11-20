@@ -81,13 +81,6 @@ public sealed partial class TransportOptions : ConfigurationLoader
     public int AsyncQueueCapacity { get; set; } = 1024;
 
     /// <summary>
-    /// The maximum size (in bytes) allowed for a single UDP datagram (including the 8-byte Token).
-    /// </summary>
-    [IniComment("Maximum allowed UDP datagram size in bytes (including header). Default 1400.")]
-    [ValueRange(64, 65507)]
-    public int MaxUdpDatagramSize { get; set; } = 1400;
-
-    /// <summary>
     /// Gets or sets whether requests that do not choose (<see cref="RequestOptions.Encrypt"/> is <see langword="null"/>)
     /// follow the session's encryption state, i.e. are encrypted once the handshake has completed.
     /// Default <see langword="false"/>: such requests are sent unencrypted, which suits deployments that already wrap

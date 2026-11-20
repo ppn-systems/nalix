@@ -94,3 +94,7 @@ static Nalix.Environment.Datagrams.DatagramPeerLimits.operator ==(Nalix.Environm
 Nalix.Environment.Datagrams.DatagramEngine.GenerateReport() -> string!
 const Nalix.Environment.Datagrams.DatagramEngine.MinimumDatagramSize = 30 -> int
 static Nalix.Environment.Datagrams.DatagramEngine.TryReadConnectionId(System.ReadOnlySpan<byte> datagram, out ulong connectionId) -> bool
+*REMOVED*Nalix.Environment.Memory.BufferLease.IsReliable.get -> bool
+*REMOVED*Nalix.Environment.Memory.BufferLease.IsReliable.set -> void
+*REMOVED*Nalix.Environment.Options.SequenceOptions.UdpWindow.get -> uint
+*REMOVED*Nalix.Environment.Options.SequenceOptions.UdpWindow.set -> void

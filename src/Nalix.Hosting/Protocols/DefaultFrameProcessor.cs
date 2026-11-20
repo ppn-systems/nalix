@@ -122,33 +122,15 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
             return;
         }
 
-        uint window;
         uint? seq = null;
         bool exchanged = false;
-        ISequenceCounter counter;
+        uint window = _sequenceOptions.TcpWindow;
+        ISequenceCounter counter = args.Connection.Transport.ReceiveSequence;
         IBufferLease current = lease;
 
         // A datagram session authenticates every datagram and has its own replay window; its messages may
         // arrive in any order (unordered and sequenced methods), so the stream sequence check does not apply.
         bool datagram = args.Connection.Transport is IDatagramTransport;
-
-        if (current.IsReliable || datagram)
-        {
-            window = _sequenceOptions.TcpWindow;
-            counter = args.Connection.Transport.ReceiveSequence;
-
-        }
-        else
-        {
-            if (args.Connection.UDP is not { } udp)
-            {
-                _logger.DiscardUnreliableFrame();
-                return;
-            }
-
-            window = _sequenceOptions.UdpWindow;
-            counter = udp.ReceiveSequence;
-        }
 
         try
         {
@@ -168,7 +150,7 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
             {
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
-                    _logger.RejectedSequence(current.IsReliable ? "TCP" : "UDP", seq, counter.Current());
+                    _logger.RejectedSequence("stream", seq, counter.Current());
                 }
                 return;
             }

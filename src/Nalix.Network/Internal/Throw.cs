@@ -28,9 +28,6 @@ internal static class Throw
 
     private static readonly NetworkException s_connectionReset = new CachedNetworkException("Connection closed by peer.", s_connectionResetInternal);
     private static readonly NetworkException s_sendFailed = new CachedNetworkException("The socket closed while sending.");
-    private static readonly NetworkException s_udpPayloadTooLarge = new CachedNetworkException("UDP payload too large. Use TCP for large data.");
-    private static readonly NetworkException s_udpPartialSend = new CachedNetworkException("UDP partial send occurred.");
-    private static readonly NetworkException s_udpSendFailed = new CachedNetworkException("UDP transmission failed.");
     private static readonly NetworkException s_processChannelFull = new CachedNetworkException("Process channel is full.");
     private static readonly NetworkException s_invalidSocket = new CachedNetworkException("Invalid socket.");
     private static readonly NetworkException s_connectionRejectedByLimiter = new CachedNetworkException("Connection rejected by limiter.");
@@ -41,7 +38,6 @@ internal static class Throw
     private static readonly InternalErrorException s_tryAcceptContextNotBound = new CachedInternalErrorException("TryAccept context was not bound to pooled socket args.");
     private static readonly InternalErrorException s_failedToAcquirePooledArgs = new CachedInternalErrorException("Failed to acquire PooledSocketAsyncEventArgs.");
     private static readonly InternalErrorException s_connectionNotAvailable = new CachedInternalErrorException("Connection is not available for this event.");
-    private static readonly InternalErrorException s_udpTransportNotCreated = new CachedInternalErrorException("UDP transport has not been created yet.");
     private static readonly InternalErrorException s_eventArgsMustHaveLease = new CachedInternalErrorException("Event args must have Lease.");
     private static readonly InvalidOperationException s_webSocketClosed = new CachedInvalidOperationException("WebSocket is closed.");
     private static readonly InvalidOperationException s_webSocketInvalidReceiveBuffer = new CachedInvalidOperationException("WebSocket receive buffer size must be greater than zero.");
@@ -105,21 +101,6 @@ internal static class Throw
     [DoesNotReturn]
     [StackTraceHidden]
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void UdpPayloadTooLargeNow() => throw s_udpPayloadTooLarge;
-
-    [DoesNotReturn]
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void UdpPartialSendNow() => throw s_udpPartialSend;
-
-    [DoesNotReturn]
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void UdpSendFailedNow() => throw s_udpSendFailed;
-
-    [DoesNotReturn]
-    [StackTraceHidden]
-    [MethodImpl(MethodImplOptions.NoInlining)]
     public static void ProtocolNotSupportedNow() => throw s_protocolNotSupported;
 
     [StackTraceHidden]
@@ -161,11 +142,6 @@ internal static class Throw
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void ConnectionNotAvailable() => throw s_connectionNotAvailable;
-
-    [StackTraceHidden]
-    [DoesNotReturn]
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void UdpTransportNotCreated() => throw s_udpTransportNotCreated;
 
     [StackTraceHidden]
     [DoesNotReturn]

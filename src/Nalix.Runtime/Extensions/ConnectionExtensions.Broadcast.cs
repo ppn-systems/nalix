@@ -12,6 +12,7 @@ using Nalix.Codec.Options;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Memory;
+using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Internal.Pipelines;
 
 namespace Nalix.Runtime.Extensions;
@@ -27,13 +28,11 @@ public static partial class ConnectionExtensions
     /// </summary>
     /// <param name="hub">The connection hub.</param>
     /// <param name="packet">The packet to broadcast.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="enableEncrypt">Whether to encrypt the packet (defaults to true).</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous broadcast operation.</returns>
     public static async Task BroadcastAsync(
         this IConnectionBroadcaster hub, IPacket packet,
-        NetworkTransport transport = NetworkTransport.TCP,
         bool enableEncrypt = true, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(hub);
@@ -59,7 +58,6 @@ public static partial class ConnectionExtensions
 
             BroadcastState state = new(
                 rawLease,
-                transport,
                 enableEncrypt,
                 enableCompress,
                 minSizeToCompress);
@@ -82,7 +80,6 @@ public static partial class ConnectionExtensions
     /// <param name="groupProvider">The connection group provider to use for resolving group members.</param>
     /// <param name="groupName">The name of the group to receive the message.</param>
     /// <param name="packet">The packet to multicast.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="enableEncrypt">Whether to encrypt the packet (defaults to true).</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous multicast operation.</returns>
@@ -90,7 +87,7 @@ public static partial class ConnectionExtensions
         this IConnectionBroadcaster hub,
         IConnectionGroupRegistry groupProvider,
         string groupName,
-        IPacket packet, NetworkTransport transport = NetworkTransport.TCP,
+        IPacket packet,
         bool enableEncrypt = true, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(hub);
@@ -118,7 +115,6 @@ public static partial class ConnectionExtensions
 
             BroadcastState state = new(
                 rawLease,
-                transport,
                 enableEncrypt,
                 enableCompress,
                 minSizeToCompress);
@@ -142,7 +138,6 @@ public static partial class ConnectionExtensions
     /// <param name="groupName">The name of the group to receive the message.</param>
     /// <param name="excludedConnection">The connection to exclude from the broadcast.</param>
     /// <param name="packet">The packet to multicast.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="enableEncrypt">Whether to encrypt the packet (defaults to true).</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous multicast operation.</returns>
@@ -151,7 +146,7 @@ public static partial class ConnectionExtensions
         IConnectionGroupRegistry groupProvider,
         string groupName,
         IConnection excludedConnection,
-        IPacket packet, NetworkTransport transport = NetworkTransport.TCP,
+        IPacket packet,
         bool enableEncrypt = true, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(hub);
@@ -180,7 +175,6 @@ public static partial class ConnectionExtensions
 
             BroadcastState state = new(
                 rawLease,
-                transport,
                 enableEncrypt,
                 enableCompress,
                 minSizeToCompress);
@@ -207,20 +201,17 @@ public static partial class ConnectionExtensions
     private readonly struct BroadcastState
     {
         public readonly IBufferLease RawLease;
-        public readonly NetworkTransport Transport;
         public readonly bool EnableEncrypt;
         public readonly bool EnableCompress;
         public readonly int MinSizeToCompress;
 
         public BroadcastState(
             IBufferLease rawLease,
-            NetworkTransport transport,
             bool enableEncrypt,
             bool enableCompress,
             int minSizeToCompress)
         {
             RawLease = rawLease;
-            Transport = transport;
             EnableEncrypt = enableEncrypt;
             EnableCompress = enableCompress;
             MinSizeToCompress = minSizeToCompress;
@@ -232,19 +223,13 @@ public static partial class ConnectionExtensions
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueTask SendAsync(IConnection connection, ref BroadcastState state, CancellationToken ct)
         {
-            IConnection.ITransport? targetTransport =
-                state.Transport == NetworkTransport.UDP ? connection.UDP : connection.Transport;
-
-            if (targetTransport is null)
-            {
-                return default;
-            }
+            IConnection.ITransport targetTransport = connection.Transport;
 
             return PacketPipeline.ProcessAndSendAsync(
                 connection,
                 targetTransport,
                 state.RawLease,
-                state.EnableEncrypt,
+                PacketSender.NeedsEncryption(connection, state.EnableEncrypt),
                 state.EnableCompress,
                 state.MinSizeToCompress,
                 ct);

@@ -20,15 +20,6 @@ public partial interface IConnection : IDisposable, IConnectionErrorTracked
     bool IsDisposed { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the UDP transport has been created and is available.
-    /// </summary>
-    /// <remarks>
-    /// Use this property to safely check UDP status before accessing <see cref="UDP"/> 
-    /// or deciding whether to cache UDP-related data.
-    /// </remarks>
-    bool IsUdpCreated { get; }
-
-    /// <summary>
     /// Gets the unique identifier for the connection.
     /// </summary>
     ulong ConnectionId { get; }

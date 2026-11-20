@@ -18,11 +18,6 @@ namespace Nalix.Abstractions.Networking.Packets;
 public interface IPacketContext<TPacket> : IPoolable where TPacket : IPacket
 {
     /// <summary>
-    /// Gets or sets a value indicating whether the transport protocol (TCP/UDP) associated with this buffer is reliable.
-    /// </summary>
-    bool IsReliable { get; }
-
-    /// <summary>
     /// Gets a value indicating whether the inbound frame this packet was deserialized from
     /// arrived encrypted on the wire. Reflects <see cref="Nalix.Abstractions.IBufferLease.EncryptedOnWire"/>
     /// as captured at decrypt time, independent of the packet header's transient flags.

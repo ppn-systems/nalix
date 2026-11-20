@@ -55,8 +55,6 @@ public sealed class SessionFactory : ISessionFactory
         {
             TcpSendSequence = connection.Transport.SendSequence.Current(),
             TcpReceiveSequence = connection.Transport.ReceiveSequence.Current(),
-            UdpSendSequence = connection.IsUdpCreated ? connection.UDP!.SendSequence.Current() : 0,
-            UdpReceiveSequence = connection.IsUdpCreated ? connection.UDP!.ReceiveSequence.Current() : 0
         };
 
         attributes[ConnectionAttributes.SequenceState] = snapshotSeq;

@@ -25,8 +25,7 @@ internal static class PacketContextFactory
             timeout: null,
             permission: null,
             encryption: null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
         MethodInfo initMethod = typeof(PacketContext<TPacket>).GetMethod(
             "Initialize",

@@ -23,7 +23,6 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Hosting.Internal;
 using Nalix.Network.Connections;
 using Nalix.Network.Listeners.Datagram;
-using Nalix.Network.Listeners.Udp;
 using Nalix.Network.Listeners.Web;
 using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
@@ -266,25 +265,6 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
     }
 
     /// <inheritdoc />
-    public IProtocolBindingBuilder MapUdp<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
-        where TProtocol : class, IProtocol
-    {
-        ProtocolBindingBuilder builder = new(this);
-
-        _state.UdpBindings.Add(new UdpProtocolBinding(
-            typeof(TProtocol),
-            dispatch => builder.Factory is not null
-                ? builder.Factory(dispatch)
-                : this.CreateProtocol<TProtocol>(dispatch),
-            Port: null,
-            Authentication: null,
-            BindingBuilder: builder));
-
-        return builder;
-    }
-
-    /// <inheritdoc />
     public IProtocolBindingBuilder MapDatagram<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol
@@ -373,59 +353,6 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
                     : new TcpServerListener(protocol, hub, guard);
 
                 return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.TCP);
-            });
-        }
-
-        foreach (UdpProtocolBinding registration in _state.UdpBindings)
-        {
-            serverFactories.Add(dispatch =>
-            {
-                IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()
-                    ?? throw new InvalidOperationException("IConnectionHub is not registered. Call UseConnectionHub or ensure Build() is invoked.");
-                IProtocol protocol = registration.Factory(dispatch);
-
-                ushort? port = registration.Port;
-                OperatingMode mode = OperatingMode.Server;
-                Func<IConnection, System.Net.EndPoint, ReadOnlySpan<byte>, bool>? authen = registration.Authentication;
-
-                if (registration.BindingBuilder is ProtocolBindingBuilder udpBuilder)
-                {
-                    mode = udpBuilder.Mode;
-                    port = udpBuilder.Port ?? port;
-                    authen = udpBuilder.Authen ?? authen;
-                }
-
-                IConnectionGuard guard = InstanceManager.Instance.GetExistingInstance<IConnectionGuard>()
-                    ?? throw new InvalidOperationException("IConnectionGuard is not registered.");
-
-                IListener listener;
-
-                if (mode == OperatingMode.Passthrough)
-                {
-                    if (authen is not null)
-                    {
-                        throw new InvalidOperationException(
-                            "UDP passthrough framing (TransportFraming.None) does not support " +
-                            "Nalix authentication hooks. The protocol layer is responsible for " +
-                            "its own authentication when using passthrough mode.");
-                    }
-
-                    listener = port.HasValue
-                        ? new UdpPassthroughListener(port.Value, protocol, hub, guard)
-                        : new UdpPassthroughListener(protocol, hub, guard);
-                }
-                else
-                {
-                    listener = authen is not null
-                        ? (port.HasValue
-                            ? new UdpServerListener(port.Value, protocol, hub, authen)
-                            : new UdpServerListener(protocol, hub, authen))
-                        : (port.HasValue
-                            ? new UdpServerListener(port.Value, protocol, hub)
-                            : new UdpServerListener(protocol, hub));
-                }
-
-                return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.UDP);
             });
         }
 
@@ -671,12 +598,6 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
     public IProtocolBindingBuilder ListenTcp<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol => this.MapTcp<TProtocol>();
-
-    /// <inheritdoc />
-    [Obsolete("Use MapUdp<TProtocol>() instead. This method will be removed in a future version.")]
-    public IProtocolBindingBuilder ListenUdp<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
-        where TProtocol : class, IProtocol => this.MapUdp<TProtocol>();
 
     /// <inheritdoc />
     [Obsolete("Use MapWebSocket<TProtocol>() instead. This method will be removed in a future version.")]

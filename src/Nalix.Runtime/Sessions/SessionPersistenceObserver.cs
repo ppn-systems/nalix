@@ -124,21 +124,12 @@ public sealed class SessionPersistenceObserver : IDisposable
             this.Level = source.Level;
             this.Algorithm = source.Algorithm;
             this.ErrorCount = source.ErrorCount;
-            this.IsUdpCreated = source.IsUdpCreated;
             _secret = source.Secret;
 
             uint tcpSend = source.Transport is not null ? source.Transport.SendSequence.Current() : 0;
             uint tcpRecv = source.Transport is not null ? source.Transport.ReceiveSequence.Current() : 0;
             TransportFraming tcpFraming = source.Transport is not null ? source.Transport.Framing : TransportFraming.UInt16LengthPrefixed;
             this.Transport = new SnapshotTransport(tcpSend, tcpRecv, tcpFraming);
-
-            if (source.IsUdpCreated && source.UDP is not null)
-            {
-                this.UDP = new SnapshotTransport(
-                    source.UDP.SendSequence.Current(),
-                    source.UDP.ReceiveSequence.Current(),
-                    source.UDP.Framing);
-            }
 
             _attributes = ObjectMap<AttributeKey, object>.Rent();
             if (source.Attributes is not null)
@@ -159,7 +150,6 @@ public sealed class SessionPersistenceObserver : IDisposable
         }
 
         public bool IsDisposed { get; private set; }
-        public bool IsUdpCreated { get; }
         public ulong ConnectionId { get; }
         public string? UserId { get; set; }
         public long UpTime { get; }
@@ -177,8 +167,6 @@ public sealed class SessionPersistenceObserver : IDisposable
         public PermissionLevel Level { get; set; }
         public CipherSuiteType Algorithm { get; set; }
         public IConnection.ITransport Transport { get; }
-        public IConnection.ITransport TCP => this.Transport;
-        public IConnection.ITransport? UDP { get; }
 
 #pragma warning disable CS0067
         public event EventHandler<IConnectionEventArgs>? ConnectionClosed;

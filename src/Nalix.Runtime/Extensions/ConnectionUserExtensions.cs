@@ -76,7 +76,6 @@ public static class ConnectionUserExtensions
     /// <param name="registry">The connection group registry used for resolving user connections.</param>
     /// <param name="userId">The target user identifier.</param>
     /// <param name="packet">The packet to send.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="enableEncrypt">Whether to encrypt the packet (defaults to true).</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous multicast operation.</returns>
@@ -85,7 +84,6 @@ public static class ConnectionUserExtensions
         IConnectionGroupRegistry registry,
         string userId,
         IPacket packet,
-        NetworkTransport transport = NetworkTransport.TCP,
         bool enableEncrypt = true,
         CancellationToken cancellationToken = default)
     {
@@ -95,7 +93,7 @@ public static class ConnectionUserExtensions
         ArgumentNullException.ThrowIfNull(packet);
 
         string groupName = GetUserGroupName(userId);
-        return hub.MulticastAsync(registry, groupName, packet, transport, enableEncrypt, cancellationToken);
+        return hub.MulticastAsync(registry, groupName, packet, enableEncrypt, cancellationToken);
     }
 
     /// <summary>
@@ -106,7 +104,6 @@ public static class ConnectionUserExtensions
     /// <param name="userId">The target user identifier.</param>
     /// <param name="excludedConnection">The connection to exclude from the broadcast.</param>
     /// <param name="packet">The packet to send.</param>
-    /// <param name="transport">The network transport protocol to use.</param>
     /// <param name="enableEncrypt">Whether to encrypt the packet (defaults to true).</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous multicast operation.</returns>
@@ -116,7 +113,6 @@ public static class ConnectionUserExtensions
         string userId,
         IConnection excludedConnection,
         IPacket packet,
-        NetworkTransport transport = NetworkTransport.TCP,
         bool enableEncrypt = true,
         CancellationToken cancellationToken = default)
     {
@@ -127,6 +123,6 @@ public static class ConnectionUserExtensions
         ArgumentNullException.ThrowIfNull(packet);
 
         string groupName = GetUserGroupName(userId);
-        return hub.MulticastExceptAsync(registry, groupName, excludedConnection, packet, transport, enableEncrypt, cancellationToken);
+        return hub.MulticastExceptAsync(registry, groupName, excludedConnection, packet, enableEncrypt, cancellationToken);
     }
 }

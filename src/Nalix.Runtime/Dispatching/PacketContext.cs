@@ -46,15 +46,6 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
     internal Task? PendingHandler { get; set; }
 
     /// <inheritdoc/>
-    public bool IsReliable
-    {
-        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        get;
-        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private set;
-    }
-
-    /// <inheritdoc/>
     public bool EncryptedOnWire
     {
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -148,7 +139,6 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
         this.Sender = new PacketSender();
         this.Scope = default!;
         this.Packet = default!;
-        this.IsReliable = false;
         this.EncryptedOnWire = false;
         this.Connection = default!;
         this.Attributes = default!;
@@ -164,7 +154,6 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
     /// <param name="packet">The packet to process.</param>
     /// <param name="connection">The connection associated with the packet.</param>
     /// <param name="descriptor">The metadata describing the packet.</param>
-    /// <param name="reliable">Whether the packet was received over a reliable transport.</param>
     /// <param name="encryptedOnWire">Whether the inbound frame arrived encrypted on the wire.</param>
     /// <param name="ownsPacket">Indicates whether the context owns the packet and is responsible for its disposal.</param>
     /// <param name="token">The cancellation token for the context.</param>
@@ -177,7 +166,7 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Initialize(
         TPacket packet, IConnection connection, PacketMetadata descriptor,
-        bool reliable, bool encryptedOnWire, bool ownsPacket = true, CancellationToken token = default,
+        bool encryptedOnWire, bool ownsPacket = true, CancellationToken token = default,
         Nalix.Abstractions.Injection.IPacketScope? scope = null)
     {
         _ = Interlocked.Exchange(ref _state, (int)PacketContextState.InUse);
@@ -186,7 +175,6 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
         ArgumentNullException.ThrowIfNull(connection);
 
         this.Packet = packet;
-        this.IsReliable = reliable;
         this.EncryptedOnWire = encryptedOnWire;
         this.Connection = connection;
         this.Attributes = descriptor;
@@ -259,7 +247,6 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
 
             this.Scope = default!;
             this.Packet = default!;
-            this.IsReliable = false;
             this.EncryptedOnWire = false;
             this.SkipOutbound = false;
             this.Attributes = default!;

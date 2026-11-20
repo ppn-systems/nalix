@@ -3,7 +3,6 @@
 
 using System;
 using System.Buffers;
-using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Threading;
@@ -13,7 +12,6 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Codec.Transforms;
-using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 
 namespace Nalix.Runtime.Internal.Pipelines;
@@ -24,7 +22,6 @@ namespace Nalix.Runtime.Internal.Pipelines;
 /// </summary>
 internal static class PacketPipeline
 {
-    private const int UdpMacTagSize = sizeof(uint);
     /// <summary>
     /// Serializes a packet into a pooled BufferLease.
     /// The caller owns the returned lease and must dispose it.
@@ -99,15 +96,7 @@ internal static class PacketPipeline
                 sequenceToUse,
                 connection.Algorithm);
 
-            ValueTask sendVt;
-            if (transport == connection.UDP)
-            {
-                sendVt = SEND_UDP_ASYNC(connection, transport, current, ct);
-            }
-            else
-            {
-                sendVt = transport.SendAsyncCore(current, ct);
-            }
+            ValueTask sendVt = transport.SendAsyncCore(current, ct);
 
             if (sendVt.IsCompletedSuccessfully)
             {
@@ -217,18 +206,6 @@ internal static class PacketPipeline
     {
         try
         {
-            if (transport == connection.UDP)
-            {
-                // Datagrams are signed and sent one by one; there is nothing to coalesce.
-                for (int i = 0; i < count; i++)
-                {
-                    await ProcessAndSendAsync(
-                        connection, transport, frames[i], needEncrypt, enableCompress, minSizeToCompress, ct, cloneLease: false).ConfigureAwait(false);
-                }
-
-                return;
-            }
-
             IAsyncDisposable sendScope = await transport.AcquireSendLockAsync(ct).ConfigureAwait(false);
             try
             {
@@ -293,28 +270,6 @@ internal static class PacketPipeline
             }
 
             ArrayPool<IBufferLease>.Shared.Return(frames, clearArray: true);
-        }
-    }
-
-    private static async ValueTask SEND_UDP_ASYNC(IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease current, CancellationToken ct)
-    {
-        int dataLen = current.Length;
-        BufferLease signedLease = BufferLease.Rent(dataLen + UdpMacTagSize);
-        try
-        {
-            current.Span.CopyTo(signedLease.SpanFull);
-
-            uint payloadHash = XxHash32.Compute(signedLease.SpanFull[..dataLen]);
-            uint computedTag = XxHash32.Compute(connection.Secret.AsSpan(), seed: payloadHash);
-            BinaryPrimitives.WriteUInt32LittleEndian(signedLease.SpanFull.Slice(dataLen, UdpMacTagSize), computedTag);
-
-            signedLease.CommitLength(dataLen + UdpMacTagSize);
-
-            await transport.SendAsyncCore(signedLease.Memory, ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            signedLease.Dispose();
         }
     }
 }

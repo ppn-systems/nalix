@@ -11,21 +11,16 @@ public enum NetworkTransport : byte
     /// <summary>
     /// Transmission Control Protocol (Reliable).
     /// </summary>
-    TCP,
-
-    /// <summary>
-    /// User Datagram Protocol (Unreliable).
-    /// </summary>
-    UDP,
+    TCP = 0,
 
     /// <summary>
     /// WebSocket Protocol (Reliable, message-oriented).
     /// </summary>
-    WEBSOCKET,
+    WEBSOCKET = 2,
 
     /// <summary>
     /// Nalix Datagram Protocol: an authenticated UDP session with reliable, sequenced and unreliable
     /// delivery on independent channels.
     /// </summary>
-    DATAGRAM,
+    DATAGRAM = 3,
 }

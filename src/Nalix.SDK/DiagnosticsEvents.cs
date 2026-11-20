@@ -48,7 +48,7 @@ public static class DiagnosticsEvents
     public static void Write<T>(string name, T payload) => Source.Write(name, payload);
 
     /// <summary>
-    /// Connection lifecycle events of TCP, WebSocket and UDP sessions.
+    /// Connection lifecycle events of TCP, WebSocket and datagram sessions.
     /// </summary>
     public static class Session
     {

@@ -231,7 +231,6 @@ public sealed class WebSocketBatchSendTests
     private sealed class ThrowingLease : IBufferLease
     {
         public int Length => 40;
-        public bool IsReliable { get; set; }
         public bool EncryptedOnWire { get; set; }
         public int Capacity => 40;
         public Span<byte> Span => throw new InvalidOperationException("lease failed");

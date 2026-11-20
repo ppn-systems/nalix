@@ -22,7 +22,6 @@ internal static class TcpLifecycleAllocationProbe
         try
         {
             Measure("CreateAndDispose_Connection", 20_000, b.CreateAndDispose_Connection);
-            Measure("CreateBindDispose_Passthrough", 20_000, b.CreateBindDispose_Passthrough);
             Measure("Churn_TcpConnections (per connection)", 20_000 / 256, b.Churn_TcpConnections, opsPerCall: 256);
             Measure("Send_Steady", 200_000, b.Send_Steady);
             Measure("SendAsync_Steady", 200_000, () => _ = b.SendAsync_Steady());

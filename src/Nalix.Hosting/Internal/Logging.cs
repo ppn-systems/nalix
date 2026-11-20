@@ -8,9 +8,6 @@ namespace Nalix.Hosting.Internal;
 
 internal static partial class Logging
 {
-    [LoggerMessage(Level = LogLevel.Debug, Message = "[NW.DefaultFrameProcessor:ProcessFrame] Discarding unreliable frame because UDP transport is not initialized.")]
-    public static partial void DiscardUnreliableFrame(this ILogger logger);
-
     [LoggerMessage(Level = LogLevel.Trace, Message = "[NW.DefaultFrameProcessor:ProcessFrame] Dropped inbound packet due to decryption or decompression failure.")]
     public static partial void DroppedInboundPacket(this ILogger logger);
 

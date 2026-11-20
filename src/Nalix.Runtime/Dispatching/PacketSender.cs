@@ -34,7 +34,6 @@ public sealed class PacketSender : IPacketSender
     private CancellationToken _token;
     private IConnection? _connection;
     private PacketMetadata _attributes;
-    private bool _isReliable;
     private ushort _requestSequenceId;
 
     private static readonly CompressionOptions s_options = ConfigurationManager.Instance.Get<CompressionOptions>();
@@ -61,7 +60,6 @@ public sealed class PacketSender : IPacketSender
         _connection = context.Connection;
         _attributes = context.Attributes;
         _token = context.CancellationToken;
-        _isReliable = context.IsReliable;
         _requestSequenceId = context.Packet.Header.SequenceId;
     }
 
@@ -71,7 +69,6 @@ public sealed class PacketSender : IPacketSender
         _token = default;
         _connection = null;
         _attributes = default;
-        _isReliable = false;
         _requestSequenceId = 0;
     }
 
@@ -81,7 +78,7 @@ public sealed class PacketSender : IPacketSender
         ArgumentNullException.ThrowIfNull(packet);
 
         IConnection connection = this.GET_CONNECTION_OR_THROW();
-        IConnection.ITransport transport = GetTransport(connection, _attributes, _isReliable);
+        IConnection.ITransport transport = GetTransport(connection, _attributes);
 
         bool needEncrypt = NeedsEncryption(connection, _attributes.Encryption?.IsEncrypted ?? false);
         CancellationToken safeToken = ct == default ? _token : ct;
@@ -95,7 +92,7 @@ public sealed class PacketSender : IPacketSender
         ArgumentNullException.ThrowIfNull(packet);
 
         IConnection connection = this.GET_CONNECTION_OR_THROW();
-        IConnection.ITransport transport = GetTransport(connection, _attributes, _isReliable);
+        IConnection.ITransport transport = GetTransport(connection, _attributes);
 
         CancellationToken safeToken = ct == default ? _token : ct;
 
@@ -118,7 +115,7 @@ public sealed class PacketSender : IPacketSender
     public ValueTask SendAsync<TPacket>(ReadOnlySpan<TPacket> packets, CancellationToken ct = default) where TPacket : IPacket
     {
         IConnection connection = this.GET_CONNECTION_OR_THROW();
-        IConnection.ITransport transport = GetTransport(connection, _attributes, _isReliable);
+        IConnection.ITransport transport = GetTransport(connection, _attributes);
 
         bool needEncrypt = NeedsEncryption(connection, _attributes.Encryption?.IsEncrypted ?? false);
         CancellationToken safeToken = ct == default ? _token : ct;
@@ -251,10 +248,10 @@ public sealed class PacketSender : IPacketSender
     /// <summary>
     /// A datagram session protects every datagram with its own AEAD, so frames sent on it are not encrypted again.
     /// </summary>
-    private static bool NeedsEncryption(IConnection connection, bool requested)
+    internal static bool NeedsEncryption(IConnection connection, bool requested)
         => requested && connection.Transport is not IDatagramTransport;
 
-    private static IConnection.ITransport GetTransport(IConnection connection, PacketMetadata attributes, bool isReliable)
+    private static IConnection.ITransport GetTransport(IConnection connection, PacketMetadata attributes)
     {
         // A datagram session sends with the handler's delivery method and channel.
         if (connection.Transport is IDatagramTransport datagram)
@@ -262,22 +259,6 @@ public sealed class PacketSender : IPacketSender
             return attributes.GetCustomAttribute<PacketDeliveryAttribute>() is { } delivery
                 ? datagram.WithDelivery(delivery.Method, delivery.Channel)
                 : datagram;
-        }
-
-        // Prioritize the transport specified on the handler attribute.
-        if (attributes.Transport?.TransportType is { } t)
-        {
-            return t switch
-            {
-                NetworkTransport.UDP => connection.UDP ?? throw new InvalidOperationException("UDP companion transport is not created on this connection."),
-                NetworkTransport.TCP or NetworkTransport.WEBSOCKET or NetworkTransport.DATAGRAM or _ => connection.Transport
-            };
-        }
-
-        // If the incoming request was received over unreliable transport (UDP), reply on UDP!
-        if (!isReliable && connection.UDP is not null)
-        {
-            return connection.UDP;
         }
 
         return connection.Transport;

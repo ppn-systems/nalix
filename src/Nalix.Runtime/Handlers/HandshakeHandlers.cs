@@ -11,6 +11,7 @@ using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Injection;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Networking.Sessions;
@@ -49,9 +50,9 @@ public static partial class HandshakeHandlers
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (!context.IsReliable)
+        if (context.Connection.Transport is IDatagramTransport)
         {
-            // This is a replayed packet, ignore silently.
+            // Session control runs on the stream connection only, not on datagram sessions.
             return default;
         }
 
@@ -193,9 +194,9 @@ public static partial class HandshakeHandlers
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (!context.IsReliable)
+        if (context.Connection.Transport is IDatagramTransport)
         {
-            // This is a replayed packet, ignore silently.
+            // Session control runs on the stream connection only, not on datagram sessions.
             return default;
         }
 

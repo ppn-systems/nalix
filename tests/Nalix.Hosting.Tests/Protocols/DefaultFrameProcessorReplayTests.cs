@@ -76,7 +76,6 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
             using (BufferLease plain10 = BufferLease.CopyFrom(validPlain))
             {
                 IBufferLease enc10 = FrameCipher.EncryptFrame(plain10, secret, seq: 10u, CipherSuiteType.Chacha20Poly1305);
-                enc10.IsReliable = true;
                 ConnectionEventArgs args10 = (ConnectionEventArgs)acquireMethod.Invoke(connection, null)!;
                 initMethod.Invoke(args10, [enc10, connection]);
                 try
@@ -96,7 +95,6 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
             using (BufferLease plain8 = BufferLease.CopyFrom(validPlain))
             {
                 IBufferLease enc8 = FrameCipher.EncryptFrame(plain8, secret, seq: 8u, CipherSuiteType.Chacha20Poly1305);
-                enc8.IsReliable = true;
                 ConnectionEventArgs args8 = (ConnectionEventArgs)acquireMethod.Invoke(connection, null)!;
                 initMethod.Invoke(args8, [enc8, connection]);
                 try

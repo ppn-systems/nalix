@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Injection;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Networking.Sessions;
@@ -43,9 +44,9 @@ public static partial class SessionHandlers
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (!context.IsReliable)
+        if (context.Connection.Transport is IDatagramTransport)
         {
-            // This is a replayed packet, ignore silently.
+            // Session control runs on the stream connection only, not on datagram sessions.
             return;
         }
 
@@ -98,18 +99,6 @@ public static partial class SessionHandlers
         ConnectionSequenceState seqState = connection.GetSequenceState();
         connection.Transport.SendSequence.Reset(seqState.TcpSendSequence);
         RestoreReceiveSequence(connection.Transport.ReceiveSequence, seqState.TcpReceiveSequence);
-
-        // UDP is keyed by the new ConnectionId (the datagram session token), so it always starts a fresh
-        // transport and replay window. The snapshot's UDP counters belong to the old binding and must not
-        // be carried over: a transport bound later would otherwise start from stale values.
-        seqState.UdpSendSequence = 0;
-        seqState.UdpReceiveSequence = 0;
-
-        if (connection.IsUdpCreated && connection.UDP is not null)
-        {
-            connection.UDP.SendSequence.Reset();
-            connection.UDP.ReceiveSequence.Reset();
-        }
 
         await s_sessionService.SaveSessionAsync(connection).ConfigureAwait(false);
 

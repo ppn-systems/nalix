@@ -1,1 +1,2 @@
 #nullable enable
+*REMOVED*const Nalix.Framework.Tasks.TaskNaming.Tags.Udp = "udp" -> string!

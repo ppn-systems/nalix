@@ -40,6 +40,6 @@ internal static class TestRuntimeBootstrap
 
         RuntimeHelpers.RunClassConstructor(typeof(Connection).TypeHandle);
         RuntimeHelpers.RunClassConstructor(typeof(WebSocketConnection).TypeHandle);
-        RuntimeHelpers.RunClassConstructor(typeof(PassthroughConnection).TypeHandle);
+        RuntimeHelpers.RunClassConstructor(typeof(DatagramConnection).TypeHandle);
     }
 }

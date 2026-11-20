@@ -41,8 +41,8 @@ public sealed class HandshakeHandlersTests
         SessionProof proofPacket = new();
         proofPacket.Initialize(Bytes32.Zero);
 
-        using (PacketContext<SessionProof> ctx1 = PacketContextFactory.Create(proofPacket, connection, reliable: true, encryptedOnWire: false))
-        using (PacketContext<SessionProof> ctx2 = PacketContextFactory.Create(proofPacket, connection, reliable: true, encryptedOnWire: false))
+        using (PacketContext<SessionProof> ctx1 = PacketContextFactory.Create(proofPacket, connection, encryptedOnWire: false))
+        using (PacketContext<SessionProof> ctx2 = PacketContextFactory.Create(proofPacket, connection, encryptedOnWire: false))
         {
             // Simulate HandleSessionProofAsync + RejectHandshakeAsync racing on the same connection's HandshakeState
             ValueTask vt1 = HandshakeHandlers.HandleSessionProofAsync(ctx1);

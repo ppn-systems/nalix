@@ -18,7 +18,7 @@ dotnet add package Nalix.Hosting
 | :--- | :--- | :--- |
 | Application host | Start, stop, run, and dispose a Nalix server | `NetworkApplication` |
 | Builder API | Configure listeners, handlers, options, and services | `NetworkApplicationBuilder`, `INetworkApplicationBuilder` |
-| Protocol binding | Bind TCP, UDP, and WebSocket protocols | `MapTcp<TProtocol>()`, `MapUdp<TProtocol>()`, `MapWebSocket<TProtocol>()` |
+| Protocol binding | Bind TCP, datagram (NDP over UDP), and WebSocket protocols | `MapTcp<TProtocol>()`, `MapDatagram<TProtocol>()`, `MapWebSocket<TProtocol>()` |
 | Handler registration | Register generated packet handlers explicitly | `MapHandlers<T>()`, `MapHandlers(Type)` |
 | Default protocol | Forward packets into the dispatch pipeline with minimal setup | `DefaultProtocol` |
 | Options | Host bootstrap and runtime settings | `HostingOptions` |
@@ -50,7 +50,8 @@ builder.MapTcp<DefaultProtocol>()
     .OnPort(57200)
     .Bind();
 
-builder.MapUdp<DefaultProtocol>()
+// Datagram sessions: clients get a ticket over TCP/WebSocket, then use UDP alone.
+builder.MapDatagram<DefaultProtocol>()
     .OnPort(57201)
     .Bind();
 
@@ -73,9 +74,12 @@ await app.RunAsync();
 
 ## Migration Note
 
-`ListenTcp<TProtocol>()`, `ListenUdp<TProtocol>()`, and `ListenWebSocket<TProtocol>()` are
-obsolete. Use `MapTcp<TProtocol>()`, `MapUdp<TProtocol>()`, and
+`ListenTcp<TProtocol>()` and `ListenWebSocket<TProtocol>()` are obsolete. Use `MapTcp<TProtocol>()` and
 `MapWebSocket<TProtocol>()` for new code.
+
+The UDP companion transport (`MapUdp`, `ListenUdp`, `WithMode`, `WithAuthentication`, `IConnection.UDP`) is removed.
+Use `MapDatagram<TProtocol>()` on the server and `DatagramSession` in the SDK instead; handlers pick a delivery
+method with `[PacketDelivery(...)]`.
 
 ## Documentation
 

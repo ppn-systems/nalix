@@ -9,6 +9,7 @@ using Nalix.Abstractions;
 using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Injection;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
@@ -119,9 +120,9 @@ public static partial class SystemControlHandlers
     /// </summary>
     private static ValueTask HandlePowRequest(IPacketContext<Control> context)
     {
-        if (!context.IsReliable)
+        if (context.Connection.Transport is IDatagramTransport)
         {
-            // This is a replayed packet, ignore silently.
+            // Session control runs on the stream connection only, not on datagram sessions.
             return default;
         }
 
@@ -161,7 +162,7 @@ public static partial class SystemControlHandlers
 
     private static ValueTask HandleCipherUpdate(IPacketContext<Control> context, Control packet)
     {
-        if (!context.IsReliable)
+        if (context.Connection.Transport is IDatagramTransport)
         {
             return default;
         }
@@ -202,9 +203,9 @@ public static partial class SystemControlHandlers
 
     private static ValueTask HandleSessionRekey(IPacketContext<Control> context, Control packet)
     {
-        if (!context.IsReliable)
+        if (context.Connection.Transport is IDatagramTransport)
         {
-            // This is a replayed packet, ignore silently.
+            // Session control runs on the stream connection only, not on datagram sessions.
             return default;
         }
 
@@ -222,12 +223,6 @@ public static partial class SystemControlHandlers
         // Reset the sequence counters to prevent overflow
         connection.Transport.SendSequence.Reset();
         connection.Transport.ReceiveSequence.Reset();
-
-        if (connection.IsUdpCreated)
-        {
-            connection.UDP!.SendSequence.Reset();
-            connection.UDP!.ReceiveSequence.Reset();
-        }
 
         PacketScope<Control> lease = PacketFactory<Control>.Acquire();
         try
@@ -325,9 +320,9 @@ public static partial class SystemControlHandlers
 
     private static ValueTask HandlePublicKeyRequest(IPacketContext<Control> context, Control packet)
     {
-        if (!context.IsReliable)
+        if (context.Connection.Transport is IDatagramTransport)
         {
-            // This is a replayed packet, ignore silently.
+            // Session control runs on the stream connection only, not on datagram sessions.
             return default;
         }
 

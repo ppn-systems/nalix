@@ -89,9 +89,6 @@ public sealed partial class DatagramConnection :
     public bool IsDisposed => _disposed || Volatile.Read(ref _backing) is null;
 
     /// <inheritdoc/>
-    public bool IsUdpCreated => false;
-
-    /// <inheritdoc/>
     public bool ExcludeFromIdleTimeout { get; set; }
 
     /// <inheritdoc/>
@@ -111,13 +108,6 @@ public sealed partial class DatagramConnection :
 
     /// <inheritdoc/>
     public IConnection.ITransport Transport => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(DatagramConnection));
-
-    /// <inheritdoc/>
-    [Obsolete("Use Transport instead. TCP will be removed in the next major version.")]
-    public IConnection.ITransport TCP => this.Transport;
-
-    /// <inheritdoc/>
-    public IConnection.ITransport? UDP => null;
 
     /// <inheritdoc/>
     /// <remarks>The address of the first authenticated datagram.</remarks>

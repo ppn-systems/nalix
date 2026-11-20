@@ -145,15 +145,6 @@ public interface INetworkApplicationBuilder
         where TProtocol : class, IProtocol;
 
     /// <summary>
-    /// Binds a TCP protocol using a fluent builder for port and factory configuration.
-    /// </summary>
-    /// <typeparam name="TProtocol">The protocol type to host.</typeparam>
-    /// <returns>A fluent builder to configure the binding.</returns>
-    IProtocolBindingBuilder MapUdp<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
-        where TProtocol : class, IProtocol;
-
-    /// <summary>
     /// Binds a WebSocket protocol using a fluent builder for port, path, and factory configuration.
     /// </summary>
     /// <typeparam name="TProtocol">The protocol type to host.</typeparam>
@@ -171,16 +162,6 @@ public interface INetworkApplicationBuilder
     /// <returns>A fluent builder to configure the binding.</returns>
     [Obsolete("Use MapTcp<TProtocol>() instead. This method will be removed in a future version.")]
     IProtocolBindingBuilder ListenTcp<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
-        where TProtocol : class, IProtocol;
-
-    /// <summary>
-    /// Binds a UDP protocol using a fluent builder for port, factory, and authentication configuration.
-    /// </summary>
-    /// <typeparam name="TProtocol">The protocol type to host.</typeparam>
-    /// <returns>A fluent builder to configure the binding.</returns>
-    [Obsolete("Use MapUdp<TProtocol>() instead. This method will be removed in a future version.")]
-    IProtocolBindingBuilder ListenUdp<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol;
 

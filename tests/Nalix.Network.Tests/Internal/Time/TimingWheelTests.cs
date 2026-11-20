@@ -27,7 +27,6 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
-using Nalix.Network.Listeners.Udp;
 using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
 using Nalix.Network.Tests.TestSupport;
@@ -52,7 +51,9 @@ public sealed class TimingWheelTests
     {
         using TimingWheel wheel = new();
         IPEndPoint ep = new(IPAddress.Parse("198.51.100.11"), 9001);
-        using PassthroughConnection conn = new(s_testOpCodeExtractor, ep)
+        using Connection conn = new(
+            new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp),
+            s_testOpCodeExtractor, ep)
         {
             ExcludeFromIdleTimeout = true,
             IdleTimeoutMs = 50
@@ -126,7 +127,6 @@ public sealed class TimingWheelTests
         public IOpCodeExtractor PacketClassifier => s_testOpCodeExtractor;
         public long UpTime => 0;
         public long LastPingTime { get; set; }
-        public bool IsUdpCreated => false;
         public bool ExcludeFromIdleTimeout { get; set; }
         public IObjectMap<AttributeKey, object> Attributes => throw new NotSupportedException();
         public long AcceptedAtMs { get; set; }
@@ -139,8 +139,7 @@ public sealed class TimingWheelTests
         public long BytesSent => 0;
         public long BytesReceived => 0;
         public long PacketsDropped => 0;
-        public IConnection.ITransport TCP => throw new NotSupportedException();
-        public IConnection.ITransport UDP => throw new NotSupportedException();
+        public IConnection.ITransport Transport => throw new NotSupportedException();
 
         public event EventHandler<IConnectionEventArgs>? ConnectionClosed { add { } remove { } }
         public event EventHandler<IConnectionEventArgs>? MessageProcessed { add { } remove { } }

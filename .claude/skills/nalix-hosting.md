@@ -30,7 +30,7 @@ Key methods on `INetworkApplicationBuilder`:
 | `ConfigureDispatchOptions(Action<PacketDispatchOptions<IPacket>>)` | Wire middleware, tune dispatch |
 | `MapHandlers<THandler>()` | Register a packet controller |
 | `ListenTcp<TProtocol>().Bind()` | Bind a TCP listener |
-| `ListenUdp<TProtocol>().Bind()` | Bind a UDP listener |
+| `MapDatagram<TProtocol>().Bind()` | Bind a datagram (NDP over UDP) listener; maps the ticket handler |
 | `ListenWebSocket<TProtocol>().Bind()` | Bind a WebSocket listener |
 | `Build()` | Produce a `NetworkApplication` |
 
@@ -85,7 +85,7 @@ await host.RunAsync();                      // ActivateAsync → wait → Deacti
 
 ### Add a custom protocol
 1. Implement `IProtocol` — use `DefaultProtocol` as reference
-2. `builder.ListenTcp<MyProtocol>().Bind()` or `builder.ListenUdp<MyProtocol>().Bind()`
+2. `builder.MapTcp<MyProtocol>().Bind()` or `builder.MapDatagram<MyProtocol>().Bind()`
 3. Protocol receives the parsed packet before dispatch — inject pre-processing here if needed
 
 ### Add error/status strings

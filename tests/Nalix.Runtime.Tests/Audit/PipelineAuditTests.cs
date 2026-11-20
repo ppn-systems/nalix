@@ -32,7 +32,7 @@ public sealed class PipelineAuditTests
     private static PacketMetadata OpenMetadata() => new(
         new PacketOpcodeAttribute(0x0001), timeout: null,
         permission: new PacketPermissionAttribute(PermissionLevel.NONE),
-        encryption: null, rateLimit: null, transport: null);
+        encryption: null, rateLimit: null);
 
     private static PacketHandler<IPacket> CreateThrowingHandler() =>
         new(0x0001, OpenMetadata(), null, "ThrowingHandler", typeof(void),
