@@ -3,17 +3,27 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Primitives;
 using Nalix.Abstractions.Security;
+using Nalix.Codec.Pooling;
+using Nalix.Codec.ProtocolFrames;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Options;
 using Nalix.Hosting.Internal;
 using Nalix.Hosting.Internal.Exceptions;
 using Nalix.Network.Connections;
+using Nalix.Runtime.Extensions;
+using Nalix.Runtime.Options;
 
 namespace Nalix.Hosting.Protocols;
 
@@ -32,6 +42,10 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
 
     private static readonly AttributeKey s_throttleAttributeKey = AttributeKey.FromName("sys.log.protocol.process_error");
     private static readonly long s_throttleWindowTicks = (long)(TimeSpan.FromSeconds(20).TotalSeconds * Stopwatch.Frequency);
+
+    // Last time (Environment.TickCount64) a rejected frame on the connection was answered.
+    private static readonly AttributeKey s_rejectedReplyAttributeKey = AttributeKey.FromName("sys.backpressure.rejected_reply");
+    private static readonly DirectiveGuardOptions s_directiveGuardOptions = ConfigurationManager.Instance.Get<DirectiveGuardOptions>();
 
     private readonly ILogger _logger;
     private readonly IProtocol _protocol;
@@ -200,9 +214,75 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
         }
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Answers the rejected request with a <see cref="ControlType.FAIL"/> / <see cref="ProtocolReason.RATE_LIMITED"/> /
+    /// <see cref="ProtocolAdvice.RETRY"/> directive flagged <see cref="ControlFlags.IS_TRANSIENT"/>, the same reply the
+    /// rate-limit middleware sends: it carries the request's sequence id and <c>Arg0</c> holds its opcode, so the client
+    /// can match it to the pending request and retry. At most one reply is sent per connection within
+    /// <see cref="DirectiveGuardOptions.DefaultCooldownMs"/>; frames rejected inside that window stay unanswered, so a
+    /// flood does not turn into a flood of replies. The directive is not encrypted, as for any handler that does not
+    /// require encryption.
+    /// </remarks>
+    public void OnFrameRejected(IConnection connection, ReadOnlySpan<byte> frame)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+
+        if (frame.Length < PacketHeader.Size || connection.IsDisposed || !TryAcquireRejectedReply(connection))
+        {
+            return;
+        }
+
+        PacketHeader header = MemoryMarshal.Read<PacketHeader>(frame);
+        _ = SEND_RATE_LIMITED_ASYNC(connection, header.OpCode, header.SequenceId);
+    }
+
+    private static async Task SEND_RATE_LIMITED_ASYNC(IConnection connection, ushort opCode, ushort sequenceId)
+    {
+        try
+        {
+            using PacketScope<Directive> lease = PacketFactory<Directive>.Acquire();
+            Directive directive = lease.Value;
+
+            directive.Initialize(
+                ControlType.FAIL, ProtocolReason.RATE_LIMITED, ProtocolAdvice.RETRY,
+                sequenceId: sequenceId,
+                controlFlags: ControlFlags.IS_TRANSIENT,
+                arg0: opCode);
+
+            await connection.SendAsync(directive, enableEncrypt: false).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            // Best effort: an overloaded or closing connection may not take the reply.
+        }
+    }
+
     #endregion Methods
 
     #region Throttle Helper
+
+    private static bool TryAcquireRejectedReply(IConnection connection)
+    {
+        int cooldownMs = s_directiveGuardOptions.DefaultCooldownMs;
+        if (cooldownMs <= 0)
+        {
+            return true;
+        }
+
+        IObjectMap<AttributeKey, object> attrs = connection.Attributes;
+        if (!attrs.TryGetValue(s_rejectedReplyAttributeKey, out object? value) || value is not StrongBox<long> lastSent)
+        {
+            lastSent = new StrongBox<long>(0);
+            attrs[s_rejectedReplyAttributeKey] = lastSent;
+        }
+
+        long now = System.Environment.TickCount64;
+        long previous = Volatile.Read(ref lastSent.Value);
+
+        return (previous == 0 || now - previous >= cooldownMs)
+            && Interlocked.CompareExchange(ref lastSent.Value, now, previous) == previous;
+    }
 
     private static bool ShouldEmitThrottledLog(IConnection connection)
     {

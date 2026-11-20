@@ -1,1 +1,2 @@
 #nullable enable
+Nalix.Hosting.Protocols.DefaultFrameProcessor.OnFrameRejected(Nalix.Abstractions.Networking.IConnection! connection, System.ReadOnlySpan<byte> frame) -> void
