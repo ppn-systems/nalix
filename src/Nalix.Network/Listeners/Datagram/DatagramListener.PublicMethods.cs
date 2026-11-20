@@ -81,6 +81,7 @@ public sealed partial class DatagramListener
             }
 
             _receiveWorkers = workers;
+            _timingWheel.Activate(token);
             _sweepJob = tasks.ScheduleRecurring(
                 name: $"{TaskNaming.Tags.Datagram}.Tickets.Sweep.{this.Port}",
                 interval: TimeSpan.FromSeconds(1),
@@ -257,6 +258,13 @@ public sealed partial class DatagramListener
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"  - Unknown CID     : {this.Metrics.DroppedUnknown}");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"  - Unauthenticated : {this.Metrics.DroppedUnauthenticated}");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Errors              : {this.Metrics.TotalErrors}");
+        _ = sb.AppendLine();
+
+        _ = sb.AppendLine("Timers:");
+        _ = sb.AppendLine("--------------------------------------------");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Wheel Running       : {_timingWheel.IsRunning}");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Deadlines Fired     : {_timingWheel.FiredCount}");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Stale Entries       : {_timingWheel.StaleSkipCount}");
         _ = sb.AppendLine("--------------------------------------------");
 
         return sb.ToString();
@@ -288,6 +296,12 @@ public sealed partial class DatagramListener
         writer.WriteNumber(nameof(DMetrics.TotalErrors), this.Metrics.TotalErrors);
         writer.WriteEndObject();
 
+        writer.WriteStartObject("Timers");
+        writer.WriteBoolean("Running", _timingWheel.IsRunning);
+        writer.WriteNumber("Fired", _timingWheel.FiredCount);
+        writer.WriteNumber("StaleSkips", _timingWheel.StaleSkipCount);
+        writer.WriteEndObject();
+
         writer.WriteEndObject();
     }
 
@@ -299,6 +313,7 @@ public sealed partial class DatagramListener
     private void ReleaseResources()
     {
         Interlocked.Exchange(ref _sweepJob, null)?.Dispose();
+        _timingWheel.Deactivate();
 
         CancellationTokenSource? cts = Interlocked.Exchange(ref _cts, null);
         try

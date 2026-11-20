@@ -13,7 +13,9 @@ using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Options;
+using Nalix.Framework.Tasks;
 using Nalix.Network.Connections;
+using Nalix.Network.Internal.Time;
 using Nalix.Network.Options;
 
 namespace Nalix.Network.Listeners.Datagram;
@@ -62,6 +64,7 @@ public sealed partial class DatagramListener : IListener, IDatagramTicketIssuer
     private readonly ConcurrentDictionary<ulong, DatagramConnection> _sessions = new();
     private readonly ConcurrentDictionary<ulong, PendingTicket> _pending = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly DatagramTimingWheel _timingWheel;
 
     private Socket? _socket;
     private CancellationTokenSource? _cts;
@@ -100,6 +103,7 @@ public sealed partial class DatagramListener : IListener, IDatagramTicketIssuer
         _options = options ?? ConfigurationManager.Instance.Get<DatagramOptions>();
         _engineOptions = engineOptions ?? ConfigurationManager.Instance.Get<DatagramEngineOptions>();
         _socketOptions = ConfigurationManager.Instance.Get<NetworkSocketOptions>();
+        _timingWheel = new DatagramTimingWheel($"{TaskNaming.Tags.Datagram}.timers.{port}");
 
         _options.Validate();
         _engineOptions.Validate();
@@ -129,6 +133,9 @@ public sealed partial class DatagramListener : IListener, IDatagramTicketIssuer
 
     /// <summary>Gets the number of tickets waiting for their first authenticated datagram.</summary>
     public int PendingTicketCount => _pending.Count;
+
+    /// <summary>Gets the wheel that drives the protocol timers of the sessions.</summary>
+    internal DatagramTimingWheel TimingWheel => _timingWheel;
 
     private ListenerState State => (ListenerState)Volatile.Read(ref _state);
 

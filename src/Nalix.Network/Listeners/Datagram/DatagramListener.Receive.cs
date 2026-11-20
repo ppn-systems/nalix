@@ -13,6 +13,7 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Environment.Datagrams;
 using Nalix.Network.Connections;
+using Nalix.Network.Internal.Datagram;
 
 namespace Nalix.Network.Listeners.Datagram;
 
@@ -141,7 +142,7 @@ public sealed partial class DatagramListener
 
         ticket.ClearSecret();
 
-        IPEndPoint remote = DatagramConnection.ToEndPoint(from);
+        IPEndPoint remote = DatagramSessionDriver.ToEndPoint(from);
         if (_guard is not null && !_guard.TryAccept(remote))
         {
             this.Metrics.RECORD_GUARD_REJECTION();

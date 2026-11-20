@@ -9,11 +9,11 @@ using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Security;
-using Nalix.Environment.Datagrams;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Options;
 using Nalix.Environment.Sequencing;
 using Nalix.Environment.Time;
+using Nalix.Network.Internal.Datagram;
 using Nalix.Network.Internal.Transport;
 using Nalix.Network.Listeners.Datagram;
 
@@ -23,37 +23,14 @@ public sealed partial class DatagramConnection : IDatagramTransport
 {
     private static readonly SequenceCounter s_detachedSequence = new();
 
-    private readonly Lock _engineLock = new();
-    private readonly byte[] _sendBuffer = new byte[DatagramEngine.MaxDatagramSize];
     private DatagramListener _listener;
-    private DatagramEngine _engine;
-    private Timer? _timer;
-    private long _timerDue = long.MaxValue;
+    private DatagramSessionDriver _driver;
     private DeliveryView?[] _views = [];
-    private int _closeScheduled;
 
     /// <summary>Gets the session statistics of the protocol engine.</summary>
-    public string EngineReport
-    {
-        get
-        {
-            lock (_engineLock)
-            {
-                return _engine.GenerateReport();
-            }
-        }
-    }
+    public string EngineReport => _driver.Report;
 
-    internal bool IsEstablished
-    {
-        get
-        {
-            lock (_engineLock)
-            {
-                return _engine.State == DatagramEngineState.Established;
-            }
-        }
-    }
+    internal bool IsEstablished => _driver.IsEstablished;
 
     private SequenceCounter SendSequenceCounter => Volatile.Read(ref _backing)?.SendSequence ?? s_detachedSequence;
 
@@ -143,165 +120,56 @@ public sealed partial class DatagramConnection : IDatagramTransport
 
     #region Engine
 
-    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(_listener), nameof(_engine))]
+    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(_listener), nameof(_driver))]
     private void InitializeTransport(DatagramListener listener, IDatagramProtection protection, DatagramEngineOptions options)
     {
         _listener = listener;
-        _engine = new DatagramEngine(
-            options, DatagramPeerLimits.From(options), protection, this.DatagramConnectionId,
-            isServer: true, new EngineHandler(this), DatagramEngine.NowMicros());
-        _timer = new Timer(static state => ((DatagramConnection)state!).OnTimer(), this, Timeout.Infinite, Timeout.Infinite);
+        _driver = new DatagramSessionDriver(this, listener, listener.TimingWheel, protection, options, this.DatagramConnectionId);
     }
 
     /// <summary>Processes a datagram routed to this session by the listener.</summary>
     /// <returns><see langword="true"/> when it authenticated.</returns>
     internal bool OnDatagram(ReadOnlySpan<byte> datagram, SocketAddress from)
     {
-        bool accepted;
-        lock (_engineLock)
+        if (!_driver.Receive(datagram, from, out IPEndPoint? firstPath))
         {
-            if (_disposed)
-            {
-                return false;
-            }
-
-            long now = DatagramEngine.NowMicros();
-            bool firstDatagram = _engine.State == DatagramEngineState.Pending;
-            accepted = _engine.Receive(datagram, from, now);
-
-            if (accepted && firstDatagram && _engine.ActivePath is { } path)
-            {
-                this.NetworkEndpoint = SocketEndpoint.FromEndPoint(ToEndPoint(path));
-            }
-
-            this.FlushLocked(now);
+            return false;
         }
 
-        if (accepted)
+        if (firstPath is not null)
         {
-            this.LastPingTime = Clock.UnixMillisecondsNow();
-            this.IncrementBytesReceived(datagram.Length);
+            this.NetworkEndpoint = SocketEndpoint.FromEndPoint(firstPath);
         }
 
-        return accepted;
+        this.LastPingTime = Clock.UnixMillisecondsNow();
+        this.IncrementBytesReceived(datagram.Length);
+        return true;
     }
+
+    /// <summary>A message delivered by the engine.</summary>
+    internal void OnEngineMessage(BufferLease message) => this.TriggerProcessEvent(message);
 
     private void SendCore(ReadOnlySpan<byte> message, DeliveryMethod method, byte channel)
     {
-        lock (_engineLock)
+        if (!_driver.TrySend(message, method, channel, out bool closed))
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-
-            long now = DatagramEngine.NowMicros();
-            if (!_engine.TrySend(message, method, channel, 0, now))
-            {
-                throw new NetworkException(_engine.State >= DatagramEngineState.Draining
-                    ? "The datagram session is closed."
-                    : $"The message ({message.Length} bytes) is too large for {method} or the send queue of channel {channel} is full.");
-            }
-
-            this.FlushLocked(now);
+            throw new NetworkException(closed
+                ? "The datagram session is closed."
+                : $"The message ({message.Length} bytes) is too large for {method} or the send queue of channel {channel} is full.");
         }
 
         this.TriggerPostProcessEvent();
     }
 
-    private void OnTimer()
-    {
-        lock (_engineLock)
-        {
-            if (_disposed)
-            {
-                return;
-            }
-
-            _timerDue = long.MaxValue;
-            long now = DatagramEngine.NowMicros();
-            _engine.OnTimer(now);
-            this.FlushLocked(now);
-        }
-    }
-
-    /// <summary>Sends everything the engine produces and re-arms the timer. Called under the engine lock.</summary>
-    private void FlushLocked(long now)
-    {
-        int length;
-        while ((length = _engine.Poll(_sendBuffer, now, out SocketAddress? to)) > 0)
-        {
-            SocketAddress? target = to ?? _engine.ActivePath;
-            if (target is not null)
-            {
-                _listener.SendTo(_sendBuffer.AsSpan(0, length), target);
-                this.IncrementBytesSent(length);
-            }
-        }
-
-        long next = _engine.NextTimer;
-        if (next == long.MaxValue)
-        {
-            return;
-        }
-
-        if (next < _timerDue)
-        {
-            _timerDue = next;
-            long delayMs = Math.Max(0, (next - now + 999) / 1000);
-            _ = _timer?.Change(delayMs, Timeout.Infinite);
-        }
-    }
-
-    private void CloseEngine(string? reason)
-    {
-        lock (_engineLock)
-        {
-            if (_disposed)
-            {
-                return;
-            }
-
-            long now = DatagramEngine.NowMicros();
-            _engine.Close(DatagramCloseCode.NoError, reason, now);
-            this.FlushLocked(now);
-        }
-    }
+    private void CloseEngine(string? reason) => _driver.Close(reason);
 
     private void DisposeTransport()
     {
-        lock (_engineLock)
-        {
-            _timer?.Dispose();
-            _timer = null;
-            _engine.Dispose();
-        }
-
+        _driver.Dispose();
         _listener.OnConnectionClosed(this);
     }
 
-    /// <summary>The engine closed (by the peer or idle timeout): dispose outside the engine lock.</summary>
-    private void OnEngineClosed()
-    {
-        if (Interlocked.Exchange(ref _closeScheduled, 1) == 0)
-        {
-            _ = ThreadPool.UnsafeQueueUserWorkItem(static self => self.Dispose(), this, preferLocal: false);
-        }
-    }
-
-    internal static IPEndPoint ToEndPoint(SocketAddress address)
-    {
-        IPAddress any = address.Family == System.Net.Sockets.AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
-        IPEndPoint endPoint = (IPEndPoint)new IPEndPoint(any, 0).Create(address);
-        return endPoint.Address.IsIPv4MappedToIPv6 ? new IPEndPoint(endPoint.Address.MapToIPv4(), endPoint.Port) : endPoint;
-    }
-
     #endregion Engine
-
-    /// <summary>Receives the engine's output.</summary>
-    private sealed class EngineHandler(DatagramConnection owner) : IDatagramEngineHandler
-    {
-        public void OnMessage(BufferLease message, DeliveryMethod method, byte channel) => owner.TriggerProcessEvent(message);
-
-        public void OnClosed(DatagramCloseCode code, ulong applicationCode, string reason, bool remote) => owner.OnEngineClosed();
-    }
 
     /// <summary>A view of the transport that sends with a fixed delivery method and channel.</summary>
     private sealed class DeliveryView(DatagramConnection owner, DeliveryMethod method, byte channel) : IConnection.ITransport
