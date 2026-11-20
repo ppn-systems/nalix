@@ -38,6 +38,16 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
 
     private static readonly FragmentOptions s_fragmentOptions = ConfigurationManager.Instance.Get<FragmentOptions>();
 
+    /// <summary>
+    /// Upper bound for the closing handshake: waiting for the send lock, writing the close frame and waiting for the
+    /// peer's close frame. A peer that does not answer in time is dropped.
+    /// </summary>
+    private static readonly TimeSpan s_closeHandshakeTimeout = TimeSpan.FromSeconds(2);
+
+    // Close reasons stay well below the 123-byte limit RFC 6455 puts on a close frame's reason.
+    private const string CloseReasonNormal = "Connection closed";
+    private const string CloseReasonMessageTooBig = "Message exceeds the maximum size";
+
     private WebSocket _webSocket;
     private CoalescingWriteStream? _writeBatcher;
     private NetworkWebSocketOptions _wsOptions;
@@ -52,6 +62,11 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
     private int _transportDisposed;
     private int _receiveStarted;
     private Task? _receiveLoopTask;
+
+    // The close status sent when the connection closes; 0 until a caller picks one (NormalClosure is the default).
+    private int _closeStatus;
+    private string? _closeReason;
+    private Task _closeTask = Task.CompletedTask;
 
     #endregion Transport Fields
 
@@ -367,6 +382,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
         // Allocate a buffer matching FragmentOptions.MaxChunkSize (typically 1.4KB) to eliminate 64KB per-connection bloat.
         int length = GET_RECEIVE_BUFFER_SIZE();
         byte[] buffer = BufferLease.ByteArrayPool.Rent(length);
+        WebSocketCloseStatus? violation = null;
 
         try
         {
@@ -387,7 +403,8 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
                     // Fast path: the entire message fit in our buffer
                     if (result.Count > options.MaxMessageSize)
                     {
-                        Throw.WebSocketMessageTooLarge();
+                        violation = WebSocketCloseStatus.MessageTooBig;
+                        break;
                     }
 
                     if (result.Count == 0)
@@ -403,8 +420,17 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
                 else
                 {
                     // Slow path: the message is larger than the buffer, we need to assemble it
-                    await HANDLE_LARGE_MESSAGE_ASYNC(owner, webSocket, options, buffer, result.Count, cancellationToken).ConfigureAwait(false);
+                    violation = await HANDLE_LARGE_MESSAGE_ASYNC(owner, webSocket, options, buffer, result.Count, cancellationToken).ConfigureAwait(false);
+                    if (violation is not null)
+                    {
+                        break;
+                    }
                 }
+            }
+
+            if (violation is WebSocketCloseStatus status)
+            {
+                await owner.CLOSE_FOR_VIOLATION_ASYNC(webSocket, status, buffer, length).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -429,12 +455,16 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
         }
     }
 
-    private static async Task HANDLE_LARGE_MESSAGE_ASYNC(
+    /// <summary>
+    /// Assembles a message that spans several reads and hands it to the connection. Returns the close status to end the
+    /// connection with when the message breaks a limit, or <see langword="null"/> otherwise.
+    /// </summary>
+    private static async Task<WebSocketCloseStatus?> HANDLE_LARGE_MESSAGE_ASYNC(
         WebSocketConnection owner, WebSocket webSocket, NetworkWebSocketOptions options, byte[] initialBuffer, int initialBytes, CancellationToken cancellationToken)
     {
         if (initialBytes > options.MaxMessageSize)
         {
-            Throw.WebSocketMessageTooLarge();
+            return WebSocketCloseStatus.MessageTooBig;
         }
 
         // DO NOT rent the full MaxMessageSize upfront to prevent memory bloat/exhaustion under concurrent load.
@@ -461,14 +491,14 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
                 result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    return;
+                    return null;
                 }
 
                 int nextWritten = checked(written + result.Count);
 
                 if (nextWritten > options.MaxMessageSize)
                 {
-                    Throw.WebSocketMessageTooLarge();
+                    return WebSocketCloseStatus.MessageTooBig;
                 }
 
                 if (nextWritten > payload.Length)
@@ -497,7 +527,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
 
             if (written == 0)
             {
-                return;
+                return null;
             }
 
             BufferLease lease = BufferLease.TakeOwnership(payload, 0, written);
@@ -505,6 +535,7 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
             owner.TriggerProcessEvent(lease);
 
             ownershipTransferred = true;
+            return null;
         }
         finally
         {
@@ -515,6 +546,79 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
                 BufferLease.ByteArrayPool.Return(payload);
             }
         }
+    }
+
+    /// <summary>
+    /// Ends the connection after the peer broke a limit: sends a close frame with <paramref name="status"/>, then
+    /// reads (and discards) until the peer's close frame arrives, so unread bytes do not turn the close into a reset.
+    /// </summary>
+    private async Task CLOSE_FOR_VIOLATION_ASYNC(WebSocket webSocket, WebSocketCloseStatus status, byte[] buffer, int length)
+    {
+        const string reason = CloseReasonMessageTooBig;
+        this.SetCloseStatus(status, reason);
+
+        using CancellationTokenSource cts = new(s_closeHandshakeTimeout);
+
+        if (!await this.SEND_CLOSE_FRAME_ASYNC(webSocket, status, reason, cts.Token).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        while (webSocket.State == WebSocketState.CloseSent)
+        {
+            WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cts.Token).ConfigureAwait(false);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes a close frame under the send lock, so it never interleaves with (or is held back by) a batch of messages.
+    /// Returns <see langword="false"/> when the WebSocket can no longer send one.
+    /// </summary>
+    private async Task<bool> SEND_CLOSE_FRAME_ASYNC(WebSocket webSocket, WebSocketCloseStatus status, string reason, CancellationToken cancellationToken)
+    {
+        await this.SendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (webSocket.State is not (WebSocketState.Open or WebSocketState.CloseReceived))
+            {
+                return false;
+            }
+
+            await webSocket.CloseOutputAsync(status, reason, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            _ = this.SendLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Picks the close status sent when this connection closes. The first caller wins.
+    /// </summary>
+    private void SetCloseStatus(WebSocketCloseStatus status, string reason)
+    {
+        if (Interlocked.CompareExchange(ref _closeStatus, (int)status, 0) == 0)
+        {
+            Volatile.Write(ref _closeReason, reason);
+        }
+    }
+
+    /// <summary>
+    /// Closes the connection with a WebSocket close frame carrying <paramref name="status"/>. The returned task
+    /// completes when the closing handshake is over (or timed out) and the socket is released.
+    /// </summary>
+    /// <param name="status">The RFC 6455 close status to send.</param>
+    /// <param name="reason">A short reason, at most 123 UTF-8 bytes.</param>
+    internal Task CloseAsync(WebSocketCloseStatus status, string reason)
+    {
+        this.SetCloseStatus(status, reason);
+        this.Disconnect(reason);
+        return Volatile.Read(ref _closeTask);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -567,13 +671,58 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
             this.OBSERVE_RECEIVE_LOOP_SHUTDOWN(receiveLoopTask);
         }
 
+        // A WebSocket that can still send ends with a close frame (RFC 6455 section 7.1.2), not a bare TCP drop.
+        if (_webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+        {
+            int status = Volatile.Read(ref _closeStatus);
+            Volatile.Write(ref _closeTask, this.CLOSE_GRACEFULLY_ASYNC(
+                _webSocket,
+                status == 0 ? WebSocketCloseStatus.NormalClosure : (WebSocketCloseStatus)status,
+                Volatile.Read(ref _closeReason) ?? CloseReasonNormal,
+                receiveLoopTask));
+            return;
+        }
+
+        RELEASE_WEBSOCKET(_webSocket);
+    }
+
+    /// <summary>
+    /// Runs the closing handshake: sends the close frame, waits for the peer's close frame while the receive loop is
+    /// still reading, then releases the socket. Bounded by <see cref="s_closeHandshakeTimeout"/>.
+    /// </summary>
+    private async Task CLOSE_GRACEFULLY_ASYNC(WebSocket webSocket, WebSocketCloseStatus status, string reason, Task? receiveLoopTask)
+    {
         try
         {
-            if (_webSocket.State == WebSocketState.Open)
+            using CancellationTokenSource cts = new(s_closeHandshakeTimeout);
+
+            if (await this.SEND_CLOSE_FRAME_ASYNC(webSocket, status, reason, cts.Token).ConfigureAwait(false) &&
+                webSocket.State == WebSocketState.CloseSent &&
+                receiveLoopTask is { IsCompleted: false })
             {
-                _webSocket.Abort();
+                // The receive loop stops when the peer's close frame arrives.
+                await receiveLoopTask.WaitAsync(cts.Token).ConfigureAwait(false);
             }
-            _webSocket.Dispose();
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+        }
+        finally
+        {
+            RELEASE_WEBSOCKET(webSocket);
+        }
+    }
+
+    private static void RELEASE_WEBSOCKET(WebSocket webSocket)
+    {
+        try
+        {
+            if (webSocket.State is not (WebSocketState.Closed or WebSocketState.Aborted))
+            {
+                webSocket.Abort();
+            }
+
+            webSocket.Dispose();
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
     }

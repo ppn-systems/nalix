@@ -156,11 +156,6 @@ internal static class Throw
     [StackTraceHidden]
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void WebSocketMessageTooLarge() => throw s_webSocketMessageTooLarge;
-
-    [StackTraceHidden]
-    [DoesNotReturn]
-    [MethodImpl(MethodImplOptions.NoInlining)]
     public static void WebSocketSyncSendNotSupported() => throw s_webSocketSyncSendNotSupported;
 
     #endregion Throw Helpers

@@ -65,7 +65,9 @@ internal sealed class WsFrameReader : IDisposable
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    disconnectReason = new WebSocketException(WebSocketError.ConnectionClosedPrematurely, "The WebSocket session was closed by the remote host.");
+                    disconnectReason = new WebSocketException(
+                        WebSocketError.ConnectionClosedPrematurely,
+                        $"The WebSocket session was closed by the remote host (close status {(int?)result.CloseStatus ?? 1005}: {result.CloseStatusDescription}).");
                     break;
                 }
 
