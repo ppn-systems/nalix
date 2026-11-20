@@ -187,4 +187,22 @@ Nalix.Network.Connections.ConnectionHub.MulticastExceptAsync(Nalix.Abstractions.
 *REMOVED*virtual Nalix.Network.Listeners.Udp.UdpListenerBase.Initialize() -> void
 *REMOVED*virtual Nalix.Network.Listeners.Udp.UdpListenerBase.ProcessDatagram(Nalix.Environment.Memory.BufferLease! lease, System.Net.EndPoint? remoteEndPoint) -> void
 *REMOVED*virtual Nalix.Network.Listeners.Udp.UdpListenerBase.TryResolveConnection(Nalix.Abstractions.Networking.IConnectionHub! hub, System.ReadOnlySpan<byte> sessionToken, out Nalix.Network.Connections.Connection? connection) -> bool
-Nalix.Network.Listeners.Datagram.DatagramListener.DatagramListener(ushort port, Nalix.Abstractions.Networking.IProtocol! protocol, Nalix.Abstractions.Networking.IConnectionHub! hub, Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory! protectionFactory, Nalix.Network.Options.DatagramOptions? options = null, Nalix.Environment.Options.DatagramEngineOptions? engineOptions = null) -> void
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.BytesReceived.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.DMetrics() -> void
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.DatagramsReceived.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.DroppedMalformed.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.DroppedUnauthenticated.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.DroppedUnknown.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.TicketsExpired.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.TicketsIssued.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.TotalAccepted.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.TotalDropped.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.TotalErrors.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics.TotalGuardRejections.get -> long
+Nalix.Network.Listeners.Datagram.DatagramListener.DatagramListener(ushort port, Nalix.Abstractions.Networking.IProtocol! protocol, Nalix.Abstractions.Networking.IConnectionHub! hub, Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory! protectionFactory, Nalix.Abstractions.Networking.IConnectionGuard? guard = null, Nalix.Network.Options.DatagramOptions? options = null, Nalix.Environment.Options.DatagramEngineOptions? engineOptions = null) -> void
+Nalix.Network.Listeners.Datagram.DatagramListener.IsListening.get -> bool
+Nalix.Network.Listeners.Datagram.DatagramListener.Metrics.get -> Nalix.Network.Listeners.Datagram.DatagramListener.DMetrics!
+Nalix.Network.Listeners.Datagram.DatagramListener.PendingTicketCount.get -> int
+Nalix.Network.Options.DatagramOptions.ReceiveWorkers.get -> int
+Nalix.Network.Options.DatagramOptions.ReceiveWorkers.set -> void

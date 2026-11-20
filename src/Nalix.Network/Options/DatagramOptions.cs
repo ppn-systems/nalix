@@ -24,6 +24,11 @@ public sealed partial class DatagramOptions : ConfigurationLoader, IValidatableC
     [ValueRange(1, int.MaxValue)]
     public int MaxSessions { get; set; } = 100_000;
 
+    /// <summary>Gets or sets the number of receive workers reading the socket. Default 1.</summary>
+    [IniComment("Receive workers reading the UDP socket, 1-64 (default 1)")]
+    [ValueRange(1, 64)]
+    public int ReceiveWorkers { get; set; } = 1;
+
     /// <summary>Gets or sets the socket receive buffer size, in bytes. Default 4 MiB.</summary>
     [IniComment("UDP socket receive buffer size in bytes (default 4194304)")]
     [ValueRange(65_536, int.MaxValue)]

@@ -416,8 +416,11 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
                     ?? throw new InvalidOperationException("IConnectionHub is not registered. Call UseConnectionHub or ensure Build() is invoked.");
                 IProtocol protocol = registration.Factory(dispatch);
 
+                IConnectionGuard guard = InstanceManager.Instance.GetExistingInstance<IConnectionGuard>()
+                    ?? throw new InvalidOperationException("IConnectionGuard is not registered.");
+
                 DatagramListener listener = new(
-                    registration.BindingBuilder.Port ?? 0, protocol, hub, ChaCha20Poly1305DatagramProtectionFactory.Instance);
+                    registration.BindingBuilder.Port ?? 0, protocol, hub, ChaCha20Poly1305DatagramProtectionFactory.Instance, guard);
 
                 // The ticket handler finds the listener through the instance manager.
                 InstanceManager.Instance.Register<IDatagramTicketIssuer>(listener);

@@ -286,7 +286,7 @@ public sealed partial class DatagramConnection : IDatagramTransport
         }
     }
 
-    private static IPEndPoint ToEndPoint(SocketAddress address)
+    internal static IPEndPoint ToEndPoint(SocketAddress address)
     {
         IPAddress any = address.Family == System.Net.Sockets.AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
         IPEndPoint endPoint = (IPEndPoint)new IPEndPoint(any, 0).Create(address);

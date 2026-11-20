@@ -147,6 +147,37 @@ public sealed class DatagramEndToEndTests : IDisposable
         Assert.False(datagram.IsConnected);
     }
 
+    [Fact]
+    public async Task Listener_DropsForeignDatagramsSilently_AndCountsAcceptedSessions()
+    {
+        (ushort tcpPort, ushort udpPort) = (NextPort(), NextPort());
+        await using NetworkApplication app = await this.StartServerAsync(tcpPort, udpPort);
+        DatagramListener listener = (DatagramListener)InstanceManager.Instance.GetExistingInstance<IDatagramTicketIssuer>()!;
+
+        using (System.Net.Sockets.UdpClient raw = new())
+        {
+            // Too short to carry an NDP header, then a well-formed header with an unknown connection identifier.
+            _ = await raw.SendAsync(new byte[] { 0x01, 0x02 }, Host, udpPort);
+            byte[] unknown = new byte[64];
+            unknown[0] = 0x40;
+            unknown[1] = 0xEE;
+            _ = await raw.SendAsync(unknown, Host, udpPort);
+        }
+
+        await WaitUntilAsync(() => listener.Metrics.DatagramsReceived >= 2);
+        Assert.Equal(0, listener.SessionCount);
+        Assert.Equal(2, listener.Metrics.TotalDropped);
+
+        using TcpSession stream = await ConnectStreamAsync(tcpPort);
+        using DatagramSession datagram = new(stream);
+        await datagram.ConnectAsync().WaitAsync(s_timeout);
+
+        Assert.Equal(1, listener.Metrics.TicketsIssued);
+        Assert.Equal(1, listener.Metrics.TotalAccepted);
+        Assert.Equal(0, listener.PendingTicketCount);
+        Assert.Contains("Established         : 1", listener.GenerateReport(), StringComparison.Ordinal);
+    }
+
     private static async Task<TcpSession> ConnectStreamAsync(ushort port)
     {
         TcpSession stream = new(CreateOptions(port));

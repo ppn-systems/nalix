@@ -42,6 +42,9 @@ public static class TaskNaming
         /// Tag for WebSocket-related tasks.
         public const string WebSocket = "ws";
 
+        /// Tag for datagram (NDP over UDP) tasks.
+        public const string Datagram = "dgram";
+
         /// Tag for generic network tasks.
         public const string Net = "net";
 
