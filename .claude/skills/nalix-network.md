@@ -72,7 +72,7 @@
 - **Creating sessions on disconnect is wrong**: Sessions must be created at `CLIENT_FINISH`. Creating them at disconnect loses the session data needed for zero-RTT resume before any disconnect can occur.
 
 - **Datagram drops are silent**: unauthenticated and replayed datagrams are discarded without logging. Monitor `DatagramListener.Metrics` (malformed / unknown-CID / unauthenticated drops, guard rejections) and `DatagramConnection.EngineReport`.
-- **Datagram timers run on `DatagramTimingWheel` (1 ms tick, one per listener), not `TimingWheel`**: the TCP wheel ticks once a second and only disconnects idle connections; ACK delay, PTO and pacing need millisecond deadlines and a callback into the engine. `Internal/Datagram/DatagramSessionDriver` sends outside the engine lock, so never call `DatagramListener.SendTo` while holding it.
+- **Datagram timers run on `DatagramTimingWheel` (1 ms tick, one per listener), not `TimingWheel`**: the TCP wheel ticks once a second and only disconnects idle connections; ACK delay, PTO and pacing need millisecond deadlines and a callback into the engine. `Internal/Datagram/DatagramSocketConnection` sends outside the engine lock, so never call `DatagramListener.SendTo` while holding it.
 - **Datagram sessions go through `IConnectionGuard`**: a session takes a per-IP slot when its first datagram authenticates (not at ticket issue) and releases it on close.
 
 - **`SpinLock` protection**: `ConnectionLimitEntry` uses a standard `Queue<long>` (not a thread-safe `ConcurrentQueue`). Always acquire the `SpinLock` before reading/modifying any tracking info or queue timestamps to prevent race conditions.

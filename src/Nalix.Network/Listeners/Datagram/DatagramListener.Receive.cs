@@ -142,7 +142,7 @@ public sealed partial class DatagramListener
 
         ticket.ClearSecret();
 
-        IPEndPoint remote = DatagramSessionDriver.ToEndPoint(from);
+        IPEndPoint remote = DatagramSocketConnection.ToEndPoint(from);
         if (_guard is not null && !_guard.TryAccept(remote))
         {
             this.Metrics.RECORD_GUARD_REJECTION();

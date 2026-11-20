@@ -24,13 +24,13 @@ public sealed partial class DatagramConnection : IDatagramTransport
     private static readonly SequenceCounter s_detachedSequence = new();
 
     private DatagramListener _listener;
-    private DatagramSessionDriver _driver;
+    private DatagramSocketConnection _socket;
     private DeliveryView?[] _views = [];
 
     /// <summary>Gets the session statistics of the protocol engine.</summary>
-    public string EngineReport => _driver.Report;
+    public string EngineReport => _socket.Report;
 
-    internal bool IsEstablished => _driver.IsEstablished;
+    internal bool IsEstablished => _socket.IsEstablished;
 
     private SequenceCounter SendSequenceCounter => Volatile.Read(ref _backing)?.SendSequence ?? s_detachedSequence;
 
@@ -120,18 +120,18 @@ public sealed partial class DatagramConnection : IDatagramTransport
 
     #region Engine
 
-    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(_listener), nameof(_driver))]
+    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(_listener), nameof(_socket))]
     private void InitializeTransport(DatagramListener listener, IDatagramProtection protection, DatagramEngineOptions options)
     {
         _listener = listener;
-        _driver = new DatagramSessionDriver(this, listener, listener.TimingWheel, protection, options, this.DatagramConnectionId);
+        _socket = new DatagramSocketConnection(this, listener, listener.TimingWheel, protection, options, this.DatagramConnectionId);
     }
 
     /// <summary>Processes a datagram routed to this session by the listener.</summary>
     /// <returns><see langword="true"/> when it authenticated.</returns>
     internal bool OnDatagram(ReadOnlySpan<byte> datagram, SocketAddress from)
     {
-        if (!_driver.Receive(datagram, from, out IPEndPoint? firstPath))
+        if (!_socket.Receive(datagram, from, out IPEndPoint? firstPath))
         {
             return false;
         }
@@ -151,7 +151,7 @@ public sealed partial class DatagramConnection : IDatagramTransport
 
     private void SendCore(ReadOnlySpan<byte> message, DeliveryMethod method, byte channel)
     {
-        if (!_driver.TrySend(message, method, channel, out bool closed))
+        if (!_socket.TrySend(message, method, channel, out bool closed))
         {
             throw new NetworkException(closed
                 ? "The datagram session is closed."
@@ -161,11 +161,11 @@ public sealed partial class DatagramConnection : IDatagramTransport
         this.TriggerPostProcessEvent();
     }
 
-    private void CloseEngine(string? reason) => _driver.Close(reason);
+    private void CloseEngine(string? reason) => _socket.Close(reason);
 
     private void DisposeTransport()
     {
-        _driver.Dispose();
+        _socket.Dispose();
         _listener.OnConnectionClosed(this);
     }
 
