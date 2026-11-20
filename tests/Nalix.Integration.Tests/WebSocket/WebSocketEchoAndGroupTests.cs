@@ -62,6 +62,10 @@ public sealed class WebSocketEchoAndGroupTests : IDisposable
         {
             FrameProcessor = new DeepFrameProcessor(this);
             this.SetConnectionAcceptance(true);
+
+            // The default closes the connection after every message the server sends, so a second multicast raced
+            // the close of the first one's recipients.
+            this.KeepConnectionOpen = true;
         }
 
         public override void ProcessMessage(object? sender, IConnectionEventArgs args)
