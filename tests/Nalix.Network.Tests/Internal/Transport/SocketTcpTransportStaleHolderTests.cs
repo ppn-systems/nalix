@@ -15,7 +15,7 @@ using Xunit;
 namespace Nalix.Network.Tests.Internal.Transport;
 
 /// <summary>
-/// Regression: <see cref="Connection.TCP"/> returns a pooled <c>SocketTcpTransport</c>. A caller that kept that
+/// Regression: <see cref="Connection.Transport"/> returns a pooled <c>SocketTcpTransport</c>. A caller that kept that
 /// reference after the connection closed could send through it once the instance was re-rented to another
 /// connection, injecting bytes into that connection's stream.
 /// </summary>
@@ -116,7 +116,7 @@ public sealed class SocketTcpTransportStaleHolderTests : IDisposable
         peer = client;
         Connection connection = new(server, new DummyOpCodeExtractor());
         _connections.Add(connection);
-        return connection.TCP;
+        return connection.Transport;
     }
 
     private sealed class DummyOpCodeExtractor : IOpCodeExtractor

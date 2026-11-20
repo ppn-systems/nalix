@@ -94,7 +94,7 @@ public sealed class SocketConnectionFragmentAuthorizationTests
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.MessageProcessing += (_, args) => processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []);
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
         await scope.ClientSocket.SendAsync(CreateFrame(CreateFragmentPayload(streamId: 2, chunkIndex: 0, totalChunks: 2, isLast: false, [9, 8, 7])));
         await scope.ClientSocket.SendAsync(CreateFrame(CreateFragmentPayload(streamId: 2, chunkIndex: 1, totalChunks: 2, isLast: true, [6, 5, 4])));
 
@@ -121,7 +121,7 @@ public sealed class SocketConnectionFragmentAuthorizationTests
             dispatched.Enqueue(payload);
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
         foreach (byte[] frame in frames)
         {
             await scope.ClientSocket.SendAsync(frame);

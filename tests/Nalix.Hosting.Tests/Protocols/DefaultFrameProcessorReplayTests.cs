@@ -89,7 +89,7 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
                 }
             }
 
-            Assert.Equal(10u, connection.TCP.ReceiveSequence.Current());
+            Assert.Equal(10u, connection.Transport.ReceiveSequence.Current());
 
             // 2. Process out-of-order packet with seq = 8 (rejected when TcpWindow == 0).
             // Because IsValid(8, window: 0) returns false, UpdateTo(8) must NOT be called in finally!
@@ -109,7 +109,7 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
                 }
             }
 
-            Assert.True(connection.TCP.ReceiveSequence.IsValid(8u, window: 32));
+            Assert.True(connection.Transport.ReceiveSequence.IsValid(8u, window: 32));
         }
         finally
         {

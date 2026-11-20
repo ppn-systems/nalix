@@ -37,15 +37,15 @@ public sealed class ConnectionSendLockScopeTests : IDisposable
     public async Task DisposeAsync_WhenCalledTwice_ReleasesTheLockOnce()
     {
         Connection connection = CreateConnection();
-        IAsyncDisposable scope = await connection.TCP.AcquireSendLockAsync();
+        IAsyncDisposable scope = await connection.Transport.AcquireSendLockAsync();
 
         await scope.DisposeAsync();
         await scope.DisposeAsync();
 
-        ValueTask<IAsyncDisposable> next = connection.TCP.AcquireSendLockAsync();
+        ValueTask<IAsyncDisposable> next = connection.Transport.AcquireSendLockAsync();
         next.IsCompletedSuccessfully.Should().BeTrue("the first release made the lock available");
 
-        ValueTask<IAsyncDisposable> blocked = connection.TCP.AcquireSendLockAsync();
+        ValueTask<IAsyncDisposable> blocked = connection.Transport.AcquireSendLockAsync();
         blocked.IsCompleted.Should().BeFalse("a second release must not have freed a lock that the next holder still owns");
 
         await (await next.ConfigureAwait(false)).DisposeAsync();
@@ -68,7 +68,7 @@ public sealed class ConnectionSendLockScopeTests : IDisposable
     {
         Connection connection = CreateConnection();
 
-        IAsyncDisposable scope = await connection.TCP.AcquireSendLockAsync();
+        IAsyncDisposable scope = await connection.Transport.AcquireSendLockAsync();
         await scope.DisposeAsync();
 
         scope.Should().NotBeSameAs(connection, "disposing the send-lock scope must never be confused with disposing the connection");

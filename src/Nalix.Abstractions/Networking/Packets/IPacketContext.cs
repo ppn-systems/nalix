@@ -52,7 +52,7 @@ public interface IPacketContext<TPacket> : IPoolable where TPacket : IPacket
     /// <summary>
     /// Gets a sender that automatically applies encryption/compression
     /// based on the current handler's attributes.
-    /// Use this instead of calling connection.TCP.SendAsync() directly.
+    /// Use this instead of calling connection.Transport.SendAsync() directly.
     /// </summary>
     IPacketSender Sender { get; }
 

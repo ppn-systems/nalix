@@ -10,9 +10,21 @@ namespace Nalix.Abstractions.Networking;
 public partial interface IConnection
 {
     /// <summary>
-    /// Gets the Transmission CONTROL number (TCP) transmission interface.
+    /// Gets the primary transport of this connection (the TCP stream or the WebSocket).
     /// For socket-based connections, cast to <see cref="ISocketTransport"/> for direct socket access.
     /// </summary>
+    /// <remarks>
+    /// The default implementation returns <see cref="TCP"/>, so existing implementations keep working.
+    /// </remarks>
+#pragma warning disable CS0618 // Default implementation forwards to the obsolete alias until it is removed.
+    ITransport Transport => this.TCP;
+#pragma warning restore CS0618
+
+    /// <summary>
+    /// Gets the primary transport of this connection.
+    /// For socket-based connections, cast to <see cref="ISocketTransport"/> for direct socket access.
+    /// </summary>
+    [Obsolete("Use Transport instead. TCP will be removed in the next major version.")]
     ITransport TCP { get; }
 
     /// <summary>

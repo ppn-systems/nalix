@@ -78,7 +78,7 @@ public sealed class SocketConnectionFramingAdversarialTests
         };
         connection.ConnectionClosed += (_, _) => closed.TrySetResult(true);
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         // Zero-length prefix bytes, then a valid frame right after.
         byte[] zeroPrefix = [0x00, 0x00];
@@ -113,7 +113,7 @@ public sealed class SocketConnectionFramingAdversarialTests
         connection.MessageProcessing += (_, _) => { };
         connection.ConnectionClosed += (_, _) => closedOrIdle.TrySetResult(true);
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         // Declare a 65535-byte frame (max representable by ushort) but only send the 2-byte prefix.
         byte[] maxPrefix = [0xFF, 0xFF];
@@ -156,7 +156,7 @@ public sealed class SocketConnectionFramingAdversarialTests
             { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         for (int offset = 0; offset < frame.Length; offset += chunkSize)
         {
@@ -201,7 +201,7 @@ public sealed class SocketConnectionFramingAdversarialTests
             }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
         await scope.ClientSocket.SendAsync(coalesced);
 
         await gotBoth.Task.WaitAsync(TimeSpan.FromSeconds(15));
@@ -239,7 +239,7 @@ public sealed class SocketConnectionFramingAdversarialTests
             }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
         byte[] combined1 = [.. validFrame, .. truncatedSentPart];
         await scope.ClientSocket.SendAsync(combined1);
 
@@ -270,7 +270,7 @@ public sealed class SocketConnectionFramingAdversarialTests
             { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
         byte[] combined2 = [.. validFrame, .. garbage];
         await scope.ClientSocket.SendAsync(combined2);
 
@@ -377,7 +377,7 @@ public sealed class SocketConnectionFramingAdversarialTests
 
         connection.MessageProcessing += (_, _) => { };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         // Send only a partial frame (declared length 10, but only 2 payload bytes delivered), then
         // half-close the client's send side.

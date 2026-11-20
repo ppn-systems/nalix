@@ -255,7 +255,7 @@ public sealed class PacketSender : IPacketSender
             return t switch
             {
                 NetworkTransport.UDP => connection.UDP ?? throw new InvalidOperationException("UDP companion transport is not created on this connection."),
-                NetworkTransport.TCP or NetworkTransport.WEBSOCKET or _ => connection.TCP
+                NetworkTransport.TCP or NetworkTransport.WEBSOCKET or _ => connection.Transport
             };
         }
 
@@ -265,7 +265,7 @@ public sealed class PacketSender : IPacketSender
             return connection.UDP;
         }
 
-        return connection.TCP;
+        return connection.Transport;
     }
 
     private IConnection GET_CONNECTION_OR_THROW()

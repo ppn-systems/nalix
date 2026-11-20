@@ -162,7 +162,11 @@ public sealed partial class Connection :
     public string? UserId { get; set; }
 
     /// <inheritdoc/>
-    public IConnection.ITransport TCP => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(Connection));
+    public IConnection.ITransport Transport => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(Connection));
+
+    /// <inheritdoc/>
+    [Obsolete("Use Transport instead. TCP will be removed in the next major version.")]
+    public IConnection.ITransport TCP => this.Transport;
 
     /// <inheritdoc/>
     public IConnection.ITransport? UDP => Volatile.Read(ref _backing)?.UdpTransport;

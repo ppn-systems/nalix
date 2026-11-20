@@ -233,7 +233,7 @@ public static partial class ConnectionExtensions
         public ValueTask SendAsync(IConnection connection, ref BroadcastState state, CancellationToken ct)
         {
             IConnection.ITransport? targetTransport =
-                state.Transport == NetworkTransport.UDP ? connection.UDP : connection.TCP;
+                state.Transport == NetworkTransport.UDP ? connection.UDP : connection.Transport;
 
             if (targetTransport is null)
             {

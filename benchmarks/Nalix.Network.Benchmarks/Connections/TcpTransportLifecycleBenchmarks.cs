@@ -13,7 +13,7 @@ namespace Nalix.Network.Benchmarks.Connections;
 
 /// <summary>
 /// Cost of the TCP transport lifecycle: creating and disposing a <see cref="Connection"/>, and the steady-state
-/// send path through <see cref="Connection.TCP"/> (which must stay allocation-free per send).
+/// send path through <see cref="Connection.Transport"/> (which must stay allocation-free per send).
 /// </summary>
 [Config(typeof(NalixBenchmarkConfig))]
 public class TcpTransportLifecycleBenchmarks
@@ -134,12 +134,12 @@ public class TcpTransportLifecycleBenchmarks
     [Benchmark]
     public void Send_Steady()
     {
-        _sendConnection.TCP.Send(Payload);
+        _sendConnection.Transport.Send(Payload);
     }
 
     [Benchmark]
     public ValueTask SendAsync_Steady()
     {
-        return _sendConnection.TCP.SendAsync(Payload);
+        return _sendConnection.Transport.SendAsync(Payload);
     }
 }

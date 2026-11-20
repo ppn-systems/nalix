@@ -127,10 +127,10 @@ public sealed class SessionPersistenceObserver : IDisposable
             this.IsUdpCreated = source.IsUdpCreated;
             _secret = source.Secret;
 
-            uint tcpSend = source.TCP is not null ? source.TCP.SendSequence.Current() : 0;
-            uint tcpRecv = source.TCP is not null ? source.TCP.ReceiveSequence.Current() : 0;
-            TransportFraming tcpFraming = source.TCP is not null ? source.TCP.Framing : TransportFraming.UInt16LengthPrefixed;
-            this.TCP = new SnapshotTransport(tcpSend, tcpRecv, tcpFraming);
+            uint tcpSend = source.Transport is not null ? source.Transport.SendSequence.Current() : 0;
+            uint tcpRecv = source.Transport is not null ? source.Transport.ReceiveSequence.Current() : 0;
+            TransportFraming tcpFraming = source.Transport is not null ? source.Transport.Framing : TransportFraming.UInt16LengthPrefixed;
+            this.Transport = new SnapshotTransport(tcpSend, tcpRecv, tcpFraming);
 
             if (source.IsUdpCreated && source.UDP is not null)
             {
@@ -176,7 +176,8 @@ public sealed class SessionPersistenceObserver : IDisposable
         }
         public PermissionLevel Level { get; set; }
         public CipherSuiteType Algorithm { get; set; }
-        public IConnection.ITransport TCP { get; }
+        public IConnection.ITransport Transport { get; }
+        public IConnection.ITransport TCP => this.Transport;
         public IConnection.ITransport? UDP { get; }
 
 #pragma warning disable CS0067

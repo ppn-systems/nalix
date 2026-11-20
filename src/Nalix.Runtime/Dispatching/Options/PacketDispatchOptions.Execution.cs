@@ -429,7 +429,7 @@ public sealed partial class PacketDispatchOptions<TPacket>
     {
         if (context.IsReliable || context.Connection.UDP is null)
         {
-            await context.Connection.TCP.SendAsync(data).ConfigureAwait(false);
+            await context.Connection.Transport.SendAsync(data).ConfigureAwait(false);
         }
         else
         {

@@ -51,7 +51,7 @@ public sealed class SocketConnectionDisposeTests : IDisposable
         Task pending = null!;
         for (int i = 0; i < 10_000 && pending is null; i++)
         {
-            ValueTask vt = connection.TCP.SendAsync(payload);
+            ValueTask vt = connection.Transport.SendAsync(payload);
             if (!vt.IsCompleted)
             {
                 pending = vt.AsTask();

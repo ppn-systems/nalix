@@ -126,7 +126,11 @@ public sealed partial class WebSocketConnection :
     public IOpCodeExtractor PacketClassifier { get; }
 
     /// <inheritdoc/>
-    public IConnection.ITransport TCP => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(WebSocketConnection));
+    public IConnection.ITransport Transport => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(WebSocketConnection));
+
+    /// <inheritdoc/>
+    [Obsolete("Use Transport instead. TCP will be removed in the next major version.")]
+    public IConnection.ITransport TCP => this.Transport;
 
     /// <inheritdoc/>
     public IConnection.ITransport? UDP => null;

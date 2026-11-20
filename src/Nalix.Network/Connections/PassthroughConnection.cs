@@ -305,7 +305,11 @@ public sealed class PassthroughConnection :
     #region TCP — Not Supported
 
     /// <inheritdoc />
-    public IConnection.ITransport TCP => throw new NotSupportedException("Passthrough connections have no TCP transport.");
+    public IConnection.ITransport Transport => throw new NotSupportedException("Passthrough connections have no TCP transport.");
+
+    /// <inheritdoc />
+    [Obsolete("Use Transport instead. TCP will be removed in the next major version.")]
+    public IConnection.ITransport TCP => this.Transport;
 
     #endregion TCP — Not Supported
 

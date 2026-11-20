@@ -140,9 +140,9 @@ public static partial class ConnectionExtensions
         IConnection.ITransport activeTransport = transport switch
         {
             NetworkTransport.UDP => connection.UDP ?? throw new InvalidOperationException("UDP companion transport is not created on this connection."),
-            NetworkTransport.TCP => connection.TCP,
-            NetworkTransport.WEBSOCKET => connection.TCP,
-            _ => connection.TCP
+            NetworkTransport.TCP => connection.Transport,
+            NetworkTransport.WEBSOCKET => connection.Transport,
+            _ => connection.Transport
         };
 
         return PacketSender.SEND_CORE_ASYNC(connection, activeTransport, packet, enableEncrypt, ct);

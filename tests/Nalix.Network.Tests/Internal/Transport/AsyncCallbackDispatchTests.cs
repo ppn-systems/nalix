@@ -110,7 +110,7 @@ public sealed class AsyncCallbackDispatchTests
 
         TransportAsyncCallback.ResetStatistics();
 
-        connection.TCP.Send([7, 8, 9, 10]);
+        connection.Transport.Send([7, 8, 9, 10]);
 
         byte[] receivedFrame = new byte[32];
         int bytesRead = await clientSocket.ReceiveAsync(receivedFrame, SocketFlags.None);

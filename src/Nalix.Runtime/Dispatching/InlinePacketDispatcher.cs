@@ -72,7 +72,7 @@ public sealed class InlinePacketDispatcher
             return;
         }
 
-        if (connection.TCP.Framing == TransportFraming.UInt16LengthPrefixed && (uint)lease.Length < PacketConstants.HeaderSize)
+        if (connection.Transport.Framing == TransportFraming.UInt16LengthPrefixed && (uint)lease.Length < PacketConstants.HeaderSize)
         {
             lease.Dispose();
             connection.IncrementErrorCount();

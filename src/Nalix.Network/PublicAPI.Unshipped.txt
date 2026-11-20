@@ -5,3 +5,6 @@ Nalix.Network.Options.ConnectionGuardOptions.ErrorWindow.get -> System.TimeSpan
 Nalix.Network.Options.ConnectionGuardOptions.ErrorWindow.set -> void
 Nalix.Network.Options.NetworkWebSocketOptions.DevOpsBearerToken.get -> string!
 Nalix.Network.Options.NetworkWebSocketOptions.DevOpsBearerToken.set -> void
+Nalix.Network.Connections.Connection.Transport.get -> Nalix.Abstractions.Networking.IConnection.ITransport!
+Nalix.Network.Connections.PassthroughConnection.Transport.get -> Nalix.Abstractions.Networking.IConnection.ITransport!
+Nalix.Network.Connections.WebSocketConnection.Transport.get -> Nalix.Abstractions.Networking.IConnection.ITransport!

@@ -220,8 +220,8 @@ public static partial class SystemControlHandlers
         connection.Secret = HandshakeX25519.DeriveRekeySecret(connection.Secret);
 
         // Reset the sequence counters to prevent overflow
-        connection.TCP.SendSequence.Reset();
-        connection.TCP.ReceiveSequence.Reset();
+        connection.Transport.SendSequence.Reset();
+        connection.Transport.ReceiveSequence.Reset();
 
         if (connection.IsUdpCreated)
         {

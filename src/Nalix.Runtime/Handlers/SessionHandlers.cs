@@ -96,8 +96,8 @@ public static partial class SessionHandlers
         // The session key is restored from the snapshot, so the sequence state must be restored with it.
         // Restarting at 0 would let frames recorded before the resume pass the receive check again.
         ConnectionSequenceState seqState = connection.GetSequenceState();
-        connection.TCP.SendSequence.Reset(seqState.TcpSendSequence);
-        RestoreReceiveSequence(connection.TCP.ReceiveSequence, seqState.TcpReceiveSequence);
+        connection.Transport.SendSequence.Reset(seqState.TcpSendSequence);
+        RestoreReceiveSequence(connection.Transport.ReceiveSequence, seqState.TcpReceiveSequence);
 
         // UDP is keyed by the new ConnectionId (the datagram session token), so it always starts a fresh
         // transport and replay window. The snapshot's UDP counters belong to the old binding and must not

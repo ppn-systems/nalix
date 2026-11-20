@@ -130,7 +130,7 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
         if (current.IsReliable)
         {
             window = _sequenceOptions.TcpWindow;
-            counter = args.Connection.TCP.ReceiveSequence;
+            counter = args.Connection.Transport.ReceiveSequence;
 
         }
         else

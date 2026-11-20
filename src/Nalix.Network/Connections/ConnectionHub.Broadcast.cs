@@ -472,7 +472,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
         }
 
         IConnection.ITransport? targetTransport =
-            transport == NetworkTransport.UDP ? connection.UDP : connection.TCP;
+            transport == NetworkTransport.UDP ? connection.UDP : connection.Transport;
 
         if (targetTransport is null)
         {
@@ -610,7 +610,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
                     continue;
                 }
 
-                IConnection.ITransport? targetTransport = transport == NetworkTransport.UDP ? connection.UDP : connection.TCP;
+                IConnection.ITransport? targetTransport = transport == NetworkTransport.UDP ? connection.UDP : connection.Transport;
                 if (targetTransport == null)
                 {
                     continue;
@@ -675,7 +675,7 @@ public sealed partial class ConnectionHub : IConnectionBroadcaster
 
                 IConnection connection = snapshot[i];
 
-                IConnection.ITransport? targetTransport = transport == NetworkTransport.UDP ? connection.UDP : connection.TCP;
+                IConnection.ITransport? targetTransport = transport == NetworkTransport.UDP ? connection.UDP : connection.Transport;
                 if (targetTransport == null)
                 {
                     continue;
