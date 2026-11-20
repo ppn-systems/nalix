@@ -407,6 +407,7 @@ public abstract partial class WebSocketListenerBase
             {
                 connection.ConnectionClosed += this.HandleConnectionClose;
                 connection.ConnectionClosed += _limiter.OnConnectionClosed;
+                this.TrackLiveConnection(connection);
                 _ = System.Threading.Interlocked.Exchange(ref state.LimiterSlotReleased, 1);
                 connection.MessageProcessed += _protocol.PostProcessMessage;
                 connection.MessageProcessing += _protocol.FrameProcessor.ProcessFrame;

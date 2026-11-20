@@ -313,7 +313,7 @@ public class WebSocketSession : TransportSession
         }
     }
 
-    private async Task DisconnectInternalAsync(ClientWebSocket? expectedSocket = null, bool waitForLoop = false, bool raiseDisconnected = true)
+    private async Task DisconnectInternalAsync(ClientWebSocket? expectedSocket = null, bool waitForLoop = false, bool raiseDisconnected = true, Exception? cause = null)
     {
         ClientWebSocket? socket;
         CancellationTokenSource? loopCts;
@@ -381,7 +381,10 @@ public class WebSocketSession : TransportSession
             socket.Dispose();
             this.StopKeepAlive();
 
-            NetworkException disconnectEx = new("The WebSocket session was disconnected.");
+            // Keep the transport's reason (for example the server's close status) so in-flight requests can see why.
+            NetworkException disconnectEx = cause is null
+                ? new("The WebSocket session was disconnected.")
+                : new("The WebSocket session was disconnected.", cause);
             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Disconnected))
             {
                 DiagnosticsEvents.Write(DiagnosticsEvents.Session.Disconnected, new DiagnosticLog("SDK.WebSocketSession:Disconnect", "disconnected"));
@@ -550,7 +553,7 @@ public class WebSocketSession : TransportSession
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually
         // an unexpected fault.
-        _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket, raiseDisconnected: !this.IsDisconnectSuppressed);
+        _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket, raiseDisconnected: !this.IsDisconnectSuppressed, cause: ex);
     }
 
     private void HandleReceiveMessage([Borrowed] IBufferLease lease)

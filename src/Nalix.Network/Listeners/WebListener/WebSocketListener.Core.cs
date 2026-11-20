@@ -3,8 +3,10 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,6 +16,7 @@ using Nalix.Abstractions.Networking;
 using Nalix.Environment.Configuration;
 using Nalix.Framework.Injection;
 using Nalix.Framework.Tasks;
+using Nalix.Network.Connections;
 using Nalix.Network.Internal.WebSockets;
 using Nalix.Network.Listeners.Tcp;
 using Nalix.Network.Options;
@@ -49,6 +52,15 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
     private readonly Lock _wsUpgradeLock = new();
     private readonly ConcurrentStack<SocketAsyncEventArgs> _wsReceiveArgsPool = new();
 
+    // The upgraded connections of this listener, so shutdown can close each one with a close frame.
+    private readonly ConcurrentDictionary<WebSocketConnection, byte> _liveConnections = new();
+    private readonly EventHandler<IConnectionEventArgs> _onLiveConnectionClosed;
+
+    /// <summary>Upper bound for shutdown to wait on the closing handshakes of the live connections.</summary>
+    private static readonly TimeSpan s_shutdownCloseTimeout = TimeSpan.FromSeconds(3);
+
+    private const string ShutdownCloseReason = "Server shutting down";
+
     #endregion Fields
 
     #region Constructors
@@ -73,6 +85,7 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
         _wsconfig.Validate();
         _versionResponseBytes = this.BUILD_VERSION_RESPONSE_BYTES();
         _handshakeTimeoutTicks = (long)(_wsconfig.HandshakeTimeoutMs / 1000.0 * Stopwatch.Frequency);
+        _onLiveConnectionClosed = this.OnLiveConnectionClosed;
         this.REGISTER_DEFAULT_DEVOPS_ROUTES();
     }
 
@@ -94,6 +107,7 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
         _wsconfig.Validate();
         _versionResponseBytes = this.BUILD_VERSION_RESPONSE_BYTES();
         _handshakeTimeoutTicks = (long)(_wsconfig.HandshakeTimeoutMs / 1000.0 * Stopwatch.Frequency);
+        _onLiveConnectionClosed = this.OnLiveConnectionClosed;
         this.REGISTER_DEFAULT_DEVOPS_ROUTES();
     }
 
@@ -162,8 +176,14 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Live connections are closed first with a <see cref="WebSocketCloseStatus.EndpointUnavailable"/> (1001) close
+    /// frame, before the listener's cancellation would drop their sockets.
+    /// </remarks>
     public override void Deactivate(CancellationToken cancellationToken = default)
     {
+        this.CLOSE_LIVE_CONNECTIONS();
+
         base.Deactivate(cancellationToken);
 
         // Disposing the handle only cancels it; CancelRecurring also frees the name so the listener can be
@@ -186,6 +206,39 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
         }
 
         base.Dispose(disposing);
+    }
+
+    internal void TrackLiveConnection(WebSocketConnection connection)
+    {
+        _ = _liveConnections.TryAdd(connection, 0);
+        connection.ConnectionClosed += _onLiveConnectionClosed;
+    }
+
+    private void OnLiveConnectionClosed(object? sender, IConnectionEventArgs args)
+    {
+        if (sender is WebSocketConnection connection)
+        {
+            _ = _liveConnections.TryRemove(connection, out _);
+        }
+    }
+
+    private void CLOSE_LIVE_CONNECTIONS()
+    {
+        if (_liveConnections.IsEmpty)
+        {
+            return;
+        }
+
+        List<Task> closing = [];
+        foreach (WebSocketConnection connection in _liveConnections.Keys)
+        {
+            closing.Add(connection.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, ShutdownCloseReason));
+        }
+
+        _liveConnections.Clear();
+
+        // Each closing handshake is bounded on its own; this only stops shutdown from waiting on them forever.
+        _ = Task.WhenAll(closing).Wait(s_shutdownCloseTimeout);
     }
 
     #endregion Lifecycle
