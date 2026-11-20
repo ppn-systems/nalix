@@ -1,107 +1,16 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System;
 using Nalix.Abstractions.Networking.Datagrams;
+using Nalix.Environment.Datagrams.Wire;
 using Nalix.Environment.Fragments;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Options;
 
-namespace Nalix.Environment.Datagrams;
-
-/// <summary>
-/// Properties of <see cref="DeliveryMethod"/> values used by the engine.
-/// </summary>
-internal static class DeliveryMethodExtensions
-{
-    public static bool IsReliable(this DeliveryMethod method) => method >= DeliveryMethod.ReliableUnordered;
-
-    public static bool HasOrderIndex(this DeliveryMethod method)
-        => method is DeliveryMethod.UnreliableSequenced or DeliveryMethod.ReliableOrdered or DeliveryMethod.ReliableSequenced;
-}
-
-/// <summary>
-/// One MESSAGE frame to send: a whole message, or one chunk of a fragmented one.
-/// </summary>
-internal sealed class OutMessage
-{
-    public byte[] Buffer = [];
-    public int Length;
-    public DeliveryMethod Method;
-    public byte Channel;
-    public byte Priority;
-    public ulong ReliableIndex;
-    public bool HasReliableIndex;
-    public ulong OrderIndex;
-    public long EnqueueTime;
-    public MessageGroup? Group;
-
-    /// <summary>The message was sent at least once (its queue bytes were released).</summary>
-    public bool SentOnce;
-
-    public bool Acked;
-
-    public int FrameSize
-    {
-        get
-        {
-            int size = 3 + VarInt.SizeOf((ulong)Length) + Length;
-            if (Method == DeliveryMethod.ReliableUnordered)
-            {
-                size += VarInt.SizeOf(ReliableIndex);
-            }
-
-            if (Method.HasOrderIndex())
-            {
-                size += VarInt.SizeOf(OrderIndex);
-            }
-
-            return size;
-        }
-    }
-}
-
-/// <summary>
-/// A logical message: the unit of flow-control release and of the ACK receipt.
-/// </summary>
-internal sealed class MessageGroup
-{
-    public int Remaining;
-    public long Cost;
-    public byte Channel;
-    public bool Ordered;
-    public bool Charged;
-    public bool Released;
-    public bool Superseded;
-    public TaskCompletionSource<bool>? Receipt;
-}
-
-/// <summary>
-/// A sent datagram awaiting acknowledgement.
-/// </summary>
-internal sealed class SentPacket
-{
-    public ulong PacketNumber;
-    public long TimeSent;
-    public int Size;
-    public bool AckEliciting;
-    public bool InFlight;
-    public bool IsMtuProbe;
-    public bool KeyPhase;
-    public long LargestAckSent = -1;
-    public readonly List<OutMessage> Messages = [];
-
-    public void Reset()
-    {
-        Messages.Clear();
-        LargestAckSent = -1;
-        IsMtuProbe = false;
-        AckEliciting = false;
-        InFlight = false;
-    }
-}
+namespace Nalix.Environment.Datagrams.Reliability;
 
 /// <summary>
 /// Send side of the reliability layer: per-priority queues, retransmission queue, order counters,

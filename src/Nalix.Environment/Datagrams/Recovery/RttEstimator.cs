@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Nalix.Environment.Datagrams;
+namespace Nalix.Environment.Datagrams.Recovery;
 
 /// <summary>
 /// RTT estimation of RFC 9002 §5, in microseconds.

@@ -1,15 +1,15 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System;
 using System.Collections.Generic;
 using System.IO;
+using System;
 using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Environment.Fragments;
 using Nalix.Environment.Memory;
 using Nalix.Environment.Options;
 
-namespace Nalix.Environment.Datagrams;
+namespace Nalix.Environment.Datagrams.Reliability;
 
 /// <summary>
 /// Receive side of the reliability layer: duplicate suppression, per-channel ordering and sequencing,

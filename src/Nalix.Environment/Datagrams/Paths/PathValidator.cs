@@ -1,11 +1,12 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System;
 using System.Net;
+using System;
+using Nalix.Environment.Datagrams.Wire;
 using Nalix.Environment.Random;
 
-namespace Nalix.Environment.Datagrams;
+namespace Nalix.Environment.Datagrams.Paths;
 
 /// <summary>
 /// The peer address on the server and its validation after NAT rebinding or migration (§10 of the NDP draft):

@@ -1,11 +1,11 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System;
 
-namespace Nalix.Environment.Datagrams;
+namespace Nalix.Environment.Datagrams.Wire;
 
 /// <summary>
 /// QUIC variable-length integer (RFC 9000 §16): the two high bits of the first byte select a 1, 2, 4 or

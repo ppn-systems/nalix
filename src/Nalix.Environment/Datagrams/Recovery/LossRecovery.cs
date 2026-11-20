@@ -1,10 +1,11 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
-using System;
 using System.Collections.Generic;
+using System;
+using Nalix.Environment.Datagrams.Wire;
 
-namespace Nalix.Environment.Datagrams;
+namespace Nalix.Environment.Datagrams.Recovery;
 
 /// <summary>
 /// Sent packets awaiting acknowledgement and the loss detection of RFC 9002 §6: a packet is lost when one

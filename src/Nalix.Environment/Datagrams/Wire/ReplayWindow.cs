@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Nalix.Environment.Datagrams;
+namespace Nalix.Environment.Datagrams.Wire;
 
 /// <summary>
 /// Bitmap of the last <see cref="Size"/> received packet numbers. <see cref="IsNew"/> is checked before

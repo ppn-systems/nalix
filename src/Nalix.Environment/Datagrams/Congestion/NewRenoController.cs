@@ -3,30 +3,7 @@
 
 using System;
 
-namespace Nalix.Environment.Datagrams;
-
-/// <summary>
-/// Congestion controller contract, so CUBIC or BBR can be added later.
-/// </summary>
-internal interface ICongestionController
-{
-    long Window { get; }
-
-    long BytesInFlight { get; }
-
-    void OnPacketSent(int size);
-
-    void OnPacketAcked(int size, long timeSent);
-
-    void OnPacketsLost(long lostBytes, long largestLostTimeSent, bool persistentCongestion, long now);
-
-    /// <summary>Removes bytes of a packet that is no longer tracked without signalling congestion (an MTU probe).</summary>
-    void OnPacketDiscarded(int size);
-
-    void OnMtuChanged(int mtu);
-
-    void Reset();
-}
+namespace Nalix.Environment.Datagrams.Congestion;
 
 /// <summary>
 /// NewReno as in RFC 9002 §7 and Appendix B: slow start, congestion avoidance, one reduction per
@@ -112,49 +89,4 @@ internal sealed class NewRenoController : ICongestionController
     }
 
     private static long InitialWindow(int mtu) => Math.Min(10L * mtu, Math.Max(14_720L, 2L * mtu));
-}
-
-/// <summary>
-/// Pacer of RFC 9002 §7.7: sends at <c>1.25 · cwnd / srtt</c> with a burst of up to 10 datagrams.
-/// </summary>
-internal sealed class Pacer
-{
-    private double _tokens;
-    private long _lastUpdate = long.MinValue;
-
-    /// <summary>
-    /// Returns the time at which a datagram of <paramref name="size"/> bytes may be sent; <paramref name="now"/>
-    /// or earlier means immediately.
-    /// </summary>
-    public long NextSendTime(int size, long window, long smoothedRtt, int mtu, long now)
-    {
-        this.Refill(window, smoothedRtt, mtu, now);
-        if (_tokens >= size)
-        {
-            return now;
-        }
-
-        double rate = Rate(window, smoothedRtt);
-        return now + (long)Math.Ceiling((size - _tokens) / rate);
-    }
-
-    public void OnSent(int size) => _tokens -= size;
-
-    private void Refill(long window, long smoothedRtt, int mtu, long now)
-    {
-        double capacity = Math.Min(window, 10L * mtu);
-        if (_lastUpdate == long.MinValue)
-        {
-            _tokens = capacity;
-        }
-        else if (now > _lastUpdate)
-        {
-            _tokens = Math.Min(capacity, _tokens + ((now - _lastUpdate) * Rate(window, smoothedRtt)));
-        }
-
-        _lastUpdate = now;
-    }
-
-    /// <summary>Bytes per microsecond.</summary>
-    private static double Rate(long window, long smoothedRtt) => 1.25 * window / Math.Max(smoothedRtt, 1);
 }

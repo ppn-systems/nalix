@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 
+using Nalix.Environment.Datagrams.Wire;
 using Nalix.Environment.Fragments;
 using Nalix.Environment.Options;
 

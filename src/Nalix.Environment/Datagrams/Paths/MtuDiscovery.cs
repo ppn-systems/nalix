@@ -3,7 +3,7 @@
 
 using Nalix.Environment.Options;
 
-namespace Nalix.Environment.Datagrams;
+namespace Nalix.Environment.Datagrams.Paths;
 
 /// <summary>
 /// Packetization-layer path MTU discovery (RFC 8899): starting at 1200 bytes, padded PING probes try the
