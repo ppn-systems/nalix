@@ -10,6 +10,7 @@
 | :--- | :--- |
 | Session integration | The NDP datagram session **implements `IConnection`** (option A). |
 | Order of work | Keep TCP + today's UDP working; add `IConnection.Transport`, build NDP alongside, remove the old UDP last (major version). |
+| Compatibility of the old UDP path | None required: it is being rebuilt, so its API and wire format may change or break freely (no deprecation period, no old-client support). `IConnection.TCP` → `Transport` still gets an obsolete alias, because it affects every TCP/WebSocket user. |
 | Fragmentation | Reuse `Nalix.Environment.Fragments` (`FragmentHeader`, `FragmentAssembler`). |
 | Old UDP tag (`XxHash32`) | Network only filters cheaply; authenticity is checked above it, in Hosting (§5a). |
 | Traversal | Only the raw passthrough part (`UdpPassthroughListener` + `PassthroughConnection`) moves into `Nalix.Traversal`. The session-bound UDP companion is not moved; it is deleted when NDP replaces it. |
@@ -131,8 +132,8 @@ What has to change for this to be safe:
 4. **Do not penalise the connection for AEAD failures on UDP.** `DefaultFrameProcessor` calls `IncrementErrorCount()` when
    processing fails; forged datagrams for a victim's token would then count against the victim. Count UDP authentication
    failures in metrics only.
-5. **Wire change:** the 4-byte tag disappears, so the SDK `UdpFrameSender`/`UdpFrameReader` change in the same PR. Old
-   clients and new servers (and the reverse) are incompatible on UDP; release notes must say so.
+5. **Wire change:** the 4-byte tag disappears, so the SDK `UdpFrameSender`/`UdpFrameReader` change in the same PR. No
+   compatibility with old clients is kept (decided).
 
 Trade-off: a forged datagram that passes the cheap filters now costs an AEAD open in Hosting instead of a hash in
 Network. An attacker needs the 8-byte token **and** the victim's source address (endpoint pinning), so this is
@@ -149,7 +150,8 @@ Codec.
 1. **`IConnection.Transport`** added; `TCP` becomes an `[Obsolete]` alias. Non-breaking.
 2. **Traversal passthrough** moved into `Nalix.Traversal` (§4). Independent of the rest.
 2a. **Old UDP: authentication moved above Network** (§5a): drop the `XxHash32` tag and the pre-auth replay window,
-    require encryption on UDP frames in `DefaultFrameProcessor`, update the SDK UDP sender/reader.
+    require encryption on UDP frames in `DefaultFrameProcessor`, update the SDK UDP sender/reader. Optional: the old
+    path is deleted at step 6 anyway, so this is only worth doing if NDP is not close.
 3. **NDP contracts + crypto:** `DeliveryMethod`, `IDatagramProtection` (Abstractions); `ChaCha20Poly1305DatagramProtection`,
    public HKDF derivation API, key schedule (Codec).
 4. **NDP engine** in Environment with the network emulator, property tests and known-answer vectors (no sockets).
