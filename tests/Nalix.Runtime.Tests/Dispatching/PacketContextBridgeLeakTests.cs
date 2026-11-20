@@ -120,14 +120,12 @@ public sealed class PacketContextBridgeLeakTests
             timeout: null,
             permission: null,
             encryption: null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
         context.Initialize(
             packet: new TestPacket(),
             connection: new FakeConnection(),
             descriptor: metadata,
-            reliable: true,
             encryptedOnWire: false,
             ownsPacket: true);
 
@@ -147,7 +145,6 @@ public sealed class PacketContextBridgeLeakTests
     private sealed class FakeConnection : IConnection
     {
         public bool IsDisposed { get; private set; }
-        public bool IsUdpCreated => false;
         public ulong ConnectionId => 1;
         public string? UserId { get; set; }
         public long UpTime => 0;
@@ -161,8 +158,7 @@ public sealed class PacketContextBridgeLeakTests
         public PermissionLevel Level { get; set; }
         public CipherSuiteType Algorithm { get; set; }
 
-        public IConnection.ITransport TCP => null!;
-        public IConnection.ITransport? UDP => null;
+        public IConnection.ITransport Transport => null!;
 
         public event EventHandler<IConnectionEventArgs>? ConnectionClosed { add { } remove { } }
         public event EventHandler<IConnectionEventArgs>? MessageProcessing { add { } remove { } }

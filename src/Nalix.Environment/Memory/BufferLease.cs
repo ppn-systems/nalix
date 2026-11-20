@@ -284,7 +284,6 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
         _detached = 0;
         this.Length = 0;
         this.ZeroOnDispose = false;
-        this.IsReliable = false;
         this.EncryptedOnWire = false;
     }
 
@@ -311,9 +310,6 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     /// Gets or sets the valid payload length within the owned slice.
     /// </summary>
     public int Length { get; private set; }
-
-    /// <inheritdoc/>
-    public bool IsReliable { get; set; }
 
     /// <inheritdoc/>
     public bool EncryptedOnWire { get; set; }

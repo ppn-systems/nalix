@@ -712,7 +712,6 @@ public sealed partial class DispatchChannelTests
         public FakeBufferLease(byte[] buffer) => _buffer = buffer;
 
         public int Length => _buffer.Length;
-        public bool IsReliable { get; set; }
         public bool EncryptedOnWire { get; set; }
         public int Capacity => _buffer.Length;
         public Span<byte> Span => _disposed != 0 ? throw new ObjectDisposedException(nameof(FakeBufferLease)) : _buffer;
@@ -735,7 +734,6 @@ public sealed partial class DispatchChannelTests
     private sealed class FakeConnection : IConnection
     {
         public bool IsDisposed { get; set; }
-        public bool IsUdpCreated => false;
         public ulong ConnectionId => 0;
         public string? UserId { get; set; }
         public long UpTime => 0;
@@ -749,8 +747,7 @@ public sealed partial class DispatchChannelTests
         public PermissionLevel Level { get; set; }
         public CipherSuiteType Algorithm { get; set; }
 
-        public IConnection.ITransport TCP => null!;
-        public IConnection.ITransport UDP => null!;
+        public IConnection.ITransport Transport => null!;
 
 #pragma warning disable CS0067
         public event EventHandler<IConnectionEventArgs>? ConnectionClosed;

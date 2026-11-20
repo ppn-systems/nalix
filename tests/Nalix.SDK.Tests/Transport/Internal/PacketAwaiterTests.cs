@@ -47,7 +47,6 @@ public sealed class PacketAwaiterTests
         private readonly byte[] _data;
         public ManualLease(byte[] data) => _data = data;
         public int Length => _data.Length;
-        public bool IsReliable { get; set; }
         public bool EncryptedOnWire { get; set; }
         public int Capacity => _data.Length;
         public Span<byte> Span => _data;

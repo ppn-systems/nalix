@@ -17,7 +17,6 @@ namespace Nalix.Abstractions.Networking.Packets;
 /// <param name="permission">The optional permission requirement.</param>
 /// <param name="encryption">The optional encryption requirement.</param>
 /// <param name="rateLimit">The optional rate limit metadata.</param>
-/// <param name="transport">The optional transport preference metadata.</param>
 /// <param name="customAttributes">Additional custom attributes keyed by attribute type.</param>
 /// <remarks>
 /// The struct is immutable so metadata can be cached and shared safely across dispatch paths.
@@ -31,7 +30,6 @@ public readonly struct PacketMetadata(
     PacketPermissionAttribute? permission,
     PacketEncryptionAttribute? encryption,
     PacketRateLimitAttribute? rateLimit,
-    PacketTransportAttribute? transport,
     IReadOnlyDictionary<Type, Attribute>? customAttributes = null)
 {
     /// <summary>
@@ -59,10 +57,6 @@ public readonly struct PacketMetadata(
     /// </summary>
     public readonly PacketRateLimitAttribute? RateLimit = rateLimit;
 
-    /// <summary>
-    /// Gets the optional transport preference.
-    /// </summary>
-    public readonly PacketTransportAttribute? Transport = transport;
 
     /// <summary>Gets additional custom metadata attributes keyed by attribute type.</summary>
     public readonly IReadOnlyDictionary<Type, Attribute> CustomAttributes = customAttributes

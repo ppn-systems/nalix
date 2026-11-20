@@ -26,8 +26,7 @@ public sealed class PacketHandlerTests
             timeout: null,
             permission: new PacketPermissionAttribute(PermissionLevel.GUEST, PermissionEvaluation.StrictMatch),
             encryption: null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
         object descriptor = CreatePacketHandlerDescriptor(metadata);
         MethodInfo canExecuteMethod = descriptor.GetType().GetMethod("CanExecute", BindingFlags.Instance | BindingFlags.Public)!;
@@ -55,8 +54,7 @@ public sealed class PacketHandlerTests
             timeout: null,
             permission: new PacketPermissionAttribute(PermissionLevel.USER),
             encryption: null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
         object descriptor = CreatePacketHandlerDescriptor(metadata);
         MethodInfo canExecuteMethod = descriptor.GetType().GetMethod("CanExecute", BindingFlags.Instance | BindingFlags.Public)!;
@@ -95,7 +93,7 @@ public sealed class PacketHandlerTests
         {
             context.Initialize(
                 new TestPacket(), connection, descriptor.Metadata,
-                reliable: true, encryptedOnWire: false);
+                encryptedOnWire: false);
 
             bool canExecute = descriptor.CanExecute(context, out ProtocolReason denyReason);
 
@@ -125,7 +123,7 @@ public sealed class PacketHandlerTests
         {
             context.Initialize(
                 new TestPacket(), connection, descriptor.Metadata,
-                reliable: true, encryptedOnWire: true);
+                encryptedOnWire: true);
 
             bool canExecute = descriptor.CanExecute(context, out ProtocolReason denyReason);
 

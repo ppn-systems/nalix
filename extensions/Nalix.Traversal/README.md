@@ -13,7 +13,7 @@ This package is intended for **server hosts**. For client-side packets and utili
 | Feature | Description | Key Concept / Type |
 | :--- | :--- | :--- |
 | 🔌 **Signaling Server** | TCP-based handler that brokers STUN-discovered public IP/Port information between two peers for hole punching. | `PeerSignalHandler`, `PeerSignal` |
-| 📡 **UDP Reflector Relay** | Zero-copy UDP passthrough protocol that forwards datagrams between peers when direct P2P fails. Token-authenticated, bandwidth-limited. | `ReflectorProtocol`, `ReflectorManager`, `ReflectorSession` |
+| 📡 **UDP Reflector Relay** | Raw UDP relay on its own socket that forwards datagrams between peers when direct P2P fails. Token-authenticated, bandwidth-limited. | `ReflectorManager`, `ReflectorSession` |
 | 🔑 **Token-Bucket Rate Limiting** | Per-session byte-level rate limiter (burst + sustained fill rate) preventing relay abuse. | `TokenBucket` |
 | 🧩 **Builder Integration** | Single `UseTraversal()` extension call to register all handlers, options, and the UDP reflector listener. | `TraversalApplicationBuilderExtensions` |
 
@@ -23,7 +23,7 @@ This package is intended for **server hosts**. For client-side packets and utili
 | :--- | :--- | :--- |
 | `Nalix.Traversal` | Root namespace with builder extension methods | `TraversalApplicationBuilderExtensions` |
 | `Nalix.Traversal.Handlers` | Packet handlers for signaling and reflector session allocation | `PeerSignalHandler`, `ReflectorInitHandler` |
-| `Nalix.Traversal.Reflector` | Reflector session management and UDP protocol implementation | `ReflectorManager`, `ReflectorSession`, `ReflectorProtocol` |
+| `Nalix.Traversal.Reflector` | Reflector session management and the UDP relay | `ReflectorManager`, `ReflectorSession` |
 | `Nalix.Traversal.Options` | Configuration schema for the Reflector service | `ReflectorOptions` |
 | `Nalix.Traversal.Internal` | Internal rate-limiting primitives | `TokenBucket` |
 | `Nalix.Traversal.Packets` | Wire-format packet definitions (shared with Contracts) | `PeerSignal`, `NatProbe`, `NatProbeAck`, `ReflectorInit`, `ReflectorAllocated` |

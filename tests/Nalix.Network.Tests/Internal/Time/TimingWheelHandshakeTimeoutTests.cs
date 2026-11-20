@@ -73,7 +73,6 @@ public sealed class TimingWheelHandshakeTimeoutTests
         public IOpCodeExtractor PacketClassifier => null!;
         public long UpTime => 0;
         public long LastPingTime { get; set; } = Clock.UnixMillisecondsNow();
-        public bool IsUdpCreated => false;
         public bool ExcludeFromIdleTimeout { get; set; }
         public IObjectMap<AttributeKey, object> Attributes { get; } = ObjectMap<AttributeKey, object>.Rent();
         public ConcurrentDictionary<ushort, object> RateLimitCache { get; } = new();
@@ -84,8 +83,7 @@ public sealed class TimingWheelHandshakeTimeoutTests
         public long BytesSent => 0;
         public long BytesReceived => 0;
         public long PacketsDropped => 0;
-        public IConnection.ITransport TCP => throw new NotSupportedException();
-        public IConnection.ITransport UDP => throw new NotSupportedException();
+        public IConnection.ITransport Transport => throw new NotSupportedException();
 
         public event EventHandler<IConnectionEventArgs>? ConnectionClosed;
         public event EventHandler<IConnectionEventArgs>? MessageProcessed { add { } remove { } }

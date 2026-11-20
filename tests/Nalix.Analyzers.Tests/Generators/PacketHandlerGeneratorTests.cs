@@ -144,12 +144,12 @@ public sealed class PacketHandlerGeneratorTests
     }
 
     [Fact]
-    public void Generate_TimeoutAndTransport_AreForwarded()
+    public void Generate_TimeoutAndDelivery_AreForwarded()
     {
         string text = GeneratedHandler(Handler(
-            "[PacketTimeout(1500)]\n            [PacketTransport(NetworkTransport.UDP)]"));
+            "[PacketTimeout(1500)]\n            [PacketDelivery(Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.Unreliable, 2)]"));
 
         Assert.Contains("PacketTimeoutAttribute((int)1500)", text);
-        Assert.Contains("PacketTransportAttribute((global::Nalix.Abstractions.Networking.NetworkTransport)", text);
+        Assert.Contains("PacketDeliveryAttribute((global::Nalix.Abstractions.Networking.Datagrams.DeliveryMethod)0, 2)", text);
     }
 }

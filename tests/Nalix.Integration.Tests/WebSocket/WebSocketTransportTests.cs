@@ -64,6 +64,10 @@ public sealed class WebSocketTransportTests : IDisposable
         {
             FrameProcessor = new WebTestFrameProcessor(this);
             this.SetConnectionAcceptance(true);
+
+            // The default closes the connection after every message the server sends: the first echo could be
+            // aborted on the wire and the remaining messages of the multi-message tests never reached the server.
+            this.KeepConnectionOpen = true;
         }
 
         public override void ProcessMessage(object? sender, IConnectionEventArgs args)
@@ -72,7 +76,7 @@ public sealed class WebSocketTransportTests : IDisposable
             // Echo the payload back exactly as received
             if (args.Lease != null && args.Lease.Length > 0)
             {
-                args.Connection.TCP.SendAsync(args.Lease.Memory).AsTask().Wait();
+                args.Connection.Transport.SendAsync(args.Lease.Memory).AsTask().Wait();
             }
         }
     }

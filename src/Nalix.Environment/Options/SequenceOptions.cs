@@ -23,23 +23,7 @@ public sealed partial class SequenceOptions : ConfigurationLoader, IValidatableC
     public uint TcpWindow { get; set; } = 32;
 
     /// <summary>
-    /// Gets or sets the reordering window size for UDP connections.
-    /// UDP can have more reordering/loss, so larger window is recommended.
-    /// </summary>
-    [IniComment("Reordering window for UDP (default: 128). Increase if you have high packet loss/jitter.")]
-    [ValueRange(0, 1024)]
-    public uint UdpWindow { get; set; } = 128;
-
-    /// <summary>
     /// Validates the configuration options.
     /// </summary>
-    public void Validate()
-    {
-        this.ValidateDataAnnotations();
-
-        if (this.UdpWindow < this.TcpWindow)
-        {
-            throw new Nalix.Abstractions.Exceptions.ValidationException("UdpWindow should be greater than or equal to TcpWindow.");
-        }
-    }
+    public void Validate() => this.ValidateDataAnnotations();
 }

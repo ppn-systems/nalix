@@ -1,2 +1,12 @@
 #nullable enable
+Nalix.Hosting.INetworkApplicationBuilder.AddListener(System.Func<Nalix.Abstractions.Networking.IListener!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.AddListener(System.Func<Nalix.Abstractions.Networking.IListener!>! factory) -> Nalix.Hosting.INetworkApplicationBuilder!
+Nalix.Hosting.INetworkApplicationBuilder.MapDatagram<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.NetworkApplicationBuilder.MapDatagram<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+*REMOVED*Nalix.Hosting.INetworkApplicationBuilder.ListenUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+*REMOVED*Nalix.Hosting.INetworkApplicationBuilder.MapUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+*REMOVED*Nalix.Hosting.IProtocolBindingBuilder.WithAuthentication(System.Func<Nalix.Abstractions.Networking.IConnection!, System.Net.EndPoint!, System.ReadOnlySpan<byte>, bool>! authen) -> Nalix.Hosting.IProtocolBindingBuilder!
+*REMOVED*Nalix.Hosting.IProtocolBindingBuilder.WithMode(Nalix.Abstractions.Networking.OperatingMode mode) -> Nalix.Hosting.IProtocolBindingBuilder!
+*REMOVED*Nalix.Hosting.NetworkApplicationBuilder.ListenUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+*REMOVED*Nalix.Hosting.NetworkApplicationBuilder.MapUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
 Nalix.Hosting.Protocols.DefaultFrameProcessor.OnFrameRejected(Nalix.Abstractions.Networking.IConnection! connection, System.ReadOnlySpan<byte> frame) -> void

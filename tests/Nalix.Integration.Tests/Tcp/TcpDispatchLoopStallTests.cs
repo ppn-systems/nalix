@@ -63,7 +63,7 @@ public sealed class TcpDispatchLoopStallTests : IDisposable
     /// <summary>
     /// Plain <see cref="Protocol"/> with nothing overridden — no custom <c>OnAccept</c>,
     /// no custom <c>ValidateConnection</c>. Default <c>OnAccept</c> only calls
-    /// <c>connection.TCP.BeginReceive(...)</c>, which does not await its receive loop, so it
+    /// <c>connection.Transport.BeginReceive(...)</c>, which does not await its receive loop, so it
     /// returns in microseconds.
     /// </summary>
     [Nalix.Abstractions.Injection.Injectable]

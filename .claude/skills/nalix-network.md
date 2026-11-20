@@ -4,7 +4,7 @@
 - Modifying connection lifecycle or per-IP limits
 - Touching rate limiting, ban logic, or flood protection
 - Working with session persistence or zero-RTT resume
-- Adding or changing transport (TCP/UDP/WebSocket) behavior
+- Adding or changing transport (TCP/WebSocket/datagram) behavior
 
 ---
 
@@ -32,8 +32,8 @@
 
 ### Transport Selection
 - TCP: reliable ordered delivery — use for game state, commands, authentication handshake
-- UDP: best-effort unordered — use for position updates, telemetry, time-sensitive events
-- UDP anti-replay: sequence IDs older than the sliding window are **silently dropped** — not counted as errors, not logged by default
+- Datagram (NDP over UDP): pick a `DeliveryMethod` per send/handler — unreliable or sequenced for position updates and telemetry, reliable ordered/unordered for state; channels are independent
+- Datagram anti-replay: every datagram is AEAD-sealed and checked against a 2048-entry packet-number window; forged, duplicate or too-old datagrams are **silently dropped** and never answered
 
 ### Connection State
 - `connection.Secret.IsZero` = connection not yet authenticated — use as pre-auth guard
@@ -55,12 +55,12 @@
 1. After `CLIENT_FINISH`: session is already saved by `HandshakeHandlers.SaveSessionAsync()`
 2. Client sends `SessionResume` frame with token
 3. `ConsumeAsync()` retrieves and removes the session atomically — even a failed resume removes the session
-4. On success: restore TCP/UDP sequence numbers from session attributes
+4. On success: restore the stream sequence numbers from session attributes
 5. On failure: disconnect; do not allow retry with the same token (it is already consumed)
 
 ### Add a new listener
 1. Implement `IListener`
-2. Register via `builder.ListenTcp<TProtocol>()` or `builder.ListenUdp<TProtocol>()`
+2. Register via `builder.MapTcp<TProtocol>()` or `builder.MapDatagram<TProtocol>()`
 3. Wire to a dispatcher — each listener can bind to a specific dispatch channel
 
 ---
@@ -71,7 +71,9 @@
 
 - **Creating sessions on disconnect is wrong**: Sessions must be created at `CLIENT_FINISH`. Creating them at disconnect loses the session data needed for zero-RTT resume before any disconnect can occur.
 
-- **UDP drops are silent**: The anti-replay window silently discards old sequence IDs. Elevated drop rates will not appear in error logs — monitor via the metrics/report endpoint of `ConnectionGuard`.
+- **Datagram drops are silent**: unauthenticated and replayed datagrams are discarded without logging. Monitor `DatagramListener.Metrics` (malformed / unknown-CID / unauthenticated drops, guard rejections) and `DatagramConnection.EngineReport`.
+- **Datagram timers run on `DatagramTimingWheel` (1 ms tick, one per listener), not `TimingWheel`**: the TCP wheel ticks once a second and only disconnects idle connections; ACK delay, PTO and pacing need millisecond deadlines and a callback into the engine. `Internal/Datagram/DatagramSocketConnection` sends outside the engine lock, so never call `DatagramListener.SendTo` while holding it.
+- **Datagram sessions go through `IConnectionGuard`**: a session takes a per-IP slot when its first datagram authenticates (not at ticket issue) and releases it on close.
 
 - **`SpinLock` protection**: `ConnectionLimitEntry` uses a standard `Queue<long>` (not a thread-safe `ConcurrentQueue`). Always acquire the `SpinLock` before reading/modifying any tracking info or queue timestamps to prevent race conditions.
 

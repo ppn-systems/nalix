@@ -16,11 +16,6 @@ public interface IBufferLease : IDisposable
     int Length { get; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the transport protocol (TCP/UDP) associated with this buffer is reliable.
-    /// </summary>
-    bool IsReliable { get; set; }
-
-    /// <summary>
     /// Gets or sets a value indicating whether this frame arrived encrypted on the wire.
     /// Set once by the inbound cipher transforms and preserved across subsequent transforms
     /// (e.g. decompression) so dispatch can audit the frame's on-wire state even after the

@@ -51,16 +51,16 @@ public sealed class ConnectionSequenceAdvanceTests : IDisposable
             valueBeforeStaleCall = backing.SendSequence.Current();
             stale.Dispose();
             newOwner = CreateConnection();
-            reRentedCounter = newOwner.TCP.SendSequence;
+            reRentedCounter = newOwner.Transport.SendSequence;
         };
 
-        _ = ((ITransportSequencer)stale.TCP).NextSendSequence();
+        _ = ((ITransportSequencer)stale.Transport).NextSendSequence();
         Connection.s_afterSequenceCaptureHook = null;
 
         newOwner.Should().NotBeNull();
-        ReferenceEquals(newOwner!.TCP.SendSequence, reRentedCounter).Should().BeTrue(
+        ReferenceEquals(newOwner!.Transport.SendSequence, reRentedCounter).Should().BeTrue(
             "the test must exercise a re-rented backing; otherwise it cannot observe the stale advance");
-        newOwner.TCP.CurrentSendSequence.Should().Be(valueBeforeStaleCall,
+        newOwner.Transport.CurrentSendSequence.Should().Be(valueBeforeStaleCall,
             "a stale connection must not advance the send sequence of the connection that re-rented its backing");
     }
 

@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Net;
 using Nalix.Abstractions.Networking;
 using Nalix.Runtime.Dispatching;
 
@@ -21,34 +20,11 @@ public interface IProtocolBindingBuilder
     IProtocolBindingBuilder OnPort(ushort port);
 
     /// <summary>
-    /// Configures how UDP traffic is handled by the listener.
-    /// </summary>
-    /// <param name="mode">
-    /// The UDP operating mode.
-    /// <see cref="OperatingMode.Server"/> enables session management,
-    /// authentication, and protocol processing.
-    /// <see cref="OperatingMode.Passthrough"/> forwards raw datagrams
-    /// without protocol-level handling.
-    /// </param>
-    /// <returns>
-    /// The current binding builder instance.
-    /// </returns>
-    IProtocolBindingBuilder WithMode(OperatingMode mode);
-
-    /// <summary>
     /// Uses a custom factory to create protocol instances instead of the default activator.
     /// </summary>
     /// <param name="factory">The factory delegate.</param>
     /// <returns>The current builder instance.</returns>
     IProtocolBindingBuilder WithFactory(Func<IPacketDispatch, IProtocol> factory);
-
-    /// <summary>
-    /// Adds a custom authentication predicate for UDP datagrams.
-    /// Only applicable when binding via <see cref="INetworkApplicationBuilder.ListenUdp{TProtocol}()"/>.
-    /// </summary>
-    /// <param name="authen">The authentication predicate.</param>
-    /// <returns>The current builder instance.</returns>
-    IProtocolBindingBuilder WithAuthentication(Func<IConnection, EndPoint, ReadOnlySpan<byte>, bool> authen);
 
     /// <summary>
     /// Finalizes this binding and returns the parent <see cref="INetworkApplicationBuilder"/>

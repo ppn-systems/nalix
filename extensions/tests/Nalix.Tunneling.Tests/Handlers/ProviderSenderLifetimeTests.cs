@@ -45,7 +45,7 @@ public sealed class ProviderSenderLifetimeTests
     private static async Task DispatchAsync(PacketDispatchOptions<IPacket> dispatch, PacketHandler<IPacket> handler, IPacket packet, FakeConnection connection)
     {
         MethodInfo execute = typeof(PacketDispatchOptions<IPacket>).GetMethod("ExecuteResolvedHandlerAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        ValueTask pending = (ValueTask)execute.Invoke(dispatch, [handler, packet, connection, true, false, CancellationToken.None])!;
+        ValueTask pending = (ValueTask)execute.Invoke(dispatch, [handler, packet, connection, false, CancellationToken.None])!;
         await pending;
     }
 

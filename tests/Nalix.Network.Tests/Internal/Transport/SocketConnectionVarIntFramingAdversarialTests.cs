@@ -53,7 +53,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
     private static async Task<Connection> CreateVarIntConnectionAsync(ConnectedSocketScope scope)
     {
         Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
-        connection.TCP.UseFraming(TransportFraming.VarIntLengthPrefixed);
+        connection.Transport.UseFraming(TransportFraming.VarIntLengthPrefixed);
         await Task.CompletedTask;
         return connection;
     }
@@ -80,7 +80,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
         };
         connection.ConnectionClosed += (_, _) => closed.TrySetResult(true);
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         // LEB128 encoding of uint.MaxValue: FF FF FF FF 0F.
         byte[] poisonHeader = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
@@ -111,7 +111,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
         connection.MessageProcessing += (_, _) => { };
         connection.ConnectionClosed += (_, _) => closedOrIdle.TrySetResult(true);
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         const int oneOverMax = 131_072 + 1;
         Span<byte> header = stackalloc byte[Leb128.MaxByteCount];
@@ -141,7 +141,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
         connection.MessageProcessing += (_, _) => { };
         connection.ConnectionClosed += (_, _) => closedOrIdle.TrySetResult(true);
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         // Below MaxPayloadSize (131072) but far above the default receive-buffer ceiling
         // (~32KB chunk size + fragment header + varint header).
@@ -180,7 +180,7 @@ public sealed class SocketConnectionVarIntFramingAdversarialTests
             { processObserved.TrySetResult(args.Lease?.Span.ToArray() ?? []); }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         for (int offset = 0; offset < frame.Length; offset += chunkSize)
         {

@@ -69,7 +69,6 @@ public sealed class ReflectorInitHandler
 
                 await targetConnection.SendAsync(
                     peerBNotification,
-                    NetworkTransport.TCP,
                     enableEncrypt: true,
                     context.CancellationToken).ConfigureAwait(false);
             }

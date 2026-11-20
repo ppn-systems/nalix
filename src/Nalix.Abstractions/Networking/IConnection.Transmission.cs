@@ -10,20 +10,10 @@ namespace Nalix.Abstractions.Networking;
 public partial interface IConnection
 {
     /// <summary>
-    /// Gets the Transmission CONTROL number (TCP) transmission interface.
+    /// Gets the transport of this connection: the TCP stream, the WebSocket, or the datagram session.
     /// For socket-based connections, cast to <see cref="ISocketTransport"/> for direct socket access.
     /// </summary>
-    ITransport TCP { get; }
-
-    /// <summary>
-    /// Gets the UDP companion transport associated with this TCP-backed connection.
-    /// </summary>
-    /// <remarks>
-    /// UDP transport cannot be created as a standalone connection in this model.
-    /// It is initialized from the accepted TCP connection endpoint and is intended
-    /// only for datagram replies or mixed TCP/UDP protocols.
-    /// </remarks>
-    ITransport? UDP { get; }
+    ITransport Transport { get; }
 
     /// <summary>
     /// Represents a transport interface for sending data packets.

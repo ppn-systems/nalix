@@ -25,7 +25,7 @@ namespace Nalix.Network.Connections;
 
 /// <summary>
 /// The WebSocket transport of a <see cref="WebSocketConnection"/>. The connection is its own transport: it is created
-/// once per connection and never pooled, so a caller that kept <see cref="TCP"/> cannot reach a later connection.
+/// once per connection and never pooled, so a caller that kept <see cref="Transport"/> cannot reach a later connection.
 /// Its sequence counters are pooled with the connection's backing; after the connection is disposed every send is a
 /// no-op.
 /// </summary>
@@ -397,7 +397,6 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
 
                     // Rent a lease and copy data so the receive loop can continue immediately
                     BufferLease lease = BufferLease.CopyFrom(new ReadOnlySpan<byte>(buffer, 0, result.Count));
-                    lease.IsReliable = true;
 
                     owner.TriggerProcessEvent(lease);
                 }
@@ -502,7 +501,6 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
             }
 
             BufferLease lease = BufferLease.TakeOwnership(payload, 0, written);
-            lease.IsReliable = true;
 
             owner.TriggerProcessEvent(lease);
 

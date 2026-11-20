@@ -1052,7 +1052,6 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
         string tPermission = "null";
         string tEncryption = "null";
         string tRate = "null";
-        string tTransport = "null";
 
         List<string> customAttributesList = new();
 
@@ -1096,10 +1095,6 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 // Named arguments (PolicyId, HardLockoutSeconds, MaxSoftViolations) carry the shared bucket and lockout policy.
                 tRate = $"new global::Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute({RenderConstructorArguments(a)}){RenderNamedArguments(a)}";
             }
-            else if (name == KnownNames.PacketTransportAttributeMetadataName && a.ConstructorArguments.Length > 0)
-            {
-                tTransport = $"new global::Nalix.Abstractions.Networking.Packets.PacketTransportAttribute((global::Nalix.Abstractions.Networking.NetworkTransport){a.ConstructorArguments[0].Value})";
-            }
             else
             {
                 // Parse and render custom attribute
@@ -1126,7 +1121,6 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 permission: {tPermission},
                 encryption: {tEncryption},
                 rateLimit: {tRate},
-                transport: {tTransport},
                 customAttributes: {customAttributesExpr})";
     }
 

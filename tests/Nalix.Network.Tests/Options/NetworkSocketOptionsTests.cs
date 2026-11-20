@@ -16,10 +16,4 @@ public sealed class NetworkSocketOptionsTests
     {
         new NetworkSocketOptions().ReusePort.Should().BeFalse("port sharing lets another local process of the same user share the listener port");
     }
-
-    [Fact]
-    public void UdpReuseAddress_WhenDefault_IsFalse()
-    {
-        new NetworkSocketOptions().UdpReuseAddress.Should().BeFalse("UDP address sharing lets another local socket receive datagrams");
-    }
 }

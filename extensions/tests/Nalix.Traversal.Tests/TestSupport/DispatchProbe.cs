@@ -38,7 +38,7 @@ internal static class DispatchProbe
         PacketContext<IPacket> context = new();
 
         MethodInfo initialize = typeof(PacketContext<IPacket>).GetMethod("Initialize", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        initialize.Invoke(context, [packet, connection, metadata, true, false, false, CancellationToken.None, null]);
+        initialize.Invoke(context, [packet, connection, metadata, false, false, CancellationToken.None, null]);
 
         return context;
     }

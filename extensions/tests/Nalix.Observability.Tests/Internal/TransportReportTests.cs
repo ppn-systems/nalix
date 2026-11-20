@@ -35,7 +35,7 @@ public sealed class TransportReportTests
     public void WriteReportData_WhenNothingRegistered_WritesEmptyObject()
     {
         _ = ReportRegistry.Instance.Unregister<IListener>(NetworkTransport.TCP);
-        _ = ReportRegistry.Instance.Unregister<IListener>(NetworkTransport.UDP);
+        _ = ReportRegistry.Instance.Unregister<IListener>(NetworkTransport.DATAGRAM);
         _ = ReportRegistry.Instance.Unregister<IListener>(NetworkTransport.WEBSOCKET);
 
         using JsonDocument document = ReportJson.Capture(TransportReport<IListener>.Instance);

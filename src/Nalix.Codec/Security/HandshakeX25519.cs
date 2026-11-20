@@ -25,52 +25,6 @@ public static class HandshakeX25519
 
     #endregion Static Labels
 
-    #region HKDF-Keccak256 Helpers (RFC 5869)
-
-    private static class Hkdf
-    {
-        /// <summary>
-        /// HKDF-Extract: PRK = HMAC-Hash(salt, IKM)
-        /// </summary>
-        public static Bytes32 Extract(ReadOnlySpan<byte> salt, ReadOnlySpan<byte> ikm)
-        {
-            Span<byte> prk = stackalloc byte[32];
-            try
-            {
-                HmacKeccak256.Compute(salt, ikm, prk);
-                return new Bytes32(prk);
-            }
-            finally
-            {
-                MemorySecurity.ZeroMemory(prk);
-            }
-        }
-
-        public static Bytes32 Expand(Bytes32 prk, ReadOnlySpan<byte> info)
-        {
-            // prk arrived by value, so this frame owns a 32-byte copy of the secret.
-            Span<byte> okm = stackalloc byte[32];
-            Span<byte> t = stackalloc byte[info.Length + 1];
-
-            try
-            {
-                info.CopyTo(t);
-                t[^1] = 1; // counter
-
-                HmacKeccak256.Compute(prk.AsSpan(), t, okm);
-                return new Bytes32(okm);
-            }
-            finally
-            {
-                MemorySecurity.ZeroMemory(okm);
-                MemorySecurity.ZeroMemory(t);
-                Bytes32.Wipe(ref prk);
-            }
-        }
-    }
-
-    #endregion HKDF-Keccak256 Helpers (RFC 5869)
-
     #region Public Methods
 
     /// <summary>
@@ -85,7 +39,7 @@ public static class HandshakeX25519
             sharedSecretEE.WriteTo(ikm);
             sharedSecretSE.WriteTo(ikm[32..]);
 
-            return Hkdf.Extract(ReadOnlySpan<byte>.Empty, ikm);
+            return HkdfKeccak256.Extract(ReadOnlySpan<byte>.Empty, ikm);
         }
         finally
         {
@@ -105,7 +59,7 @@ public static class HandshakeX25519
             Span<byte> info = stackalloc byte[ServerProofLabel.Length + 32];
             ServerProofLabel.CopyTo(info);
             transcriptHash.WriteTo(info[ServerProofLabel.Length..]);
-            return Hkdf.Expand(masterSecret, info);
+            return HkdfKeccak256.Expand(masterSecret, info);
         }
         finally
         {
@@ -123,7 +77,7 @@ public static class HandshakeX25519
             Span<byte> info = stackalloc byte[ClientProofLabel.Length + 32];
             ClientProofLabel.CopyTo(info);
             transcriptHash.WriteTo(info[ClientProofLabel.Length..]);
-            return Hkdf.Expand(masterSecret, info);
+            return HkdfKeccak256.Expand(masterSecret, info);
         }
         finally
         {
@@ -141,7 +95,7 @@ public static class HandshakeX25519
             Span<byte> info = stackalloc byte[ServerFinishLabel.Length + 32];
             ServerFinishLabel.CopyTo(info);
             transcriptHash.WriteTo(info[ServerFinishLabel.Length..]);
-            return Hkdf.Expand(masterSecret, info);
+            return HkdfKeccak256.Expand(masterSecret, info);
         }
         finally
         {
@@ -168,7 +122,7 @@ public static class HandshakeX25519
             offset += 32;
             transcriptHash.WriteTo(info[offset..]);
 
-            return Hkdf.Expand(masterSecret, info[..(offset + 32)]);
+            return HkdfKeccak256.Expand(masterSecret, info[..(offset + 32)]);
         }
         finally
         {
@@ -185,7 +139,7 @@ public static class HandshakeX25519
         try
         {
             ReadOnlySpan<byte> info = "nalix-session/rekey"u8;
-            return Hkdf.Expand(currentSecret, info);
+            return HkdfKeccak256.Expand(currentSecret, info);
         }
         finally
         {

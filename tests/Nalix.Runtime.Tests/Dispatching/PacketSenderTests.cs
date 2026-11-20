@@ -203,25 +203,6 @@ public sealed class PacketSenderTests
     }
 
     [Fact]
-    public async Task SendAsync_WithBatch_OverUdp_SendsEveryDatagramWithItsTag()
-    {
-        FakeConnection connection = new() { FakeUdp = new FakeTransport() };
-        PacketSender sender = new();
-        sender.Initialize(new FakeContext(connection, new TestPacket(), isReliable: false));
-
-        await sender.SendAsync<MarkerPacket>([new(1), new(2), new(3)]);
-
-        Assert.Empty(connection.FakeTcp.SentMessages);
-        Assert.Equal(3, connection.FakeUdp.SentMessages.Count);
-        for (int i = 0; i < 3; i++)
-        {
-            // Payload followed by the 4-byte datagram tag.
-            Assert.Equal(MarkerPacket.Size + sizeof(uint), connection.FakeUdp.SentMessages[i].Length);
-            Assert.Equal((byte)(i + 1), connection.FakeUdp.SentMessages[i][MarkerPacket.Size - 1]);
-        }
-    }
-
-    [Fact]
     public async Task SendAsync_WithSinglePacketBatch_SendsIt()
     {
         FakeConnection connection = new();
@@ -278,9 +259,8 @@ public sealed class PacketSenderTests
         }
     }
 
-    private sealed class FakeContext(FakeConnection connection, TestPacket packet, bool encrypted = false, bool isReliable = true) : IPacketContext<TestPacket>
+    private sealed class FakeContext(FakeConnection connection, TestPacket packet, bool encrypted = false) : IPacketContext<TestPacket>
     {
-        public bool IsReliable => isReliable;
         public bool EncryptedOnWire => false;
         public bool SkipOutbound => false;
         public TestPacket Packet => packet;
@@ -290,8 +270,7 @@ public sealed class PacketSenderTests
             timeout: null,
             permission: null,
             encryption: encrypted ? new PacketEncryptionAttribute() : null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
         public IPacketSender Sender => null!;
         public IPacketScope Scope => null!;
         public CancellationToken CancellationToken => default;
@@ -353,7 +332,6 @@ public sealed class PacketSenderTests
     {
         public FakeTransport FakeTcp { get; } = new();
         public bool IsDisposed { get; private set; }
-        public bool IsUdpCreated => false;
         public ulong ConnectionId => 1;
         public string? UserId { get; set; }
         public long UpTime => 0;
@@ -372,10 +350,8 @@ public sealed class PacketSenderTests
             get => AlgorithmReadsBeforeNone-- > 0 ? _algorithm : CipherSuiteType.None;
             set => _algorithm = value;
         }
-        public FakeTransport? FakeUdp { get; init; }
         public int Disconnects { get; private set; }
-        public IConnection.ITransport TCP => FakeTcp;
-        public IConnection.ITransport? UDP => FakeUdp;
+        public IConnection.ITransport Transport => FakeTcp;
         public event EventHandler<IConnectionEventArgs>? ConnectionClosed { add { } remove { } }
         public event EventHandler<IConnectionEventArgs>? MessageProcessing { add { } remove { } }
         public event EventHandler<IConnectionEventArgs>? MessageProcessed { add { } remove { } }

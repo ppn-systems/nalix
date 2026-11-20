@@ -33,8 +33,7 @@ public sealed class HandlerPermissionAuditTests
             timeout: null,
             permission: null,
             encryption: null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
         PacketHandler<SessionResume> handler = new(
             0x0001, metadata, null, "NoPermissionHandler", typeof(void),
