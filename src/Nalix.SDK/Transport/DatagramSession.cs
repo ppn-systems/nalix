@@ -241,11 +241,11 @@ public sealed class DatagramSession : TransportSession
 #pragma warning disable RS0026 // Overrides of the TransportSession contract; the overload set is inherited.
     /// <inheritdoc/>
     public override Task SendAsync(IPacket packet, CancellationToken ct = default)
-        => this.SendWithDeliveryAsync(packet, DeliveryMethod.ReliableOrdered, 0, ct);
+        => this.SendAsync(packet, DeliveryMethod.ReliableOrdered, 0, ct);
 
     /// <inheritdoc/>
     public override Task SendAsync(IPacket packet, bool? encrypt = null, CancellationToken ct = default)
-        => this.SendWithDeliveryAsync(packet, DeliveryMethod.ReliableOrdered, 0, ct);
+        => this.SendAsync(packet, DeliveryMethod.ReliableOrdered, 0, ct);
 
     /// <inheritdoc/>
     public override Task SendAsync(ReadOnlyMemory<byte> payload, bool? encrypt = null, CancellationToken ct = default)
@@ -255,6 +255,7 @@ public sealed class DatagramSession : TransportSession
     }
 #pragma warning restore RS0026
 
+#pragma warning disable RS0026 // DeliveryMethod has no conversion to bool?, so the inherited overloads stay unambiguous.
     /// <summary>
     /// Sends a packet with a delivery method on a channel.
     /// </summary>
@@ -264,7 +265,7 @@ public sealed class DatagramSession : TransportSession
     /// <param name="ct">A token to cancel the operation.</param>
     /// <returns>A task that completes once the packet is queued.</returns>
     /// <exception cref="NetworkException">The session is closed, the packet is too large for the method, or the queue is full.</exception>
-    public Task SendWithDeliveryAsync(IPacket packet, DeliveryMethod method, byte channel = 0, CancellationToken ct = default)
+    public Task SendAsync(IPacket packet, DeliveryMethod method, byte channel = 0, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(packet);
         ct.ThrowIfCancellationRequested();
@@ -275,6 +276,7 @@ public sealed class DatagramSession : TransportSession
         this.Send(lease.Span, method, channel);
         return Task.CompletedTask;
     }
+#pragma warning restore RS0026
 
     /// <summary>
     /// Sends a packet reliably and completes when the server acknowledged every fragment of it.

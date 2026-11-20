@@ -74,7 +74,7 @@ virtual Nalix.SDK.Transport.WebSocketSession.ResolveDialEndpointAsync(string! ho
 Nalix.SDK.Transport.DatagramSession
 Nalix.SDK.Transport.DatagramSession.DatagramSession(Nalix.SDK.Transport.TransportSession! stream) -> void
 Nalix.SDK.Transport.DatagramSession.EngineReport.get -> string?
-Nalix.SDK.Transport.DatagramSession.SendWithDeliveryAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel = 0, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.SDK.Transport.DatagramSession.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel = 0, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Nalix.SDK.Transport.DatagramSession.SendWithReceiptAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method = Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.ReliableOrdered, byte channel = 0) -> System.Threading.Tasks.Task<bool>!
 Nalix.SDK.Transport.DatagramSession.Ticket.get -> Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo?
 override Nalix.SDK.Transport.DatagramSession.ConnectAsync(string? host = null, ushort? port = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
