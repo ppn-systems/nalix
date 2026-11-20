@@ -157,6 +157,7 @@ public sealed partial class DatagramListener
         }
 
         _pending.Clear();
+        _ticketByStream.Clear();
         this.ReleaseResources();
         _ = Interlocked.Exchange(ref _state, (int)ListenerState.STOPPED);
 
@@ -191,29 +192,45 @@ public sealed partial class DatagramListener
             throw new InvalidOperationException("The stream connection has no session secret; complete the handshake first.");
         }
 
-        if (_sessions.Count + _pending.Count >= _options.MaxSessions)
-        {
-            throw new InvalidOperationException("The datagram session limit is reached.");
-        }
-
         Span<byte> nonce = stackalloc byte[16];
         Csprng.Fill(nonce);
         UInt128 nonceValue = new(BitConverter.ToUInt64(nonce[8..]), BitConverter.ToUInt64(nonce));
 
         PendingTicket ticket = new(
-            new DatagramIdentity(streamConnection.UserId, streamConnection.Level, streamConnection.Algorithm, streamConnection.Secret),
+            new DatagramIdentity(streamConnection.UserId, streamConnection.Level, streamConnection.Algorithm, streamConnection.Secret, streamConnection.ConnectionId),
             nonce.ToArray(),
             System.Environment.TickCount64 + (_options.TicketLifetimeSeconds * 1000L),
-            onAccepted);
+            onAccepted,
+            streamConnection.ConnectionId);
         nonce.Clear();
 
         ulong connectionId;
-        do
+        lock (_ticketLock)
         {
-            // Not a Snowflake: the identifier must not be predictable.
-            connectionId = Csprng.NextUInt64();
+            // One outstanding ticket per stream connection: a new request replaces the previous ticket, so a client
+            // cannot fill the session table by asking in a loop.
+            if (_ticketByStream.TryGetValue(streamConnection.ConnectionId, out ulong previous) &&
+                _pending.TryGetValue(previous, out PendingTicket? replaced))
+            {
+                _ = this.RemoveTicket(previous, replaced);
+            }
+
+            // Checked and added under the lock, so concurrent requests cannot overshoot the limit.
+            if (_sessions.Count + _pending.Count >= _options.MaxSessions)
+            {
+                ticket.Discard();
+                throw new InvalidOperationException("The datagram session limit is reached.");
+            }
+
+            do
+            {
+                // Not a Snowflake: the identifier must not be predictable.
+                connectionId = Csprng.NextUInt64();
+            }
+            while (connectionId == 0 || _sessions.ContainsKey(connectionId) || !_pending.TryAdd(connectionId, ticket));
+
+            _ticketByStream[streamConnection.ConnectionId] = connectionId;
         }
-        while (connectionId == 0 || _sessions.ContainsKey(connectionId) || !_pending.TryAdd(connectionId, ticket));
 
         this.Metrics.RECORD_TICKET_ISSUED();
 

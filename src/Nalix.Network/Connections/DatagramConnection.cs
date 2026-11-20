@@ -35,8 +35,13 @@ namespace Nalix.Network.Connections;
 /// stream connection when the ticket was issued.
 /// </summary>
 /// <remarks>
-/// The session has its own keys and lifetime: closing or rekeying the stream connection does not affect it.
-/// Idle timeout is enforced by the protocol engine, not by the timing wheel.
+/// <para>
+/// The session has its own keys and lifetime: closing or rekeying the stream connection does not affect it, and
+/// the identity and permission level copied at ticket time do not follow later changes on the stream connection.
+/// To remove a user from both transports (a kick or a ban), also disconnect the datagram sessions whose
+/// <see cref="StreamConnectionId"/> is the stream connection's <see cref="IConnection.ConnectionId"/>.
+/// </para>
+/// <para>Idle timeout is enforced by the protocol engine, not by the timing wheel.</para>
 /// </remarks>
 public sealed partial class DatagramConnection :
     IConnection,
@@ -75,6 +80,7 @@ public sealed partial class DatagramConnection :
         this.Level = identity.Level;
         this.Algorithm = identity.Algorithm;
         this.Secret = identity.Secret;
+        this.StreamConnectionId = identity.StreamConnectionId;
         this.ExcludeFromIdleTimeout = true;
         this.NetworkEndpoint = Internal.Transport.SocketEndpoint.FromEndPoint(new IPEndPoint(IPAddress.Any, 0));
 
@@ -99,6 +105,12 @@ public sealed partial class DatagramConnection :
     /// <see cref="ConnectionId"/>, which identifies the connection in the hub.
     /// </summary>
     public ulong DatagramConnectionId { get; }
+
+    /// <summary>
+    /// Gets the <see cref="IConnection.ConnectionId"/> of the stream connection (TCP or WebSocket) that requested
+    /// the ticket of this session. The session does not end with that connection.
+    /// </summary>
+    public ulong StreamConnectionId { get; }
 
     /// <inheritdoc/>
     public string? UserId { get; set; }
@@ -503,4 +515,4 @@ public sealed partial class DatagramConnection :
 /// <summary>
 /// What a datagram session inherits from the stream connection when its ticket is issued.
 /// </summary>
-internal readonly record struct DatagramIdentity(string? UserId, PermissionLevel Level, CipherSuiteType Algorithm, Bytes32 Secret);
+internal readonly record struct DatagramIdentity(string? UserId, PermissionLevel Level, CipherSuiteType Algorithm, Bytes32 Secret, ulong StreamConnectionId);

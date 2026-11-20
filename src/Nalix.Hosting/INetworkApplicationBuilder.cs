@@ -121,8 +121,14 @@ public interface INetworkApplicationBuilder
     /// Binds a protocol to a datagram (NDP over UDP) listener. Clients obtain a ticket over an established TCP or
     /// WebSocket session and then use the datagram session; the ticket handlers are mapped automatically.
     /// </summary>
+    /// <remarks>
+    /// A datagram session copies the user, permission level and secret of its stream connection when the ticket is
+    /// issued and then lives on its own: disconnecting the stream connection does not close it. To kick a user, also
+    /// disconnect the <c>DatagramConnection</c> instances whose <c>StreamConnectionId</c> matches.
+    /// </remarks>
     /// <typeparam name="TProtocol">The protocol type whose frame processor receives datagram messages.</typeparam>
     /// <returns>A fluent builder to configure the port and the protocol factory.</returns>
+    /// <exception cref="InvalidOperationException">A datagram binding is already mapped; only one is supported.</exception>
     IProtocolBindingBuilder MapDatagram<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol;

@@ -19,7 +19,7 @@ public sealed partial class DatagramListener
     /// A ticket waiting for its first authenticated datagram. Its connection is created on the first datagram that
     /// carries the identifier and stays pending until one authenticates, so a forged datagram cannot consume it.
     /// </summary>
-    private sealed class PendingTicket(DatagramIdentity identity, byte[] nonce, long expiresAtMs, Action<IConnection>? onAccepted)
+    private sealed class PendingTicket(DatagramIdentity identity, byte[] nonce, long expiresAtMs, Action<IConnection>? onAccepted, ulong streamConnectionId)
     {
         private readonly Lock _lock = new();
         private DatagramIdentity _identity = identity;
@@ -28,6 +28,9 @@ public sealed partial class DatagramListener
         public long ExpiresAtMs { get; } = expiresAtMs;
 
         public Action<IConnection>? OnAccepted { get; } = onAccepted;
+
+        /// <summary>Gets the <see cref="IConnection.ConnectionId"/> of the stream connection the ticket was issued to.</summary>
+        public ulong StreamConnectionId { get; } = streamConnectionId;
 
         public bool IsExpired(long nowMs) => nowMs > this.ExpiresAtMs;
 

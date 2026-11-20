@@ -30,6 +30,7 @@ public sealed partial class DatagramListener
         // One byte more than the largest valid datagram, so an oversized one is detected instead of truncated.
         byte[] buffer = GC.AllocateUninitializedArray<byte>(DatagramEngine.MaxDatagramSize + 1, pinned: true);
         SocketAddress from = new(socket.AddressFamily);
+        int consecutiveErrors = 0;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -61,9 +62,21 @@ public sealed partial class DatagramListener
                         new DiagnosticLog("NW.DatagramListener:Receive", $"receive-failed port={_port} error={ex.SocketErrorCode}", ex));
                 }
 
+                // A persistent error (network down, socket in an error state) fails every call at once: back off
+                // instead of spinning, up to one second between attempts.
+                try
+                {
+                    await Task.Delay(Math.Min(1000, 10 * ++consecutiveErrors), cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
                 continue;
             }
 
+            consecutiveErrors = 0;
             ctx.Beat();
             this.Metrics.RECORD_RECEIVED(received);
 
@@ -139,6 +152,8 @@ public sealed partial class DatagramListener
         {
             return true; // Another worker promoted it concurrently.
         }
+
+        _ = _ticketByStream.TryRemove(new KeyValuePair<ulong, ulong>(ticket.StreamConnectionId, connectionId));
 
         ticket.ClearSecret();
 
@@ -270,11 +285,23 @@ public sealed partial class DatagramListener
 
     private void DiscardTicket(ulong connectionId, PendingTicket ticket)
     {
-        if (_pending.TryRemove(new KeyValuePair<ulong, PendingTicket>(connectionId, ticket)))
+        if (this.RemoveTicket(connectionId, ticket))
         {
-            ticket.Discard();
             this.Metrics.RECORD_TICKET_EXPIRED();
         }
+    }
+
+    /// <summary>Removes a pending ticket and wipes it; returns <see langword="false"/> when it was already gone.</summary>
+    private bool RemoveTicket(ulong connectionId, PendingTicket ticket)
+    {
+        if (!_pending.TryRemove(new KeyValuePair<ulong, PendingTicket>(connectionId, ticket)))
+        {
+            return false;
+        }
+
+        _ = _ticketByStream.TryRemove(new KeyValuePair<ulong, ulong>(ticket.StreamConnectionId, connectionId));
+        ticket.Discard();
+        return true;
     }
 
     #endregion Session Plumbing

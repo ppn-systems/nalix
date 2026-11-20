@@ -25,6 +25,7 @@ public sealed partial class DatagramConnection : IDatagramTransport
 
     private DatagramListener _listener;
     private DatagramSocketConnection _socket;
+    private int _channelCount;
     private DeliveryView?[] _views = [];
     private IPEndPoint? _guardSlot;
 
@@ -101,6 +102,13 @@ public sealed partial class DatagramConnection : IDatagramTransport
     /// <inheritdoc/>
     public IConnection.ITransport WithDelivery(DeliveryMethod method, byte channel)
     {
+        if (!Enum.IsDefined(method))
+        {
+            throw new ArgumentOutOfRangeException(nameof(method), method, "Unknown delivery method.");
+        }
+
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(channel, _channelCount, nameof(channel));
+
         if (method == DeliveryMethod.ReliableOrdered && channel == 0)
         {
             return this;
@@ -125,6 +133,7 @@ public sealed partial class DatagramConnection : IDatagramTransport
     private void InitializeTransport(DatagramListener listener, IDatagramProtection protection, DatagramEngineOptions options)
     {
         _listener = listener;
+        _channelCount = options.ChannelCount;
         _socket = new DatagramSocketConnection(this, listener, listener.TimingWheel, protection, options, this.DatagramConnectionId);
     }
 

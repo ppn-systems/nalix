@@ -63,6 +63,8 @@ public sealed partial class DatagramListener : IListener, IDatagramTicketIssuer
     private readonly NetworkSocketOptions _socketOptions;
     private readonly ConcurrentDictionary<ulong, DatagramConnection> _sessions = new();
     private readonly ConcurrentDictionary<ulong, PendingTicket> _pending = new();
+    private readonly ConcurrentDictionary<ulong, ulong> _ticketByStream = new();
+    private readonly Lock _ticketLock = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly DatagramTimingWheel _timingWheel;
 

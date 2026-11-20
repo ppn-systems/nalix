@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Datagrams;
+using Nalix.Abstractions.Primitives;
 using Nalix.Environment.Configuration;
 using Nalix.Network.Listeners.Datagram;
 using Nalix.Network.Options;
@@ -72,6 +73,52 @@ public sealed class DatagramListenerTests
         Assert.False(listener.IsListening);
     }
 
-    private static DatagramListener CreateListener(ushort port)
-        => new(port, Substitute.For<IProtocol>(), Substitute.For<IConnectionHub>(), Substitute.For<IDatagramProtectionFactory>());
+    [Fact]
+    public void IssueTicket_AgainForTheSameStreamConnection_ReplacesTheOutstandingTicket()
+    {
+        using DatagramListener listener = CreateListener(0);
+        listener.Activate();
+        IConnection stream = CreateStreamConnection(1);
+
+        DatagramTicketInfo first = listener.IssueTicket(stream);
+        DatagramTicketInfo second = listener.IssueTicket(stream);
+
+        // A client asking in a loop holds one ticket, not one per request.
+        Assert.NotEqual(first.ConnectionId, second.ConnectionId);
+        Assert.Equal(1, listener.PendingTicketCount);
+
+        _ = listener.IssueTicket(CreateStreamConnection(2));
+        Assert.Equal(2, listener.PendingTicketCount);
+    }
+
+    [Fact]
+    public void IssueTicket_WhenMaxSessionsIsReached_RefusesOtherStreamConnections()
+    {
+        DatagramOptions options = new() { MaxSessions = 2 };
+        using DatagramListener listener = CreateListener(0, options);
+        listener.Activate();
+
+        _ = listener.IssueTicket(CreateStreamConnection(1));
+        _ = listener.IssueTicket(CreateStreamConnection(2));
+
+        _ = Assert.Throws<InvalidOperationException>(() => listener.IssueTicket(CreateStreamConnection(3)));
+        Assert.Equal(2, listener.PendingTicketCount);
+
+        // Replacing an outstanding ticket stays possible at the limit.
+        _ = listener.IssueTicket(CreateStreamConnection(1));
+        Assert.Equal(2, listener.PendingTicketCount);
+    }
+
+    private static IConnection CreateStreamConnection(ulong id)
+    {
+        byte[] secret = new byte[32];
+        secret[0] = 1;
+        IConnection connection = Substitute.For<IConnection>();
+        _ = connection.ConnectionId.Returns(id);
+        _ = connection.Secret.Returns(new Bytes32(secret));
+        return connection;
+    }
+
+    private static DatagramListener CreateListener(ushort port, DatagramOptions? options = null)
+        => new(port, Substitute.For<IProtocol>(), Substitute.For<IConnectionHub>(), Substitute.For<IDatagramProtectionFactory>(), options: options);
 }

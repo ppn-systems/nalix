@@ -269,6 +269,13 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol
     {
+        // Ticket requests are answered by a single IDatagramTicketIssuer, so a second datagram listener would never
+        // get a session.
+        if (_state.DatagramBindings.Count > 0)
+        {
+            throw new InvalidOperationException("MapDatagram can be called once per application: datagram tickets are issued by a single listener.");
+        }
+
         ProtocolBindingBuilder builder = new(this);
 
         _state.DatagramBindings.Add(new DatagramProtocolBinding(
@@ -278,10 +285,7 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
                 : this.CreateProtocol<TProtocol>(dispatch),
             builder));
 
-        if (_state.DatagramBindings.Count == 1)
-        {
-            _ = this.MapHandlers(typeof(DatagramTicketHandlers));
-        }
+        _ = this.MapHandlers(typeof(DatagramTicketHandlers));
 
         return builder;
     }

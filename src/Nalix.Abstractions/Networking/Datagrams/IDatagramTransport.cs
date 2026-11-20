@@ -34,5 +34,6 @@ public interface IDatagramTransport : IConnection.ITransport
     /// <param name="method">The delivery method.</param>
     /// <param name="channel">The channel.</param>
     /// <returns>The transport view.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The method is unknown or the channel is not below the session's channel count.</exception>
     IConnection.ITransport WithDelivery(DeliveryMethod method, byte channel);
 }

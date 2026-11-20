@@ -291,6 +291,30 @@ public sealed class DatagramEndToEndTests : IDisposable
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
+    [Fact]
+    public async Task ServerDatagramConnection_ExposesItsStreamAndValidatesDeliveryViews()
+    {
+        (ushort tcpPort, ushort udpPort) = (NextPort(), NextPort());
+        await using NetworkApplication app = await this.StartServerAsync(tcpPort, udpPort);
+        IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()!;
+
+        using TcpSession stream = await ConnectStreamAsync(tcpPort);
+        using DatagramSession datagram = new(stream);
+        await datagram.ConnectAsync().WaitAsync(s_timeout);
+
+        DatagramConnection server = hub.ListConnections().OfType<DatagramConnection>().Single();
+        IConnection serverStream = hub.ListConnections().Single(c => c is not DatagramConnection);
+
+        // The link a kick needs to close the datagram session with its stream connection.
+        Assert.Equal(serverStream.ConnectionId, server.StreamConnectionId);
+
+        byte channels = datagram.Ticket!.Value.ChannelCount;
+        Assert.NotNull(server.WithDelivery(DeliveryMethod.Unreliable, (byte)(channels - 1)));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => server.WithDelivery(DeliveryMethod.Unreliable, channels));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => server.WithDelivery(DeliveryMethod.ReliableSequenced, 100));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => server.WithDelivery((DeliveryMethod)9, 0));
+    }
+
     private static async Task<TcpSession> ConnectStreamAsync(ushort port)
     {
         TcpSession stream = new(CreateOptions(port));
