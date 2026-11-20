@@ -170,11 +170,14 @@ public sealed class WebSocketListenerSessionTimeoutTests : IDisposable
             // Now disconnect client
             await client.DisconnectAsync();
             
-            // Wait for disconnect event to propagate and Unregister to be called (up to 10 seconds)
+            // Wait for disconnect event to propagate and Unregister to be called (up to 10 seconds).
+            // Unregister clears IsRegisteredInWheel before it removes the task from its bucket and returns it to the
+            // pool (and when the wheel loop holds the task at that moment, the loop returns it a little later), so
+            // wait for all three instead of reading the rest right after the flag.
             bool unregistered = false;
             for (int i = 0; i < 1000; i++)
             {
-                if (!timeoutTracked.IsRegisteredInWheel)
+                if (!timeoutTracked.IsRegisteredInWheel && timeoutTracked.TimeoutTask is null && taskReference.Conn is null)
                 {
                     unregistered = true;
                     break;
