@@ -208,12 +208,9 @@ negotiated in the ticket (default 8, max 64).
 
 ```
 u8      Channel (0..63)
-u8      Info      bits 2..0 DeliveryMethod | bit 3 Fragmented | bits 7..4 reserved (0)
+u8      Info      bits 2..0 DeliveryMethod | bits 7..3 reserved (0)
 varint  ReliableIndex       (reliable methods)   per-session, dedup on the receiver
 varint  OrderIndex          (ordered/sequenced)  per channel and method
-varint  FragmentGroupId     (if Fragmented)      per session
-varint  FragmentIndex       (if Fragmented)
-varint  FragmentCount       (if Fragmented)
 varint  Length
 bytes   Payload
 ```
@@ -221,12 +218,24 @@ bytes   Payload
 The receiver deduplicates reliable messages with a window over `ReliableIndex` and buffers out-of-order
 messages of an ordered channel until the gap is filled.
 
-### 9.4 Fragmentation
+### 9.4 Fragmentation (reuses `Nalix.Environment.Fragments`)
 
-A message larger than the space left in one datagram is split into fragments of one group. Fragments carry the
-message's delivery method. Limits (negotiated, defaults): message ≤ 1 MiB, fragments per message ≤ 1024,
-concurrent incomplete groups ≤ 64 per session, incomplete group lifetime 10 s. **Unreliable** fragmented
-messages are dropped if any fragment is lost; they are limited to 16 fragments by default.
+NDP has no fragment fields of its own. A Nalix frame that does not fit in one datagram is split with the existing
+fragment format — `FragmentHeader` (packet header with `PacketFlags.FRAGMENTED` + stream id, chunk index, total
+chunks, last flag) — exactly as TCP/WebSocket do today. Each chunk travels as its own `MESSAGE` on the same channel and
+delivery method, and the receiver rebuilds the frame with `FragmentAssembler`. One fragmentation concept for every
+transport.
+
+- **Only reliable methods may fragment** (`ReliableOrdered`, `ReliableUnordered`), as in LiteNetLib. A message on
+  `Unreliable`, `UnreliableSequenced` or `ReliableSequenced` that does not fit in one datagram is rejected at send time.
+  This avoids partial unreliable messages and sequenced chunks overtaking each other.
+- `FragmentAssembler` requires chunks **in index order**: it appends and rejects out-of-order chunks (written for TCP).
+  On `ReliableOrdered` that order already holds. On `ReliableUnordered` the NDP receiver holds the chunks of one fragment
+  stream and feeds them to the assembler in index order, so the Environment code is reused unchanged.
+- Limits: the assembler's own `MaxStreamBytes`, `MaxOpenStreams` and `StreamTimeoutMs` are configured per NDP session
+  (defaults: 1 MiB, 64, 10 s). Chunk bytes held back for ordering count against the flow-control budget (§9.5).
+- Per-chunk overhead is the 13-byte `FragmentHeader` (versus about 4 bytes of varints). This is acceptable for large
+  messages; small messages are coalesced instead of fragmented.
 
 ### 9.5 Flow control and memory limits
 

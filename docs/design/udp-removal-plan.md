@@ -10,6 +10,8 @@
 | :--- | :--- |
 | Session integration | The NDP datagram session **implements `IConnection`** (option A). |
 | Order of work | Keep TCP + today's UDP working; add `IConnection.Transport`, build NDP alongside, remove the old UDP last (major version). |
+| Fragmentation | Reuse `Nalix.Environment.Fragments` (`FragmentHeader`, `FragmentAssembler`). |
+| Old UDP tag (`XxHash32`) | Network only filters cheaply; authenticity is checked above it, in Hosting (§5a). |
 | Traversal | Only the raw passthrough part (`UdpPassthroughListener` + `PassthroughConnection`) moves into `Nalix.Traversal`. The session-bound UDP companion is not moved; it is deleted when NDP replaces it. |
 | New project | **None.** Shared, crypto-free engine code goes into `Nalix.Environment` (next to `Fragments/`); crypto goes into `Nalix.Codec`. |
 | Defaults | As proposed in the NDP draft (channels, limits, 100 ms unreliable expiry). |
@@ -107,10 +109,47 @@ gets its own varint-based fragment fields as in the draft; to be decided when th
 
 The same `IDatagramProtection` injection is how Network gets real AEAD without referencing Codec.
 
+## 5a. Old UDP during the transition: authentication moved above Network
+
+Today `UdpListener` (Network) checks a 4-byte `XxHash32(Secret, XxHash32(payload))` tag. It is not a MAC, but Network
+cannot reference Codec. The proposal from review: **Network accepts the datagram after cheap checks only, and
+authenticity is decided above it**, where Codec is available. This fits the existing design, because
+`DefaultFrameProcessor` (Hosting) already runs `FramePipeline.TryProcessInbound` (Codec) on every UDP frame: encrypted
+frames are AEAD-verified there, with the packet header as AAD and the sequence number taken from the authenticated
+envelope.
+
+What has to change for this to be safe:
+
+1. **Every UDP frame must be encrypted.** `TryProcessInbound` passes frames without `PacketFlags.ENCRYPTED` through
+   unauthenticated. `DefaultFrameProcessor` must drop unreliable frames that are not encrypted; the SDK must always
+   encrypt UDP frames.
+2. **Remove the pre-authentication replay window in Network** (`connection.UdpReplayWindow`, checked on the cleartext
+   `SequenceId`). Once the tag is gone, a forged datagram could advance that window and make genuine datagrams be
+   dropped. The post-decryption sequence check in `DefaultFrameProcessor` (`counter.IsValid`) already covers replay.
+3. **Keep the cheap filters in Network:** minimum size, session-token lookup, `Secret` non-zero, endpoint pinning to the
+   client's address, per-IP limits (`DatagramGuard`).
+4. **Do not penalise the connection for AEAD failures on UDP.** `DefaultFrameProcessor` calls `IncrementErrorCount()` when
+   processing fails; forged datagrams for a victim's token would then count against the victim. Count UDP authentication
+   failures in metrics only.
+5. **Wire change:** the 4-byte tag disappears, so the SDK `UdpFrameSender`/`UdpFrameReader` change in the same PR. Old
+   clients and new servers (and the reverse) are incompatible on UDP; release notes must say so.
+
+Trade-off: a forged datagram that passes the cheap filters now costs an AEAD open in Hosting instead of a hash in
+Network. An attacker needs the 8-byte token **and** the victim's source address (endpoint pinning), so this is
+acceptable for the transition.
+
+**This does not carry over to NDP.** In NDP the whole payload (ACK, MESSAGE, PING… frames) is encrypted, and the
+protocol engine has to read those frames to do acknowledgements, retransmission and congestion control. It runs at the
+transport level (Network on the server), so it must decrypt there. NDP therefore still uses `IDatagramProtection`
+(contract in Abstractions, ChaCha20-Poly1305 implementation in Codec, injected by Hosting); Network never references
+Codec.
+
 ## 6. Proposed PR sequence
 
 1. **`IConnection.Transport`** added; `TCP` becomes an `[Obsolete]` alias. Non-breaking.
 2. **Traversal passthrough** moved into `Nalix.Traversal` (§4). Independent of the rest.
+2a. **Old UDP: authentication moved above Network** (§5a): drop the `XxHash32` tag and the pre-auth replay window,
+    require encryption on UDP frames in `DefaultFrameProcessor`, update the SDK UDP sender/reader.
 3. **NDP contracts + crypto:** `DeliveryMethod`, `IDatagramProtection` (Abstractions); `ChaCha20Poly1305DatagramProtection`,
    public HKDF derivation API, key schedule (Codec).
 4. **NDP engine** in Environment with the network emulator, property tests and known-answer vectors (no sockets).
@@ -121,6 +160,5 @@ The same `IDatagramProtection` injection is how Network gets real AEAD without r
 
 ## 7. Open questions
 
-1. Reuse Environment `Fragments` for NDP reassembly, or NDP-specific fragment fields as in the draft?
-2. Should the old UDP path get the `IDatagramProtection` (real AEAD instead of `XxHash32`) during the transition, or is
-   it left as is until it is removed?
+None at the moment. Answered: NDP reuses `Nalix.Environment.Fragments` (see the NDP draft §9.4); the old UDP tag is
+replaced by moving authentication above Network (§5a).
