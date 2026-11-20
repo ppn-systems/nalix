@@ -11,6 +11,7 @@ using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Security;
 using Nalix.Environment.Datagrams;
 using Nalix.Environment.Memory;
+using Nalix.Environment.Options;
 using Nalix.Environment.Sequencing;
 using Nalix.Environment.Time;
 using Nalix.Network.Internal.Transport;

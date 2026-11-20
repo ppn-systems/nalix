@@ -16,6 +16,7 @@ using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Primitives;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Datagrams;
+using Nalix.Environment.Options;
 using Nalix.Environment.Random;
 using Nalix.Network.Connections;
 using Nalix.Network.Options;
@@ -59,8 +60,11 @@ public sealed class DatagramListener : IListener, IDatagramTicketIssuer
     /// <param name="protocol">The protocol whose frame processor receives the messages of every session.</param>
     /// <param name="hub">The hub sessions are registered in.</param>
     /// <param name="protectionFactory">Creates the AEAD protection of each session.</param>
-    /// <param name="options">Settings; defaults to the configured <see cref="DatagramOptions"/>.</param>
-    public DatagramListener(ushort port, IProtocol protocol, IConnectionHub hub, IDatagramProtectionFactory protectionFactory, DatagramOptions? options = null)
+    /// <param name="options">Listener settings; defaults to the configured <see cref="DatagramOptions"/>.</param>
+    /// <param name="engineOptions">Session settings advertised in tickets; defaults to the configured <see cref="DatagramEngineOptions"/>.</param>
+    public DatagramListener(
+        ushort port, IProtocol protocol, IConnectionHub hub, IDatagramProtectionFactory protectionFactory,
+        DatagramOptions? options = null, DatagramEngineOptions? engineOptions = null)
     {
         _port = port;
         _protocol = protocol ?? throw new ArgumentNullException(nameof(protocol));
@@ -68,7 +72,8 @@ public sealed class DatagramListener : IListener, IDatagramTicketIssuer
         _protectionFactory = protectionFactory ?? throw new ArgumentNullException(nameof(protectionFactory));
         _options = options ?? ConfigurationManager.Instance.Get<DatagramOptions>();
         _options.Validate();
-        _engineOptions = _options.ToEngineOptions();
+        _engineOptions = engineOptions ?? ConfigurationManager.Instance.Get<DatagramEngineOptions>();
+        _engineOptions.Validate();
     }
 
     /// <summary>
@@ -214,8 +219,8 @@ public sealed class DatagramListener : IListener, IDatagramTicketIssuer
         _ = Interlocked.Increment(ref _ticketsIssued);
 
         return new DatagramTicketInfo(
-            connectionId, nonceValue, this.Port, (ushort)_options.TicketLifetimeSeconds, _options.IdleTimeoutMs,
-            _options.MaxMessageSize, (byte)_options.ChannelCount, _options.ReceiveBufferBytes, _options.ChannelReceiveBufferBytes);
+            connectionId, nonceValue, this.Port, (ushort)_options.TicketLifetimeSeconds, _engineOptions.IdleTimeoutMs,
+            _engineOptions.MaxMessageSize, (byte)_engineOptions.ChannelCount, _engineOptions.ReceiveBufferBytes, _engineOptions.ChannelReceiveBufferBytes);
     }
 
     /// <inheritdoc/>

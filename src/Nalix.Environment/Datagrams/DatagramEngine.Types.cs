@@ -3,6 +3,7 @@
 
 
 using Nalix.Environment.Fragments;
+using Nalix.Environment.Options;
 
 namespace Nalix.Environment.Datagrams;
 

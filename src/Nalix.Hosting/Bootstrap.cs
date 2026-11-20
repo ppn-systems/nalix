@@ -113,6 +113,7 @@ public static partial class Bootstrap
         _ = ConfigurationManager.Instance.Get<SequenceOptions>();
         _ = ConfigurationManager.Instance.Get<TimingWheelOptions>();
         _ = ConfigurationManager.Instance.Get<DatagramOptions>();
+        _ = ConfigurationManager.Instance.Get<DatagramEngineOptions>();
         _ = ConfigurationManager.Instance.Get<NetworkSocketOptions>();
         _ = ConfigurationManager.Instance.Get<ConnectionHubOptions>();
         _ = ConfigurationManager.Instance.Get<ConnectionQuotaOptions>();

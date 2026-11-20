@@ -48,7 +48,6 @@ Nalix.Network.Connections.DatagramConnection.UserId.set -> void
 Nalix.Network.Connections.DatagramConnection.WithDelivery(Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel) -> Nalix.Abstractions.Networking.IConnection.ITransport!
 Nalix.Network.Listeners.Datagram.DatagramListener
 Nalix.Network.Listeners.Datagram.DatagramListener.Activate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
-Nalix.Network.Listeners.Datagram.DatagramListener.DatagramListener(ushort port, Nalix.Abstractions.Networking.IProtocol! protocol, Nalix.Abstractions.Networking.IConnectionHub! hub, Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory! protectionFactory, Nalix.Network.Options.DatagramOptions? options = null) -> void
 Nalix.Network.Listeners.Datagram.DatagramListener.Deactivate(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
 Nalix.Network.Listeners.Datagram.DatagramListener.Dispose() -> void
 Nalix.Network.Listeners.Datagram.DatagramListener.GenerateReport() -> string!
@@ -57,28 +56,15 @@ Nalix.Network.Listeners.Datagram.DatagramListener.Port.get -> ushort
 Nalix.Network.Listeners.Datagram.DatagramListener.SessionCount.get -> int
 Nalix.Network.Listeners.Datagram.DatagramListener.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
 Nalix.Network.Options.DatagramOptions
-Nalix.Network.Options.DatagramOptions.ChannelCount.get -> int
-Nalix.Network.Options.DatagramOptions.ChannelCount.set -> void
-Nalix.Network.Options.DatagramOptions.ChannelReceiveBufferBytes.get -> long
-Nalix.Network.Options.DatagramOptions.ChannelReceiveBufferBytes.set -> void
 Nalix.Network.Options.DatagramOptions.DatagramOptions() -> void
-Nalix.Network.Options.DatagramOptions.IdleTimeoutMs.get -> int
-Nalix.Network.Options.DatagramOptions.IdleTimeoutMs.set -> void
-Nalix.Network.Options.DatagramOptions.MaxMessageSize.get -> int
-Nalix.Network.Options.DatagramOptions.MaxMessageSize.set -> void
 Nalix.Network.Options.DatagramOptions.MaxSessions.get -> int
 Nalix.Network.Options.DatagramOptions.MaxSessions.set -> void
-Nalix.Network.Options.DatagramOptions.ReceiveBufferBytes.get -> long
-Nalix.Network.Options.DatagramOptions.ReceiveBufferBytes.set -> void
 Nalix.Network.Options.DatagramOptions.SocketReceiveBufferSize.get -> int
 Nalix.Network.Options.DatagramOptions.SocketReceiveBufferSize.set -> void
 Nalix.Network.Options.DatagramOptions.SocketSendBufferSize.get -> int
 Nalix.Network.Options.DatagramOptions.SocketSendBufferSize.set -> void
 Nalix.Network.Options.DatagramOptions.TicketLifetimeSeconds.get -> int
 Nalix.Network.Options.DatagramOptions.TicketLifetimeSeconds.set -> void
-Nalix.Network.Options.DatagramOptions.ToEngineOptions() -> Nalix.Environment.Datagrams.DatagramEngineOptions!
-Nalix.Network.Options.DatagramOptions.UnreliableExpiryMs.get -> int
-Nalix.Network.Options.DatagramOptions.UnreliableExpiryMs.set -> void
 Nalix.Network.Options.DatagramOptions.Validate() -> void
 override Nalix.Network.Connections.DatagramConnection.ToString() -> string!
 Nalix.Network.Connections.ConnectionHub.BroadcastAsync(System.ReadOnlyMemory<byte> message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
@@ -201,3 +187,4 @@ Nalix.Network.Connections.ConnectionHub.MulticastExceptAsync(Nalix.Abstractions.
 *REMOVED*virtual Nalix.Network.Listeners.Udp.UdpListenerBase.Initialize() -> void
 *REMOVED*virtual Nalix.Network.Listeners.Udp.UdpListenerBase.ProcessDatagram(Nalix.Environment.Memory.BufferLease! lease, System.Net.EndPoint? remoteEndPoint) -> void
 *REMOVED*virtual Nalix.Network.Listeners.Udp.UdpListenerBase.TryResolveConnection(Nalix.Abstractions.Networking.IConnectionHub! hub, System.ReadOnlySpan<byte> sessionToken, out Nalix.Network.Connections.Connection? connection) -> bool
+Nalix.Network.Listeners.Datagram.DatagramListener.DatagramListener(ushort port, Nalix.Abstractions.Networking.IProtocol! protocol, Nalix.Abstractions.Networking.IConnectionHub! hub, Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory! protectionFactory, Nalix.Network.Options.DatagramOptions? options = null, Nalix.Environment.Options.DatagramEngineOptions? engineOptions = null) -> void

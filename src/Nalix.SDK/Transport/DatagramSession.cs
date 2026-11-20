@@ -20,6 +20,7 @@ using Nalix.Codec.Security.Datagram;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Datagrams;
 using Nalix.Environment.Memory;
+using Nalix.Environment.Options;
 using Nalix.SDK.Options;
 using Nalix.SDK.Transport.Extensions;
 

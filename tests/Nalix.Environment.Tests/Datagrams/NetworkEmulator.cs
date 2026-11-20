@@ -9,6 +9,7 @@ using Nalix.Abstractions.Primitives;
 using Nalix.Codec.Security.Datagram;
 using Nalix.Environment.Datagrams;
 using Nalix.Environment.Memory;
+using Nalix.Environment.Options;
 
 namespace Nalix.Environment.Tests.Datagrams;
 

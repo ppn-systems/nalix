@@ -17,7 +17,6 @@ Nalix.Environment.Datagrams.DatagramEngine.BytesInFlight.get -> long
 Nalix.Environment.Datagrams.DatagramEngine.Close(Nalix.Environment.Datagrams.DatagramCloseCode code, string? reason, long now, ulong applicationCode = 0) -> void
 Nalix.Environment.Datagrams.DatagramEngine.CongestionWindow.get -> long
 Nalix.Environment.Datagrams.DatagramEngine.ConnectionId.get -> ulong
-Nalix.Environment.Datagrams.DatagramEngine.DatagramEngine(Nalix.Environment.Datagrams.DatagramEngineOptions! options, Nalix.Environment.Datagrams.DatagramPeerLimits peerLimits, Nalix.Abstractions.Networking.Datagrams.IDatagramProtection! protection, ulong connectionId, bool isServer, Nalix.Environment.Datagrams.IDatagramEngineHandler! handler, long now) -> void
 Nalix.Environment.Datagrams.DatagramEngine.DatagramsDropped.get -> long
 Nalix.Environment.Datagrams.DatagramEngine.DatagramsLost.get -> long
 Nalix.Environment.Datagrams.DatagramEngine.DatagramsReceived.get -> long
@@ -33,35 +32,6 @@ Nalix.Environment.Datagrams.DatagramEngine.SmoothedRtt.get -> long
 Nalix.Environment.Datagrams.DatagramEngine.State.get -> Nalix.Environment.Datagrams.DatagramEngineState
 Nalix.Environment.Datagrams.DatagramEngine.TrySend(System.ReadOnlySpan<byte> message, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel, byte priority, long now) -> bool
 Nalix.Environment.Datagrams.DatagramEngine.TrySendWithReceipt(System.ReadOnlySpan<byte> message, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel, byte priority, long now) -> System.Threading.Tasks.Task<bool>?
-Nalix.Environment.Datagrams.DatagramEngineOptions
-Nalix.Environment.Datagrams.DatagramEngineOptions.ChannelCount.get -> int
-Nalix.Environment.Datagrams.DatagramEngineOptions.ChannelCount.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.ChannelReceiveBufferBytes.get -> long
-Nalix.Environment.Datagrams.DatagramEngineOptions.ChannelReceiveBufferBytes.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.DatagramEngineOptions() -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.EnableMtuProbing.get -> bool
-Nalix.Environment.Datagrams.DatagramEngineOptions.EnableMtuProbing.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.FragmentTimeoutMs.get -> int
-Nalix.Environment.Datagrams.DatagramEngineOptions.FragmentTimeoutMs.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.IdleTimeoutMs.get -> int
-Nalix.Environment.Datagrams.DatagramEngineOptions.IdleTimeoutMs.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.KeyUpdateIntervalMs.get -> long
-Nalix.Environment.Datagrams.DatagramEngineOptions.KeyUpdateIntervalMs.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.KeyUpdatePacketInterval.get -> long
-Nalix.Environment.Datagrams.DatagramEngineOptions.KeyUpdatePacketInterval.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.MaxAckDelayMs.get -> int
-Nalix.Environment.Datagrams.DatagramEngineOptions.MaxAckDelayMs.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.MaxMessageSize.get -> int
-Nalix.Environment.Datagrams.DatagramEngineOptions.MaxMessageSize.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.MaxOpenFragmentStreams.get -> int
-Nalix.Environment.Datagrams.DatagramEngineOptions.MaxOpenFragmentStreams.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.ReceiveBufferBytes.get -> long
-Nalix.Environment.Datagrams.DatagramEngineOptions.ReceiveBufferBytes.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.SendQueueBytesPerChannel.get -> long
-Nalix.Environment.Datagrams.DatagramEngineOptions.SendQueueBytesPerChannel.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.UnreliableExpiryMs.get -> int
-Nalix.Environment.Datagrams.DatagramEngineOptions.UnreliableExpiryMs.init -> void
-Nalix.Environment.Datagrams.DatagramEngineOptions.Validate() -> void
 Nalix.Environment.Datagrams.DatagramEngineState
 Nalix.Environment.Datagrams.DatagramEngineState.Closed = 3 -> Nalix.Environment.Datagrams.DatagramEngineState
 Nalix.Environment.Datagrams.DatagramEngineState.Draining = 2 -> Nalix.Environment.Datagrams.DatagramEngineState
@@ -81,12 +51,9 @@ Nalix.Environment.Datagrams.IDatagramEngineHandler.OnClosed(Nalix.Environment.Da
 Nalix.Environment.Datagrams.IDatagramEngineHandler.OnMessage(Nalix.Environment.Memory.BufferLease! message, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel) -> void
 const Nalix.Environment.Datagrams.DatagramEngine.MaxDatagramSize = 1472 -> int
 const Nalix.Environment.Datagrams.DatagramEngine.MaxUnfragmentedMessageSize = 1148 -> int
-const Nalix.Environment.Datagrams.DatagramEngineOptions.MaxChannels = 64 -> int
-const Nalix.Environment.Datagrams.DatagramEngineOptions.MinimumMtu = 1200 -> int
 override Nalix.Environment.Datagrams.DatagramPeerLimits.GetHashCode() -> int
 static Nalix.Environment.Datagrams.DatagramEngine.NowMicros() -> long
 static Nalix.Environment.Datagrams.DatagramPeerLimits.Default.get -> Nalix.Environment.Datagrams.DatagramPeerLimits
-static Nalix.Environment.Datagrams.DatagramPeerLimits.From(Nalix.Environment.Datagrams.DatagramEngineOptions! options) -> Nalix.Environment.Datagrams.DatagramPeerLimits
 static Nalix.Environment.Datagrams.DatagramPeerLimits.operator !=(Nalix.Environment.Datagrams.DatagramPeerLimits left, Nalix.Environment.Datagrams.DatagramPeerLimits right) -> bool
 static Nalix.Environment.Datagrams.DatagramPeerLimits.operator ==(Nalix.Environment.Datagrams.DatagramPeerLimits left, Nalix.Environment.Datagrams.DatagramPeerLimits right) -> bool
 ~override Nalix.Environment.Datagrams.DatagramPeerLimits.Equals(object obj) -> bool
@@ -98,3 +65,36 @@ static Nalix.Environment.Datagrams.DatagramEngine.TryReadConnectionId(System.Rea
 *REMOVED*Nalix.Environment.Memory.BufferLease.IsReliable.set -> void
 *REMOVED*Nalix.Environment.Options.SequenceOptions.UdpWindow.get -> uint
 *REMOVED*Nalix.Environment.Options.SequenceOptions.UdpWindow.set -> void
+Nalix.Environment.Datagrams.DatagramEngine.DatagramEngine(Nalix.Environment.Options.DatagramEngineOptions! options, Nalix.Environment.Datagrams.DatagramPeerLimits peerLimits, Nalix.Abstractions.Networking.Datagrams.IDatagramProtection! protection, ulong connectionId, bool isServer, Nalix.Environment.Datagrams.IDatagramEngineHandler! handler, long now) -> void
+Nalix.Environment.Options.DatagramEngineOptions
+Nalix.Environment.Options.DatagramEngineOptions.ChannelCount.get -> int
+Nalix.Environment.Options.DatagramEngineOptions.ChannelCount.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.ChannelReceiveBufferBytes.get -> long
+Nalix.Environment.Options.DatagramEngineOptions.ChannelReceiveBufferBytes.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.DatagramEngineOptions() -> void
+Nalix.Environment.Options.DatagramEngineOptions.EnableMtuProbing.get -> bool
+Nalix.Environment.Options.DatagramEngineOptions.EnableMtuProbing.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.FragmentTimeoutMs.get -> int
+Nalix.Environment.Options.DatagramEngineOptions.FragmentTimeoutMs.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.IdleTimeoutMs.get -> int
+Nalix.Environment.Options.DatagramEngineOptions.IdleTimeoutMs.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.KeyUpdateIntervalMs.get -> long
+Nalix.Environment.Options.DatagramEngineOptions.KeyUpdateIntervalMs.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.KeyUpdatePacketInterval.get -> long
+Nalix.Environment.Options.DatagramEngineOptions.KeyUpdatePacketInterval.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.MaxAckDelayMs.get -> int
+Nalix.Environment.Options.DatagramEngineOptions.MaxAckDelayMs.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.MaxMessageSize.get -> int
+Nalix.Environment.Options.DatagramEngineOptions.MaxMessageSize.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.MaxOpenFragmentStreams.get -> int
+Nalix.Environment.Options.DatagramEngineOptions.MaxOpenFragmentStreams.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.ReceiveBufferBytes.get -> long
+Nalix.Environment.Options.DatagramEngineOptions.ReceiveBufferBytes.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.SendQueueBytesPerChannel.get -> long
+Nalix.Environment.Options.DatagramEngineOptions.SendQueueBytesPerChannel.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.UnreliableExpiryMs.get -> int
+Nalix.Environment.Options.DatagramEngineOptions.UnreliableExpiryMs.set -> void
+Nalix.Environment.Options.DatagramEngineOptions.Validate() -> void
+const Nalix.Environment.Options.DatagramEngineOptions.MaxChannels = 64 -> int
+const Nalix.Environment.Options.DatagramEngineOptions.MinimumMtu = 1200 -> int
+static Nalix.Environment.Datagrams.DatagramPeerLimits.From(Nalix.Environment.Options.DatagramEngineOptions! options) -> Nalix.Environment.Datagrams.DatagramPeerLimits
