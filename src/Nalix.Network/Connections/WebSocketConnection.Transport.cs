@@ -388,7 +388,8 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
         {
             while (!cancellationToken.IsCancellationRequested && webSocket.State == WebSocketState.Open && !owner.IsDisposed)
             {
-                WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
+                // The Memory overload: the ArraySegment one wraps every result in a new Task and WebSocketReceiveResult.
+                ValueWebSocketReceiveResult result = await webSocket.ReceiveAsync(buffer.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
@@ -485,10 +486,10 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
         bool ownershipTransferred = false;
         try
         {
-            WebSocketReceiveResult result;
+            ValueWebSocketReceiveResult result;
             do
             {
-                result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
+                result = await webSocket.ReceiveAsync(buffer.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
                     return null;
