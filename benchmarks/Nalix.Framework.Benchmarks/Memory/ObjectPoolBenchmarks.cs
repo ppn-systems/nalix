@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Nalix.Abstractions;
 using Nalix.Environment.Configuration;
@@ -12,6 +13,10 @@ namespace Nalix.Framework.Benchmarks.Memory;
 public class ObjectPoolBenchmarks
 {
     private ObjectPoolManager _poolManager = null!;
+
+    /// <summary>Per-type metrics (on by default in hosts).</summary>
+    [Params(true, false)]
+    public bool Metrics { get; set; }
 
     public class SamplePoolable : IPoolable
     {
@@ -33,6 +38,7 @@ public class ObjectPoolBenchmarks
         options.EnableObjectTrimming = false;
         options.EnableDiagnostics = false;
         options.EnableLeakDetection = false;
+        options.EnableMetrics = this.Metrics;
 
         _poolManager = new ObjectPoolManager(options);
 
@@ -55,4 +61,20 @@ public class ObjectPoolBenchmarks
         obj.Value2 = "pooled";
         _poolManager.Return(obj);
     }
+
+    private const int Workers = 4;
+    private const int PerWorker = 10_000;
+
+    /// <summary>Four threads renting and returning at once: every packet and lease on a multi-core server.</summary>
+    [Benchmark(OperationsPerInvoke = Workers * PerWorker)]
+    public void RentAndReturn_ObjectPool_Parallel()
+        => _ = Parallel.For(0, Workers, _ =>
+        {
+            for (int i = 0; i < PerWorker; i++)
+            {
+                SamplePoolable obj = _poolManager.Get<SamplePoolable>();
+                obj.Value1 = i;
+                _poolManager.Return(obj);
+            }
+        });
 }

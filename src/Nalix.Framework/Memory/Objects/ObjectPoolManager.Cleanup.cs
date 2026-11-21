@@ -51,8 +51,8 @@ public sealed partial class ObjectPoolManager
                 }
 
                 // Update trim snapshot for next cycle's hit rate calculation
-                _ = Interlocked.Exchange(ref metrics.LastTrimGets, Interlocked.Read(ref metrics.TotalGets));
-                _ = Interlocked.Exchange(ref metrics.LastTrimHits, Interlocked.Read(ref metrics.CacheHits));
+                _ = Interlocked.Exchange(ref metrics.LastTrimGets, metrics.TotalGets);
+                _ = Interlocked.Exchange(ref metrics.LastTrimHits, metrics.CacheHits);
             }
             catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
             {
@@ -90,11 +90,10 @@ public sealed partial class ObjectPoolManager
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int CALCULATE_PER_TYPE_TRIM_PERCENTAGE(Type type, PoolMetrics metrics, bool isDeepTrim)
     {
-        long windowGets = Interlocked.Read(ref metrics.TotalGets) - Interlocked.Read(ref metrics.LastTrimGets);
-        long windowHits = Interlocked.Read(ref metrics.CacheHits) - Interlocked.Read(ref metrics.LastTrimHits);
+        long windowGets = metrics.TotalGets - Interlocked.Read(ref metrics.LastTrimGets);
+        long windowHits = metrics.CacheHits - Interlocked.Read(ref metrics.LastTrimHits);
 
-        // If there are no gets in this window, assume hit rate is 100% to protect unused but cached objects.
-        // We'll rely on idle/free ratio checks below to clear them out if they are truly idle.
+        // No gets in this window: the pool is idle (handled below, after the safety floor).
         double hitRate = windowGets > 0
             ? (double)windowHits / windowGets * 100.0
             : 100.0;
@@ -109,8 +108,11 @@ public sealed partial class ObjectPoolManager
         }
 
         // === SAFETY FLOOR ===
-        // Never trim below this threshold to prevent excessive churn and keep recovery fast
-        long peakOutstanding = Interlocked.Read(ref metrics.PeakOutstanding);
+        // Never trim below this threshold to prevent excessive churn and keep recovery fast. It covers the
+        // working set of the recent past, not of the pool's whole life: the lifetime peak never falls, so one
+        // burst kept 1.5x its size in every idle pool for good. The recent peak is this interval's peak, or half
+        // the previous one, whichever is larger; an idle pool sheds the burst over a few intervals.
+        long peakOutstanding = this.UPDATE_TRIM_PEAK(metrics);
         int minKeep = Math.Max(
             _config.MinimumKeepObjects,
             Math.Max(maxCap / 12, (int)(peakOutstanding * 1.5))
@@ -122,6 +124,15 @@ public sealed partial class ObjectPoolManager
         }
 
         double freeRatio = maxCap > 0 ? (double)available / maxCap : 0.0;
+
+        // === IDLE POOL (no Get for a whole trim interval) → shrink toward the safety floor ===
+        // The 100 % hit rate assumed above for an empty window made an idle pool look hot, so it kept up to 90 %
+        // of its capacity for good. Trim keeps a percentage of the capacity: aim at the floor; the decay factor
+        // still takes only part of the excess per cycle.
+        if (windowGets == 0)
+        {
+            return maxCap > 0 ? Math.Clamp((int)Math.Ceiling(minKeep * 100.0 / maxCap), 1, 100) : 0;
+        }
 
         // === HOT POOL (high hit rate) → keep more objects ===
         if (hitRate >= _config.HotHitRateThreshold)
@@ -148,5 +159,32 @@ public sealed partial class ObjectPoolManager
         return _config.BaseKeepPercentage;
     }
 
-}
+    /// <summary>
+    /// Advances the recent peak of outstanding objects that the trim floor protects, and returns it.
+    /// </summary>
+    /// <remarks>
+    /// With <see cref="Options.ObjectPoolOptions.EnableMetrics"/> the lifetime peak is exact: when it rose during the
+    /// interval, that is the interval's peak. Without it the outstanding count is sampled now from the per-type
+    /// Gets and Returns, so the working set out at a trim is protected (the lifetime peak follows the samples, for
+    /// the reports).
+    /// </remarks>
+    private long UPDATE_TRIM_PEAK(PoolMetrics metrics)
+    {
+        long lifetimePeak = Interlocked.Read(ref metrics.PeakOutstanding);
+        long outstanding = _config.EnableMetrics || _config.EnableDiagnostics
+            ? Interlocked.Read(ref metrics.Outstanding)
+            : Math.Max(0, metrics.TotalGets - metrics.TotalReturns);
 
+        if (!_config.EnableMetrics && !_config.EnableDiagnostics && outstanding > lifetimePeak)
+        {
+            _ = Interlocked.Exchange(ref metrics.PeakOutstanding, outstanding);
+            lifetimePeak = outstanding;
+        }
+
+        long previousLifetimePeak = Interlocked.Exchange(ref metrics.LastTrimLifetimePeak, lifetimePeak);
+        long intervalPeak = lifetimePeak > previousLifetimePeak ? lifetimePeak : outstanding;
+        long recent = Math.Max(intervalPeak, Interlocked.Read(ref metrics.TrimPeak) / 2);
+        _ = Interlocked.Exchange(ref metrics.TrimPeak, recent);
+        return recent;
+    }
+}

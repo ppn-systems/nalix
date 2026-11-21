@@ -103,11 +103,11 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     /// <summary>
     /// Statistics tracking
     /// </summary>
-    internal long _totalGetOperations;
-
-    internal long _totalReturnOperations;
-    internal long _totalCacheMisses;
-    internal long _totalCacheHits;
+    /// <summary>
+    /// Get, Return, hit and miss counts, one padded slot per processor: a single shared counter made every core
+    /// write the same cache line on every pooled packet and lease. Summed when read.
+    /// </summary>
+    private readonly StatSlot[] _stats = new StatSlot[StatSlotCount()];
     internal long _totalCreated;
     internal long _totalDisposed;
     internal DateTime _startTime = DateTime.UtcNow;
@@ -147,22 +147,22 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     /// <summary>
     /// Gets the total number of get operations performed.
     /// </summary>
-    public long TotalGetOperations => Interlocked.Read(ref _totalGetOperations);
+    public long TotalGetOperations => this.SumStats(StatField.Gets);
 
     /// <summary>
     /// Gets the total number of return operations performed.
     /// </summary>
-    public long TotalReturnOperations => Interlocked.Read(ref _totalReturnOperations);
+    public long TotalReturnOperations => this.SumStats(StatField.Returns);
 
     /// <summary>
     /// Gets the total number of cache hits (objects retrieved from pool).
     /// </summary>
-    public long TotalCacheHits => Interlocked.Read(ref _totalCacheHits);
+    public long TotalCacheHits => this.SumStats(StatField.Hits);
 
     /// <summary>
     /// Gets the total number of cache misses (new objects created).
     /// </summary>
-    public long TotalCacheMisses => Interlocked.Read(ref _totalCacheMisses);
+    public long TotalCacheMisses => this.SumStats(StatField.Misses);
 
     /// <summary>
     /// Gets the overall cache hit rate as a percentage (0-100).
@@ -262,7 +262,8 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T Get<T>() where T : IPoolable, new()
     {
-        _ = Interlocked.Increment(ref _totalGetOperations);
+        ref StatSlot stats = ref this.CurrentStats;
+        _ = Interlocked.Increment(ref stats.Gets);
 
         int id = PoolType<T>.Id;
         ObjectPool? pool = id < _pools.Length ? _pools[id] : null;
@@ -284,29 +285,31 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
 
         if (isCacheHit)
         {
-            _ = Interlocked.Increment(ref _totalCacheHits);
+            _ = Interlocked.Increment(ref stats.Hits);
         }
         else
         {
-            _ = Interlocked.Increment(ref _totalCacheMisses);
+            _ = Interlocked.Increment(ref stats.Misses);
             _ = Interlocked.Increment(ref _totalCreated);
         }
 
-        // 1. Lightweight metrics tracking (Safe for Production)
+        // 1. Per-type counts, always: trimming reads them. They are per processor, so they stay cheap.
+        ref StatSlot typeStats = ref metrics.Current;
+        if (isCacheHit)
+        {
+            _ = Interlocked.Increment(ref typeStats.Hits);
+        }
+        else
+        {
+            _ = Interlocked.Increment(ref typeStats.Misses);
+            _ = Interlocked.Increment(ref metrics.TotalCreated);
+        }
+
+        _ = Interlocked.Increment(ref typeStats.Gets);
+
+        // 2. Exact outstanding and peak tracking (EnableMetrics): one counter every thread renting the type writes.
         if (_config.EnableMetrics || _config.EnableDiagnostics)
         {
-            if (isCacheHit)
-            {
-                _ = Interlocked.Increment(ref metrics.CacheHits);
-            }
-            else
-            {
-                _ = Interlocked.Increment(ref metrics.CacheMisses);
-                _ = Interlocked.Increment(ref metrics.TotalCreated);
-            }
-
-            _ = Interlocked.Increment(ref metrics.TotalGets);
-
             // Track outstanding objects so we can detect leaks (Gets - Returns)
             long outstanding = Interlocked.Increment(ref metrics.Outstanding);
 
@@ -323,11 +326,10 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
                 }
             }
 
-            metrics.LastAccessUtc = DateTime.UtcNow;
-            metrics.LastAccessType = "Get";
+            metrics.Touch("Get");
         }
 
-        // 2. Heavyweight diagnostics (Development / QA leaks tracking)
+        // 3. Heavyweight diagnostics (Development / QA leaks tracking)
         if (_config.EnableDiagnostics)
         {
             PoolSentinel sentinel = new(result, _config.CaptureStackTraces);
@@ -359,7 +361,7 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             THROW_NULL_OBJECT();
         }
 
-        _ = Interlocked.Increment(ref _totalReturnOperations);
+        _ = Interlocked.Increment(ref this.CurrentStats.Returns);
 
         int id = PoolType<T>.Id;
         ObjectPool? pool = id < _pools.Length ? _pools[id] : null;
@@ -405,13 +407,12 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             }
         }
 
-        // 2. Lightweight metrics tracking (Safe for Production)
+        // 2. Per-type count, always (see Get); exact outstanding tracking with EnableMetrics.
+        _ = Interlocked.Increment(ref metrics.Current.Returns);
+
         if (_config.EnableMetrics || _config.EnableDiagnostics)
         {
-            metrics.LastAccessType = "Return";
-            metrics.LastAccessUtc = DateTime.UtcNow;
-
-            _ = Interlocked.Increment(ref metrics.TotalReturns);
+            metrics.Touch("Return");
 
             // Decrement outstanding; ensure it doesn't go negative
             long outstandingAfter = Interlocked.Decrement(ref metrics.Outstanding);
@@ -506,15 +507,15 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ResetMetrics()
     {
-        _ = Interlocked.Exchange(ref _totalGetOperations, 0);
-        _ = Interlocked.Exchange(ref _totalReturnOperations, 0);
+        this.ResetStats(StatField.Gets);
+        this.ResetStats(StatField.Returns);
 
         foreach (PoolMetrics metrics in _metricsDict.Values)
         {
-            _ = Interlocked.Exchange(ref metrics.TotalGets, 0);
-            _ = Interlocked.Exchange(ref metrics.TotalReturns, 0);
-            _ = Interlocked.Exchange(ref metrics.CacheHits, 0);
-            _ = Interlocked.Exchange(ref metrics.CacheMisses, 0);
+            metrics.Reset(StatField.Gets);
+            metrics.Reset(StatField.Returns);
+            metrics.Reset(StatField.Hits);
+            metrics.Reset(StatField.Misses);
             _ = Interlocked.Exchange(ref metrics.Outstanding, 0);
             _ = Interlocked.Exchange(ref metrics.ConsecutiveFailures, 0);
             _ = Interlocked.Exchange(ref metrics.TotalCreated, 0);
@@ -654,14 +655,14 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
         {
             PoolMetrics metrics = kvp.Value;
 
-            long lifetimeGets = Interlocked.Read(ref metrics.TotalGets);
+            long lifetimeGets = metrics.TotalGets;
             if (lifetimeGets == 0)
             {
                 continue;
             }
 
-            long lifetimeHits = Interlocked.Read(ref metrics.CacheHits);
-            long lifetimeMisses = Interlocked.Read(ref metrics.CacheMisses);
+            long lifetimeHits = metrics.CacheHits;
+            long lifetimeMisses = metrics.CacheMisses;
             long previousGets = Interlocked.Exchange(ref metrics.LastHealthGets, lifetimeGets);
             _ = Interlocked.Exchange(ref metrics.LastHealthHits, lifetimeHits);
             long previousMisses = Interlocked.Exchange(ref metrics.LastHealthMisses, lifetimeMisses);
@@ -730,10 +731,10 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     public void ResetStatistics()
     {
         // Capture snapshot before reset
-        long gets = Interlocked.Read(ref _totalGetOperations);
-        long returns = Interlocked.Read(ref _totalReturnOperations);
-        long hits = Interlocked.Read(ref _totalCacheHits);
-        long misses = Interlocked.Read(ref _totalCacheMisses);
+        long gets = this.SumStats(StatField.Gets);
+        long returns = this.SumStats(StatField.Returns);
+        long hits = this.SumStats(StatField.Hits);
+        long misses = this.SumStats(StatField.Misses);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Memory.PoolReturned))
         {
@@ -742,10 +743,10 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             DiagnosticsEvents.Write(DiagnosticsEvents.Memory.PoolReturned, new DiagnosticLog("FW.ObjectPoolManager:ResetStatistics", $"reset-statistics phase=before-reset gets={gets} returns={returns} hits={hits} misses={misses} hit-rate={hitRateStr}% uptime-seconds={uptimeStr} pool-count={this.PoolCount}"));
         }
 
-        _ = Interlocked.Exchange(ref _totalGetOperations, 0);
-        _ = Interlocked.Exchange(ref _totalReturnOperations, 0);
-        _ = Interlocked.Exchange(ref _totalCacheHits, 0);
-        _ = Interlocked.Exchange(ref _totalCacheMisses, 0);
+        this.ResetStats(StatField.Gets);
+        this.ResetStats(StatField.Returns);
+        this.ResetStats(StatField.Hits);
+        this.ResetStats(StatField.Misses);
         _startTime = DateTime.UtcNow;
 
         // Also reset statistics for all pools
@@ -826,8 +827,8 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             return "Fail (1)";
         }
 
-        long gets = Interlocked.Read(ref metrics.TotalGets);
-        long misses = Interlocked.Read(ref metrics.CacheMisses);
+        long gets = metrics.TotalGets;
+        long misses = metrics.CacheMisses;
 
         long totalCreated = Interlocked.Read(ref metrics.TotalCreated);
         int maxCapacity = 0;
