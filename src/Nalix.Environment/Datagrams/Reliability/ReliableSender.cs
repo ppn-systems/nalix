@@ -19,8 +19,8 @@ namespace Nalix.Environment.Datagrams.Reliability;
 internal sealed class ReliableSender
 {
     private readonly DatagramEngineOptions _options;
-    private readonly LinkedList<OutMessage> _retransmit = new();
-    private readonly LinkedList<OutMessage>[] _queues = new LinkedList<OutMessage>[DatagramEngine.PriorityLevels];
+    private readonly OutMessageList _retransmit = new();
+    private readonly OutMessageList[] _queues = new OutMessageList[DatagramEngine.PriorityLevels];
     private readonly long[] _queuedBytes;
     private readonly long[] _unreleasedBytes;
     private readonly ulong[] _nextUnreliableSequenced;
@@ -58,7 +58,7 @@ internal sealed class ReliableSender
 
         for (int i = 0; i < DatagramEngine.PriorityLevels; i++)
         {
-            _queues[i] = new LinkedList<OutMessage>();
+            _queues[i] = new OutMessageList();
         }
     }
 
@@ -122,7 +122,7 @@ internal sealed class ReliableSender
             }
         }
 
-        LinkedList<OutMessage> queue = _queues[Math.Min(priority, (byte)(DatagramEngine.PriorityLevels - 1))];
+        OutMessageList queue = _queues[Math.Min(priority, (byte)(DatagramEngine.PriorityLevels - 1))];
         ushort streamId = chunks > 1 ? FragmentStreamId.Next() : (ushort)0;
 
         for (int i = 0; i < chunks; i++)
@@ -142,11 +142,21 @@ internal sealed class ReliableSender
             }
             else
             {
+                // One copy of the whole message, shared by its chunks: one pool rent instead of one per chunk.
+                // The fragment header is written with the frame (WriteFrame).
+                if (i == 0)
+                {
+                    group!.Buffer = BufferLease.ByteArrayPool.Rent(message.Length);
+                    message.CopyTo(group.Buffer);
+                    group.BufferLength = message.Length;
+                    group.BufferUsers = chunks;
+                }
+
                 int offset = i * DatagramEngine.ChunkBodySize;
                 int length = Math.Min(DatagramEngine.ChunkBodySize, message.Length - offset);
-                m.Buffer = BufferLease.ByteArrayPool.Rent(FragmentHeader.WireSize + length);
-                new FragmentHeader(streamId, (ushort)i, (ushort)chunks, i == chunks - 1).WriteTo(m.Buffer);
-                message.Slice(offset, length).CopyTo(m.Buffer.AsSpan(FragmentHeader.WireSize));
+                m.IsChunk = true;
+                m.Chunk = new FragmentHeader(streamId, (ushort)i, (ushort)chunks, i == chunks - 1);
+                m.ChunkOffset = offset;
                 m.Length = FragmentHeader.WireSize + length;
             }
 
@@ -160,7 +170,7 @@ internal sealed class ReliableSender
             };
 
             _queuedBytes[channel] += m.Length;
-            _ = queue.AddLast(m);
+            queue.AddLast(m);
         }
 
         this.MayHaveSendable = true;
@@ -178,19 +188,18 @@ internal sealed class ReliableSender
         bool full = false;
 
         // Retransmissions go first.
-        for (LinkedListNode<OutMessage>? node = _retransmit.First; node is not null && !full;)
+        for (OutMessage? m = _retransmit.First; m is not null && !full;)
         {
-            LinkedListNode<OutMessage>? next = node.Next;
-            OutMessage m = node.Value;
+            OutMessage? next = m.Next;
 
             if (m.Method == DeliveryMethod.ReliableSequenced && m.OrderIndex + 1 < _nextReliableSequenced[m.Channel])
             {
-                _retransmit.Remove(node);
+                _retransmit.Remove(m);
                 this.Supersede(m);
             }
             else if (m.FrameSize <= destination.Length - offset)
             {
-                _retransmit.Remove(node);
+                _retransmit.Remove(m);
                 offset += WriteFrame(destination[offset..], m);
                 carried.Add(m);
             }
@@ -199,7 +208,7 @@ internal sealed class ReliableSender
                 full = true;
             }
 
-            node = next;
+            m = next;
         }
 
         Array.Clear(_blocked);
@@ -207,28 +216,27 @@ internal sealed class ReliableSender
 
         for (int level = DatagramEngine.PriorityLevels - 1; level >= 0 && !full; level--)
         {
-            LinkedList<OutMessage> queue = _queues[level];
-            for (LinkedListNode<OutMessage>? node = queue.First; node is not null && !full;)
+            OutMessageList queue = _queues[level];
+            for (OutMessage? m = queue.First; m is not null && !full;)
             {
-                LinkedListNode<OutMessage>? next = node.Next;
-                OutMessage m = node.Value;
+                OutMessage? next = m.Next;
 
                 if (!m.Method.IsReliable())
                 {
                     if (now - m.EnqueueTime > _options.UnreliableExpiryMs * 1000L)
                     {
                         // Too old to be useful: drop instead of sending late.
-                        queue.Remove(node);
+                        queue.Remove(m);
                         _queuedBytes[m.Channel] -= m.Length;
                         this.ReturnMessage(m);
-                        node = next;
+                        m = next;
                         continue;
                     }
                 }
                 else if (_blocked[m.Channel] || !this.TryCharge(m, ref windowBlocked))
                 {
                     _blocked[m.Channel] = true;
-                    node = next;
+                    m = next;
                     continue;
                 }
 
@@ -238,7 +246,7 @@ internal sealed class ReliableSender
                     break;
                 }
 
-                queue.Remove(node);
+                queue.Remove(m);
                 _queuedBytes[m.Channel] -= m.Length;
                 m.SentOnce = true;
                 offset += WriteFrame(destination[offset..], m);
@@ -252,7 +260,7 @@ internal sealed class ReliableSender
                     this.ReturnMessage(m);
                 }
 
-                node = next;
+                m = next;
             }
         }
 
@@ -314,7 +322,7 @@ internal sealed class ReliableSender
             return;
         }
 
-        _ = _retransmit.AddLast(m);
+        _retransmit.AddLast(m);
         this.MayHaveSendable = true;
     }
 
@@ -327,20 +335,10 @@ internal sealed class ReliableSender
         }
 
         _closed = true;
-        foreach (OutMessage m in _retransmit)
+        this.FailAll(_retransmit);
+        foreach (OutMessageList queue in _queues)
         {
-            this.Fail(m);
-        }
-
-        _retransmit.Clear();
-        foreach (LinkedList<OutMessage> queue in _queues)
-        {
-            foreach (OutMessage m in queue)
-            {
-                this.Fail(m);
-            }
-
-            queue.Clear();
+            this.FailAll(queue);
         }
 
         foreach (Queue<MessageGroup> groups in _orderedGroups)
@@ -356,6 +354,15 @@ internal sealed class ReliableSender
 
         Array.Clear(_queuedBytes);
         this.MayHaveSendable = false;
+    }
+
+    private void FailAll(OutMessageList list)
+    {
+        while (list.First is { } m)
+        {
+            list.Remove(m);
+            this.Fail(m);
+        }
     }
 
     /// <summary>A message that was in flight when the session closed.</summary>
@@ -464,7 +471,22 @@ internal sealed class ReliableSender
 
     private void ReturnMessage(OutMessage m)
     {
-        if (m.Buffer.Length > 0)
+        if (m.IsChunk)
+        {
+            // The last chunk returned releases the message the chunks share.
+            MessageGroup group = m.Group!;
+            if (--group.BufferUsers == 0)
+            {
+                group.Buffer.AsSpan(0, group.BufferLength).Clear();
+                BufferLease.ByteArrayPool.Return(group.Buffer);
+                group.Buffer = [];
+                group.BufferLength = 0;
+            }
+
+            m.IsChunk = false;
+            m.ChunkOffset = 0;
+        }
+        else if (m.Buffer.Length > 0)
         {
             m.Buffer.AsSpan(0, m.Length).Clear();
             BufferLease.ByteArrayPool.Return(m.Buffer);
@@ -494,7 +516,16 @@ internal sealed class ReliableSender
         }
 
         offset += VarInt.Write(destination[offset..], (ulong)m.Length);
-        m.Buffer.AsSpan(0, m.Length).CopyTo(destination[offset..]);
+        if (m.IsChunk)
+        {
+            m.Chunk.WriteTo(destination[offset..]);
+            m.Group!.Buffer.AsSpan(m.ChunkOffset, m.Length - FragmentHeader.WireSize).CopyTo(destination[(offset + FragmentHeader.WireSize)..]);
+        }
+        else
+        {
+            m.Buffer.AsSpan(0, m.Length).CopyTo(destination[offset..]);
+        }
+
         return offset + m.Length;
     }
 }

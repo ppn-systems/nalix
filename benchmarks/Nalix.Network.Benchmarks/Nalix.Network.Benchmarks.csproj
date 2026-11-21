@@ -7,5 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Nalix.Benchmarks.Shared\Nalix.Benchmarks.Shared.csproj" />
     <ProjectReference Include="..\..\src\Nalix.Network\Nalix.Network.csproj" />
+    <!-- Datagram benchmarks: ChaCha20-Poly1305 datagram protection. -->
+    <ProjectReference Include="..\..\src\Nalix.Codec\Nalix.Codec.csproj" />
   </ItemGroup>
 </Project>

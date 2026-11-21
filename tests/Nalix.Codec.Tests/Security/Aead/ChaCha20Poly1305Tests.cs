@@ -385,4 +385,46 @@ public sealed class ChaCha20Poly1305Tests
         Assert.Equal(bcCipher, nalixCipher);
         Assert.Equal(bcTag, nalixTag);
     }
+
+    /// <summary>
+    /// Lengths around the keystream boundaries: block 1 (first 64 bytes, generated with the Poly1305 key block),
+    /// the two-block and eight-block passes from counter 2, and a datagram-sized payload.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(63)]
+    [InlineData(64)]
+    [InlineData(65)]
+    [InlineData(191)]
+    [InlineData(192)]
+    [InlineData(193)]
+    [InlineData(575)]
+    [InlineData(576)]
+    [InlineData(577)]
+    [InlineData(1443)]
+    public void EncryptDecrypt_AtKeystreamBoundaries_MatchesBouncyCastle(int length)
+    {
+        byte[] key = GenerateRandom(32);
+        byte[] nonce = GenerateRandom(12);
+        byte[] aad = GenerateRandom(13);
+        byte[] plaintext = GenerateRandom(length);
+
+        byte[] cipher = new byte[length];
+        byte[] tag = new byte[16];
+        _ = Nalix.Codec.Security.Aead.ChaCha20Poly1305.Encrypt(key, nonce, plaintext, aad, cipher, tag);
+
+        var engine = new Org.BouncyCastle.Crypto.Modes.ChaCha20Poly1305();
+        engine.Init(true, new AeadParameters(new KeyParameter(key), 128, nonce, aad));
+        byte[] expected = new byte[length + 16];
+        int written = engine.ProcessBytes(plaintext, 0, length, expected, 0);
+        _ = engine.DoFinal(expected, written);
+
+        Assert.Equal(expected[..length], cipher);
+        Assert.Equal(expected[length..], tag);
+
+        byte[] recovered = new byte[length];
+        Assert.Equal(length, Nalix.Codec.Security.Aead.ChaCha20Poly1305.Decrypt(key, nonce, cipher, aad, tag, recovered));
+        Assert.Equal(plaintext, recovered);
+    }
 }

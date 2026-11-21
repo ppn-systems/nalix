@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 
 namespace Nalix.Codec.Security.Symmetric;
 
@@ -10,10 +11,12 @@ namespace Nalix.Codec.Security.Symmetric;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Three keystream paths are provided and selected once per call by hardware capability, in the
+/// Four keystream paths are provided and selected once per call by hardware capability, in the
 /// same style as <see cref="Hashing.Keccak256"/>:
 /// </para>
 /// <list type="bullet">
+/// <item><description><see cref="XorEightBlocks"/> — eight blocks per pass (AVX2), one state word of
+/// all eight blocks per register, so the rounds need no shuffles; XORed straight into the output.</description></item>
 /// <item><description><see cref="KeyStreamTwoBlocks"/> — two blocks per pass, one per 128-bit lane
 /// of a <see cref="Vector256{T}"/> (AVX2).</description></item>
 /// <item><description><see cref="KeyStreamOneBlock"/> — one block held in four
@@ -22,7 +25,7 @@ namespace Nalix.Codec.Security.Symmetric;
 /// round function stays free of span bounds checks.</description></item>
 /// </list>
 /// <para>
-/// All three produce byte-identical output to RFC 8439 §2.3; the vector paths differ from the
+/// All four produce byte-identical output to RFC 8439 §2.3; the vector paths differ from the
 /// scalar one only in how the same additions, XORs and rotations are scheduled.
 /// </para>
 /// </remarks>
@@ -35,6 +38,116 @@ internal static class ChaCha20Core
 
     /// <summary>True when <see cref="KeyStreamTwoBlocks"/> can be used on this machine.</summary>
     internal static bool TwoBlockPathSupported => Vector256.IsHardwareAccelerated;
+
+    /// <summary>True when <see cref="XorEightBlocks"/> can be used on this machine.</summary>
+    internal static bool EightBlockPathSupported => Avx2.IsSupported;
+
+    #region Keystream — eight blocks (AVX2, word-sliced)
+
+    /// <summary>
+    /// XORs eight blocks of keystream, for block counters <paramref name="counter"/> to
+    /// <paramref name="counter"/> + 7, into <paramref name="dst"/>: <c>dst[..512] = src[..512] ^ keystream</c>.
+    /// The keystream never leaves registers. <c>state[12]</c> is not read: the caller advances it, checking for
+    /// overflow, before calling, and checks <see cref="EightBlockPathSupported"/>.
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    internal static void XorEightBlocks(
+        scoped System.ReadOnlySpan<uint> state,
+        uint counter,
+        scoped System.ReadOnlySpan<byte> src,
+        scoped System.Span<byte> dst)
+    {
+        // Register i holds word i of the eight blocks; only the counter word differs between them.
+        Vector256<uint> x0 = Vector256.Create(state[0]), x1 = Vector256.Create(state[1]);
+        Vector256<uint> x2 = Vector256.Create(state[2]), x3 = Vector256.Create(state[3]);
+        Vector256<uint> x4 = Vector256.Create(state[4]), x5 = Vector256.Create(state[5]);
+        Vector256<uint> x6 = Vector256.Create(state[6]), x7 = Vector256.Create(state[7]);
+        Vector256<uint> x8 = Vector256.Create(state[8]), x9 = Vector256.Create(state[9]);
+        Vector256<uint> x10 = Vector256.Create(state[10]), x11 = Vector256.Create(state[11]);
+        Vector256<uint> x12 = Vector256.Create(counter) + Vector256.Create(0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u);
+        Vector256<uint> x13 = Vector256.Create(state[13]), x14 = Vector256.Create(state[14]);
+        Vector256<uint> x15 = Vector256.Create(state[15]);
+        Vector256<uint> counters = x12;
+
+        for (int i = 0; i < DoubleRounds; i++)
+        {
+            // Column rounds.
+            QuarterRound(ref x0, ref x4, ref x8, ref x12);
+            QuarterRound(ref x1, ref x5, ref x9, ref x13);
+            QuarterRound(ref x2, ref x6, ref x10, ref x14);
+            QuarterRound(ref x3, ref x7, ref x11, ref x15);
+
+            // Diagonal rounds.
+            QuarterRound(ref x0, ref x5, ref x10, ref x15);
+            QuarterRound(ref x1, ref x6, ref x11, ref x12);
+            QuarterRound(ref x2, ref x7, ref x8, ref x13);
+            QuarterRound(ref x3, ref x4, ref x9, ref x14);
+        }
+
+        x0 += Vector256.Create(state[0]); x1 += Vector256.Create(state[1]);
+        x2 += Vector256.Create(state[2]); x3 += Vector256.Create(state[3]);
+        x4 += Vector256.Create(state[4]); x5 += Vector256.Create(state[5]);
+        x6 += Vector256.Create(state[6]); x7 += Vector256.Create(state[7]);
+        x8 += Vector256.Create(state[8]); x9 += Vector256.Create(state[9]);
+        x10 += Vector256.Create(state[10]); x11 += Vector256.Create(state[11]);
+        x12 += counters; x13 += Vector256.Create(state[13]);
+        x14 += Vector256.Create(state[14]); x15 += Vector256.Create(state[15]);
+
+        // Words 0-7 of the eight blocks, then words 8-15: each transpose yields 32 bytes per block.
+        XorTransposed(x0, x1, x2, x3, x4, x5, x6, x7, src, dst);
+        XorTransposed(x8, x9, x10, x11, x12, x13, x14, x15, src[32..], dst[32..]);
+    }
+
+    /// <summary>
+    /// Transposes eight registers of word-sliced state (register i = word i of blocks 0-7) into eight runs of
+    /// eight consecutive words, one per block, and XORs run k into <c>[64k, 64k + 32)</c> of
+    /// <paramref name="src"/>/<paramref name="dst"/>.
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    private static void XorTransposed(
+        Vector256<uint> r0, Vector256<uint> r1, Vector256<uint> r2, Vector256<uint> r3,
+        Vector256<uint> r4, Vector256<uint> r5, Vector256<uint> r6, Vector256<uint> r7,
+        scoped System.ReadOnlySpan<byte> src,
+        scoped System.Span<byte> dst)
+    {
+        // Within each 128-bit lane: interleave 32-bit words, then 64-bit pairs.
+        Vector256<uint> t0 = Avx2.UnpackLow(r0, r1), t1 = Avx2.UnpackHigh(r0, r1);
+        Vector256<uint> t2 = Avx2.UnpackLow(r2, r3), t3 = Avx2.UnpackHigh(r2, r3);
+        Vector256<uint> t4 = Avx2.UnpackLow(r4, r5), t5 = Avx2.UnpackHigh(r4, r5);
+        Vector256<uint> t6 = Avx2.UnpackLow(r6, r7), t7 = Avx2.UnpackHigh(r6, r7);
+
+        Vector256<uint> u0 = Avx2.UnpackLow(t0.AsUInt64(), t2.AsUInt64()).AsUInt32();
+        Vector256<uint> u1 = Avx2.UnpackHigh(t0.AsUInt64(), t2.AsUInt64()).AsUInt32();
+        Vector256<uint> u2 = Avx2.UnpackLow(t1.AsUInt64(), t3.AsUInt64()).AsUInt32();
+        Vector256<uint> u3 = Avx2.UnpackHigh(t1.AsUInt64(), t3.AsUInt64()).AsUInt32();
+        Vector256<uint> u4 = Avx2.UnpackLow(t4.AsUInt64(), t6.AsUInt64()).AsUInt32();
+        Vector256<uint> u5 = Avx2.UnpackHigh(t4.AsUInt64(), t6.AsUInt64()).AsUInt32();
+        Vector256<uint> u6 = Avx2.UnpackLow(t5.AsUInt64(), t7.AsUInt64()).AsUInt32();
+        Vector256<uint> u7 = Avx2.UnpackHigh(t5.AsUInt64(), t7.AsUInt64()).AsUInt32();
+
+        // Lane 0 of u0-u3 holds blocks 0-3 (words 0-3), lane 1 blocks 4-7; u4-u7 hold words 4-7.
+        XorRun(Avx2.Permute2x128(u0, u4, 0x20), src, dst, 0);
+        XorRun(Avx2.Permute2x128(u1, u5, 0x20), src, dst, 1);
+        XorRun(Avx2.Permute2x128(u2, u6, 0x20), src, dst, 2);
+        XorRun(Avx2.Permute2x128(u3, u7, 0x20), src, dst, 3);
+        XorRun(Avx2.Permute2x128(u0, u4, 0x31), src, dst, 4);
+        XorRun(Avx2.Permute2x128(u1, u5, 0x31), src, dst, 5);
+        XorRun(Avx2.Permute2x128(u2, u6, 0x31), src, dst, 6);
+        XorRun(Avx2.Permute2x128(u3, u7, 0x31), src, dst, 7);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    private static void XorRun(Vector256<uint> keystream, scoped System.ReadOnlySpan<byte> src, scoped System.Span<byte> dst, int block)
+    {
+        // AVX2 is x86 only, so the words are already little-endian.
+        int offset = block * 64;
+        (Vector256.Create(src.Slice(offset, 32)) ^ keystream.AsByte()).CopyTo(dst.Slice(offset, 32));
+    }
+
+    #endregion Keystream — eight blocks (AVX2, word-sliced)
 
     #region Keystream — two blocks (Vector256)
 

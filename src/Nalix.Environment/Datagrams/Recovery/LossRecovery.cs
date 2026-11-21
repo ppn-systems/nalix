@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System;
+using System.Runtime.InteropServices;
 using Nalix.Environment.Datagrams.Wire;
 
 namespace Nalix.Environment.Datagrams.Recovery;
@@ -79,7 +80,8 @@ internal sealed class LossRecovery
 
         if (end > lo)
         {
-            acked.InsertRange(0, _sent.GetRange(lo, end - lo));
+            // The span overload copies straight from _sent; GetRange allocated a list per ACK range.
+            acked.InsertRange(0, CollectionsMarshal.AsSpan(_sent)[lo..end]);
             _sent.RemoveRange(lo, end - lo);
         }
     }

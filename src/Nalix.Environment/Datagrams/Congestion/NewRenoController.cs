@@ -32,11 +32,20 @@ internal sealed class NewRenoController : ICongestionController
 
     public void OnPacketAcked(int size, long timeSent)
     {
-        this.BytesInFlight = Math.Max(0, this.BytesInFlight - size);
+        long flight = this.BytesInFlight;
+        this.BytesInFlight = Math.Max(0, flight - size);
 
         if (timeSent <= _recoveryStart)
         {
             return; // Acknowledgements of packets sent before the recovery period do not grow the window.
+        }
+
+        // RFC 9002 §7.8: an application-limited sender does not grow the window, which would otherwise rise
+        // without bound and stop pacing a later burst. The window counts as used when the flight before this
+        // acknowledgement filled at least half of it (slow start doubles the flight every round trip).
+        if (flight * 2 < this.Window)
+        {
+            return;
         }
 
         if (this.Window < _ssthresh)

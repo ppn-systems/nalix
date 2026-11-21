@@ -623,10 +623,64 @@ public ref struct Poly1305
     {
         System.Diagnostics.Debug.Assert(blocks.Length % BlockBytes == 0);
 
+        // The same arithmetic as AbsorbBlock, with the accumulator and the key limbs kept in locals for the
+        // whole run instead of being loaded from and stored to memory once per block.
+        uint h0 = h.L0, h1 = h.L1, h2 = h.L2, h3 = h.L3, h4 = h.L4;
+        uint r0 = _r.L0, r1 = _r.L1, r2 = _r.L2, r3 = _r.L3, r4 = _r.L4;
+        uint s1 = _r5.L1, s2 = _r5.L2, s3 = _r5.L3, s4 = _r5.L4;
+
         for (int offset = 0; offset < blocks.Length; offset += BlockBytes)
         {
-            this.AbsorbBlock(ref h, blocks.Slice(offset, BlockBytes), BlockHighBit);
+            System.ReadOnlySpan<byte> block = blocks.Slice(offset, BlockBytes);
+            uint t0 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block[..4]);
+            uint t1 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(4, 4));
+            uint t2 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(8, 4));
+            uint t3 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(12, 4));
+
+            // h += block
+            h0 += t0 & LimbMask;
+            h1 += ((t0 >> 26) | (t1 << 6)) & LimbMask;
+            h2 += ((t1 >> 20) | (t2 << 12)) & LimbMask;
+            h3 += ((t2 >> 14) | (t3 << 18)) & LimbMask;
+            h4 += (t3 >> 8) | BlockHighBit;
+
+            // h *= r, with the limbs above 2¹³⁰ folded back in times five.
+            ulong d0 = ((ulong)h0 * r0) + ((ulong)h1 * s4) + ((ulong)h2 * s3) + ((ulong)h3 * s2) + ((ulong)h4 * s1);
+            ulong d1 = ((ulong)h0 * r1) + ((ulong)h1 * r0) + ((ulong)h2 * s4) + ((ulong)h3 * s3) + ((ulong)h4 * s2);
+            ulong d2 = ((ulong)h0 * r2) + ((ulong)h1 * r1) + ((ulong)h2 * r0) + ((ulong)h3 * s4) + ((ulong)h4 * s3);
+            ulong d3 = ((ulong)h0 * r3) + ((ulong)h1 * r2) + ((ulong)h2 * r1) + ((ulong)h3 * r0) + ((ulong)h4 * s4);
+            ulong d4 = ((ulong)h0 * r4) + ((ulong)h1 * r3) + ((ulong)h2 * r2) + ((ulong)h3 * r1) + ((ulong)h4 * r0);
+
+            // Single carry pass, partially reduced (see AbsorbBlock).
+            ulong carry = d0 >> LimbBits;
+            h0 = (uint)d0 & LimbMask;
+
+            d1 += carry;
+            carry = d1 >> LimbBits;
+            h1 = (uint)d1 & LimbMask;
+
+            d2 += carry;
+            carry = d2 >> LimbBits;
+            h2 = (uint)d2 & LimbMask;
+
+            d3 += carry;
+            carry = d3 >> LimbBits;
+            h3 = (uint)d3 & LimbMask;
+
+            d4 += carry;
+            carry = d4 >> LimbBits;
+            h4 = (uint)d4 & LimbMask;
+
+            h0 += (uint)carry * 5u;
+            h1 += h0 >> LimbBits;
+            h0 &= LimbMask;
         }
+
+        h.L0 = h0;
+        h.L1 = h1;
+        h.L2 = h2;
+        h.L3 = h3;
+        h.L4 = h4;
     }
 
     /// <summary>
