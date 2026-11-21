@@ -77,4 +77,10 @@ public class ObjectPoolBenchmarks
                 _poolManager.Return(obj);
             }
         });
+
+    /// <summary>
+    /// A type rented and never returned (a client's responses are handed to its caller): the pool stays empty.
+    /// </summary>
+    [Benchmark]
+    public SamplePoolable Rent_NeverReturned() => _poolManager.Get<SamplePoolable>();
 }

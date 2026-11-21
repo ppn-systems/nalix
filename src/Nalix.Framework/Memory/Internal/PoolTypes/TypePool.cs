@@ -150,7 +150,7 @@ internal class TypePool(int maxCapacity)
     /// still wraps over the whole array, so capacity and what can be found are unchanged.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int RegionStart(int length) => (int)((uint)(Thread.GetCurrentProcessorId() * 8) % (uint)length);
+    private static int RegionStart(int length) => (int)((uint)(Thread.GetCurrentProcessorId() * RegionSize) % (uint)length);
 
     /// <summary>
     /// Tries to get an object from the pool.
@@ -161,16 +161,47 @@ internal class TypePool(int maxCapacity)
     public bool TryPop(out IPoolable? obj)
     {
         IPoolable?[] slots = _slots;
-
         int length = slots.Length;
-        for (int n = 0, i = RegionStart(length); n < length; n++, i = i + 1 == length ? 0 : i + 1)
+        int start = RegionStart(length);
+
+        // This core's own run first: a busy pool almost always has an object there.
+        int region = length < RegionSize ? length : RegionSize;
+        if (TryTake(slots, start, region, length, out obj))
+        {
+            _ = Interlocked.Decrement(ref this.CurrentCount);
+            return true;
+        }
+
+        // An empty pool answers from the counts. It used to scan every slot (2048 by default) first, on every
+        // Get of a type that is rented and never returned, such as the responses a client hands to its caller.
+        // A push counts after it lands, so a pop racing it may miss that object: it is only a miss.
+        if (region == length || this.SumCounts() <= 0)
+        {
+            return false;
+        }
+
+        if (TryTake(slots, start + region, length - region, length, out obj))
+        {
+            _ = Interlocked.Decrement(ref this.CurrentCount);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Slots per processor region: eight references, one 64-byte cache line.</summary>
+    private const int RegionSize = 8;
+
+    /// <summary>Takes the first object among <paramref name="count"/> slots from <paramref name="from"/>, wrapping.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryTake(IPoolable?[] slots, int from, int count, int length, out IPoolable? obj)
+    {
+        for (int n = 0, i = from % length; n < count; n++, i = i + 1 == length ? 0 : i + 1)
         {
             IPoolable? candidate = Volatile.Read(ref slots[i]);
-            if (candidate != null &&
-                Interlocked.CompareExchange(ref slots[i], null, candidate) == candidate)
+            if (candidate != null && Interlocked.CompareExchange(ref slots[i], null, candidate) == candidate)
             {
                 obj = candidate;
-                _ = Interlocked.Decrement(ref this.CurrentCount);
                 return true;
             }
         }
