@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Nalix.Abstractions;
 using Nalix.Framework.Memory.Internal.PoolTypes;
 using Nalix.Framework.Tests.TestSupport;
@@ -506,5 +508,33 @@ public sealed class TypePoolTests
             Assert.Same(obj, popped);
             Assert.Equal(0, pool.AvailableCount);
         }
+    }
+
+    /// <summary>
+    /// TryPop looks in the calling core's run of slots first and answers an empty pool from its counts; an
+    /// object anywhere else in the array must still be found.
+    /// </summary>
+    [Fact]
+    public async Task TryPop_ObjectsPushedOnOtherThreads_AreAllFound()
+    {
+        TypePool pool = new(256);
+        HashSet<IPoolable> pushed = new(ReferenceEqualityComparer.Instance);
+
+        // Pushed from thread-pool threads, so most land outside this core's run of slots.
+        for (int i = 0; i < 40; i++)
+        {
+            TestPoolable obj = new();
+            _ = pushed.Add(obj);
+            Assert.True(await Task.Run(() => pool.TryPush(obj)));
+        }
+
+        HashSet<IPoolable> popped = new(ReferenceEqualityComparer.Instance);
+        while (pool.TryPop(out IPoolable? obj))
+        {
+            Assert.True(popped.Add(obj!));
+        }
+
+        Assert.Equal(pushed, popped);
+        Assert.Equal(0, pool.AvailableCount);
     }
 }

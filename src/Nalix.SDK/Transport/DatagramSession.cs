@@ -642,9 +642,15 @@ public sealed class DatagramSession : TransportSession
 
         if (closed is not null)
         {
-            _ = Task.Run(() => this.Teardown(raiseDisconnected: true, closed));
+            this.ScheduleTeardown(closed);
         }
     }
+
+    /// <summary>
+    /// Tears the session down on the thread pool. A method of its own: a lambda capturing the error in
+    /// <see cref="DispatchBatch"/> made the compiler allocate its closure on every call, closed or not.
+    /// </summary>
+    private void ScheduleTeardown(Exception closed) => _ = Task.Run(() => this.Teardown(raiseDisconnected: true, closed));
 
     private void Teardown(bool raiseDisconnected, Exception? reason = null)
     {

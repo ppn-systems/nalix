@@ -108,6 +108,8 @@ public static class RequestExtensions
     ///     predicate: r => r.RequestId == tradeRequest.Id);
     /// </code>
     /// </example>
+    // A pooled state machine box: an awaited request otherwise allocated one per call.
+    [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder<>))]
     public static async ValueTask<TResponse> RequestAsync<TResponse>(
         this ITransportSession client,
         IPacket request,
@@ -228,6 +230,8 @@ public static class RequestExtensions
     /// </returns>
     /// <exception cref="ArgumentNullException"><paramref name="client"/> or <paramref name="request"/> is <see langword="null"/>.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled.</exception>
+    // A pooled state machine box: an awaited request otherwise allocated one per call.
+    [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder<>))]
     public static async ValueTask<RequestOutcome<TResponse>> TryRequestAsync<TResponse>(
         this ITransportSession client,
         IPacket request,
