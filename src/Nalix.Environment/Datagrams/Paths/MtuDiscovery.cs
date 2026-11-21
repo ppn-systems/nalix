@@ -15,6 +15,9 @@ internal sealed class MtuDiscovery
     private const int MaxProbeAttempts = 3;
     private const int BlackHoleThreshold = 3;
 
+    /// <summary>The wait before searching again after a black-hole fallback: 60 seconds.</summary>
+    internal const long RaiseDelayMicros = 60_000_000;
+
     private static readonly int[] s_candidates = [1232, 1350, 1400, 1452, 1472];
 
     private readonly bool _enabled;
@@ -69,8 +72,11 @@ internal sealed class MtuDiscovery
     public void OnProbeAcked(int size, long now, long smoothedRtt)
     {
         _inFlight = false;
-        this.Mtu = size;
-        _index++;
+
+        // By size rather than by position: a probe sent before a black-hole fallback can be acknowledged after
+        // the search restarted, and it proves its own size, not the current candidate.
+        this.Mtu = System.Math.Max(this.Mtu, size);
+        _index = System.Math.Max(_index, System.Array.IndexOf(s_candidates, size) + 1);
         _attempts = 0;
         this.Schedule(now, smoothedRtt);
     }
@@ -90,8 +96,16 @@ internal sealed class MtuDiscovery
     public void OnLargePacketAcked() => _consecutiveLargeLost = 0;
 
     /// <summary>A datagram above the minimum MTU was lost.</summary>
+    /// <param name="now">The current time.</param>
     /// <returns><see langword="true"/> when the MTU fell back to the minimum.</returns>
-    public bool OnLargePacketLost()
+    /// <remarks>
+    /// After the fallback the search starts again from the smallest candidate once
+    /// <see cref="RaiseDelayMicros"/> has passed (the PMTU raise timer of RFC 8899 §5.1.1): every datagram is lost
+    /// in a blackout too (a tunnel, a handover), which must not cap the MTU for the rest of the session, and a
+    /// route that shrank can grow back. On a path that really carries less, the search stops at the largest
+    /// candidate that passes.
+    /// </remarks>
+    public bool OnLargePacketLost(long now)
     {
         if (++_consecutiveLargeLost < BlackHoleThreshold)
         {
@@ -100,7 +114,11 @@ internal sealed class MtuDiscovery
 
         _consecutiveLargeLost = 0;
         this.Mtu = DatagramEngineOptions.MinimumMtu;
-        this.Stop();
+        _index = 0;
+        _attempts = 0;
+        _inFlight = false;
+        _requested = false;
+        this.NextProbeTime = _enabled ? now + RaiseDelayMicros : long.MaxValue;
         return true;
     }
 

@@ -291,7 +291,7 @@ public sealed partial class DatagramEngine : IDisposable
         bool ackEliciting = false;
 
         bool ackDue = _ackTracker.AckPending && _ackTracker.AckDeadline <= now;
-        if (_ackTracker.HasRanges && (ackDue || (canSendData && wantsData)))
+        if (_ackTracker.HasRanges && (ackDue || _pathResponsePending || (canSendData && wantsData)))
         {
             int written = _ackTracker.WriteAckFrame(plaintext, now, out ulong largestAcknowledged);
             if (written > 0)
@@ -302,17 +302,21 @@ public sealed partial class DatagramEngine : IDisposable
             }
         }
 
+        // A PATH_RESPONSE is a probing frame: it goes out at once, past congestion control and pacing (RFC 9000
+        // §8.2.2). After a NAT rebinding or a handover the peer sends its ACKs to the old address until this
+        // answer validates the new one, so this side's window stays full; held back by it, the answer only left
+        // with a backed-off probe timeout, after the peer had given up on its challenge, and the session stalled.
+        if (_pathResponsePending && capacity - offset >= 9)
+        {
+            plaintext[offset++] = (byte)FrameType.PathResponse;
+            _pathResponse.CopyTo(plaintext[offset..]);
+            offset += 8;
+            _pathResponsePending = false;
+            ackEliciting = true;
+        }
+
         if (canSendData)
         {
-            if (_pathResponsePending && capacity - offset >= 9)
-            {
-                plaintext[offset++] = (byte)FrameType.PathResponse;
-                _pathResponse.CopyTo(plaintext[offset..]);
-                offset += 8;
-                _pathResponsePending = false;
-                ackEliciting = true;
-            }
-
             if (_limitsPending && capacity - offset >= 17)
             {
                 plaintext[offset++] = (byte)FrameType.Limits;
@@ -692,7 +696,13 @@ public sealed partial class DatagramEngine : IDisposable
 
         foreach (SentPacket p in _scratchPackets)
         {
-            this.DatagramsLost++;
+            // An ACK-only datagram is never acknowledged on its own: the peer ACKs it only along with later
+            // ack-eliciting ones, so the time threshold "loses" it whenever it is reordered. It carries nothing
+            // to repair and nothing in flight, so it does not count as a loss.
+            if (p.AckEliciting)
+            {
+                this.DatagramsLost++;
+            }
 
             if (p.IsMtuProbe)
             {
@@ -705,7 +715,7 @@ public sealed partial class DatagramEngine : IDisposable
                 lostBytes += p.Size;
                 largestLostTime = Math.Max(largestLostTime, p.TimeSent);
 
-                if (p.Size > DatagramEngineOptions.MinimumMtu && _mtuDiscovery.OnLargePacketLost())
+                if (p.Size > DatagramEngineOptions.MinimumMtu && _mtuDiscovery.OnLargePacketLost(now))
                 {
                     _congestion.OnMtuChanged(_mtuDiscovery.Mtu);
                 }

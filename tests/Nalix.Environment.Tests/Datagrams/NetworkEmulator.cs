@@ -14,8 +14,9 @@ using Nalix.Environment.Options;
 namespace Nalix.Environment.Tests.Datagrams;
 
 /// <summary>
-/// Deterministic network between a client and a server <see cref="DatagramEngine"/>: loss, duplication,
-/// reordering by delay jitter, a bandwidth cap, an MTU black hole and NAT rebinding, on a simulated clock.
+/// Deterministic network between a client and a server <see cref="DatagramEngine"/>: random and burst loss,
+/// duplication, reordering by delay jitter, a bandwidth cap with a drop-tail queue, an MTU black hole, NAT
+/// rebinding and injected (spoofed) datagrams, on a simulated clock.
 /// </summary>
 internal sealed class NetworkEmulator : IDisposable
 {
@@ -26,6 +27,7 @@ internal sealed class NetworkEmulator : IDisposable
     private readonly byte[] _buffer = new byte[DatagramEngine.MaxDatagramSize];
     private long _sequence;
     private long _linkFreeAt;
+    private bool _inBurst;
 
     public NetworkEmulator(int seed, DatagramEngineOptions? clientOptions = null, DatagramEngineOptions? serverOptions = null)
     {
@@ -85,6 +87,39 @@ internal sealed class NetworkEmulator : IDisposable
 
     /// <summary>Gets or sets a value indicating whether the network delivers anything.</summary>
     public bool Connected { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the chance, per datagram, that a loss burst starts (Gilbert–Elliott model, as on Wi-Fi and
+    /// mobile links); 0 disables bursts.
+    /// </summary>
+    public double BurstStart { get; set; }
+
+    /// <summary>Gets or sets the chance, per datagram, that a loss burst ends.</summary>
+    public double BurstEnd { get; set; } = 0.3;
+
+    /// <summary>Gets or sets the share of datagrams lost during a burst.</summary>
+    public double BurstLoss { get; set; } = 1.0;
+
+    /// <summary>
+    /// Gets or sets the bytes the bottleneck queue holds when <see cref="Bandwidth"/> is set; datagrams arriving
+    /// at a full queue are dropped (drop-tail). 0 means unbounded.
+    /// </summary>
+    public long QueueBytes { get; set; }
+
+    /// <summary>Gets the client datagrams the network dropped.</summary>
+    public long ClientDropped { get; private set; }
+
+    /// <summary>Gets the server datagrams the network dropped.</summary>
+    public long ServerDropped { get; private set; }
+
+    /// <summary>Gets the simulated send time of every datagram in <see cref="ClientSent"/>.</summary>
+    public List<long> ClientSendTimes { get; } = [];
+
+    /// <summary>Gets the datagrams the server refused (<see cref="DatagramEngine.Receive"/> returned false).</summary>
+    public List<(long Time, byte[] Data)> ServerRejected { get; } = [];
+
+    /// <summary>Gets the bytes the server sent to each address it sent to.</summary>
+    public Dictionary<SocketAddress, long> ServerBytesTo { get; } = [];
 
     /// <summary>Gets every datagram the client sent, for replay tests.</summary>
     public List<byte[]> ClientSent { get; } = [];
@@ -148,7 +183,10 @@ internal sealed class NetworkEmulator : IDisposable
             _ = _wire.Dequeue();
             if (datagram.ToServer)
             {
-                _ = this.Server.Receive(datagram.Data, datagram.From, this.Now);
+                if (!this.Server.Receive(datagram.Data, datagram.From, this.Now))
+                {
+                    this.ServerRejected.Add((this.Now, datagram.Data));
+                }
             }
             else if (datagram.ToClientAddress is null || datagram.ToClientAddress.Equals(this.ClientAddress))
             {
@@ -169,6 +207,13 @@ internal sealed class NetworkEmulator : IDisposable
         this.AfterStep?.Invoke();
     }
 
+    /// <summary>
+    /// Puts <paramref name="data"/> on the wire as if sent from <paramref name="from"/>, arriving after
+    /// <paramref name="delay"/> microseconds: an off-path attacker replaying or racing a datagram it observed.
+    /// </summary>
+    public void Inject(byte[] data, SocketAddress from, long delay)
+        => _wire.Enqueue(new InFlight(data, from, ToServer: true, ToClientAddress: null), (this.Now + delay, _sequence++));
+
     public void Dispose()
     {
         this.Client.Dispose();
@@ -186,10 +231,34 @@ internal sealed class NetworkEmulator : IDisposable
             if (fromClient)
             {
                 this.ClientSent.Add(data);
+                this.ClientSendTimes.Add(this.Now);
+            }
+            else
+            {
+                SocketAddress to = path ?? this.Server.ActivePath ?? this.ClientAddress;
+                this.ServerBytesTo[to] = this.ServerBytesTo.GetValueOrDefault(to) + length;
             }
 
-            if (!this.Connected || length > this.PathMtu || _random.NextDouble() < this.LossRate || (this.Drop?.Invoke(fromClient, data) ?? false))
+            if (this.BurstStart > 0)
             {
+                _inBurst = _inBurst ? _random.NextDouble() >= this.BurstEnd : _random.NextDouble() < this.BurstStart;
+            }
+
+            bool queueFull = this.Bandwidth > 0 && this.QueueBytes > 0 &&
+                (_linkFreeAt - this.Now) * this.Bandwidth / 1_000_000 + length > this.QueueBytes;
+
+            if (!this.Connected || length > this.PathMtu || queueFull || _random.NextDouble() < this.LossRate ||
+                (_inBurst && _random.NextDouble() < this.BurstLoss) || (this.Drop?.Invoke(fromClient, data) ?? false))
+            {
+                if (fromClient)
+                {
+                    this.ClientDropped++;
+                }
+                else
+                {
+                    this.ServerDropped++;
+                }
+
                 continue;
             }
 

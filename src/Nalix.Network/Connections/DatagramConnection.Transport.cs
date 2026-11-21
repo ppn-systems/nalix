@@ -141,14 +141,16 @@ public sealed partial class DatagramConnection : IDatagramTransport
     /// <returns><see langword="true"/> when it authenticated.</returns>
     internal bool OnDatagram(ReadOnlySpan<byte> datagram, SocketAddress from)
     {
-        if (!_socket.Receive(datagram, from, out IPEndPoint? firstPath))
+        if (!_socket.Receive(datagram, from, out IPEndPoint? newPath))
         {
             return false;
         }
 
-        if (firstPath is not null)
+        // The first address, then each validated migration: the endpoint follows the client across NAT
+        // rebindings and network changes. (The guard slot stays with the address it was taken for.)
+        if (newPath is not null)
         {
-            this.NetworkEndpoint = SocketEndpoint.FromEndPoint(firstPath);
+            this.NetworkEndpoint = SocketEndpoint.FromEndPoint(newPath);
         }
 
         this.LastPingTime = Clock.UnixMillisecondsNow();

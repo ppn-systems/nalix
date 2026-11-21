@@ -44,6 +44,9 @@ internal sealed partial class DatagramSocketConnection : IDatagramEngineHandler,
     private readonly DatagramTimingWheel _wheel;
     private readonly DatagramEngine _engine;
     private readonly Lock _engineLock = new();
+
+    /// <summary>The engine's active path last reported to the owner (guarded by the engine lock).</summary>
+    private SocketAddress? _reportedPath;
     private readonly Lock _sendLock = new();
 
     private long _scheduledTick = long.MaxValue;
@@ -132,12 +135,15 @@ internal sealed partial class DatagramSocketConnection : IDatagramEngineHandler,
     /// </summary>
     /// <param name="datagram">The UDP payload.</param>
     /// <param name="from">The sender address (the listener's buffer; the engine copies what it keeps).</param>
-    /// <param name="firstPath">The path of the session when this datagram established it; otherwise <see langword="null"/>.</param>
+    /// <param name="newPath">
+    /// The session's path when this datagram changed it: the first path when the datagram established the session,
+    /// or the new address once a migration (NAT rebinding, a handover) was validated; otherwise <see langword="null"/>.
+    /// </param>
     /// <returns><see langword="true"/> when the datagram authenticated.</returns>
-    public bool Receive(ReadOnlySpan<byte> datagram, SocketAddress from, out IPEndPoint? firstPath)
+    public bool Receive(ReadOnlySpan<byte> datagram, SocketAddress from, out IPEndPoint? newPath)
     {
         bool accepted;
-        firstPath = null;
+        newPath = null;
 
         lock (_engineLock)
         {
@@ -146,12 +152,13 @@ internal sealed partial class DatagramSocketConnection : IDatagramEngineHandler,
                 return false;
             }
 
-            bool pending = _engine.State == DatagramEngineState.Pending;
             accepted = _engine.Receive(datagram, from, DatagramEngine.NowMicros());
 
-            if (accepted && pending && _engine.ActivePath is { } path)
+            // The engine replaces its active path object when a migration is validated, and never mutates it.
+            if (accepted && _engine.ActivePath is { } path && !ReferenceEquals(path, _reportedPath))
             {
-                firstPath = ToEndPoint(path);
+                _reportedPath = path;
+                newPath = ToEndPoint(path);
             }
         }
 
