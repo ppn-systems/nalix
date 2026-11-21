@@ -129,7 +129,7 @@ internal static unsafe partial class DatagramBatchSender
 
     /// <summary>A <c>struct iovec</c> (64-bit).</summary>
     [StructLayout(LayoutKind.Sequential)]
-    private struct IoVector
+    internal struct IoVector
     {
         public byte* Base;
         public nuint Length;
@@ -137,7 +137,7 @@ internal static unsafe partial class DatagramBatchSender
 
     /// <summary>A <c>struct mmsghdr</c>: a <c>struct msghdr</c> followed by <c>msg_len</c> (64-bit, 64 bytes).</summary>
     [StructLayout(LayoutKind.Explicit, Size = 64)]
-    private struct MultiMessageHeader
+    internal struct MultiMessageHeader
     {
         [FieldOffset(0)]
         public byte* Name;

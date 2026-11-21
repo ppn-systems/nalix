@@ -31,6 +31,7 @@ public sealed partial class DatagramListener
         byte[] buffer = GC.AllocateUninitializedArray<byte>(DatagramEngine.MaxDatagramSize + 1, pinned: true);
         SocketAddress from = new(socket.AddressFamily);
         int consecutiveErrors = 0;
+        DatagramBatchReceiver? batch = DatagramBatchReceiver.TryCreate(socket);
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -78,20 +79,40 @@ public sealed partial class DatagramListener
 
             consecutiveErrors = 0;
             ctx.Beat();
-            this.Metrics.RECORD_RECEIVED(received);
+            this.ProcessReceived(buffer.AsSpan(0, received), from);
 
-            try
+            // Then what else is already queued, several datagrams per system call (Linux), before waiting again.
+            if (batch is not null)
             {
-                this.Route(buffer.AsSpan(0, received), from);
-            }
-            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
-            {
-                this.Metrics.RECORD_ERROR();
-                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Error))
+                int count;
+                do
                 {
-                    DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Error,
-                        new DiagnosticLog("NW.DatagramListener:Receive", "datagram processing failed", ex));
+                    count = batch.Receive(socket);
+                    for (int i = 0; i < count; i++)
+                    {
+                        this.ProcessReceived(batch.Datagram(i), batch.Address(i));
+                    }
                 }
+                while (count == DatagramBatchSender.MaxBatch && !cancellationToken.IsCancellationRequested);
+            }
+        }
+    }
+
+    private void ProcessReceived(ReadOnlySpan<byte> datagram, SocketAddress from)
+    {
+        this.Metrics.RECORD_RECEIVED(datagram.Length);
+
+        try
+        {
+            this.Route(datagram, from);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            this.Metrics.RECORD_ERROR();
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Error))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Error,
+                    new DiagnosticLog("NW.DatagramListener:Receive", "datagram processing failed", ex));
             }
         }
     }
