@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -38,10 +39,13 @@ namespace Nalix.SDK.Transport;
 [UnsupportedOSPlatform("browser")]
 public sealed class DatagramSession : TransportSession
 {
+    private const int SendBatchSize = 8;
+
     private readonly TransportSession _stream;
     private readonly Lock _engineLock = new();
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly byte[] _sendBuffer = new byte[DatagramEngine.MaxDatagramSize];
+    private readonly Lock _sendLock = new();
     private readonly Lock _dispatchLock = new();
     private List<(BufferLease Message, DeliveryMethod Method, byte Channel)> _deliveries = [];
     private List<(BufferLease Message, DeliveryMethod Method, byte Channel)> _dispatching = [];
@@ -53,6 +57,7 @@ public sealed class DatagramSession : TransportSession
     private Task? _loopTask;
     private Timer? _timer;
     private long _timerDue = long.MaxValue;
+    private int _flushRequested;
     private TaskCompletionSource? _established;
     private Exception? _closeError;
     private int _disposed;
@@ -181,8 +186,9 @@ public sealed class DatagramSession : TransportSession
                 _loopCts = new CancellationTokenSource();
                 CancellationToken token = _loopCts.Token;
                 _loopTask = Task.Factory.StartNew(() => this.ReceiveLoopAsync(socket, token), token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
-                this.FlushLocked(DatagramEngine.NowMicros());
             }
+
+            this.Flush();
 
             // The first datagram must authenticate within the ticket lifetime.
             using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -228,7 +234,7 @@ public sealed class DatagramSession : TransportSession
                 {
                     long now = DatagramEngine.NowMicros();
                     engine.Close(DatagramCloseCode.NoError, null, now);
-                    this.FlushLocked(now);
+                    this.SendAllLocked(now);
                 }
             }
 
@@ -293,15 +299,17 @@ public sealed class DatagramSession : TransportSession
         using BufferLease lease = BufferLease.Rent(packet.Length);
         lease.CommitLength(packet.Serialize(lease.SpanFull));
 
+        Task<bool> receipt;
         lock (_engineLock)
         {
             DatagramEngine engine = _engine ?? throw new NetworkException("The datagram session is not connected.");
             long now = DatagramEngine.NowMicros();
-            Task<bool> receipt = engine.TrySendWithReceipt(lease.Span, method, channel, 0, now)
+            receipt = engine.TrySendWithReceipt(lease.Span, method, channel, 0, now)
                 ?? throw new NetworkException($"The packet ({lease.Length} bytes) is too large for {method} or the send queue is full.");
-            this.FlushLocked(now);
-            return receipt;
         }
+
+        this.Flush();
+        return receipt;
     }
 
     /// <inheritdoc/>
@@ -355,9 +363,9 @@ public sealed class DatagramSession : TransportSession
                     ? "The datagram session is closed."
                     : $"The frame ({frame.Length} bytes) is too large for {method} or the send queue of channel {channel} is full.");
             }
-
-            this.FlushLocked(now);
         }
+
+        this.Flush();
     }
 
     private async Task ReceiveLoopAsync(Socket socket, CancellationToken ct)
@@ -395,10 +403,9 @@ public sealed class DatagramSession : TransportSession
                 {
                     _ = _established?.TrySetResult();
                 }
-
-                this.FlushLocked(now);
             }
 
+            this.Flush();
             this.DispatchDeliveries();
         }
     }
@@ -415,13 +422,116 @@ public sealed class DatagramSession : TransportSession
             _timerDue = long.MaxValue;
             long now = DatagramEngine.NowMicros();
             engine.OnTimer(now);
-            this.FlushLocked(now);
         }
 
+        this.Flush();
         this.DispatchDeliveries();
     }
 
-    private void FlushLocked(long now)
+    /// <summary>
+    /// Sends what the engine produces outside the engine lock, so a slow socket never blocks the receive loop.
+    /// One thread drains at a time (the send lock keeps the packet-number order); a thread that finds the drain
+    /// busy leaves a request that the draining thread picks up before it returns. Must not be called under the
+    /// engine lock.
+    /// </summary>
+    private void Flush()
+    {
+        _ = Interlocked.Exchange(ref _flushRequested, 1);
+
+        // Re-check after leaving: a request made while this thread was finishing would otherwise be lost.
+        while (Volatile.Read(ref _flushRequested) == 1 && _sendLock.TryEnter())
+        {
+            try
+            {
+                while (Interlocked.Exchange(ref _flushRequested, 0) == 1)
+                {
+                    this.Drain();
+                }
+            }
+            finally
+            {
+                _sendLock.Exit();
+            }
+        }
+    }
+
+    /// <summary>Polls the engine in batches under its lock and sends each batch after releasing it.</summary>
+    private void Drain()
+    {
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(SendBatchSize * DatagramEngine.MaxDatagramSize);
+        Span<int> lengths = stackalloc int[SendBatchSize];
+
+        try
+        {
+            int count;
+            do
+            {
+                count = 0;
+                Socket socket;
+                lock (_engineLock)
+                {
+                    if (_engine is not { } engine || _socket is null)
+                    {
+                        return;
+                    }
+
+                    socket = _socket;
+                    long now = DatagramEngine.NowMicros();
+                    while (count < SendBatchSize)
+                    {
+                        int length = engine.Poll(
+                            buffer.AsSpan(count * DatagramEngine.MaxDatagramSize, DatagramEngine.MaxDatagramSize), now, out _);
+                        if (length == 0)
+                        {
+                            break;
+                        }
+
+                        lengths[count++] = length;
+                    }
+
+                    this.ArmTimerLocked(engine, now);
+                }
+
+                for (int i = 0; i < count; i++)
+                {
+                    try
+                    {
+                        _ = socket.Send(buffer.AsSpan(i * DatagramEngine.MaxDatagramSize, lengths[i]), SocketFlags.None);
+                    }
+                    catch (SocketException)
+                    {
+                        // Best effort: the engine retransmits what matters.
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        return;
+                    }
+                }
+            }
+            while (count == SendBatchSize);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>Moves the timer earlier when the engine needs it. Called under the engine lock.</summary>
+    private void ArmTimerLocked(DatagramEngine engine, long now)
+    {
+        long next = engine.NextTimer;
+        if (next != long.MaxValue && next < _timerDue)
+        {
+            _timerDue = next;
+            _ = _timer?.Change(Math.Max(0, (next - now + 999) / 1000), Timeout.Infinite);
+        }
+    }
+
+    /// <summary>
+    /// Sends everything under the engine lock. Only for the CLOSE frame of <see cref="DisconnectAsync"/>, which must
+    /// leave before the session is torn down.
+    /// </summary>
+    private void SendAllLocked(long now)
     {
         if (_engine is not { } engine || _socket is not { } socket)
         {
@@ -445,12 +555,6 @@ public sealed class DatagramSession : TransportSession
             }
         }
 
-        long next = engine.NextTimer;
-        if (next != long.MaxValue && next < _timerDue)
-        {
-            _timerDue = next;
-            _ = _timer?.Change(Math.Max(0, (next - now + 999) / 1000), Timeout.Infinite);
-        }
     }
 
     /// <summary>
