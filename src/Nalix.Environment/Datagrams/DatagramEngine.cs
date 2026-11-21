@@ -291,6 +291,7 @@ public sealed partial class DatagramEngine : IDisposable
         bool ackEliciting = false;
 
         bool ackDue = _ackTracker.AckPending && _ackTracker.AckDeadline <= now;
+        bool ackWritten = false;
         if (_ackTracker.HasRanges && (ackDue || _pathResponsePending || (canSendData && wantsData)))
         {
             int written = _ackTracker.WriteAckFrame(plaintext, now, out ulong largestAcknowledged);
@@ -298,7 +299,7 @@ public sealed partial class DatagramEngine : IDisposable
             {
                 offset += written;
                 packet.LargestAckSent = (long)largestAcknowledged;
-                _ackTracker.OnAckSent();
+                ackWritten = true;
             }
         }
 
@@ -356,6 +357,19 @@ public sealed partial class DatagramEngine : IDisposable
             {
                 _pingPending = false;
             }
+        }
+
+        // An ACK written for data that then had nothing to send (wantsData is conservative: a released flow-control
+        // budget sets it with an empty queue) goes out only once it is due; until then the next datagram carries it.
+        // Sent at once it was an ACK-only datagram ahead of the handler's reply on most requests.
+        if (ackWritten && !ackEliciting && !ackDue)
+        {
+            plaintext[..offset].Clear();
+            offset = 0;
+        }
+        else if (ackWritten)
+        {
+            _ackTracker.OnAckSent();
         }
 
         if (offset == 0)
