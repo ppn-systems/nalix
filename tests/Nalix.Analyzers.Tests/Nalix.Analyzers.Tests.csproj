@@ -25,7 +25,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Update="coverlet.collector" Version="10.0.0" />
       <PackageReference Update="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
       <PackageReference Update="Microsoft.NET.Test.Sdk" Version="18.4.0" />
     </ItemGroup>

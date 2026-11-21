@@ -123,6 +123,8 @@ jobs:
 
   # Release only (what ships). Linux runs the whole suite; Windows runs only the client-side projects
   # (Nalix.SDK and the libraries it ships with) listed in tests/Nalix.Client.Tests.slnf.
+  # Tests run on net10.0 only; the product projects in the test solutions still compile for net10.0 and net11.0,
+  # so a net11.0 build break or warning is still caught.
   core:
     name: Core (${{ matrix.os }}, Release)
     needs: [changes]
@@ -146,6 +148,7 @@ jobs:
       test: ${{ matrix.test }}
       deploy: false
       coverage: ${{ matrix.coverage }}
+      test-framework: net10.0
 
   # One matrix entry per extension the diff touches (see the changes job). Each entry builds and tests its own solution.
   extensions:
@@ -162,6 +165,7 @@ jobs:
       project: ${{ matrix.project }}
       test: ${{ matrix.test }}
       deploy: false
+      test-framework: net10.0
 
   lint-workflows:
     name: Lint workflows

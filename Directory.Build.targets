@@ -15,4 +15,14 @@
 		<PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" PrivateAssets="all" />
 	</ItemGroup>
 
+	<!--
+		Optional: build and run the multi-targeted test projects for one framework only, e.g.
+		dotnet test tests/Nalix.Tests.sln -p:TestTargetFramework=net10.0
+		CI tests one framework and compiles src for every framework separately. Unset, nothing changes.
+		(dotnet build -f does not work on the solutions: the analyzer projects are netstandard2.0 only.)
+	-->
+	<PropertyGroup Condition="'$(TestTargetFramework)' != '' And '$(IsTestProject)' == 'true' And '$(TargetFrameworks)' != ''">
+		<TargetFrameworks>$(TestTargetFramework)</TargetFrameworks>
+	</PropertyGroup>
+
 </Project>

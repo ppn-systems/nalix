@@ -57,6 +57,10 @@ internal sealed partial class DatagramSocketConnection
                     return;
                 }
 
+                // The caller (DatagramConnection.Disconnect) disposes the session itself: OnClosed must not queue
+                // a second Dispose, which would make Disconnect return before the session is disposed.
+                _ = Interlocked.Exchange(ref _closeScheduled, 1);
+
                 long now = DatagramEngine.NowMicros();
                 _engine.Close(DatagramCloseCode.NoError, reason, now);
 

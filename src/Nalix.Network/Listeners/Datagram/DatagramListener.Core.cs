@@ -159,6 +159,7 @@ public sealed partial class DatagramListener : IListener, IDatagramTicketIssuer
         _sweepJob?.Dispose();
         _cts?.Dispose();
         _socket?.Dispose();
+        _timingWheel.Dispose();
         _lock.Dispose();
     }
 

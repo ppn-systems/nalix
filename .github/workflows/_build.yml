@@ -39,6 +39,11 @@ on:
         required: false
         type: boolean
         default: false
+      test-framework:
+        description: "Run the multi-targeted test projects on this framework only (e.g. net10.0); empty runs every framework. Product projects still build for every framework."
+        required: false
+        type: string
+        default: ""
       configuration:
         description: "Build configuration (Release | Debug)"
         required: false
@@ -51,6 +56,10 @@ jobs:
     runs-on: ${{ inputs.os }}
     # Concurrency lives in the caller: a job-level group here made matrix callers on the same OS cancel each other.
     timeout-minutes: 30
+    env:
+      # MSBuild reads environment variables as properties: Directory.Build.targets narrows the test projects'
+      # TargetFrameworks to this one when it is set, so every dotnet restore/build/test below follows it.
+      TestTargetFramework: ${{ inputs.test-framework }}
 
     steps:
       - name: Set environment variables

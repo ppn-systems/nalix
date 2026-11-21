@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Concurrency;
@@ -35,7 +36,7 @@ namespace Nalix.Network.Internal.Time;
 /// </para>
 /// </remarks>
 [DebuggerDisplay("Tick={CurrentTick}, Running={IsRunning}")]
-internal sealed class DatagramTimingWheel
+internal sealed class DatagramTimingWheel : IDisposable
 {
     #region Constants
 
@@ -51,10 +52,16 @@ internal sealed class DatagramTimingWheel
     private readonly ConcurrentQueue<Entry>[] _buckets;
     private readonly string _name;
     private long _currentTick;
+    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "Disposed by Deactivate, which Dispose calls.")]
     private CancellationTokenSource? _cts;
+
+    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "Disposed by Deactivate, which Dispose calls.")]
     private IWorkerHandle? _worker;
+    private TaskCompletionSource _wakeup = NewSignal();
+    private long _entries;
     private long _fired;
     private long _staleSkips;
+    private long _iterations;
 
     #endregion Fields
 
@@ -97,6 +104,12 @@ internal sealed class DatagramTimingWheel
     /// <summary>Gets the number of deadlines that fired.</summary>
     public long FiredCount => Volatile.Read(ref _fired);
 
+    /// <summary>Gets the number of loop iterations; the loop sleeps while no entry is scheduled.</summary>
+    internal long Iterations => Volatile.Read(ref _iterations);
+
+    /// <summary>Gets the number of entries in the buckets, live or stale.</summary>
+    internal long EntryCount => Volatile.Read(ref _entries);
+
     /// <summary>Gets the number of stale entries dropped.</summary>
     public long StaleSkipCount => Volatile.Read(ref _staleSkips);
 
@@ -117,6 +130,9 @@ internal sealed class DatagramTimingWheel
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         Volatile.Write(ref _currentTick, NowTick());
+
+        // A previous Deactivate may have cancelled the signal.
+        Volatile.Write(ref _wakeup, NewSignal());
 
         _worker = InstanceManager.Instance.GetOrCreateInstance<TaskManager>().ScheduleWorker(
             name: _name,
@@ -147,7 +163,16 @@ internal sealed class DatagramTimingWheel
     /// Queues <paramref name="target"/> for <paramref name="tick"/>. The caller sets its
     /// <see cref="ITarget.ScheduledTick"/> to <paramref name="tick"/> before calling.
     /// </summary>
-    public void Schedule(ITarget target, long tick) => _buckets[(int)(tick & Mask)].Enqueue(new Entry(target, tick));
+    public void Schedule(ITarget target, long tick)
+    {
+        _buckets[(int)(tick & Mask)].Enqueue(new Entry(target, tick));
+
+        // The first entry wakes an idle wheel (see RunAsync).
+        if (Interlocked.Increment(ref _entries) == 1)
+        {
+            _ = Volatile.Read(ref _wakeup).TrySetResult();
+        }
+    }
 
     /// <summary>
     /// Stops the wheel worker and drops every deadline. The wheel can be activated again.
@@ -175,7 +200,12 @@ internal sealed class DatagramTimingWheel
         {
             bucket.Clear();
         }
+
+        _ = Interlocked.Exchange(ref _entries, 0);
     }
+
+    /// <summary>Stops the wheel.</summary>
+    public void Dispose() => this.Deactivate();
 
     #endregion Methods
 
@@ -187,10 +217,21 @@ internal sealed class DatagramTimingWheel
 
         try
         {
-            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            while (!cancellationToken.IsCancellationRequested)
             {
-                ctx.Beat();
+                // Nothing scheduled: sleep until Schedule adds an entry instead of ticking 1000 times a second.
+                // The ticks missed meanwhile are processed by Advance below (every bucket at most once).
+                if (Volatile.Read(ref _entries) == 0)
+                {
+                    await this.SleepUntilScheduledAsync(cancellationToken).ConfigureAwait(false);
+                }
+                else if (!await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    break;
+                }
 
+                ctx.Beat();
+                _ = Interlocked.Increment(ref _iterations);
                 this.Advance(NowTick());
             }
         }
@@ -208,6 +249,32 @@ internal sealed class DatagramTimingWheel
             throw;
         }
     }
+
+    /// <summary>
+    /// Waits until <see cref="Schedule"/> adds the first entry, or the wheel stops.
+    /// </summary>
+    /// <remarks>
+    /// A TaskCompletionSource rather than SemaphoreSlim.WaitAsync: on net11.0 (runtime async) a cancelled
+    /// SemaphoreSlim.WaitAsync was seen never completing, which left the wheel worker, and with it the host's
+    /// shutdown, waiting forever.
+    /// </remarks>
+    private async Task SleepUntilScheduledAsync(CancellationToken cancellationToken)
+    {
+        TaskCompletionSource signal = Volatile.Read(ref _wakeup);
+
+        // Re-check after taking the signal: an entry added before it would not set it.
+        if (Volatile.Read(ref _entries) == 0)
+        {
+            using CancellationTokenRegistration registration = cancellationToken.UnsafeRegister(
+                static state => ((TaskCompletionSource)state!).TrySetCanceled(), signal);
+            await signal.Task.ConfigureAwait(false);
+        }
+
+        // Arm a fresh signal for the next sleep.
+        _ = Interlocked.CompareExchange(ref _wakeup, NewSignal(), signal);
+    }
+
+    private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// Processes every tick up to <paramref name="now"/>. Called by the wheel worker; tests call it directly.
@@ -244,10 +311,12 @@ internal sealed class DatagramTimingWheel
             if (entry.Target.ScheduledTick != entry.Tick)
             {
                 _ = Interlocked.Increment(ref _staleSkips);
+                _ = Interlocked.Decrement(ref _entries);
             }
             else if (entry.Tick <= now)
             {
                 _ = Interlocked.Increment(ref _fired);
+                _ = Interlocked.Decrement(ref _entries);
                 _ = ThreadPool.UnsafeQueueUserWorkItem(entry.Target, preferLocal: false);
             }
             else

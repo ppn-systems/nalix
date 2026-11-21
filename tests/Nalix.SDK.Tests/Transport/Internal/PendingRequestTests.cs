@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Diagnostics;
+using System.Reflection;
 using Nalix.Codec.ProtocolFrames;
 using Nalix.Environment.Memory;
 using Nalix.SDK.Tests.TestSupport;
@@ -154,6 +155,42 @@ public sealed class PendingRequestTests
         TimeoutException ex = await Assert.ThrowsAsync<TimeoutException>(async () => await task.AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Contains("within 300 ms", ex.Message, StringComparison.Ordinal);
         request.Return(wasAwaited: true);
+    }
+
+    [Fact]
+    public void Settle_ForAPreviousUseOfThePooledInstance_DoesNotSettleTheCurrentUse()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        MethodInfo trySettle = typeof(PendingRequest<Control>).GetMethod("TrySettle", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        PropertyInfo currentUse = typeof(PendingRequest<Control>).GetProperty("CurrentUse", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        // A timer or frame callback that began for request A remembers A's use...
+        PendingRequest<Control> a = PendingRequest<Control>.Rent(session, _ => true);
+        int useOfA = (int)currentUse.GetValue(a)!;
+        a.Return(wasAwaited: false);
+
+        // ...and the pool hands the same instance to B before that callback settles anything. The pool is shared
+        // and FIFO, so rent until A comes back.
+        List<PendingRequest<Control>> others = [];
+        PendingRequest<Control> b = PendingRequest<Control>.Rent(session, _ => false);
+        while (!ReferenceEquals(a, b) && others.Count < 10_000)
+        {
+            others.Add(b);
+            b = PendingRequest<Control>.Rent(session, _ => false);
+        }
+
+        others.ForEach(static other => other.Return(wasAwaited: false));
+        Assert.Same(a, b);
+        b.Subscribe();
+        ValueTask<Control> bTask = b.WaitAsync(0, CancellationToken.None);
+
+        Assert.False((bool)trySettle.Invoke(b, [useOfA])!);
+        Assert.False(bTask.IsCompleted);
+
+        // B's own use still settles normally.
+        Assert.True((bool)trySettle.Invoke(b, [(int)currentUse.GetValue(b)!])!);
+        b.Return(wasAwaited: false);
     }
 
     [Fact]

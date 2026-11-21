@@ -68,12 +68,14 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     private readonly EventHandler<IBufferLease> _onMessage;
     private readonly EventHandler<Exception> _onDisconnected;
 
-    private int _completed;
     private int _subscribed;
 
-    // Bumped on every Rent and Return so callbacks that began for a previous use of this pooled
-    // instance can tell they are stale.
-    private int _generation;
+    // High 32 bits: which use of this pooled instance is current (bumped on every Rent and Return).
+    // Bit 0: that use is settled. Settling is a compare-and-swap from (the use the caller observed, not settled),
+    // so a callback that began for a previous use (a timer queued before Return, a frame dispatched before a
+    // re-Rent) can never settle the next one: a separate generation check followed by an exchange left a window
+    // in which a stale timeout settled a freshly rented request.
+    private long _status;
 
     // Environment.TickCount64 at which the current use times out; 0 when no timer is armed. A stale
     // timer callback (queued before Return, run after a re-Rent) fires before the new deadline.
@@ -102,13 +104,12 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
         }
 
         pending._deadline = 0;
-        _ = Interlocked.Increment(ref pending._generation);
+        Volatile.Write(ref pending._status, OpenStatus(pending.CurrentUse + 1));
         pending._session = session;
         pending._directSession = session is TransportSession { HasDirectPendingDispatch: true } direct ? direct : null;
         pending._predicate = predicate;
         pending._opcode = TPkt.StaticOpCode;
         pending._expectedSequenceId = expectedSequenceId;
-        pending._completed = 0;
         pending._subscribed = 0;
         pending._timeoutMs = 0;
         pending._ct = default;
@@ -122,7 +123,8 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     /// </summary>
     internal void Return(bool wasAwaited)
     {
-        _ = Interlocked.Increment(ref _generation);
+        // Move to the next use, settled: from here no callback of the use being returned can settle anything.
+        bool settled = (Interlocked.Exchange(ref _status, OpenStatus(this.CurrentUse + 1) | 1) & 1) != 0;
         Volatile.Write(ref _deadline, 0);
         this.Unsubscribe();
         _ = _timeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
@@ -131,7 +133,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
         if (!wasAwaited)
         {
-            if (Interlocked.Exchange(ref _completed, 1) == 0)
+            if (!settled)
             {
                 _session = null;
                 _directSession = null;
@@ -208,7 +210,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     /// </summary>
     internal ValueTask<TPkt> WaitAsync(int timeoutMs, CancellationToken ct)
     {
-        if (Volatile.Read(ref _completed) != 0)
+        if (this.IsSettled)
         {
             return new ValueTask<TPkt>(this, _core.Version);
         }
@@ -227,7 +229,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
             _ctRegistration = ct.UnsafeRegister(s_cancelCallback, this);
         }
 
-        if (timeoutMs > 0 && Volatile.Read(ref _completed) == 0)
+        if (timeoutMs > 0 && !this.IsSettled)
         {
             Volatile.Write(ref _deadline, System.Environment.TickCount64 + timeoutMs);
             _ = _timeoutTimer.Change(timeoutMs, Timeout.Infinite);
@@ -237,9 +239,11 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     }
 
     /// <summary>Faults the exchange, unless it has already settled.</summary>
-    internal void TrySetException(Exception error)
+    internal void TrySetException(Exception error) => this.TrySetException(error, this.CurrentUse);
+
+    private void TrySetException(Exception error, int use)
     {
-        if (Interlocked.Exchange(ref _completed, 1) == 0)
+        if (this.TrySettle(use))
         {
             _ = _timeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
             this.Unsubscribe();
@@ -253,6 +257,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
         // previous use of the pooled instance (deadline not reached yet) or after the request settled
         // (deadline cleared). A callback that fires early relative to our clock (timer granularity differs
         // between platforms) must never lose the timeout, so re-arm for the remaining time instead of dropping it.
+        int use = this.CurrentUse;
         long deadline = Volatile.Read(ref _deadline);
         if (deadline == 0)
         {
@@ -262,7 +267,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
         long remaining = deadline - System.Environment.TickCount64;
         if (remaining > 0)
         {
-            if (Volatile.Read(ref _completed) == 0)
+            if (!this.IsSettled)
             {
                 _ = _timeoutTimer.Change(remaining, Timeout.Infinite);
             }
@@ -270,7 +275,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
             return;
         }
 
-        if (Interlocked.Exchange(ref _completed, 1) == 0)
+        if (this.TrySettle(use))
         {
             int timeoutMs = _timeoutMs;
             this.Unsubscribe();
@@ -280,7 +285,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
     private void OnCanceled()
     {
-        if (Interlocked.Exchange(ref _completed, 1) == 0)
+        if (this.TrySettle(this.CurrentUse))
         {
             CancellationToken ct = _ct;
             _ = _timeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
@@ -300,7 +305,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
         // The session invokes observers outside its lock, so this request may be returned and re-rented while
         // the predicate runs. Remember which use of the instance this frame was dispatched to.
-        int generation = Volatile.Read(ref _generation);
+        int use = this.CurrentUse;
 
         ref readonly PacketHeader header = ref buffer.Span.AsHeaderRef();
         if (header.OpCode != _opcode)
@@ -335,7 +340,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
                 }
                 catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
                 {
-                    this.TrySetException(ex);
+                    this.TrySetException(ex, use);
                     return;
                 }
 
@@ -346,7 +351,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
                 // Only the first arriving thread hands the packet to the caller; the caller then
                 // owns it, which is why it is not disposed on this path.
-                if (Volatile.Read(ref _generation) != generation || Interlocked.Exchange(ref _completed, 1) != 0)
+                if (!this.TrySettle(use))
                 {
                     return;
                 }
@@ -385,6 +390,19 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
 
     private void OnDisconnectedEvent(object? sender, Exception error)
         => this.OnDisconnected(error);
+
+    private int CurrentUse => (int)(Volatile.Read(ref _status) >>> 32);
+
+    private bool IsSettled => (Volatile.Read(ref _status) & 1) != 0;
+
+    private static long OpenStatus(int use) => (long)((ulong)(uint)use << 32);
+
+    /// <summary>Settles <paramref name="use"/> if it is still current and not settled yet.</summary>
+    private bool TrySettle(int use)
+    {
+        long open = OpenStatus(use);
+        return Interlocked.CompareExchange(ref _status, open | 1, open) == open;
+    }
 
     /// <inheritdoc/>
     TPkt IValueTaskSource<TPkt>.GetResult(short token) => _core.GetResult(token);
