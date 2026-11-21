@@ -149,7 +149,6 @@ public sealed class PolicyRateLimiterTests : IDisposable
 
     private sealed class TestPacketContext(IConnection connection, ushort opCode, PacketRateLimitAttribute? rateLimit) : IPacketContext<IPacket>
     {
-        public bool IsReliable => true;
         public bool EncryptedOnWire => false;
         public bool SkipOutbound => false;
         public IPacket Packet { get; } = new TestPacket(opCode);
@@ -159,8 +158,7 @@ public sealed class PolicyRateLimiterTests : IDisposable
                 timeout: null,
                 permission: null,
                 encryption: null,
-                rateLimit: rateLimit,
-                transport: null);
+                rateLimit: rateLimit);
 
         public IPacketSender Sender => null!;
         public Nalix.Abstractions.Injection.IPacketScope Scope => null!;

@@ -46,8 +46,14 @@
 		exercise the same tests. A strong-name-signed assembly cannot grant IVT by simple name (CS1726) and a
 		shipped package should not expose internals anyway, so signed builds skip the grant. Test and analysis
 		builds must therefore stay unsigned (they do not need the signing key).
+		The NuGet release build passes /p:NalixInternalsVisibleTo=false so the shipped assemblies do not carry the
+		test and benchmark assembly names either; every other build (including Release test runs) keeps the grant.
 	-->
-	<ItemGroup Condition="'$(SignAssembly)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Generators'">
+	<PropertyGroup>
+		<NalixInternalsVisibleTo Condition="'$(NalixInternalsVisibleTo)' == ''">true</NalixInternalsVisibleTo>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(NalixInternalsVisibleTo)' == 'true' And '$(SignAssembly)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Generators'">
 		<InternalsVisibleTo Include="Nalix.Abstractions.Tests" />
 		<InternalsVisibleTo Include="Nalix.Codec.Tests" />
 		<InternalsVisibleTo Include="Nalix.Environment.Tests" />
@@ -57,13 +63,16 @@
 		<InternalsVisibleTo Include="Nalix.Network.Tests" />
 		<InternalsVisibleTo Include="Nalix.Runtime.Tests" />
 		<InternalsVisibleTo Include="Nalix.SDK.Tests" />
+		<InternalsVisibleTo Include="Nalix.Tunneling.Tests" />
+		<InternalsVisibleTo Include="Nalix.Traversal.Tests" />
 		<InternalsVisibleTo Include="Nalix.Codec.Benchmarks" />
 		<InternalsVisibleTo Include="Nalix.Framework.Benchmarks" />
 		<InternalsVisibleTo Include="Nalix.Network.Benchmarks" />
 		<InternalsVisibleTo Include="Nalix.Runtime.Benchmarks" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(PublishAot)' != 'true' And '$(DisableNalixAnalyzers)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Tests'">
+	<!-- Every Nalix analyzer rule needs Nalix.Codec symbols, so projects that do not reference Codec (Abstractions, Environment, Framework, Network) would only get NALIX105. -->
+	<ItemGroup Condition="'$(PublishAot)' != 'true' And '$(DisableNalixAnalyzers)' != 'true' And '$(MSBuildProjectName)' != 'Nalix.Analyzers' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.CodeFixes' And '$(MSBuildProjectName)' != 'Nalix.Analyzers.Tests' And '$(MSBuildProjectName)' != 'Nalix.Abstractions' And '$(MSBuildProjectName)' != 'Nalix.Environment' And '$(MSBuildProjectName)' != 'Nalix.Framework' And '$(MSBuildProjectName)' != 'Nalix.Network'">
 		<ProjectReference Include="$(MSBuildThisFileDirectory)..\analyzers\Nalix.Analyzers\Nalix.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" AdditionalProperties="Configuration=$(Configuration)" />
 		<ProjectReference Include="$(MSBuildThisFileDirectory)..\analyzers\Nalix.Analyzers.CodeFixes\Nalix.Analyzers.CodeFixes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" AdditionalProperties="Configuration=$(Configuration)" />
 	</ItemGroup>

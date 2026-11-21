@@ -4,12 +4,15 @@
 using System.Collections.Concurrent;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Primitives;
+using Nalix.Codec.Security.Hashing;
 using Nalix.Environment.Random;
 
 namespace Nalix.Tunneling;
 
 /// <summary>
 /// Tracks pending reverse tunnel requests matching consumer connections to provider data connections.
+/// Pending entries are keyed by the public tunnel identifier <c>Keccak256(token)</c>, so observing a
+/// tunnel identifier on the wire does not reveal the token.
 /// </summary>
 public sealed class TunnelRegistry
 {
@@ -33,10 +36,11 @@ public sealed class TunnelRegistry
         Csprng.Fill(tokenBytes);
 
         Bytes32 token = new(tokenBytes);
+        Bytes32 tunnelId = ComputeTunnelId(token);
 
-        PendingEntry entry = new(tcs, System.Environment.TickCount64);
+        PendingEntry entry = new(tcs, token, System.Environment.TickCount64);
 
-        if (!_pendingTunnels.TryAdd(token, entry))
+        if (!_pendingTunnels.TryAdd(tunnelId, entry))
         {
             throw new InvalidOperationException("Failed to generate a unique tunnel token.");
         }
@@ -45,19 +49,45 @@ public sealed class TunnelRegistry
     }
 
     /// <summary>
+    /// Computes the public tunnel identifier for a token: <c>Keccak256(token)</c>.
+    /// </summary>
+    public static Bytes32 ComputeTunnelId(Bytes32 token) => Keccak256.HashDataToFixed(token.AsSpan());
+
+    /// <summary>
+    /// Gets the token of a pending tunnel request without removing it.
+    /// </summary>
+    public bool TryGetToken(Bytes32 tunnelId, out Bytes32 token)
+    {
+        if (_pendingTunnels.TryGetValue(tunnelId, out PendingEntry? entry))
+        {
+            token = entry.Token;
+            return true;
+        }
+
+        token = default;
+        return false;
+    }
+
+    /// <summary>
     /// Resolves a pending tunnel request with the active data connection opened by the Provider.
     /// </summary>
-    public bool Resolve(Bytes32 token, IConnection providerDataConnection)
+    public bool Resolve(Bytes32 tunnelId, IConnection providerDataConnection)
     {
         ArgumentNullException.ThrowIfNull(providerDataConnection);
 
-        if (_pendingTunnels.TryRemove(token, out PendingEntry? entry))
+        if (_pendingTunnels.TryRemove(tunnelId, out PendingEntry? entry))
         {
             return entry.Tcs.TrySetResult(providerDataConnection);
         }
 
         return false;
     }
+
+    /// <summary>
+    /// Removes a pending tunnel request without resolving it.
+    /// </summary>
+    /// <returns><see langword="true"/> if the request was pending and has been removed.</returns>
+    public bool Remove(Bytes32 token) => _pendingTunnels.TryRemove(ComputeTunnelId(token), out _);
 
     /// <summary>
     /// Gets the number of pending tunnel requests.
@@ -99,9 +129,10 @@ public sealed class TunnelRegistry
         return cleaned;
     }
 
-    private sealed class PendingEntry(TaskCompletionSource<IConnection> tcs, long timestamp)
+    private sealed class PendingEntry(TaskCompletionSource<IConnection> tcs, Bytes32 token, long timestamp)
     {
         public TaskCompletionSource<IConnection> Tcs { get; } = tcs;
+        public Bytes32 Token { get; } = token;
         public long Timestamp { get; } = timestamp;
     }
 }

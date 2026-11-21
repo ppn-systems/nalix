@@ -14,7 +14,6 @@ public sealed class PacketContextTests
     {
         PacketContext<TestPacket> context = new();
 
-        Assert.False(context.IsReliable);
         Assert.False(context.SkipOutbound);
 
         context.Return();

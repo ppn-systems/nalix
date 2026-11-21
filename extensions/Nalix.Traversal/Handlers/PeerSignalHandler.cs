@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Buffers.Binary;
+using System.Net;
 using System.Threading.Tasks;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
@@ -16,6 +18,12 @@ namespace Nalix.Traversal.Handlers;
 /// <summary>
 /// Handles peer signaling for NAT traversal.
 /// Forwards STUN discovered IP/Port information between peers over TCP.
+/// <para>
+/// A <see cref="SignalType.CandidateOffer"/> is relayed only when its address is the sender's own
+/// server-observed IP (the port is the sender's UDP mapping and cannot be checked). Address fields on a
+/// <see cref="SignalType.Request"/> are not relayed. Peers therefore cannot direct a third party's UDP
+/// probes at an arbitrary address.
+/// </para>
 /// </summary>
 [PacketHandler("Nalix.Traversal")]
 public sealed class PeerSignalHandler
@@ -44,7 +52,7 @@ public sealed class PeerSignalHandler
         IConnectionHub? hub = context.Connection.GetHub();
         IConnection? targetConnection = hub?.GetConnection(targetId);
 
-        if (targetConnection != null)
+        if (targetConnection != null && IsRelayable(context.Connection, context.Packet, type))
         {
             using PacketScope<PeerSignal> lease = PacketFactory<PeerSignal>.Acquire();
             PeerSignal forwardedPacket = lease.Value;
@@ -53,11 +61,15 @@ public sealed class PeerSignalHandler
             forwardedPacket.Type = SignalType.CandidateOffer;
 
             forwardedPacket.SequenceId = 0;
-            forwardedPacket.Port = context.Packet.Port;
-            forwardedPacket.AddressLow = context.Packet.AddressLow;
-            forwardedPacket.AddressHigh = context.Packet.AddressHigh;
 
-            await targetConnection.SendAsync(forwardedPacket, NetworkTransport.TCP, enableEncrypt: true, context.CancellationToken).ConfigureAwait(false);
+            if (type == SignalType.CandidateOffer)
+            {
+                forwardedPacket.Port = context.Packet.Port;
+                forwardedPacket.AddressLow = context.Packet.AddressLow;
+                forwardedPacket.AddressHigh = context.Packet.AddressHigh;
+            }
+
+            await targetConnection.SendAsync(forwardedPacket, enableEncrypt: true, context.CancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -70,6 +82,28 @@ public sealed class PeerSignalHandler
 
             await context.Sender.SendAsync(errorPacket, context.CancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private static bool IsRelayable(IConnection sender, PeerSignal packet, SignalType type)
+    {
+        if (type == SignalType.Request)
+        {
+            return true;
+        }
+
+        if (packet.Port == 0 || !IPAddress.TryParse(sender.NetworkEndpoint.Address, out IPAddress? observed))
+        {
+            return false;
+        }
+
+        // Candidate bytes: Low then High, little-endian (the layout used by TraversalClient). Compare in
+        // IPv4-mapped IPv6 form so an IPv4 sender matches either encoding.
+        Span<byte> claimed = stackalloc byte[16];
+        BinaryPrimitives.WriteUInt64LittleEndian(claimed, packet.AddressLow);
+        BinaryPrimitives.WriteUInt64LittleEndian(claimed[8..], packet.AddressHigh);
+
+        Span<byte> actual = stackalloc byte[16];
+        return observed.MapToIPv6().TryWriteBytes(actual, out _) && claimed.SequenceEqual(actual);
     }
 
 }

@@ -3,6 +3,7 @@
 
 using System;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Validation;
 using Nalix.Environment.Configuration.Binding;
 
@@ -51,6 +52,13 @@ public sealed partial class NetworkWebSocketOptions : ConfigurationLoader, IVali
     /// </summary>
     [IniComment("Enable native HTTP endpoints (/healthz, /version, /metrics) (default true)")]
     public bool EnableDevOpsEndpoints { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the bearer token required to read the DevOps endpoints (/metrics, /version).
+    /// Empty (the default) disables both endpoints.
+    /// </summary>
+    [IniComment("Bearer token required for /metrics and /version; empty disables both endpoints (default empty)")]
+    public string DevOpsBearerToken { get; set; } = string.Empty;
 
     /// <summary>
     /// Maximum time in milliseconds to wait for the HTTP upgrade handshake to complete
@@ -166,8 +174,16 @@ public sealed partial class NetworkWebSocketOptions : ConfigurationLoader, IVali
     /// <summary>
     /// Validates the configuration options and throws an exception if validation fails.
     /// </summary>
-    /// <exception cref="Abstractions.Exceptions.ValidationException">
-    /// Thrown when one or more validation attributes fail.
+    /// <exception cref="ValidationException">
+    /// Thrown when one or more validation attributes fail, or when <see cref="DevOpsBearerToken"/> is set but shorter than 16 characters.
     /// </exception>
-    public void Validate() => this.ValidateDataAnnotations();
+    public void Validate()
+    {
+        this.ValidateDataAnnotations();
+
+        if (!string.IsNullOrEmpty(this.DevOpsBearerToken) && this.DevOpsBearerToken.Length < 16)
+        {
+            throw new ValidationException("DevOpsBearerToken must be at least 16 characters when set.");
+        }
+    }
 }

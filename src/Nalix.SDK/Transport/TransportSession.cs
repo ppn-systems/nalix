@@ -6,6 +6,7 @@ using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
 using Nalix.Environment.Extensions;
@@ -20,7 +21,7 @@ namespace Nalix.SDK.Transport;
 /// Derived sessions expose a consistent lifecycle for connecting, disconnecting,
 /// sending packets, and receiving transport events.
 /// </remarks>
-public abstract class TransportSession : IDisposable, ITransportSession
+public abstract class TransportSession : IDisposable, IAsyncDisposable, ITransportSession
 {
     #region Properties
 
@@ -335,7 +336,7 @@ public abstract class TransportSession : IDisposable, ITransportSession
     /// </summary>
     internal void MarkIntentionalDisconnect()
     {
-        Interlocked.Exchange(ref _intentionalDisconnect, 1);
+        _ = Interlocked.Exchange(ref _intentionalDisconnect, 1);
         _ = Interlocked.Increment(ref _intentionalDisconnectEpoch);
     }
 
@@ -494,9 +495,17 @@ public abstract class TransportSession : IDisposable, ITransportSession
                 catch (Exception ex) when (Nalix.Abstractions.Exceptions.ExceptionClassifier.IsNonFatal(ex))
                 {
                     consecutiveMisses++;
+                    if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.KeepAlive.Missed))
+                    {
+                        DiagnosticsEvents.Write(DiagnosticsEvents.KeepAlive.Missed, new DiagnosticLog("SDK.TransportSession:KeepAlive", $"pong-missed misses={consecutiveMisses} threshold={Math.Max(1, this.Options.KeepAliveMissThreshold)}", ex));
+                    }
                     int threshold = Math.Max(1, this.Options.KeepAliveMissThreshold);
                     if (consecutiveMisses >= threshold && !ct.IsCancellationRequested && this.IsConnected)
                     {
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.KeepAlive.Failed))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.KeepAlive.Failed, new DiagnosticLog("SDK.TransportSession:KeepAlive", $"keepalive-failed misses={consecutiveMisses}"));
+                        }
                         await this.FaultFromKeepAliveAsync(
                             new Nalix.Abstractions.Exceptions.NetworkException(
                                 $"Keepalive failed after {consecutiveMisses} missed PONG response(s): {ex.Message}", ex)).ConfigureAwait(false);
@@ -515,6 +524,24 @@ public abstract class TransportSession : IDisposable, ITransportSession
     /// allowing <see cref="ReconnectSupervisor"/> to recover the session.
     /// </summary>
     private protected virtual Task FaultFromKeepAliveAsync(Exception ex) => Task.CompletedTask;
+
+    /// <summary>
+    /// Gets whether a SESSION_REKEY sent on this transport is guaranteed to reach the server in order (TCP, WebSocket).
+    /// The server switches keys as soon as it reads the request, so once it is written the new key is in effect on both
+    /// sides even if the acknowledgement is late. Over a datagram session the server ignores the request.
+    /// </summary>
+    internal virtual bool DeliversRekeyReliably => false;
+
+    /// <summary>
+    /// Sends <paramref name="packet"/> and then runs <paramref name="afterWrite"/>. Reliable transports override this to
+    /// run <paramref name="afterWrite"/> under their send lock, so no other frame is encrypted between the packet and
+    /// the key switch.
+    /// </summary>
+    internal virtual async Task SendThenSwitchAsync(IPacket packet, Action afterWrite, CancellationToken ct)
+    {
+        await this.SendAsync(packet, ct).ConfigureAwait(false);
+        afterWrite();
+    }
 
     /// <summary>
     /// Reserves the next outbound <c>SequenceId</c> from this session's counter.
@@ -660,6 +687,33 @@ public abstract class TransportSession : IDisposable, ITransportSession
     /// </summary>
     /// <param name="disposing"><see langword="true"/> when called from <see cref="Dispose()"/>.</param>
     protected abstract void Dispose(bool disposing);
+
+    /// <summary>
+    /// Disconnects gracefully, waiting until the transport and its receive loop have shut down, then releases all
+    /// resources. Unlike <see cref="Dispose()"/>, which starts the disconnect and returns, this completes only after
+    /// the session is fully closed. Safe to call more than once and together with <see cref="Dispose()"/>; the
+    /// disconnect is application-initiated, so it never starts an auto-reconnect.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await this.DisposeAsyncCore().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (Nalix.Abstractions.Exceptions.ExceptionClassifier.IsNonFatal(ex))
+        {
+            // A disconnect that fails while closing must not prevent the resources from being released.
+        }
+
+        this.Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Performs the asynchronous part of <see cref="DisposeAsync"/>: closes the transport and waits for it to stop.
+    /// The default calls <see cref="DisconnectAsync"/>.
+    /// </summary>
+    protected virtual ValueTask DisposeAsyncCore() => new(this.DisconnectAsync());
 
     #endregion Methods
 }

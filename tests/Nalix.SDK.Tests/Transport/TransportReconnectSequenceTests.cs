@@ -25,7 +25,7 @@ namespace Nalix.SDK.Tests.Transport;
 public sealed class TransportReconnectSequenceTests : IDisposable
 {
     [Fact]
-    public async Task ConnectAsync_AfterStaleTcpSocket_ResetsSendSequence()
+    public async Task ConnectAsync_AfterStaleTcpSocket_KeepsSendSequenceForResume()
     {
         int port = TestEnvironment.GetFreePort();
         TcpListener listener = new(IPAddress.Loopback, port);
@@ -42,7 +42,7 @@ public sealed class TransportReconnectSequenceTests : IDisposable
             await session.ConnectAsync();
             using Socket accepted = await acceptTask.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(0u, CurrentSendSequence(session));
+            Assert.Equal(1u, CurrentSendSequence(session));
         }
         finally
         {
@@ -51,7 +51,7 @@ public sealed class TransportReconnectSequenceTests : IDisposable
     }
 
     [Fact]
-    public async Task ConnectAsync_AfterStaleWebSocket_ResetsSendSequence()
+    public async Task ConnectAsync_AfterStaleWebSocket_KeepsSendSequenceForResume()
     {
         ushort port = (ushort)TestEnvironment.GetFreePort();
         NetworkWebSocketOptions wsOptions = ConfigurationManager.Instance.Get<NetworkWebSocketOptions>();
@@ -75,7 +75,7 @@ public sealed class TransportReconnectSequenceTests : IDisposable
 
             await session.ConnectAsync();
 
-            Assert.Equal(0u, CurrentSendSequence(session));
+            Assert.Equal(1u, CurrentSendSequence(session));
             server.Deactivate();
         }
         finally
@@ -84,24 +84,15 @@ public sealed class TransportReconnectSequenceTests : IDisposable
         }
     }
 
-    [Fact]
-    public async Task ConnectAsync_AfterStaleUdpSocket_ResetsSendSequence()
+    // Subscribes to every SDK diagnostic while these tests run, so the diagnostics on the reconnect, resume,
+    // handshake and request paths they take are built and written (and cannot throw) instead of skipped.
+    private readonly DiagnosticCapture _diagnostics = new(string.Empty);
+
+    public void Dispose()
     {
-        using UdpSession session = new(new TransportOptions
-        {
-            Address = "127.0.0.1",
-            Port = (ushort)TestEnvironment.GetFreePort()
-        });
-
-        await session.SendAsync(new byte[] { 1 }, encrypt: true);
-        Assert.Equal(1u, CurrentSendSequence(session));
-
-        await session.ConnectAsync();
-
-        Assert.Equal(0u, CurrentSendSequence(session));
+        _diagnostics.Dispose();
+        Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
     }
-
-    public void Dispose() => Nalix.Framework.Injection.InstanceManager.Instance.Clear(dispose: false);
 
     private static uint CurrentSendSequence(object session)
     {

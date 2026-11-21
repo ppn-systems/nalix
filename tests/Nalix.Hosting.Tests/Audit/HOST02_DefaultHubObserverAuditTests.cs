@@ -41,7 +41,7 @@ public sealed class HOST02_DefaultHubObserverAuditTests : IDisposable
         int port = TestUtils.GetFreePort();
 
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
         builder.UseConnectionHub(new Nalix.Network.Connections.ConnectionHub());
         builder.UseGroups();
 
@@ -66,7 +66,7 @@ public sealed class HOST02_DefaultHubObserverAuditTests : IDisposable
         int port = TestUtils.GetFreePort();
 
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
         builder.UseGroups();
 
         using NetworkApplication app = builder.Build();
@@ -90,7 +90,7 @@ public sealed class HOST02_DefaultHubObserverAuditTests : IDisposable
         int port = TestUtils.GetFreePort();
 
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
         builder.UseSessions();
 
         using NetworkApplication app = builder.Build();

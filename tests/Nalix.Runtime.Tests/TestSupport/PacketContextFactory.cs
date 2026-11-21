@@ -14,7 +14,6 @@ internal static class PacketContextFactory
     public static PacketContext<TPacket> Create<TPacket>(
         TPacket packet,
         IConnection connection,
-        bool reliable = true,
         bool encryptedOnWire = false,
         PacketMetadata? metadata = null)
         where TPacket : IPacket
@@ -25,14 +24,13 @@ internal static class PacketContextFactory
             timeout: null,
             permission: null,
             encryption: null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
         MethodInfo initMethod = typeof(PacketContext<TPacket>).GetMethod(
             "Initialize",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-        initMethod.Invoke(context, [packet, connection, desc, reliable, encryptedOnWire, false, CancellationToken.None, null]);
+        initMethod.Invoke(context, [packet, connection, desc, encryptedOnWire, false, CancellationToken.None, null]);
         return context;
     }
 }

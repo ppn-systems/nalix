@@ -20,7 +20,7 @@ namespace Nalix.SDK.Transport.Extensions;
 /// <remarks>
 /// Before this existed, every such screen hand-rolled the same five steps: stamp a
 /// <c>SequenceId</c>, open a <see cref="TaskCompletionSource{T}"/> per response type, subscribe them
-/// all via <see cref="TransportSessionSubscriptions.On{TPacket}"/> before sending, apply one shared
+/// all via <see cref="TransportSessionSubscriptions.On{TPacket}(ITransportSession, Action{TPacket}, bool)"/> before sending, apply one shared
 /// timeout to every TCS, then await the header followed by each stream. Each copy risked a subtly
 /// different mistake (a TCS built without
 /// <see cref="TaskCreationOptions.RunContinuationsAsynchronously"/>, a timeout that only covered some
@@ -258,7 +258,7 @@ public static class HeaderStreamExtensions
     /// <summary>
     /// Sends the request and, if the send itself fails, faults the header TCS and the stream TCS
     /// with the same wrapped exception instead of leaving them to hang until the caller's timeout —
-    /// mirroring how <see cref="PacketAwaiter"/> handles a failed send phase for a single-response
+    /// mirroring how <see cref="Internal.PacketAwaiter"/> handles a failed send phase for a single-response
     /// request. One statically-typed overload per arity, deliberately not unified via <c>object</c>
     /// or <c>dynamic</c>, which would defeat AOT/trimming on the WASM targets this SDK ships to.
     /// </summary>

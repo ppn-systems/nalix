@@ -6,34 +6,27 @@ using System;
 namespace Nalix.Abstractions.Networking.Packets;
 
 /// <summary>
-/// Marks a class as a Nalix packet and enables automatic registration
-/// when scanning assemblies.
+/// Marks a class as a Nalix packet so that the packet registry generator
+/// registers it automatically at module load.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Types annotated with this attribute will be discovered and registered
-/// into the packet registry during startup via reflection-based scanning.
+/// Types annotated with this attribute are discovered at compile time by the
+/// Nalix source generators (<c>PacketRegistryGenerator</c>), which emit the
+/// registration code. No runtime reflection is used.
 /// </para>
 /// <para>
-/// This attribute is typically applied to classes that inherit from
-/// <c>PacketBase&lt;T&gt;</c>.
-/// </para>
-/// <para>
-/// Using this attribute helps avoid manual packet registration and ensures
-/// explicit control over which packet types are exposed.
+/// This attribute is applied to classes that inherit from
+/// <c>PacketBase&lt;T&gt;</c>. The packet must declare its operation code with
+/// <see cref="IPacketStaticOpcode.StaticOpCode"/>; the opcode is not taken from this attribute.
 /// </para>
 /// </remarks>
 /// <example>
 /// <code>
 /// [Packet]
-/// public sealed class PingRequest : PacketBase&lt;PingRequest&gt;
+/// public sealed partial class PingRequest : PacketBase&lt;PingRequest&gt;, IPacketStaticOpcode
 /// {
-///     public const ushort OpCodeValue = 0x1001;
-///
-///     public PingRequest()
-///     {
-///         this.OpCode = OpCodeValue;
-///     }
+///     public static ushort StaticOpCode =&gt; 0x1001;
 /// }
 /// </code>
 /// </example>

@@ -26,7 +26,7 @@ internal sealed class TransportReport<T> : IReportable where T : class, IReporta
     {
         writer.WriteStartObject();
         WRITE(writer, NetworkTransport.TCP, "TCP");
-        WRITE(writer, NetworkTransport.UDP, "UDP");
+        WRITE(writer, NetworkTransport.DATAGRAM, "DATAGRAM");
         WRITE(writer, NetworkTransport.WEBSOCKET, "WEBSOCKET");
         writer.WriteEndObject();
     }

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net10.0</TargetFramework>
+		<TargetFrameworks>net10.0;net11.0</TargetFrameworks>
 		<IsAotCompatible>true</IsAotCompatible>
 
 		<Nullable>enable</Nullable>
@@ -22,8 +22,17 @@ Nalix.Traversal provides NAT traversal, STUN signaling, and UDP hole punching ca
 	<Import Project="..\..\src\Package.Build.props" />
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Nalix.Traversal.Tests" Condition="'$(NalixInternalsVisibleTo)' != 'false'" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Nalix.Traversal.Contracts\Nalix.Traversal.Contracts.csproj" />
 		<ProjectReference Include="..\..\src\Nalix.Hosting\Nalix.Hosting.csproj" />
 		<ProjectReference Include="..\..\src\Nalix.Runtime\Nalix.Runtime.csproj" />
 	</ItemGroup>
+	<!-- Source generator for [PacketHandler] handler registration -->
+	<ItemGroup>
+		<ProjectReference Include="..\..\analyzers\Nalix.Analyzers.Generators\Nalix.Analyzers.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;IsTrimmable;IsAotCompatible;RuntimeIdentifier;RuntimeIdentifiers" />
+	</ItemGroup>
+
 </Project>

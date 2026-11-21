@@ -16,7 +16,7 @@
 
 ---
 
-**Nalix** is low-latency binary realtime networking for .NET 10 — for Blazor WebAssembly, MAUI and game servers — with a pooled, near-zero-allocation hot path (~120 B per message on the server, the lowest of the frameworks measured below) and built-in X25519 + AEAD encryption.
+**Nalix** is low-latency binary realtime networking for .NET 10 and .NET 11 — for Blazor WebAssembly, MAUI and game servers — with a pooled, near-zero-allocation hot path (~56 B per message on the server over TCP, the lowest of the frameworks measured below) and built-in X25519 + AEAD encryption.
 
 You define packets as plain C# classes, write handlers keyed by opcode, and talk to the server over TCP, UDP or WebSocket from the Nalix client SDK. There is no HTTP layer in between.
 
@@ -68,7 +68,7 @@ How Nalix compares with the usual .NET choices for realtime traffic (competitor 
 
 - You need **HTTP/REST interop**, proxies or API gateways that understand HTTP semantics. Use gRPC or plain ASP.NET Core.
 - You have **polyglot clients** (JavaScript, Go, Python, Java). The only client SDK is .NET; gRPC and SignalR have clients for many languages.
-- You are on **.NET 8/9 or .NET Framework**. Nalix targets .NET 10 only.
+- You are on **.NET 8/9 or .NET Framework**. Nalix targets .NET 10 and .NET 11 (.NET 8 and 9 reached end of support on November 10, 2026).
 - You are building a **Unity** client. Unity does not run .NET 10, so the SDK cannot be used there today; MagicOnion supports Unity.
 
 ---
@@ -161,7 +161,7 @@ HelloResponsePacket response = await session.RequestAsync<HelloResponsePacket>(
     RequestOptions.Default.WithTimeout(5_000));
 ```
 
-To encrypt the connection, add `.UseSecureConnections()` to the server builder and `await session.HandshakeAsync();` after connecting on the client. See [`samples/SecureMultiTransportHelloWorld`](samples/SecureMultiTransportHelloWorld).
+To encrypt the connection, add `.UseSecureConnections()` to the server builder and `await session.HandshakeAsync();` after connecting on the client. Requests are then encrypted when you set `TransportOptions.EncryptRequestsByDefault = true` (or pass `RequestOptions.Default.WithEncrypt()` per call); it defaults to `false` so deployments that already wrap the transport in TLS are not encrypted twice. See [`samples/SecureMultiTransportHelloWorld`](samples/SecureMultiTransportHelloWorld).
 
 Run it: `dotnet run --project samples/HelloWorld/HelloWorld.Server`, then `dotnet run --project samples/HelloWorld/HelloWorld.Client` in a second terminal. The snippets above are trimmed from the sample (doc comments, logging and Ctrl+C handling removed) and use the current `MapTcp` API; the sample itself builds and runs as-is against its pinned package version.
 
@@ -182,11 +182,11 @@ Runnable end-to-end projects, from beginner to production-grade:
 
 | Requirement | Version |
 | :--- | :--- |
-| .NET SDK | [10.0+](https://dotnet.microsoft.com/download/dotnet/10.0) — **.NET 10 only** |
+| .NET SDK | [10.0+](https://dotnet.microsoft.com/download/dotnet/10.0) — packages target **.NET 10 and .NET 11**; building the repository needs the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) |
 | C# Language | 14+ |
 | IDE | [Visual Studio 2026](https://visualstudio.microsoft.com/downloads/) / [VS Code](https://code.visualstudio.com/) / [Rider](https://www.jetbrains.com/rider/) |
 
-Every package targets `net10.0` only. The hot path relies on recent runtime and language features (C# 14, `Span<T>`/`ref struct` APIs, static abstract interface members for packet opcodes and formatters), and a single target keeps the packages trimmable and Native AOT-compatible without multi-targeting shims.
+Every package targets `net10.0` and `net11.0`, built from the same sources with no per-target code. The hot path relies on recent runtime and language features (C# 14, `Span<T>`/`ref struct` APIs, static abstract interface members for packet opcodes and formatters), so older runtimes are not targeted; both targets stay trimmable and Native AOT-compatible.
 
 ---
 
@@ -218,7 +218,7 @@ Nalix is composed of several modular packages — install only what you need.
 | **[Nalix.Abstractions](src/Nalix.Abstractions)** | Base abstractions, enums, and shared contracts for the Nalix ecosystem. |
 | **[Nalix.Codec](src/Nalix.Codec)** | High-performance framing, cryptography, and serialization. |
 | **[Nalix.Environment](src/Nalix.Environment)** | Low-level IO primitives, buffer leasing, and configuration loading. |
-| **[Nalix.Framework](src/Nalix.Framework)** | High-performance core: cryptography, identity, DI, serialization, and task orchestration. |
+| **[Nalix.Framework](src/Nalix.Framework)** | High-performance core: identity (Snowflake IDs), DI, object and buffer pooling, task orchestration, and diagnostics. |
 | **[Nalix.Runtime](src/Nalix.Runtime)** | Packet dispatching, middleware pipelines, protection primitives, and throttling. |
 
 ### 📡 Networking & Hosting

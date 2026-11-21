@@ -75,13 +75,6 @@ public sealed partial class NetworkSocketOptions : ConfigurationLoader, IValidat
     public int MaxParallel { get; set; } = 1;
 
     /// <summary>
-    /// Gets or sets the maximum number of parallel connections.
-    /// </summary>
-    [IniComment("Maximum simultaneous parallel listeners/acceptors (1–1024, default 1)")]
-    [ValueRange(1, 1024)]
-    public int MaxParallelUDP { get; set; } = 1;
-
-    /// <summary>
     /// Gets or sets the buffer size for both sending and receiving data.
     /// </summary>
     [IniComment("Send and receive buffer size in bytes (1024–10,485,760)")]
@@ -95,7 +88,7 @@ public sealed partial class NetworkSocketOptions : ConfigurationLoader, IValidat
     public bool KeepAlive { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets whether the socket can reuse an address in TIME_WAIT state.
+    /// Gets or sets whether the TCP listener may reuse an address in TIME_WAIT state.
     /// </summary>
     [IniComment("Allow reuse of a local address in TIME_WAIT state (recommended: true)")]
     public bool ReuseAddress { get; set; } = true;
@@ -134,24 +127,18 @@ public sealed partial class NetworkSocketOptions : ConfigurationLoader, IValidat
     public int ProcessChannelDrainTimeout { get; set; } = 5000;
 
     /// <summary>
-    /// ReusePort allows multiple sockets to bind to the same port, which can be useful for load balancing and high availability scenarios.
+    /// Gets or sets whether the TCP listener may share its port with other sockets (SO_REUSEPORT on Linux).
+    /// Disabled by default: on Linux a process running under the same user can otherwise bind the same port
+    /// and receive a share of incoming connections. Enable only for an explicit multi-socket load-balancing setup.
     /// </summary>
-    [IniComment("Allow multiple sockets to bind to the same port for load balancing (default: true)")]
-    public bool ReusePort { get; set; } = true;
+    [IniComment("Allow multiple sockets to bind to the same port for load balancing; can let another local process of the same user share the port (default: false)")]
+    public bool ReusePort { get; set; } = false;
 
     /// <summary>
     /// TcpFastOpen enables the TCP Fast Open feature, which allows data to be sent during the initial connection handshake, reducing latency for subsequent connections.
     /// </summary>
     [IniComment("Enable TCP Fast Open to reduce latency for subsequent connections (default: true)")]
     public bool TcpFastOpen { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets the maximum size (in bytes) allowed for a single UDP datagram.
-    /// Default 1440 avoids IP fragmentation.
-    /// </summary>
-    [IniComment("Maximum allowed UDP datagram size in bytes to avoid fragmentation (default 1440)")]
-    [ValueRange(64, 65507)]
-    public int MaxUdpDatagramSize { get; set; } = 1440;
 
     #endregion Properties
 

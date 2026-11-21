@@ -203,14 +203,14 @@ internal sealed class DictionaryFormatter<
         {
             if (reader.IsFailed)
             {
-                return null!;
+                return null;
             }
 
             TKey key = kf.Deserialize(ref reader);
             TValue val = vf.Deserialize(ref reader);
             if (reader.IsFailed)
             {
-                return null!;
+                return null;
             }
 
             dict[key] = val;

@@ -9,9 +9,11 @@ using Microsoft.Extensions.Logging;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Injection;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Networking.Datagrams;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Security;
 using Nalix.Codec.DataFrames;
+using Nalix.Codec.Security.Datagram;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Configuration.Binding;
 using Nalix.Environment.Memory;
@@ -20,11 +22,12 @@ using Nalix.Framework.Memory.Buffers;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Hosting.Internal;
 using Nalix.Network.Connections;
-using Nalix.Network.Listeners.Udp;
+using Nalix.Network.Listeners.Datagram;
 using Nalix.Network.Listeners.Web;
 using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
 using Nalix.Runtime.Dispatching;
+using Nalix.Runtime.Handlers;
 using Nalix.Runtime.Routing;
 
 namespace Nalix.Hosting;
@@ -262,22 +265,37 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
     }
 
     /// <inheritdoc />
-    public IProtocolBindingBuilder MapUdp<
+    public IProtocolBindingBuilder MapDatagram<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol
     {
+        // Ticket requests are answered by a single IDatagramTicketIssuer, so a second datagram listener would never
+        // get a session.
+        if (_state.DatagramBindings.Count > 0)
+        {
+            throw new InvalidOperationException("MapDatagram can be called once per application: datagram tickets are issued by a single listener.");
+        }
+
         ProtocolBindingBuilder builder = new(this);
 
-        _state.UdpBindings.Add(new UdpProtocolBinding(
+        _state.DatagramBindings.Add(new DatagramProtocolBinding(
             typeof(TProtocol),
             dispatch => builder.Factory is not null
                 ? builder.Factory(dispatch)
                 : this.CreateProtocol<TProtocol>(dispatch),
-            Port: null,
-            Authentication: null,
-            BindingBuilder: builder));
+            builder));
+
+        _ = this.MapHandlers(typeof(DatagramTicketHandlers));
 
         return builder;
+    }
+
+    /// <inheritdoc />
+    public INetworkApplicationBuilder AddListener(Func<IListener> factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        _state.CustomListeners.Add(factory);
+        return this;
     }
 
     /// <inheritdoc />
@@ -342,59 +360,6 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
             });
         }
 
-        foreach (UdpProtocolBinding registration in _state.UdpBindings)
-        {
-            serverFactories.Add(dispatch =>
-            {
-                IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()
-                    ?? throw new InvalidOperationException("IConnectionHub is not registered. Call UseConnectionHub or ensure Build() is invoked.");
-                IProtocol protocol = registration.Factory(dispatch);
-
-                ushort? port = registration.Port;
-                OperatingMode mode = OperatingMode.Server;
-                Func<IConnection, System.Net.EndPoint, ReadOnlySpan<byte>, bool>? authen = registration.Authentication;
-
-                if (registration.BindingBuilder is ProtocolBindingBuilder udpBuilder)
-                {
-                    mode = udpBuilder.Mode;
-                    port = udpBuilder.Port ?? port;
-                    authen = udpBuilder.Authen ?? authen;
-                }
-
-                IConnectionGuard guard = InstanceManager.Instance.GetExistingInstance<IConnectionGuard>()
-                    ?? throw new InvalidOperationException("IConnectionGuard is not registered.");
-
-                IListener listener;
-
-                if (mode == OperatingMode.Passthrough)
-                {
-                    if (authen is not null)
-                    {
-                        throw new InvalidOperationException(
-                            "UDP passthrough framing (TransportFraming.None) does not support " +
-                            "Nalix authentication hooks. The protocol layer is responsible for " +
-                            "its own authentication when using passthrough mode.");
-                    }
-
-                    listener = port.HasValue
-                        ? new UdpPassthroughListener(port.Value, protocol, hub, guard)
-                        : new UdpPassthroughListener(protocol, hub, guard);
-                }
-                else
-                {
-                    listener = authen is not null
-                        ? (port.HasValue
-                            ? new UdpServerListener(port.Value, protocol, hub, authen)
-                            : new UdpServerListener(protocol, hub, authen))
-                        : (port.HasValue
-                            ? new UdpServerListener(port.Value, protocol, hub)
-                            : new UdpServerListener(protocol, hub));
-                }
-
-                return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.UDP);
-            });
-        }
-
         foreach (WebSocketProtocolBinding registration in _state.WebSocketBindings)
         {
             serverFactories.Add(dispatch =>
@@ -445,6 +410,32 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
 
                 return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.WEBSOCKET);
             });
+        }
+
+        foreach (DatagramProtocolBinding registration in _state.DatagramBindings)
+        {
+            serverFactories.Add(dispatch =>
+            {
+                IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()
+                    ?? throw new InvalidOperationException("IConnectionHub is not registered. Call UseConnectionHub or ensure Build() is invoked.");
+                IProtocol protocol = registration.Factory(dispatch);
+
+                IConnectionGuard guard = InstanceManager.Instance.GetExistingInstance<IConnectionGuard>()
+                    ?? throw new InvalidOperationException("IConnectionGuard is not registered.");
+
+                DatagramListener listener = new(
+                    registration.BindingBuilder.Port ?? 0, protocol, hub, ChaCha20Poly1305DatagramProtectionFactory.Instance, guard);
+
+                // The ticket handler finds the listener through the instance manager.
+                InstanceManager.Instance.Register<IDatagramTicketIssuer>(listener);
+
+                return new ListenerBinding(listener, protocol, registration.ProtocolType, NetworkTransport.DATAGRAM);
+            });
+        }
+
+        foreach (Func<IListener> factory in _state.CustomListeners)
+        {
+            serverFactories.Add(_ => new ListenerBinding(factory(), protocol: null, protocolType: null, transport: null));
         }
 
         return new NetworkApplication(_state.Logger, PrepareCallbacks, DispatchFactory, serverFactories);
@@ -614,12 +605,6 @@ public sealed class NetworkApplicationBuilder : INetworkApplicationBuilder
     public IProtocolBindingBuilder ListenTcp<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
         where TProtocol : class, IProtocol => this.MapTcp<TProtocol>();
-
-    /// <inheritdoc />
-    [Obsolete("Use MapUdp<TProtocol>() instead. This method will be removed in a future version.")]
-    public IProtocolBindingBuilder ListenUdp<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProtocol>()
-        where TProtocol : class, IProtocol => this.MapUdp<TProtocol>();
 
     /// <inheritdoc />
     [Obsolete("Use MapWebSocket<TProtocol>() instead. This method will be removed in a future version.")]

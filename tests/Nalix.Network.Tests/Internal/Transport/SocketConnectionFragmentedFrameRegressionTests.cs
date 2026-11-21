@@ -27,7 +27,6 @@ using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
-using Nalix.Network.Listeners.Udp;
 using Nalix.Network.Options;
 using Nalix.Network.RateLimiting;
 using Nalix.Network.Tests.TestSupport;
@@ -77,6 +76,7 @@ public sealed class SocketConnectionFragmentedFrameRegressionTests
         try
         {
             Connection realConn = new(server, s_testOpCodeExtractor);
+            realConn.Level = PermissionLevel.ESTABLISHED;
             FieldInfo backingField = typeof(Connection).GetField("_backing", BindingFlags.Instance | BindingFlags.NonPublic)!;
             object backing = backingField.GetValue(realConn)!;
             FieldInfo socketField = backing.GetType().GetField("Socket", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;

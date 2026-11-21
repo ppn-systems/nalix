@@ -46,6 +46,8 @@ public sealed class RuntimeObservationSerializationTests
         Assert.Equal(source.Stage, result.Stage);
         Assert.Equal(source.Targets, result.Targets);
         Assert.Equal(source.Reason, result.Reason);
+        Assert.Equal(source.SampledAt, result.SampledAt);
+        Assert.Equal(source.IsEndOfStream, result.IsEndOfStream);
         Assert.True(source.ObservationData.Span.SequenceEqual(result.ObservationData.Span),
             string.Format("ObservationData mismatch: expected {0} bytes, got {1} bytes.",
                 source.ObservationData.Length, result.ObservationData.Length));
@@ -250,7 +252,7 @@ public sealed class RuntimeObservationSerializationTests
             ProtocolReason.NONE,
             observationData: payload);
 
-        // Expected: Header(6) + Stage(1) + Targets(4) + Reason(2) + SampledAt(8) + LengthPrefix(4) + Payload(8) = 33
+        // Expected: Header(6) + Stage(1) + Targets(4) + Reason(2) + SampledAt(8) + IsEndOfStream(1) + LengthPrefix(4) + Payload(8) = 34
         int expectedMinLength = PacketSchema<RuntimeObservation>.StaticSize + payload.Length;
 
         try
@@ -494,17 +496,17 @@ public sealed class RuntimeObservationSerializationTests
     /// <summary>
     /// Verifies that the <see cref="PacketSchema{RuntimeObservation}.StaticSize"/>
     /// is the expected static overhead: Header(6) + Stage(1) + Targets(4) +
-    /// Reason(2) + SampledAt(8) + LengthPrefix(4) = 25.
+    /// Reason(2) + SampledAt(8) + IsEndOfStream(1) + LengthPrefix(4) = 26.
     /// If this value is wrong, all dynamic-length tests will produce incorrect
     /// expected values, masking the real bug.
     /// </summary>
     [Fact]
-    public void StaticSize_WhenRuntimeObservationSchemaIsBuilt_IsTwentyFiveBytes()
+    public void StaticSize_WhenRuntimeObservationSchemaIsBuilt_IsTwentySixBytes()
     {
         int staticSize = PacketSchema<RuntimeObservation>.StaticSize;
 
-        // Header(6) + Stage(1) + Targets(4) + Reason(2) + SampledAt(8) + LengthPrefix(4) = 25
-        Assert.Equal(25, staticSize);
+        // Header(6) + Stage(1) + Targets(4) + Reason(2) + SampledAt(8) + IsEndOfStream(1) + LengthPrefix(4) = 26
+        Assert.Equal(26, staticSize);
     }
 
     // =====================================================================
@@ -521,6 +523,7 @@ public sealed class RuntimeObservationSerializationTests
             RuntimeObservationTargets.DISPATCH,
             ProtocolReason.NONE,
             observationData: payload);
+        packet.IsEndOfStream = true;
         return packet;
     }
 

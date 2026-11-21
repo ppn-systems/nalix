@@ -55,7 +55,7 @@ public sealed class TransportSendLockTests : IDisposable
     [Fact]
     public async Task AcquireSendLockAsync_OnTcpTransportWhenUncontended_ReturnsCachedScopeSynchronously()
     {
-        IConnection.ITransport transport = _connection.TCP;
+        IConnection.ITransport transport = _connection.Transport;
 
         // Act: Uncontended acquire must complete synchronously on the fast-path
         ValueTask<IAsyncDisposable> vt = transport.AcquireSendLockAsync(CancellationToken.None);
@@ -78,7 +78,7 @@ public sealed class TransportSendLockTests : IDisposable
     [Fact]
     public async Task AcquireSendLockAsync_OnTcpTransportWhenContended_WaitsUntilFirstScopeDisposed()
     {
-        IConnection.ITransport transport = _connection.TCP;
+        IConnection.ITransport transport = _connection.Transport;
 
         // Hold first lock
         ValueTask<IAsyncDisposable> vt1 = transport.AcquireSendLockAsync(CancellationToken.None);
@@ -105,7 +105,7 @@ public sealed class TransportSendLockTests : IDisposable
     [Fact]
     public async Task AcquireSendLockAsync_OnTcpTransportWithCancelledToken_ThrowsOperationCanceledException()
     {
-        IConnection.ITransport transport = _connection.TCP;
+        IConnection.ITransport transport = _connection.Transport;
 
         using CancellationTokenSource cts = new();
         cts.Cancel();
@@ -127,7 +127,7 @@ public sealed class TransportSendLockTests : IDisposable
     [Fact]
     public async Task AcquireSendLockAsync_OnWebSocketTransportWhenUncontended_ReturnsCachedScopeSynchronously()
     {
-        IConnection.ITransport transport = _webSocketConnection.TCP;
+        IConnection.ITransport transport = _webSocketConnection.Transport;
 
         // Act: Uncontended acquire must complete synchronously on the fast-path
         ValueTask<IAsyncDisposable> vt = transport.AcquireSendLockAsync(CancellationToken.None);
@@ -150,7 +150,7 @@ public sealed class TransportSendLockTests : IDisposable
     [Fact]
     public async Task AcquireSendLockAsync_OnWebSocketTransportWhenContended_WaitsUntilFirstScopeDisposed()
     {
-        IConnection.ITransport transport = _webSocketConnection.TCP;
+        IConnection.ITransport transport = _webSocketConnection.Transport;
 
         // Hold first lock
         ValueTask<IAsyncDisposable> vt1 = transport.AcquireSendLockAsync(CancellationToken.None);
@@ -177,7 +177,7 @@ public sealed class TransportSendLockTests : IDisposable
     [Fact]
     public async Task AcquireSendLockAsync_OnWebSocketTransportWithCancelledToken_ThrowsOperationCanceledException()
     {
-        IConnection.ITransport transport = _webSocketConnection.TCP;
+        IConnection.ITransport transport = _webSocketConnection.Transport;
 
         using CancellationTokenSource cts = new();
         cts.Cancel();
@@ -194,69 +194,6 @@ public sealed class TransportSendLockTests : IDisposable
         ValueTask<IAsyncDisposable> vt = transport.AcquireSendLockAsync(CancellationToken.None);
         vt.IsCompletedSuccessfully.Should().BeTrue();
         await vt.Result.DisposeAsync();
-    }
-
-    [Fact]
-    public async Task ResetForPool_OnTcpTransport_ReinitializesCachedScope()
-    {
-        SocketTcpTransport transport = new();
-        SocketConnection socketConn = ObjectPoolManager.Shared.Get<SocketConnection>();
-        socketConn.Initialize(_socket, _connection);
-        transport.Initialize(_connection, socketConn);
-
-        IConnection.ITransport iface = transport;
-
-        // Acquire lock
-        ValueTask<IAsyncDisposable> vt1 = iface.AcquireSendLockAsync(CancellationToken.None);
-        vt1.IsCompletedSuccessfully.Should().BeTrue();
-        IAsyncDisposable scope1 = vt1.Result;
-        await scope1.DisposeAsync();
-
-        // Reset for pool
-        transport.ResetForPool();
-
-        // Re-initialize
-        transport.Initialize(_connection, socketConn);
-
-        // Acquire lock again
-        ValueTask<IAsyncDisposable> vt2 = iface.AcquireSendLockAsync(CancellationToken.None);
-        vt2.IsCompletedSuccessfully.Should().BeTrue();
-        IAsyncDisposable scope2 = vt2.Result;
-        scope2.Should().NotBeNull();
-        await scope2.DisposeAsync();
-
-        transport.ResetForPool();
-        socketConn.ResetForPool();
-    }
-
-    [Fact]
-    public async Task ResetForPool_OnWebSocketTransport_ReinitializesCachedScope()
-    {
-        WebSocketTransport transport = new();
-        transport.Initialize(_webSocketConnection, _webSocket);
-
-        IConnection.ITransport iface = transport;
-
-        // Acquire lock
-        ValueTask<IAsyncDisposable> vt1 = iface.AcquireSendLockAsync(CancellationToken.None);
-        vt1.IsCompletedSuccessfully.Should().BeTrue();
-        IAsyncDisposable scope1 = vt1.Result;
-        await scope1.DisposeAsync();
-
-        // Reset for pool
-        transport.ResetForPool();
-
-        // Re-initialize
-        transport.Initialize(_webSocketConnection, _webSocket);
-
-        // Acquire lock again
-        ValueTask<IAsyncDisposable> vt2 = iface.AcquireSendLockAsync(CancellationToken.None);
-        vt2.IsCompletedSuccessfully.Should().BeTrue();
-        IAsyncDisposable scope2 = vt2.Result;
-        scope2.Should().NotBeNull();
-        await scope2.DisposeAsync();
-
-        transport.ResetForPool();
     }
 
     private sealed class DummyOpCodeExtractor : IOpCodeExtractor

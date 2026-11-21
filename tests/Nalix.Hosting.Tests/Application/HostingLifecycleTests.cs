@@ -26,7 +26,7 @@ public sealed class HostingLifecycleTests : IDisposable
     {
         int port = TestUtils.GetFreePort();
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
 
         await using NetworkApplication app = builder.Build();
         await app.ActivateAsync().WaitAsync(TestUtils.Timeout);
@@ -44,7 +44,7 @@ public sealed class HostingLifecycleTests : IDisposable
     {
         int port = TestUtils.GetFreePort();
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
 
         using NetworkApplication app = builder.Build();
         using var cts = new CancellationTokenSource();
@@ -71,7 +71,7 @@ public sealed class HostingLifecycleTests : IDisposable
         int port = TestUtils.GetFreePort();
 
         var builder1 = NetworkApplication.CreateBuilder();
-        builder1.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder1.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
         using (NetworkApplication app1 = builder1.Build())
         {
             await app1.ActivateAsync().WaitAsync(TestUtils.Timeout);
@@ -79,7 +79,7 @@ public sealed class HostingLifecycleTests : IDisposable
         }
 
         var builder2 = NetworkApplication.CreateBuilder();
-        builder2.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder2.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
         using (NetworkApplication app2 = builder2.Build())
         {
             // Must not throw "address already in use" — the previous listener released the port.
@@ -100,14 +100,14 @@ public sealed class HostingLifecycleTests : IDisposable
         int port = TestUtils.GetFreePort();
 
         var builder1 = NetworkApplication.CreateBuilder();
-        builder1.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder1.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
         using NetworkApplication app1 = builder1.Build();
         await app1.ActivateAsync().WaitAsync(TestUtils.Timeout);
 
         try
         {
             var builder2 = NetworkApplication.CreateBuilder();
-            builder2.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+            builder2.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
             using NetworkApplication app2 = builder2.Build();
 
             await Assert.ThrowsAnyAsync<Exception>(() => app2.ActivateAsync().WaitAsync(TestUtils.Timeout));
@@ -119,12 +119,12 @@ public sealed class HostingLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task ListenTcpAndUdp_OnSamePort_AcceptsTcpConnection()
+    public async Task MapTcpAndDatagram_OnSamePort_AcceptsTcpConnection()
     {
         int port = TestUtils.GetFreePort();
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
-        builder.ListenUdp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapDatagram<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
 
         using NetworkApplication app = builder.Build();
         await app.ActivateAsync().WaitAsync(TestUtils.Timeout);

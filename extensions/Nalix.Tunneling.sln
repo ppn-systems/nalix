@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Tunneling.Contracts",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Tunneling", "Nalix.Tunneling\Nalix.Tunneling.csproj", "{4EB8803D-C2E9-5795-6A29-F035259D8794}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Tunneling.Tests", "tests\Nalix.Tunneling.Tests\Nalix.Tunneling.Tests.csproj", "{B28F4B03-4BAB-4EA1-ABA4-4F3BD647BB6A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{4EB8803D-C2E9-5795-6A29-F035259D8794}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4EB8803D-C2E9-5795-6A29-F035259D8794}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4EB8803D-C2E9-5795-6A29-F035259D8794}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B28F4B03-4BAB-4EA1-ABA4-4F3BD647BB6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B28F4B03-4BAB-4EA1-ABA4-4F3BD647BB6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B28F4B03-4BAB-4EA1-ABA4-4F3BD647BB6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B28F4B03-4BAB-4EA1-ABA4-4F3BD647BB6A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

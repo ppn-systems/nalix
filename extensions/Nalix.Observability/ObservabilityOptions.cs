@@ -15,6 +15,17 @@ public sealed class ObservabilityOptions
     public string? PrivateKeyPath { get; set; }
 
     /// <summary>
+    /// Gets or sets the largest JSON payload one response may carry (bytes, 8 KiB – 1 MiB).
+    /// </summary>
+    /// <remarks>
+    /// The default stays well under the 128 KiB transport frame limit (<c>VarIntFramingOptions.MaxPayloadSize</c>),
+    /// leaving room for headers, encryption and payloads that do not compress. Sections that do not fit are sent in
+    /// follow-up requests; a single oversized section has its arrays capped. Raise it only together with the
+    /// frame limit.
+    /// </remarks>
+    public int MaxPayloadBytes { get; set; } = 96 * 1024;
+
+    /// <summary>
     /// Gets or sets a value indicating whether numeric metrics are recorded to disk so a dashboard can browse past days.
     /// </summary>
     public bool HistoryEnabled { get; set; } = true;

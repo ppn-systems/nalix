@@ -637,6 +637,8 @@ public sealed class SerializeFormatterGenerator : IIncrementalGenerator
             SpecialType.System_Int16 => "ReadEnumInt16",
             SpecialType.System_UInt16 => "ReadEnumUInt16",
             SpecialType.System_Int32 => "ReadEnumInt32",
+            SpecialType.System_Int64 => "ReadEnumInt64",
+            SpecialType.System_UInt64 => "ReadEnumUInt64",
             SpecialType.System_UInt32 or _ => "ReadEnumUInt32"
         };
     }

@@ -1,0 +1,90 @@
+#nullable enable
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.ACKNOWLEDGED = 64 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.RELIABLE = 16 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketFlags.UNRELIABLE = 32 -> Nalix.Abstractions.Networking.Packets.PacketFlags
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_CHALLENGE = 241 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.TUNNEL_PROOF = 242 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+Nalix.Abstractions.Networking.IConnection.Transport.get -> Nalix.Abstractions.Networking.IConnection.ITransport!
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.ReliableOrdered = 3 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.ReliableSequenced = 4 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.ReliableUnordered = 2 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.Unreliable = 0 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.UnreliableSequenced = 1 -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.DiscardPreviousReceiveKey() -> void
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.Seal(ulong packetNumber, System.ReadOnlySpan<byte> header, System.ReadOnlySpan<byte> plaintext, System.Span<byte> destination) -> void
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.SendKeyPhase.get -> bool
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.TagSize.get -> int
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.TryOpen(ulong packetNumber, bool keyPhase, System.ReadOnlySpan<byte> header, System.ReadOnlySpan<byte> ciphertextAndTag, System.Span<byte> plaintext) -> bool
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtection.UpdateSendKey() -> void
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory
+Nalix.Abstractions.Networking.Datagrams.IDatagramProtectionFactory.Create(Nalix.Abstractions.Primitives.Bytes32 sessionSecret, ulong connectionId, System.ReadOnlySpan<byte> ticketNonce, bool isServer) -> Nalix.Abstractions.Networking.Datagrams.IDatagramProtection!
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ChannelCount.get -> byte
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ChannelCount.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ChannelReceiveBufferBytes.get -> long
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ChannelReceiveBufferBytes.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ConnectionId.get -> ulong
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ConnectionId.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.DatagramTicketInfo() -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.DatagramTicketInfo(ulong ConnectionId, System.UInt128 Nonce, ushort Port, ushort ExpiresInSeconds, int IdleTimeoutMs, int MaxMessageSize, byte ChannelCount, long ReceiveBufferBytes, long ChannelReceiveBufferBytes) -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Deconstruct(out ulong ConnectionId, out System.UInt128 Nonce, out ushort Port, out ushort ExpiresInSeconds, out int IdleTimeoutMs, out int MaxMessageSize, out byte ChannelCount, out long ReceiveBufferBytes, out long ChannelReceiveBufferBytes) -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Equals(Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo other) -> bool
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ExpiresInSeconds.get -> ushort
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ExpiresInSeconds.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.IdleTimeoutMs.get -> int
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.IdleTimeoutMs.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.MaxMessageSize.get -> int
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.MaxMessageSize.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Nonce.get -> System.UInt128
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Nonce.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Port.get -> ushort
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Port.init -> void
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ReceiveBufferBytes.get -> long
+Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ReceiveBufferBytes.init -> void
+Nalix.Abstractions.Networking.Datagrams.IDatagramTicketIssuer
+Nalix.Abstractions.Networking.Datagrams.IDatagramTicketIssuer.IssueTicket(Nalix.Abstractions.Networking.IConnection! streamConnection, System.Action<Nalix.Abstractions.Networking.IConnection!>? onAccepted = null) -> Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo
+Nalix.Abstractions.Networking.Datagrams.IDatagramTransport
+Nalix.Abstractions.Networking.Datagrams.IDatagramTransport.SendAsync(System.ReadOnlyMemory<byte> message, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Nalix.Abstractions.Networking.Datagrams.IDatagramTransport.WithDelivery(Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel) -> Nalix.Abstractions.Networking.IConnection.ITransport!
+Nalix.Abstractions.Networking.NetworkTransport.DATAGRAM = 3 -> Nalix.Abstractions.Networking.NetworkTransport
+Nalix.Abstractions.Networking.Packets.PacketDeliveryAttribute
+Nalix.Abstractions.Networking.Packets.PacketDeliveryAttribute.Channel.get -> byte
+Nalix.Abstractions.Networking.Packets.PacketDeliveryAttribute.Method.get -> Nalix.Abstractions.Networking.Datagrams.DeliveryMethod
+Nalix.Abstractions.Networking.Packets.PacketDeliveryAttribute.PacketDeliveryAttribute(Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel = 0) -> void
+Nalix.Abstractions.Networking.Protocols.ProtocolOpCode.DATAGRAM_TICKET = 12 -> Nalix.Abstractions.Networking.Protocols.ProtocolOpCode
+override Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.GetHashCode() -> int
+static Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.operator !=(Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo left, Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo right) -> bool
+static Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.operator ==(Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo left, Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo right) -> bool
+~override Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.Equals(object obj) -> bool
+~override Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo.ToString() -> string
+Nalix.Abstractions.Networking.IConnectionBroadcaster.BroadcastAsync(System.ReadOnlyMemory<byte> message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.BroadcastWhereAsync(System.ReadOnlyMemory<byte> message, System.Func<Nalix.Abstractions.Networking.IConnection!, bool>! predicate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.MulticastAsync(Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, System.ReadOnlyMemory<byte> message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.IConnectionBroadcaster.MulticastExceptAsync(Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, Nalix.Abstractions.Networking.IConnection! excludedConnection, System.ReadOnlyMemory<byte> message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.Abstractions.Networking.Packets.PacketMetadata.PacketMetadata(Nalix.Abstractions.Networking.Packets.PacketOpcodeAttribute! opCode, Nalix.Abstractions.Networking.Packets.PacketTimeoutAttribute? timeout, Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute? permission, Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute? encryption, Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute? rateLimit, System.Collections.Generic.IReadOnlyDictionary<System.Type!, System.Attribute!>? customAttributes = null) -> void
+*REMOVED*Nalix.Abstractions.IBufferLease.IsReliable.get -> bool
+*REMOVED*Nalix.Abstractions.IBufferLease.IsReliable.set -> void
+*REMOVED*Nalix.Abstractions.Networking.ConnectionSequenceState.UdpReceiveSequence.get -> uint
+*REMOVED*Nalix.Abstractions.Networking.ConnectionSequenceState.UdpReceiveSequence.set -> void
+*REMOVED*Nalix.Abstractions.Networking.ConnectionSequenceState.UdpSendSequence.get -> uint
+*REMOVED*Nalix.Abstractions.Networking.ConnectionSequenceState.UdpSendSequence.set -> void
+*REMOVED*Nalix.Abstractions.Networking.IConnection.IsUdpCreated.get -> bool
+*REMOVED*Nalix.Abstractions.Networking.IConnection.TCP.get -> Nalix.Abstractions.Networking.IConnection.ITransport!
+*REMOVED*Nalix.Abstractions.Networking.IConnection.UDP.get -> Nalix.Abstractions.Networking.IConnection.ITransport?
+*REMOVED*Nalix.Abstractions.Networking.IConnectionBroadcaster.BroadcastAsync(System.ReadOnlyMemory<byte> message, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*Nalix.Abstractions.Networking.IConnectionBroadcaster.BroadcastWhereAsync(System.ReadOnlyMemory<byte> message, System.Func<Nalix.Abstractions.Networking.IConnection!, bool>! predicate, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*Nalix.Abstractions.Networking.IConnectionBroadcaster.MulticastAsync(Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, System.ReadOnlyMemory<byte> message, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*Nalix.Abstractions.Networking.IConnectionBroadcaster.MulticastExceptAsync(Nalix.Abstractions.Networking.IConnectionGroupRegistry! groupProvider, string! groupName, Nalix.Abstractions.Networking.IConnection! excludedConnection, System.ReadOnlyMemory<byte> message, Nalix.Abstractions.Networking.NetworkTransport transport = Nalix.Abstractions.Networking.NetworkTransport.TCP, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*Nalix.Abstractions.Networking.NetworkTransport.UDP = 1 -> Nalix.Abstractions.Networking.NetworkTransport
+*REMOVED*Nalix.Abstractions.Networking.OperatingMode
+*REMOVED*Nalix.Abstractions.Networking.OperatingMode.Passthrough = 1 -> Nalix.Abstractions.Networking.OperatingMode
+*REMOVED*Nalix.Abstractions.Networking.OperatingMode.Server = 0 -> Nalix.Abstractions.Networking.OperatingMode
+*REMOVED*Nalix.Abstractions.Networking.Packets.IPacketContext<TPacket>.IsReliable.get -> bool
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketMetadata.PacketMetadata(Nalix.Abstractions.Networking.Packets.PacketOpcodeAttribute! opCode, Nalix.Abstractions.Networking.Packets.PacketTimeoutAttribute? timeout, Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute? permission, Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute? encryption, Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute? rateLimit, Nalix.Abstractions.Networking.Packets.PacketTransportAttribute? transport, System.Collections.Generic.IReadOnlyDictionary<System.Type!, System.Attribute!>? customAttributes = null) -> void
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketTransportAttribute
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketTransportAttribute.PacketTransportAttribute(Nalix.Abstractions.Networking.NetworkTransport transportType) -> void
+*REMOVED*Nalix.Abstractions.Networking.Packets.PacketTransportAttribute.TransportType.get -> Nalix.Abstractions.Networking.NetworkTransport
+*REMOVED*readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.Transport -> Nalix.Abstractions.Networking.Packets.PacketTransportAttribute?
+Nalix.Abstractions.Networking.IFrameProcessor.OnFrameRejected(Nalix.Abstractions.Networking.IConnection! connection, System.ReadOnlySpan<byte> frame) -> void

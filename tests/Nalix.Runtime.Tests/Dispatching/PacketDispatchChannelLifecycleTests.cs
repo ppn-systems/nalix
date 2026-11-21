@@ -77,7 +77,7 @@ public sealed class PacketDispatchChannelLifecycleTests
         header.Priority = PacketPriority.NONE;
         header.SequenceId = 1;
         MemoryMarshal.Write(buffer, in header);
-        return new FakeBufferLease(buffer) { IsReliable = true };
+        return new FakeBufferLease(buffer);
     }
 
     private sealed class FakeBufferLease(byte[] buffer) : IBufferLease
@@ -88,7 +88,6 @@ public sealed class PacketDispatchChannelLifecycleTests
 
         public int Length => buffer.Length;
 
-        public bool IsReliable { get; set; }
 
         public bool EncryptedOnWire { get; set; }
 

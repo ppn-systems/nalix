@@ -41,7 +41,7 @@ public sealed class TimeoutMiddlewareTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             connection.FakeTcp.SentMessages.Should().NotBeEmpty(
                 "a handler exceeding its configured timeout must cause a TIMEOUT directive to be sent");
@@ -78,7 +78,7 @@ public sealed class TimeoutMiddlewareTests
         try
         {
             Func<Task> act = async () => await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false, token: outerCts.Token).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false, token: outerCts.Token).AsTask();
 
             await act.Should().ThrowAsync<OperationCanceledException>();
             connection.FakeTcp.SentMessages.Should().BeEmpty(

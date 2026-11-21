@@ -42,64 +42,172 @@ internal static class ObservationWriter
         new(RuntimeObservationTargets.PROTOCOLS, RuntimeObservationSections.Protocols, static () => TransportReport<IProtocol>.Instance),
     ];
 
+    private const int MaxArrayItems = 4096;
+
     [ThreadStatic] private static Utf8JsonWriter? t_payloadWriter;
     [ThreadStatic] private static Utf8JsonWriter? t_sectionWriter;
 
     /// <summary>
-    /// Writes every requested and registered section.
+    /// Writes every requested and registered section into as many payloads ("chunks") as needed so that none
+    /// exceeds <paramref name="budget"/> bytes.
     /// </summary>
+    /// <remarks>
+    /// Sections are packed in catalog order; when the next one does not fit, the current chunk is closed and a new
+    /// one started. A section larger than the whole budget on its own has its arrays capped (see
+    /// <see cref="JsonTrimmer"/>) until it fits, or is omitted. Each chunk reports the sections it carries.
+    /// </remarks>
     /// <param name="targets">The requested subsystems.</param>
-    /// <param name="written">Receives the subsystems that were actually written.</param>
-    /// <returns>A lease owning the UTF-8 JSON payload; the caller owns and must dispose it.</returns>
+    /// <param name="budget">The maximum size of one chunk in bytes.</param>
+    /// <returns>The chunks, in order; the caller owns and must dispose every lease. Never empty.</returns>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Design", "CA1031:Do not catch general exception types",
         Justification = "A faulty reportable must only drop its own section.")]
-    public static BufferLease Write(RuntimeObservationTargets targets, out RuntimeObservationTargets written)
+    public static List<(BufferLease Payload, RuntimeObservationTargets Written)> WriteChunks(RuntimeObservationTargets targets, int budget)
     {
-        written = RuntimeObservationTargets.NONE;
-
-        using BufferWriter payload = new(8 * 1024);
+        List<(BufferLease, RuntimeObservationTargets)> chunks = [];
         using BufferWriter scratch = new(4 * 1024);
-
-        Utf8JsonWriter writer = RENT(ref t_payloadWriter, payload);
+        using BufferWriter trimmed = new(1024);
         Utf8JsonWriter sectionWriter = RENT(ref t_sectionWriter, scratch);
 
-        writer.WriteStartObject();
+        BufferWriter? payload = null;
+        Utf8JsonWriter? writer = null;
+        RuntimeObservationTargets written = RuntimeObservationTargets.NONE;
+        int used = 0;
 
-        foreach (Section section in s_sections)
+        try
         {
-            if ((targets & section.Target) == 0)
+            foreach (Section section in s_sections)
             {
-                continue;
-            }
-
-            try
-            {
-                IReportable? report = section.Resolve();
-                if (report is null)
+                if ((targets & section.Target) == 0)
                 {
                     continue;
                 }
 
-                scratch.Clear();
-                sectionWriter.Reset(scratch);
-                report.WriteReportData(sectionWriter);
-                sectionWriter.Flush();
+                try
+                {
+                    IReportable? report = section.Resolve();
+                    if (report is null)
+                    {
+                        continue;
+                    }
 
-                writer.WritePropertyName(section.Name);
-                writer.WriteRawValue(scratch.WrittenSpan, skipInputValidation: true);
-                written |= section.Target;
+                    scratch.Clear();
+                    sectionWriter.Reset(scratch);
+                    report.WriteReportData(sectionWriter);
+                    sectionWriter.Flush();
+
+                    ReadOnlySpan<byte> body = scratch.WrittenSpan;
+                    int overhead = section.Name.Length + 4;
+                    if (body.Length + overhead + 2 > budget)
+                    {
+                        body = FIT(body, budget - overhead - 2, trimmed);
+                        if (body.IsEmpty)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (writer is not null && used + body.Length + overhead > budget)
+                    {
+                        chunks.Add((CLOSE(writer, payload!), written));
+                        writer = null;
+                    }
+
+                    if (writer is null)
+                    {
+                        payload?.Dispose();
+                        payload = new BufferWriter(Math.Min(budget, 8 * 1024));
+                        writer = RENT(ref t_payloadWriter, payload);
+                        writer.WriteStartObject();
+                        written = RuntimeObservationTargets.NONE;
+                        used = 2;
+                    }
+
+                    writer.WritePropertyName(section.Name);
+                    writer.WriteRawValue(body, skipInputValidation: true);
+                    used += body.Length + overhead;
+                    written |= section.Target;
+                }
+                catch
+                {
+                    // Section omitted; the remaining sections are still served.
+                }
             }
-            catch
+
+            if (writer is not null)
             {
-                // Section omitted; the remaining sections are still served.
+                chunks.Add((CLOSE(writer, payload!), written));
+                writer = null;
+            }
+            else if (chunks.Count == 0)
+            {
+                // Nothing resolvable: one empty object, so callers always have a chunk to answer with.
+                payload = new BufferWriter(16);
+                writer = RENT(ref t_payloadWriter, payload);
+                writer.WriteStartObject();
+                chunks.Add((CLOSE(writer, payload), RuntimeObservationTargets.NONE));
+                writer = null;
+            }
+        }
+        finally
+        {
+            // Idempotent: after CLOSE extracted the lease the writer owns nothing.
+            payload?.Dispose();
+        }
+
+        return chunks;
+    }
+
+    /// <summary>Writes every requested and registered section into a single payload, with no size limit.</summary>
+    /// <param name="targets">The requested subsystems.</param>
+    /// <param name="written">Receives the subsystems that were actually written.</param>
+    /// <returns>A lease owning the UTF-8 JSON payload; the caller owns and must dispose it.</returns>
+    public static BufferLease Write(RuntimeObservationTargets targets, out RuntimeObservationTargets written)
+    {
+        List<(BufferLease Payload, RuntimeObservationTargets Written)> chunks = WriteChunks(targets, int.MaxValue - 1024);
+        written = chunks[0].Written;
+        return chunks[0].Payload;
+    }
+
+    private static BufferLease CLOSE(Utf8JsonWriter writer, BufferWriter payload)
+    {
+        writer.WriteEndObject();
+        writer.Flush();
+        BufferLease lease = payload.ExtractLease();
+        payload.Dispose();
+        return lease;
+    }
+
+    // Largest per-array item cap whose trimmed output fits `limit`, found by binary search (≈12 passes for 4096).
+    private static ReadOnlySpan<byte> FIT(ReadOnlySpan<byte> body, int limit, BufferWriter output)
+    {
+        int low = 0;
+        int high = MaxArrayItems;
+        int best = -1;
+        while (low <= high)
+        {
+            int cap = low + ((high - low) / 2);
+            output.Clear();
+            _ = JsonTrimmer.Trim(body, cap, output);
+            if (output.WrittenSpan.Length <= limit)
+            {
+                best = cap;
+                low = cap + 1;
+            }
+            else
+            {
+                high = cap - 1;
             }
         }
 
-        writer.WriteEndObject();
-        writer.Flush();
+        if (best < 0)
+        {
+            return [];
+        }
 
-        return payload.ExtractLease();
+        output.Clear();
+        _ = JsonTrimmer.Trim(body, best, output);
+        return output.WrittenSpan;
     }
 
     private static Utf8JsonWriter RENT(ref Utf8JsonWriter? cached, BufferWriter target)

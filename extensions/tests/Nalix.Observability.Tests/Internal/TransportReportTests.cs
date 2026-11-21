@@ -1,0 +1,46 @@
+// Copyright (c) 2026 PPN Corporation. All rights reserved.
+// Licensed under the Apache License, Version 2.0.
+
+using System.Text.Json;
+using Nalix.Abstractions.Networking;
+using Nalix.Framework;
+using Nalix.Observability.Internal;
+using Nalix.Observability.Tests.TestSupport;
+
+namespace Nalix.Observability.Tests.Internal;
+
+/// <summary>
+/// Verifies that <see cref="TransportReport{T}"/> keys each registered transport's report by name.
+/// </summary>
+[Collection(TestCollections.ObservabilityState)]
+public sealed class TransportReportTests
+{
+    [Fact]
+    public void WriteReportData_WhenListenerRegisteredForTcp_WritesReportUnderTcp()
+    {
+        ReportRegistry.Instance.Register<IListener>(NetworkTransport.TCP, new FakeListener());
+        try
+        {
+            using JsonDocument document = ReportJson.Capture(TransportReport<IListener>.Instance);
+
+            Assert.Equal(3, document.RootElement.GetProperty("TCP").GetProperty("Accepted").GetInt32());
+        }
+        finally
+        {
+            _ = ReportRegistry.Instance.Unregister<IListener>(NetworkTransport.TCP);
+        }
+    }
+
+    [Fact]
+    public void WriteReportData_WhenNothingRegistered_WritesEmptyObject()
+    {
+        _ = ReportRegistry.Instance.Unregister<IListener>(NetworkTransport.TCP);
+        _ = ReportRegistry.Instance.Unregister<IListener>(NetworkTransport.DATAGRAM);
+        _ = ReportRegistry.Instance.Unregister<IListener>(NetworkTransport.WEBSOCKET);
+
+        using JsonDocument document = ReportJson.Capture(TransportReport<IListener>.Instance);
+
+        Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
+        Assert.Equal(0, document.RootElement.EnumerateObject().Count());
+    }
+}

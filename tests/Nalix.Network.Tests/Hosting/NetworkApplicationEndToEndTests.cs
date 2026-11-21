@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System.Net;
+using Microsoft.Extensions.Logging.Abstractions;
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
@@ -61,17 +62,14 @@ public sealed class NetworkApplicationEndToEndTests
         int port = GetFreePort();
 
         // 1. Setup Server
-        using var logger = new Nalix.Logging.NLogixBuilder()
-            .SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace)
-            .AddTarget(new Nalix.Logging.Sinks.BatchConsoleLogTarget())
-            .Build();
+        var logger = NullLogger.Instance;
 
         NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
         builder.UseLogger(logger);
         builder.UseSecureConnections(certPath);
 
         // Listen on loopback with our test protocol
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<IntegrationTestProtocol>().OnPort((ushort)port);
 
         builder.MapHandlers<IntegrationTestController>();
 
@@ -116,91 +114,6 @@ public sealed class NetworkApplicationEndToEndTests
             Assert.Equal(1, IntegrationTestProtocol.ProcessedCount);
 
             await client.DisconnectAsync();
-        }
-        finally
-        {
-            await app.DeactivateAsync();
-        }
-    }
-
-    [Fact]
-    public async Task Activate_WithUdpRequest_ReturnsResponse()
-    {
-        // 0. Resolve certificate path (using the sample key provided in shared)
-        string certPath = Path.GetFullPath(@"..\..\..\shared\certificate.private");
-        if (!File.Exists(certPath))
-        {
-            certPath = Path.GetFullPath(@"shared\certificate.private");
-        }
-
-        if (!File.Exists(certPath))
-        {
-            certPath = Path.GetFullPath("test_certificate.private");
-            File.WriteAllText(certPath, new string('a', 64));
-        }
-
-        int port = GetFreePort();
-
-        // 1. Setup Server
-        using var logger = new Nalix.Logging.NLogixBuilder()
-            .SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace)
-            .AddTarget(new Nalix.Logging.Sinks.BatchConsoleLogTarget())
-            .Build();
-
-        NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
-        builder.UseLogger(logger);
-        builder.UseSecureConnections(certPath);
-        builder.UseSystemControl();
-
-        // Listen on TCP and UDP
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
-        builder.ListenUdp<IntegrationTestProtocol>().OnPort((ushort)port);
-
-        builder.MapHandlers<IntegrationTestController2>();
-
-        using NetworkApplication app = builder.Build();
-
-        // Start Server
-        await app.ActivateAsync();
-
-        try
-        {
-            // 2. Setup Client
-            var tcpOptions = new TransportOptions
-            {
-                Address = "127.0.0.1",
-                Port = (ushort)port,
-                CompressionEnabled = false,
-                ServerPublicKey = Nalix.Runtime.Handlers.HandshakeHandlers.ServerPublicKey.ToString()
-            };
-            SessionState sharedState = new();
-            using TcpSession tcpSession = new(tcpOptions, sharedState);
-
-            await tcpSession.ConnectAsync();
-            await tcpSession.HandshakeAsync();
-
-            Assert.True(sharedState.EncryptionEnabled);
-
-            var udpOptions = new TransportOptions
-            {
-                Address = "127.0.0.1",
-                Port = (ushort)port,
-                CompressionEnabled = false
-            };
-            using UdpSession udpSession = new(udpOptions, sharedState);
-            await udpSession.ConnectAsync();
-
-            // 3. Send Request over UDP and await response
-            using HostingScanAttributedPacket req = new() { Value = 42 };
-
-            using HostingScanAttributedPacket resp = await udpSession.RequestAsync<HostingScanAttributedPacket>(
-                req,
-                options: RequestOptions.Default.WithTimeout(5000).WithRetry(1));
-
-            Assert.Equal(43, resp.Value);
-
-            await udpSession.DisconnectAsync();
-            await tcpSession.DisconnectAsync();
         }
         finally
         {

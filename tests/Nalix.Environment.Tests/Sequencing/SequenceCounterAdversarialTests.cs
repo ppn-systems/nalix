@@ -85,4 +85,35 @@ public sealed class SequenceCounterAdversarialTests
         _ = counter.Next(); // current = MaxValue - 1_000_000, exactly at the margin boundary
         Assert.True(counter.IsApproachingOverflow());
     }
+
+    /// <summary>
+    /// Regression test: a forward jump of 2^31 or more must reset the replay bitmap.
+    /// Before the fix the delta was cast to a negative <c>int</c>, which skipped the
+    /// <c>shift &gt;= 32</c> guard, so the bitmap marked sequences that were never received.
+    /// </summary>
+    [Fact]
+    public void UpdateTo_WhenForwardJumpExceedsInt32_ResetsReplayBitmap()
+    {
+        SequenceCounter counter = new(5);
+        counter.UpdateTo(5);
+
+        uint jumped = 5u + 0x8000_0001u;
+        counter.UpdateTo(jumped);
+
+        Assert.Equal(jumped, counter.Current());
+        Assert.True(counter.IsValid(jumped - 1, window: 32));
+        Assert.False(counter.IsValid(jumped, window: 32));
+    }
+
+    [Fact]
+    public void UpdateTo_WhenBackwardDistanceExceedsInt32_IsIgnored()
+    {
+        SequenceCounter counter = new(0x8000_0010u);
+        counter.UpdateTo(0x8000_0010u);
+
+        counter.UpdateTo(5);
+
+        Assert.Equal(0x8000_0010u, counter.Current());
+        Assert.True(counter.IsValid(0x8000_0010u - 1, window: 32));
+    }
 }

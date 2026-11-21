@@ -19,7 +19,7 @@ public class SessionState
 
     /// <summary>
     /// Gets or sets the unique session token assigned by the server.
-    /// Primarily used for UDP communication and session resumption.
+    /// Primarily used for session resumption.
     /// </summary>
     public ulong SessionToken { get; set; }
 
@@ -30,7 +30,7 @@ public class SessionState
 
     /// <summary>
     /// Gets or sets the local port of the companion TCP session.
-    /// Used to bind the companion UDP socket to the same local port for endpoint pinning.
+    /// Recorded when the stream connects.
     /// </summary>
     public int LocalPort { get; set; }
 

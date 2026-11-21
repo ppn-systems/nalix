@@ -46,7 +46,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          # net10.0 and net11.0 are both built: the .NET 11 SDK builds both, the .NET 10 runtime runs the net10.0 tests.
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Install zip
         run: |
@@ -56,14 +59,14 @@ jobs:
       - name: Build extensions
         shell: bash
         run: |
-          dotnet build extensions/Nalix.Observability.Contracts/Nalix.Observability.Contracts.csproj --configuration Release -o ./output/observability_contracts
-          dotnet build extensions/Nalix.Observability/Nalix.Observability.csproj --configuration Release -o ./output/observability
+          dotnet build extensions/Nalix.Observability.Contracts/Nalix.Observability.Contracts.csproj --configuration Release /p:NalixInternalsVisibleTo=false -o ./output/observability_contracts
+          dotnet build extensions/Nalix.Observability/Nalix.Observability.csproj --configuration Release /p:NalixInternalsVisibleTo=false -o ./output/observability
 
-          dotnet build extensions/Nalix.Traversal.Contracts/Nalix.Traversal.Contracts.csproj --configuration Release -o ./output/traversal_contracts
-          dotnet build extensions/Nalix.Traversal/Nalix.Traversal.csproj --configuration Release -o ./output/traversal
+          dotnet build extensions/Nalix.Traversal.Contracts/Nalix.Traversal.Contracts.csproj --configuration Release /p:NalixInternalsVisibleTo=false -o ./output/traversal_contracts
+          dotnet build extensions/Nalix.Traversal/Nalix.Traversal.csproj --configuration Release /p:NalixInternalsVisibleTo=false -o ./output/traversal
 
-          dotnet build extensions/Nalix.Tunneling.Contracts/Nalix.Tunneling.Contracts.csproj --configuration Release -o ./output/tunneling_contracts
-          dotnet build extensions/Nalix.Tunneling/Nalix.Tunneling.csproj --configuration Release -o ./output/tunneling
+          dotnet build extensions/Nalix.Tunneling.Contracts/Nalix.Tunneling.Contracts.csproj --configuration Release /p:NalixInternalsVisibleTo=false -o ./output/tunneling_contracts
+          dotnet build extensions/Nalix.Tunneling/Nalix.Tunneling.csproj --configuration Release /p:NalixInternalsVisibleTo=false -o ./output/tunneling
 
       - name: Prepare release assets
         shell: bash

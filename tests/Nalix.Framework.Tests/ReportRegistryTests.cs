@@ -40,7 +40,7 @@ public sealed class ReportRegistryTests : IDisposable
         var resolved = _registry.Get<IReportable>(NetworkTransport.TCP);
         Assert.Same(fake, resolved);
 
-        var resolvedUdp = _registry.Get<IReportable>(NetworkTransport.UDP);
+        var resolvedUdp = _registry.Get<IReportable>(NetworkTransport.DATAGRAM);
         Assert.Null(resolvedUdp);
     }
 
@@ -64,12 +64,12 @@ public sealed class ReportRegistryTests : IDisposable
         var fake2 = new FakeReportable("2");
 
         _registry.Register<IReportable>(NetworkTransport.TCP, fake1);
-        _registry.Register<IReportable>(NetworkTransport.UDP, fake2);
+        _registry.Register<IReportable>(NetworkTransport.DATAGRAM, fake2);
 
         _registry.Clear();
 
         Assert.Null(_registry.Get<IReportable>(NetworkTransport.TCP));
-        Assert.Null(_registry.Get<IReportable>(NetworkTransport.UDP));
+        Assert.Null(_registry.Get<IReportable>(NetworkTransport.DATAGRAM));
     }
 
     [Fact]
@@ -204,7 +204,7 @@ public sealed class ReportRegistryTests : IDisposable
         var protocol = new FakeTestProtocol("protocol metrics");
 
         _registry.Register<ITestListener>(NetworkTransport.TCP, listener);
-        _registry.Register<ITestProtocol>(NetworkTransport.UDP, protocol);
+        _registry.Register<ITestProtocol>(NetworkTransport.DATAGRAM, protocol);
 
         using var ms = new System.IO.MemoryStream();
         using (var writer = new Utf8JsonWriter(ms))

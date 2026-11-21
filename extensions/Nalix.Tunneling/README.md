@@ -13,10 +13,10 @@ This package is intended for **server hosts**. For client-side packets and proto
 | Feature | Description | Key Concept / Type |
 | :--- | :--- | :--- |
 | 🔌 **Reverse Tunnel Broker** | Providers register named channels; consumers request connections to those channels. The server pairs them automatically. | `ProviderRegistry`, `TunnelRegistry` |
-| 🔑 **Token-Authenticated Data Connections** | Each tunnel handshake generates a 256-bit cryptographic token. The provider's data connection must present it to be accepted. | `Bytes32`, `TunnelReady`, `DataConnectionHandler` |
+| 🔑 **Proof-of-Possession Data Connections** | Each tunnel generates a 256-bit one-time token. The token never crosses the wire: the provider proves possession with an HMAC over a fresh server nonce. | `Bytes32`, `TunnelReady`, `TunnelChallenge`, `TunnelProof`, `DataConnectionHandler` |
 | 🚀 **Raw Socket Piping** | After handshake, sockets are unwrapped from the Nalix engine and piped bi-directionally at OS level — zero protocol overhead. | `TunnelPipe`, `TunnelSession` |
-| 📊 **Bandwidth Control** | Optional per-tunnel byte-level rate limiting with async-aware token bucket. | `TokenBucket`, `TunnelOptions.MaxBytesPerSecond` |
-| 🔄 **Stolen Data Recovery** | Transparently recovers any TCP bytes already buffered by the Nalix receive loop before transitioning to raw piping. | `TunnelSession.RecoverStolenDataAsync` |
+| 📊 **Bandwidth Control** | Optional per-tunnel byte-level rate limiting with async-aware token bucket. | `TunnelOptions.MaxBytesPerSecond` |
+| 🔄 **Stolen Data Recovery** | Bytes already buffered by the Nalix receive loops are forwarded to the peer before raw piping starts, so no data is lost in the handover. | `TunnelSession` |
 | 🧹 **Stale Request Cleanup** | Opportunistic sweep cancels pending tunnel requests that exceed the timeout window. | `TunnelRegistry.CleanupStale` |
 | 🧩 **Builder Integration** | Single `UseTunneling()` extension call to register all handlers and registries. | `TunnelApplicationBuilderExtensions` |
 
@@ -26,8 +26,8 @@ This package is intended for **server hosts**. For client-side packets and proto
 | :--- | :--- | :--- |
 | `Nalix.Tunneling` | Core tunnel management, registries, piping, and builder extensions | `TunnelSession`, `TunnelPipe`, `TunnelRegistry`, `TunnelSessionRegistry`, `ProviderRegistry`, `TunnelOptions` |
 | `Nalix.Tunneling.Handlers` | Packet handlers for the three-phase tunnel protocol | `ProviderHandler`, `ConsumerHandler`, `DataConnectionHandler` |
-| `Nalix.Tunneling.Internal` | Internal rate-limiting primitives | `TokenBucket` |
-| `Nalix.Tunneling.Packets` | Wire-format packet definitions (shared with Contracts) | `TunnelProvide`, `TunnelProvideAck`, `TunnelConnect`, `TunnelConnectAck`, `TunnelRequest`, `TunnelReady` |
+| `Nalix.Tunneling.Internal` | Internal rate-limiting primitives (not public API) | — |
+| `Nalix.Tunneling.Packets` | Wire-format packet definitions (shared with Contracts) | `TunnelProvide`, `TunnelProvideAck`, `TunnelConnect`, `TunnelConnectAck`, `TunnelRequest`, `TunnelReady`, `TunnelChallenge`, `TunnelProof` |
 
 ## How It Works
 
@@ -47,7 +47,11 @@ This package is intended for **server hosts**. For client-side packets and proto
      |                        |                          |
      |-- [new TCP conn] ----->|                          |
      |-- TunnelReady -------->|                          |
-     |   (token=T)            |                          |
+     |   (id=Keccak(T))       |                          |
+     |<-- TunnelChallenge ----|                          |
+     |   (nonce=N)            |                          |
+     |-- TunnelProof -------->|                          |
+     |   (mac=HMAC(T,N))      |                          |
      |                        |                          |
      |                        |-- TunnelConnectAck ----->|
      |                        |   (success=true)         |
@@ -59,7 +63,7 @@ This package is intended for **server hosts**. For client-side packets and proto
 
 1. **Registration** — Provider sends `TunnelProvide` with a `ChannelId`. Server registers it in `ProviderRegistry` and replies with `TunnelProvideAck`.
 2. **Negotiation** — Consumer sends `TunnelConnect` with the target `ChannelId`. Server looks up the provider, generates a 256-bit token via `TunnelRegistry`, forwards a `TunnelRequest` to the provider, and waits for the data connection (15 s timeout).
-3. **Authentication** — Provider opens a **new TCP connection** and sends `TunnelReady` with the token. `DataConnectionHandler` resolves the token in `TunnelRegistry`, linking the data connection to the consumer's pending task.
+3. **Authentication** — Provider opens a **new TCP connection** and sends `TunnelReady` carrying the public tunnel id `Keccak256(token)`. The server replies with `TunnelChallenge` (fresh nonce, this connection only). The provider answers with `TunnelProof` = `HMAC-Keccak256(key: token, message: nonce)`. `DataConnectionHandler` verifies it and links the data connection to the consumer's pending task. The token itself is never sent on the data connection.
 4. **Pipe** — `TunnelSession` unwraps both raw sockets, recovers any stolen bytes from the Nalix receive loops, and starts `TunnelPipe` — a lock-free bi-directional `Socket.SendAsync`/`Socket.ReceiveAsync` pump with optional bandwidth limiting.
 
 ## Installation

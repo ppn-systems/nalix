@@ -62,7 +62,7 @@ TestEnvironment.SetupCertificate();
         builder.UseSessionService(sessionService);
         builder.UseSessionStore(store);
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
-        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.MapTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSessions();
 
@@ -138,7 +138,7 @@ TestEnvironment.SetupCertificate();
         builder.UseSessionService(sessionService);
         builder.UseSessionStore(store);
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
-        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.MapTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSessions();
 
@@ -187,7 +187,7 @@ TestEnvironment.SetupCertificate();
     }
 
     [Fact]
-    public async Task ResumeSessionAsync_WhenPreviousSessionHadHighSequences_ResetsSequencesForFreshTransport()
+    public async Task ResumeSessionAsync_WhenPreviousSessionHadHighSequences_RestoresReceiveSequence()
     {
         int port = TestEnvironment.GetFreePort();
         ulong token = Snowflake.NewId(SnowflakeType.Session).ToUInt64();
@@ -204,7 +204,7 @@ TestEnvironment.SetupCertificate();
         builder.UseSessionService(sessionService);
         builder.UseSessionStore(store);
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
-        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.MapTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSessions();
 
@@ -249,7 +249,7 @@ TestEnvironment.SetupCertificate();
             Assert.Equal(ProtocolReason.NONE, result);
 
             IConnection serverConn = Assert.Single(hub.ListConnections());
-            Assert.Equal(0u, serverConn.TCP.ReceiveSequence.Current());
+            Assert.Equal(50u, serverConn.Transport.ReceiveSequence.Current());
         }
         finally
         {
@@ -276,7 +276,7 @@ TestEnvironment.SetupCertificate();
         builder.UseSessionService(sessionService);
         builder.UseSessionStore(store);
         builder.Configure<Nalix.Runtime.Options.SessionStoreOptions>(opt => opt.MinAttributesForPersistence = 0);
-        builder.ListenTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
+        builder.MapTcp<RobustIntegrationTestProtocol>().WithFactory(dispatch => new RobustIntegrationTestProtocol(dispatch, hub)).OnPort((ushort)port);
         builder.UseSecureConnections();
         builder.UseSessions();
 
@@ -329,5 +329,13 @@ TestEnvironment.SetupCertificate();
         }
     }
 
-    public void Dispose() => InstanceManager.Instance.Clear(dispose: false);
+    // Subscribes to every SDK diagnostic while these tests run, so the diagnostics on the reconnect, resume,
+    // handshake and request paths they take are built and written (and cannot throw) instead of skipped.
+    private readonly DiagnosticCapture _diagnostics = new(string.Empty);
+
+    public void Dispose()
+    {
+        _diagnostics.Dispose();
+        InstanceManager.Instance.Clear(dispose: false);
+    }
 }

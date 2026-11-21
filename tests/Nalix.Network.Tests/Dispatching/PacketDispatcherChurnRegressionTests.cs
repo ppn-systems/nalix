@@ -50,7 +50,7 @@ public sealed class PacketDispatcherChurnRegressionTests(ITestOutputHelper outpu
         // Other tests in this assembly clear InstanceManager and register their own pool manager;
         // pin the process-wide one so Build/Activate does not trip over a mismatched instance.
         builder.UseObjectPoolManager(Nalix.Framework.Memory.Objects.ObjectPoolManager.Shared);
-        builder.ListenTcp<IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<IntegrationTestProtocol>().OnPort((ushort)port);
         builder.MapHandlers<IntegrationTestController2>();
 
         using NetworkApplication app = builder.Build();

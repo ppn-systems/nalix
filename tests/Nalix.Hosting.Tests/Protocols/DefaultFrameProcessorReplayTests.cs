@@ -76,7 +76,6 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
             using (BufferLease plain10 = BufferLease.CopyFrom(validPlain))
             {
                 IBufferLease enc10 = FrameCipher.EncryptFrame(plain10, secret, seq: 10u, CipherSuiteType.Chacha20Poly1305);
-                enc10.IsReliable = true;
                 ConnectionEventArgs args10 = (ConnectionEventArgs)acquireMethod.Invoke(connection, null)!;
                 initMethod.Invoke(args10, [enc10, connection]);
                 try
@@ -89,14 +88,13 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
                 }
             }
 
-            Assert.Equal(10u, connection.TCP.ReceiveSequence.Current());
+            Assert.Equal(10u, connection.Transport.ReceiveSequence.Current());
 
             // 2. Process out-of-order packet with seq = 8 (rejected when TcpWindow == 0).
             // Because IsValid(8, window: 0) returns false, UpdateTo(8) must NOT be called in finally!
             using (BufferLease plain8 = BufferLease.CopyFrom(validPlain))
             {
                 IBufferLease enc8 = FrameCipher.EncryptFrame(plain8, secret, seq: 8u, CipherSuiteType.Chacha20Poly1305);
-                enc8.IsReliable = true;
                 ConnectionEventArgs args8 = (ConnectionEventArgs)acquireMethod.Invoke(connection, null)!;
                 initMethod.Invoke(args8, [enc8, connection]);
                 try
@@ -109,7 +107,7 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
                 }
             }
 
-            Assert.True(connection.TCP.ReceiveSequence.IsValid(8u, window: 32));
+            Assert.True(connection.Transport.ReceiveSequence.IsValid(8u, window: 32));
         }
         finally
         {

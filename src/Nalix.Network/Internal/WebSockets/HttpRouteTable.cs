@@ -18,12 +18,19 @@ internal readonly struct HttpRouteEntry
     public readonly HttpRouteHandler? Handler;
     public readonly byte[]? StaticResponseBytes;
 
-    public HttpRouteEntry(HttpMethodType method, byte[] pathBytes, HttpRouteHandler? handler, byte[]? staticResponseBytes)
+    /// <summary>
+    /// When <see langword="true"/>, the request must carry the DevOps bearer token and the response
+    /// never carries a wildcard CORS header.
+    /// </summary>
+    public readonly bool RequiresBearerAuth;
+
+    public HttpRouteEntry(HttpMethodType method, byte[] pathBytes, HttpRouteHandler? handler, byte[]? staticResponseBytes, bool requiresBearerAuth)
     {
         Method = method;
         PathBytes = pathBytes;
         Handler = handler;
         StaticResponseBytes = staticResponseBytes;
+        RequiresBearerAuth = requiresBearerAuth;
     }
 }
 
@@ -43,24 +50,24 @@ internal sealed class HttpRouteTable
     /// <summary>
     /// Registers or overrides a dynamic HTTP route handler.
     /// </summary>
-    public void Register(HttpMethodType method, string path, HttpRouteHandler handler)
+    public void Register(HttpMethodType method, string path, HttpRouteHandler handler, bool requiresBearerAuth = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(handler);
 
         byte[] pathBytes = NormalizePathToUtf8(path);
-        this.Upsert(new HttpRouteEntry(method, pathBytes, handler, staticResponseBytes: null));
+        this.Upsert(new HttpRouteEntry(method, pathBytes, handler, staticResponseBytes: null, requiresBearerAuth));
     }
 
     /// <summary>
     /// Registers or overrides a pre-encoded static HTTP response for a route.
     /// </summary>
-    public void RegisterStatic(HttpMethodType method, string path, ReadOnlySpan<byte> fullHttpResponse)
+    public void RegisterStatic(HttpMethodType method, string path, ReadOnlySpan<byte> fullHttpResponse, bool requiresBearerAuth = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         byte[] pathBytes = NormalizePathToUtf8(path);
-        this.Upsert(new HttpRouteEntry(method, pathBytes, handler: null, staticResponseBytes: fullHttpResponse.ToArray()));
+        this.Upsert(new HttpRouteEntry(method, pathBytes, handler: null, staticResponseBytes: fullHttpResponse.ToArray(), requiresBearerAuth));
     }
 
     /// <summary>

@@ -60,6 +60,81 @@ public sealed class PendingRequestTests
         Assert.Same(a, b);
     }
 
+    [Theory]
+    // expected-SequenceId prefilter on, frames deserialized for 16 same-opcode pending requests
+    [InlineData(true, 1)]
+    [InlineData(false, 16)]
+    public async Task OnMessageReceived_WithManySameOpcodeRequests_DeserializesOnlyForTheMatchingSequenceId(bool prefilter, int expectedDeserializations)
+    {
+        // Directive, not Control: PendingRequest<T> pools per T, and the other tests here assume Control's pool is untouched.
+        const int count = 16;
+        const ushort target = 7;
+
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+
+        byte[] frame = new Directive().Serialize();
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(
+            frame.AsSpan((int)Nalix.Abstractions.Networking.Packets.PacketHeaderOffset.SequenceId), target);
+        using BufferLease lease = BufferLease.CopyFrom(frame);
+
+        // The predicate runs only after a frame was deserialized, so its call count is the deserialization count.
+        int deserializations = 0;
+        PendingRequest<Directive>[] pending = new PendingRequest<Directive>[count];
+        ValueTask<Directive>[] tasks = new ValueTask<Directive>[count];
+        for (int i = 0; i < count; i++)
+        {
+            ushort seq = (ushort)(i + 1);
+            pending[i] = prefilter
+                ? PendingRequest<Directive>.Rent(session, c => { _ = Interlocked.Increment(ref deserializations); return true; }, seq)
+                : PendingRequest<Directive>.Rent(session, c => { _ = Interlocked.Increment(ref deserializations); return c.Header.SequenceId == seq; });
+            pending[i].Subscribe();
+            tasks[i] = pending[i].WaitAsync(0, CancellationToken.None);
+        }
+
+        // What TransportSession.DispatchPendingMessage does: hand the frame to every pending request of the opcode.
+        for (int i = 0; i < count; i++)
+        {
+            pending[i].OnMessageReceived(lease);
+        }
+
+        Assert.Equal(expectedDeserializations, deserializations);
+        for (int i = 0; i < count; i++)
+        {
+            bool shouldComplete = i + 1 == target;
+            Assert.Equal(shouldComplete, tasks[i].IsCompleted);
+            if (shouldComplete)
+            {
+                using Directive reply = await tasks[i];
+                Assert.Equal(target, reply.Header.SequenceId);
+            }
+
+            pending[i].Return(wasAwaited: shouldComplete);
+        }
+    }
+
+    [Fact]
+    public void OnMessageReceived_WithCorruptFrameOfTheExpectedOpcode_ReportsAndKeepsWaiting()
+    {
+        using RaisableFakeSession session = new();
+        session.EnsureRegistry();
+        using DiagnosticCapture capture = new(DiagnosticsEvents.Requests.InboundFrameFailed);
+
+        // The header carries the expected opcode but the body is cut short, so deserialization fails.
+        byte[] frame = new TimeSync().Serialize();
+        using BufferLease lease = BufferLease.CopyFrom(frame.AsSpan(0, Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize + 1));
+
+        PendingRequest<TimeSync> request = PendingRequest<TimeSync>.Rent(session, _ => true);
+        request.Subscribe();
+        ValueTask<TimeSync> task = request.WaitAsync(0, CancellationToken.None);
+
+        request.OnMessageReceived(lease);
+
+        Assert.False(task.IsCompleted);
+        Assert.Contains(capture.Events, e => e.Log.Tag == "SDK.PendingRequest:OnMessageReceived");
+        request.Return(wasAwaited: false);
+    }
+
     [Fact]
     public async Task OnTimeout_WhenTimerFiresBeforeDeadline_StillTimesOutAtDeadline()
     {

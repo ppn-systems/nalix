@@ -17,7 +17,14 @@ internal sealed class FakeConnection : IConnection
 {
     private static ulong s_nextId = 1000;
 
-    public FakeTransport FakeTcp { get; } = new();
+    public FakeTransport FakeTcp { get; }
+
+    public FakeConnection()
+        : this(new FakeTransport())
+    {
+    }
+
+    public FakeConnection(FakeTransport tcp) => FakeTcp = tcp;
 
     public bool IsDisposed { get; private set; }
 
@@ -25,7 +32,6 @@ internal sealed class FakeConnection : IConnection
 
     public string? DisconnectReason { get; private set; }
 
-    public bool IsUdpCreated => false;
 
     public ulong ConnectionId { get; } = Interlocked.Increment(ref s_nextId);
 
@@ -51,9 +57,8 @@ internal sealed class FakeConnection : IConnection
 
     public CipherSuiteType Algorithm { get; set; }
 
-    public IConnection.ITransport TCP => FakeTcp;
+    public IConnection.ITransport Transport => FakeTcp;
 
-    public IConnection.ITransport? UDP => null;
 
 #pragma warning disable CS0067
     public event EventHandler<IConnectionEventArgs>? ConnectionClosed;

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -1051,7 +1052,6 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
         string tPermission = "null";
         string tEncryption = "null";
         string tRate = "null";
-        string tTransport = "null";
 
         List<string> customAttributesList = new();
 
@@ -1077,23 +1077,23 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             else if (name == KnownNames.PacketPermissionAttributeMetadataName)
             {
                 // A bare [PacketPermission] binds the parameterless ctor (default USER); it must still be forwarded.
-                tPermission = a.ConstructorArguments.Length > 0
-                    ? $"new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel){a.ConstructorArguments[0].Value})"
-                    : "new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute()";
+                // The optional second argument selects the evaluation mode (StrictMatch); dropping it would silently widen the check.
+                tPermission = a.ConstructorArguments.Length switch
+                {
+                    0 => "new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute()",
+                    1 => $"new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel){a.ConstructorArguments[0].Value})",
+                    _ => $"new global::Nalix.Abstractions.Networking.Packets.PacketPermissionAttribute((global::Nalix.Abstractions.Security.PermissionLevel){a.ConstructorArguments[0].Value}, (global::Nalix.Abstractions.Security.PermissionEvaluation){a.ConstructorArguments[1].Value})",
+                };
             }
-            else if (name == KnownNames.PacketEncryptionAttributeMetadataName && a.ConstructorArguments.Length > 0)
+            else if (name == KnownNames.PacketEncryptionAttributeMetadataName)
             {
-                tEncryption = $"new global::Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute({a.ConstructorArguments[0].Value?.ToString()?.ToLowerInvariant()})";
+                // A bare [PacketEncryption] binds the parameterless ctor (encrypted, default cipher); dropping it would disable encryption.
+                tEncryption = $"new global::Nalix.Abstractions.Networking.Packets.PacketEncryptionAttribute({RenderConstructorArguments(a)})";
             }
             else if (name == KnownNames.PacketRateLimitAttributeMetadataName && a.ConstructorArguments.Length > 0)
             {
-                int rps = (int)a.ConstructorArguments[0].Value!;
-                double burst = a.ConstructorArguments.Length > 1 ? (double)a.ConstructorArguments[1].Value! : 1.0;
-                tRate = $"new global::Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute({rps}, {burst})";
-            }
-            else if (name == KnownNames.PacketTransportAttributeMetadataName && a.ConstructorArguments.Length > 0)
-            {
-                tTransport = $"new global::Nalix.Abstractions.Networking.Packets.PacketTransportAttribute((global::Nalix.Abstractions.Networking.NetworkTransport){a.ConstructorArguments[0].Value})";
+                // Named arguments (PolicyId, HardLockoutSeconds, MaxSoftViolations) carry the shared bucket and lockout policy.
+                tRate = $"new global::Nalix.Abstractions.Networking.Packets.PacketRateLimitAttribute({RenderConstructorArguments(a)}){RenderNamedArguments(a)}";
             }
             else
             {
@@ -1121,7 +1121,6 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
                 permission: {tPermission},
                 encryption: {tEncryption},
                 rateLimit: {tRate},
-                transport: {tTransport},
                 customAttributes: {customAttributesExpr})";
     }
 
@@ -1134,22 +1133,21 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
 
         string typeName = attr.AttributeClass.ToDisplayString();
 
-        List<string> ctorArgs = new();
-        foreach (TypedConstant arg in attr.ConstructorArguments)
+        return $"new global::{typeName}({RenderConstructorArguments(attr)}){RenderNamedArguments(attr)}";
+    }
+
+    private static string RenderConstructorArguments(AttributeData attr) =>
+        string.Join(", ", attr.ConstructorArguments.Select(RenderTypedConstant));
+
+    private static string RenderNamedArguments(AttributeData attr)
+    {
+        if (attr.NamedArguments.Length == 0)
         {
-            ctorArgs.Add(RenderTypedConstant(arg));
+            return "";
         }
 
-        List<string> namedArgs = new();
-        foreach (System.Collections.Generic.KeyValuePair<string, TypedConstant> namedArg in attr.NamedArguments)
-        {
-            namedArgs.Add($"{namedArg.Key} = {RenderTypedConstant(namedArg.Value)}");
-        }
-
-        string ctorString = string.Join(", ", ctorArgs);
-        string initString = namedArgs.Count > 0 ? $" {{ {string.Join(", ", namedArgs)} }}" : "";
-
-        return $"new global::{typeName}({ctorString}){initString}";
+        IEnumerable<string> namedArgs = attr.NamedArguments.Select(static namedArg => $"{namedArg.Key} = {RenderTypedConstant(namedArg.Value)}");
+        return $" {{ {string.Join(", ", namedArgs)} }}";
     }
 
     private static string RenderTypedConstant(TypedConstant constant)
@@ -1186,7 +1184,25 @@ public sealed class PacketHandlerGenerator : IIncrementalGenerator
             return b ? "true" : "false";
         }
 
-        return constant.Value?.ToString() ?? "null";
+        // Floating-point text must not depend on the build machine's culture (a comma decimal would not compile).
+        if (constant.Value is double d)
+        {
+            return double.IsNaN(d) ? "double.NaN" : double.IsPositiveInfinity(d) ? "double.PositiveInfinity" : double.IsNegativeInfinity(d) ? "double.NegativeInfinity" : d.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        if (constant.Value is float f)
+        {
+            return float.IsNaN(f) ? "float.NaN" : float.IsPositiveInfinity(f) ? "float.PositiveInfinity" : float.IsNegativeInfinity(f) ? "float.NegativeInfinity" : f.ToString("R", CultureInfo.InvariantCulture) + "F";
+        }
+
+        if (constant.Value is char ch)
+        {
+            return Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(ch, true);
+        }
+
+        return constant.Value is IFormattable formattable
+            ? formattable.ToString(null, CultureInfo.InvariantCulture)
+            : constant.Value?.ToString() ?? "null";
     }
 
     private static string GetSafeName(string typeName) => new([.. typeName.Select(c => char.IsLetterOrDigit(c) ? c : '_')]);

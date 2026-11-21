@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
@@ -57,6 +58,11 @@ public static class HandshakeExtensions
             throw new NetworkException("ServerPublicKey is required when AllowTofu is disabled.");
         }
 
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.Started))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.Started, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", $"handshake-start server-key={(string.IsNullOrEmpty(session.Options.ServerPublicKey) ? "tofu" : "pinned")}"));
+        }
+
         X25519.X25519KeyPair clientKey = X25519.GenerateKeyPair();
 
         Span<byte> clientNonceBytes = stackalloc byte[Bytes32.Size];
@@ -71,6 +77,9 @@ public static class HandshakeExtensions
         Bytes32 sharedSecretSE = default;
         Bytes32 masterSecret = default;
         Bytes32 sessionKey = default;
+
+        // A full handshake starts a new key and a new server-side session, so both directions restart at 0.
+        session.ResetSequenceCounters();
 
         TransportSession? transportSession = session as TransportSession;
         transportSession?.EnterNegotiation();
@@ -118,7 +127,7 @@ public static class HandshakeExtensions
 
                 using ProofOfWorkChallenge challenge = await session.RequestAsync<ProofOfWorkChallenge>(
                     powReq,
-                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis),
+                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis).WithEncrypt(false),
                     predicate: null,
                     ct: ct).ConfigureAwait(false);
 
@@ -128,6 +137,10 @@ public static class HandshakeExtensions
                 }
 
                 // Bounded by the same linked token as the handshake, so ConnectTimeoutMillis also bounds the solve.
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.ProofOfWorkRequested))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.ProofOfWorkRequested, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", $"pow-requested difficulty={challenge.Difficulty}"));
+                }
                 long solution = ProofOfWorkSolver.SolveChallenge(challenge.Nonce.AsSpan(), challenge.Difficulty, challenge.TimestampTicks, cts.Token);
 
                 using ProofOfWorkProof proof = new();
@@ -139,7 +152,7 @@ public static class HandshakeExtensions
                 // Re-send SessionInit and wait for SessionChallenge
                 serverHello = await session.RequestAsync<SessionChallenge>(
                     clientHello,
-                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis),
+                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis).WithEncrypt(false),
                     predicate: null,
                     ct: ct).ConfigureAwait(false);
             }
@@ -175,7 +188,7 @@ public static class HandshakeExtensions
 
                 using SessionTofu keyResponse = await session.RequestAsync<SessionTofu>(
                     request,
-                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis),
+                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis).WithEncrypt(false),
                     predicate: null,
                     ct: ct).ConfigureAwait(false);
 
@@ -186,6 +199,11 @@ public static class HandshakeExtensions
 
                 pinnedServerKey = keyResponse.PublicKey;
                 tofuFetchedKeyHex = pinnedServerKey.ToString();
+
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuTrusted))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuTrusted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", $"tofu-trusted server-key={tofuFetchedKeyHex} authenticated=false"));
+                }
             }
             else
             {
@@ -210,6 +228,10 @@ public static class HandshakeExtensions
             Bytes32 expectedProof = HandshakeX25519.ComputeServerProof(masterSecret, transcriptHash);
             if (serverHello.Proof != expectedProof)
             {
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.ProofInvalid))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.ProofInvalid, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "server-proof-invalid possible-mitm=true"));
+                }
                 throw new NetworkException("SessionChallenge proof is invalid. Possible Man-in-the-Middle attack.");
             }
 
@@ -232,7 +254,7 @@ public static class HandshakeExtensions
             {
                 using SessionEstablished serverFinish = await session.RequestAsync<SessionEstablished>(
                     clientFinish,
-                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis),
+                    options: RequestOptions.Default.WithTimeout(session.Options.ConnectTimeoutMillis).WithEncrypt(false),
                     predicate: null,
                     ct: ct).ConfigureAwait(false);
 
@@ -252,23 +274,52 @@ public static class HandshakeExtensions
                 {
                     session.Options.ServerPublicKey = tofuFetchedKeyHex;
 
-                    if (session.Options.PersistTofuKey && !OperatingSystem.IsBrowser())
+                    if (!session.Options.PersistTofuKey)
+                    {
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuNotPersisted))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuNotPersisted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "tofu-not-persisted reason=disabled"));
+                        }
+                    }
+                    else if (OperatingSystem.IsBrowser())
+                    {
+                        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuNotPersisted))
+                        {
+                            DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuNotPersisted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "tofu-not-persisted reason=browser"));
+                        }
+                    }
+                    else
                     {
                         try
                         {
                             ConfigurationManager.Instance.UpdateValue<TransportOptions>(nameof(TransportOptions.ServerPublicKey), tofuFetchedKeyHex);
                             ConfigurationManager.Instance.Flush();
+                            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuPersisted))
+                            {
+                                DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuPersisted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "tofu-persisted"));
+                            }
                         }
                         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
                         {
-                            // Ignore persistence failure on unsupported platforms
+                            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.TofuNotPersisted))
+                            {
+                                DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.TofuNotPersisted, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "tofu-not-persisted reason=error", ex));
+                            }
                         }
                     }
                 }
 
                 session.State.EncryptionEnabled = true;
                 session.State.SessionToken = serverFinish.SessionToken;
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.Completed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.Completed, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", $"handshake-complete algorithm={session.Options.Algorithm}"));
+                }
                 transportSession?.NotifyReady();
+            }
+            // Logs non-fatal failures and never handles them (returns false), so the cleanup below still runs for every exception.
+            catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex) && LOG_FAILURE(ex))
+            {
             }
             catch
             {
@@ -286,6 +337,15 @@ public static class HandshakeExtensions
             Bytes32.Wipe(ref sharedSecretSE);
             Bytes32.Wipe(ref masterSecret);
             Bytes32.Wipe(ref sessionKey);
+        }
+
+        static bool LOG_FAILURE(Exception ex)
+        {
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Handshake.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Handshake.Failed, new DiagnosticLog("SDK.HandshakeExtensions:Handshake", "handshake-failed", ex));
+            }
+            return false;
         }
     }
 }

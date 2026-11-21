@@ -34,6 +34,19 @@ public sealed class NetworkApplicationBuilderRegistrationTests
     }
 
     [Fact]
+    public void MapDatagram_CalledTwice_Throws()
+    {
+        NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();
+        builder.MapDatagram<TestProtocolNoDispatch>();
+
+        // Tickets are issued by a single listener: a second binding would never get a session.
+        Action second = () => builder.MapDatagram<TestProtocolNoDispatch>();
+
+        second.Should().Throw<InvalidOperationException>().WithMessage("*once*");
+        GetState(builder).DatagramBindings.Should().ContainSingle();
+    }
+
+    [Fact]
     public void MapHandlers_Type_RegistersHandlerDescriptor()
     {
         NetworkApplicationBuilder builder = NetworkApplication.CreateBuilder();

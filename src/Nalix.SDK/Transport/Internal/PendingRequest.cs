@@ -3,11 +3,11 @@
 
 using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
@@ -59,6 +59,10 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     private Func<TPkt, bool>? _predicate;
     private ushort _opcode;
 
+    // Non-zero when the reply is matched by SequenceId. Checked on the raw header before deserializing, so a frame
+    // meant for another pending request of the same opcode costs a header read instead of a full deserialization.
+    private ushort _expectedSequenceId;
+
     // Fallback delegates used only when the session is a custom/mock ITransportSession that does not
     // participate in TransportSession's direct pending-request table.
     private readonly EventHandler<IBufferLease> _onMessage;
@@ -90,7 +94,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
     /// Rents a pooled instance (or allocates one if the pool is empty) and binds it to
     /// <paramref name="session"/> and <paramref name="predicate"/> for one request.
     /// </summary>
-    internal static PendingRequest<TPkt> Rent(ITransportSession session, Func<TPkt, bool> predicate)
+    internal static PendingRequest<TPkt> Rent(ITransportSession session, Func<TPkt, bool> predicate, ushort expectedSequenceId = 0)
     {
         if (!s_pool.TryDequeue(out PendingRequest<TPkt>? pending))
         {
@@ -103,6 +107,7 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
         pending._directSession = session is TransportSession { HasDirectPendingDispatch: true } direct ? direct : null;
         pending._predicate = predicate;
         pending._opcode = TPkt.StaticOpCode;
+        pending._expectedSequenceId = expectedSequenceId;
         pending._completed = 0;
         pending._subscribed = 0;
         pending._timeoutMs = 0;
@@ -303,6 +308,11 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
             return;
         }
 
+        if (_expectedSequenceId != 0 && header.SequenceId != _expectedSequenceId)
+        {
+            return;
+        }
+
         try
         {
             IPacket packet = PacketRegistry.Deserialize(buffer.Span);
@@ -357,10 +367,10 @@ internal sealed class PendingRequest<TPkt> : IValueTaskSource<TPkt>, IPendingReq
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            Trace.TraceError(
-                "Nalix.SDK.PendingRequest<{0}> failed to handle an inbound frame: {1}",
-                typeof(TPkt).Name,
-                ex);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Requests.InboundFrameFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Requests.InboundFrameFailed, new DiagnosticLog("SDK.PendingRequest:OnMessageReceived", $"inbound-frame-failed type={typeof(TPkt).Name} opcode={_opcode}", ex));
+            }
         }
     }
 

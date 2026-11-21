@@ -271,7 +271,7 @@ public sealed class PacketDispatchChannel
             return;
         }
 
-        if (connection.TCP.Framing == TransportFraming.UInt16LengthPrefixed && (uint)lease.Length < PacketConstants.HeaderSize)
+        if (connection.Transport.Framing == TransportFraming.UInt16LengthPrefixed && (uint)lease.Length < PacketConstants.HeaderSize)
         {
             lease.Dispose();
             connection.IncrementErrorCount();
@@ -386,7 +386,7 @@ public sealed class PacketDispatchChannel
         writer.WriteNumber("ReadyConnections", _dispatch.ReadyConnections);
         writer.WriteNumber("WakeSignals", Interlocked.Read(ref _wakeSignals));
         writer.WriteNumber("WakeReads", Interlocked.Read(ref _wakeReadSignals));
-        writer.WriteNumber("IdleWorkers", this.IdleWorkers);
+        writer.WriteNumber(nameof(this.IdleWorkers), this.IdleWorkers);
         writer.WriteString("PacketRegistryType", nameof(PacketRegistry));
 
         Span<int> priorities = stackalloc int[(int)PacketPriority.URGENT + 1];
@@ -629,14 +629,12 @@ public sealed class PacketDispatchChannel
     {
         ushort opcode;
         IPacket packet;
-        bool isReliable;
         bool encryptedOnWire;
         PacketHandler<IPacket> handler;
 
         try
         {
             // 1. Read the packet header directly from the raw span to determine routing
-            isReliable = lease.IsReliable;
             encryptedOnWire = lease.EncryptedOnWire;
             opcode = connection.PacketClassifier.Extract(lease.Span);
 
@@ -710,7 +708,7 @@ public sealed class PacketDispatchChannel
              * 2. If it completes synchronously, we can dispose resources immediately.
              * 3. If it's asynchronous, we hand off to AwaitPacketHandlerCompletionAsync.
              */
-            ValueTask pending = this.Options.ExecuteResolvedHandlerAsync(in handler, packet, connection, isReliable, encryptedOnWire, ct);
+            ValueTask pending = this.Options.ExecuteResolvedHandlerAsync(in handler, packet, connection, encryptedOnWire, ct);
 
             // Fast-path: handler completed synchronously. The packet context already released the packet.
             if (pending.IsCompletedSuccessfully)

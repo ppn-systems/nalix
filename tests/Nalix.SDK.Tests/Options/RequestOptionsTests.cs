@@ -26,7 +26,7 @@ public sealed class RequestOptionsTests
 
         Assert.Equal(RequestOptions.DefaultTimeoutMs, original.TimeoutMs);
         Assert.Equal(0, original.RetryCount);
-        Assert.False(original.Encrypt);
+        Assert.Null(original.Encrypt);
 
         Assert.Equal(1500, changed.TimeoutMs);
         Assert.Equal(2, changed.RetryCount);

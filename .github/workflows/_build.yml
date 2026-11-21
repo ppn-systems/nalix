@@ -72,7 +72,10 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.x"
+          # net10.0 and net11.0 are both built: the .NET 11 SDK builds both, the .NET 10 runtime runs the net10.0 tests.
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -109,58 +112,79 @@ jobs:
         shell: bash
         timeout-minutes: 20
         run: |
-          # One retry of the whole suite. Two tests are known to be flaky because they expose real races in src/
-          # (WebSocketEchoAndGroupTests.Multicast_WithMultipleRooms_IsolatesMessagesByRoom and
-          # RequestResilienceTests.RequestAsync_ConcurrentOutOfOrderResponses_EachResolvesCorrectly); remove the retry
-          # (set max_retries=1) once those are fixed so new flakiness is not hidden.
-          max_retries=2
-          attempt=1
-          while true; do
-            # Clean results directory to avoid mixing failed and successful runs
-            rm -rf "$TEST_RESULTS_DIR"/* 2>/dev/null || true
+          rm -rf "$TEST_RESULTS_DIR"/* 2>/dev/null || true
 
-            echo "Running tests (Attempt $attempt/$max_retries)..."
-            test_args=(
-              "${{ inputs.test }}"
-              --configuration "${{ inputs.configuration }}"
-              --no-build
-              --no-restore
-              --logger "trx"
-              --results-directory "$TEST_RESULTS_DIR"
-              --blame-hang
-              --blame-hang-timeout 120000
-              -m
-            )
+          test_args=(
+            "${{ inputs.test }}"
+            --configuration "${{ inputs.configuration }}"
+            --no-build
+            --no-restore
+            --logger "trx"
+            --results-directory "$TEST_RESULTS_DIR"
+            --blame-hang
+            --blame-hang-timeout 120000
+            -m
+          )
 
-            if [ "${{ inputs.coverage }}" = "true" ]; then
-              test_args+=(--collect:"XPlat Code Coverage")
-            fi
+          # Microsoft.CodeCoverage instead of coverlet: coverlet's instrumentation made Nalix.Codec.Tests take
+          # ~4 min instead of ~30 s (its crypto loops), and that one project set the length of the whole job.
+          if [ "${{ inputs.coverage }}" = "true" ]; then
+            test_args+=(--settings tests/coverage.runsettings --collect "Code Coverage")
+          fi
 
-            # Capture the real exit code: `$?` after an `if` block is the if's status (0), which made
-            # failed runs report green.
-            exit_code=0
-            dotnet test "${test_args[@]}" || exit_code=$?
-            if [ $exit_code -eq 0 ]; then
-              echo "Tests passed!"
-              break
-            fi
+          # Capture the real exit code: `$?` after an `if` block is the if's status (0).
+          exit_code=0
+          dotnet test "${test_args[@]}" || exit_code=$?
+          if [ $exit_code -eq 0 ]; then
+            exit 0
+          fi
 
-            if [ $attempt -ge $max_retries ]; then
-              echo "Tests failed after $max_retries attempts."
-              exit $exit_code
-            fi
+          # One retry, of the failed tests only (not the whole suite, which doubled the job). Each failure that
+          # passes on the retry is listed in the job summary so flaky tests stay visible.
+          filter=$(python3 .github/scripts/failed-tests-filter.py "$TEST_RESULTS_DIR")
+          if [ -z "$filter" ]; then
+            echo "::error::dotnet test failed (exit code $exit_code) without a failed test in the results (build or crash)."
+            exit $exit_code
+          fi
 
-            echo "Test run failed (exit code $exit_code). Retrying in 10 seconds..."
-            attempt=$((attempt+1))
-            sleep 10
-          done
+          retry_args=(
+            "${{ inputs.test }}"
+            --configuration "${{ inputs.configuration }}"
+            --no-build
+            --no-restore
+            --logger "trx"
+            --results-directory "$TEST_RESULTS_DIR/retry"
+            --blame-hang
+            --blame-hang-timeout 120000
+            -m
+          )
+          if [ "$filter" = "ALL" ]; then
+            echo "Too many failures to filter: retrying the whole suite."
+          else
+            echo "Retrying the failed tests only: $filter"
+            retry_args+=(--filter "$filter")
+          fi
+
+          retry_code=0
+          dotnet test "${retry_args[@]}" || retry_code=$?
+          if [ $retry_code -ne 0 ]; then
+            echo "Tests failed again on the retry."
+            exit $retry_code
+          fi
+
+          {
+            echo "### Flaky tests (failed, then passed on the retry)"
+            echo
+            echo "$filter" | tr '|' '\n' | sed 's/^FullyQualifiedName=/- `/; s/$/`/'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Some tests failed and then passed on the retry; see the job summary."
 
       - name: Detect coverage reports
         id: coverage_files
         if: ${{ inputs.coverage && inputs.test != '' }}
         shell: bash
         run: |
-          if [ -d "$TEST_RESULTS_DIR" ] && find "$TEST_RESULTS_DIR" -name 'coverage.cobertura.xml' -print -quit | grep -q .; then
+          if [ -d "$TEST_RESULTS_DIR" ] && find "$TEST_RESULTS_DIR" -name '*.cobertura.xml' -print -quit | grep -q .; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
@@ -168,9 +192,9 @@ jobs:
 
       - name: Generate coverage report
         if: always() && steps.coverage_files.outputs.found == 'true'
-        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        uses: danielpalme/ReportGenerator-GitHub-Action@v5.6.0
         with:
-          reports: ${{ env.TEST_RESULTS_DIR }}/**/coverage.cobertura.xml
+          reports: ${{ env.TEST_RESULTS_DIR }}/**/*.cobertura.xml
           targetdir: ${{ env.COVERAGE_REPORT_DIR }}
           reporttypes: Cobertura;MarkdownSummaryGithub
 
@@ -183,7 +207,7 @@ jobs:
         if: always() && steps.coverage_files.outputs.found == 'true'
         uses: codecov/codecov-action@v7
         with:
-          files: ${{ env.TEST_RESULTS_DIR }}/**/coverage.cobertura.xml
+          files: ${{ env.TEST_RESULTS_DIR }}/**/*.cobertura.xml
           flags: ${{ runner.os }}-${{ inputs.configuration }}
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}

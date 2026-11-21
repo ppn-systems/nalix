@@ -1,0 +1,287 @@
+#nullable enable
+const Nalix.Environment.DiagnosticsEvents.Configuration.Cache = "Configuration.Cache" -> string!
+const Nalix.Environment.DiagnosticsEvents.Configuration.Container = "Configuration.Container" -> string!
+const Nalix.Environment.DiagnosticsEvents.Configuration.Directory = "Configuration.Directory" -> string!
+const Nalix.Environment.DiagnosticsEvents.Configuration.Failure = "Configuration.Failure" -> string!
+const Nalix.Environment.DiagnosticsEvents.Configuration.Flush = "Configuration.Flush" -> string!
+const Nalix.Environment.DiagnosticsEvents.Configuration.ManualOverrideOverwritten = "Configuration.ManualOverrideOverwritten" -> string!
+const Nalix.Environment.DiagnosticsEvents.Configuration.PathChanged = "Configuration.PathChanged" -> string!
+const Nalix.Environment.DiagnosticsEvents.Configuration.Reload = "Configuration.Reload" -> string!
+const Nalix.Environment.DiagnosticsEvents.IO.Cleanup = "IO.Cleanup" -> string!
+const Nalix.Environment.DiagnosticsEvents.IO.Directory = "IO.Directory" -> string!
+const Nalix.Environment.DiagnosticsEvents.ListenerName = "Environment" -> string!
+const Nalix.Environment.DiagnosticsEvents.Random.Failure = "Random.Failure" -> string!
+const Nalix.Environment.DiagnosticsEvents.Random.Init = "Random.Init" -> string!
+const Nalix.Environment.DiagnosticsEvents.Time.Reset = "Time.Reset" -> string!
+const Nalix.Environment.DiagnosticsEvents.Time.Synchronized = "Time.Synchronized" -> string!
+const Nalix.Environment.Fragments.FragmentAssembler.EvictInterval = 64 -> int
+const Nalix.Environment.Fragments.FragmentHeader.Magic = 240 -> byte
+const Nalix.Environment.Fragments.FragmentHeader.WireSize = 8 -> int
+const Nalix.Environment.Hashing.Sha1.HashSize = 20 -> int
+const Nalix.Environment.Memory.BufferLease.TransportHeadroom = 2 -> int
+const Nalix.Environment.Memory.Leb128.MaxByteCount = 5 -> int
+const Nalix.Environment.Random.Csprng.MaxByteArrayLength = 1048576 -> int
+Nalix.Environment.Configuration.Binding.ConfigurationLoader
+Nalix.Environment.Configuration.Binding.ConfigurationLoader.Clone<T>() -> T!
+Nalix.Environment.Configuration.Binding.ConfigurationLoader.ConfigurationLoader() -> void
+Nalix.Environment.Configuration.Binding.ConfigurationLoader.IsInitialized.get -> bool
+Nalix.Environment.Configuration.Binding.ConfigurationLoader.LastInitializationTime.get -> System.DateTime
+Nalix.Environment.Configuration.Binding.IniConfig
+Nalix.Environment.Configuration.Binding.IniConfig.Dispose() -> void
+Nalix.Environment.Configuration.Binding.IniConfig.ExistsFile.get -> bool
+Nalix.Environment.Configuration.Binding.IniConfig.FilePath.get -> string!
+Nalix.Environment.Configuration.Binding.IniConfig.Flush() -> void
+Nalix.Environment.Configuration.Binding.IniConfig.GetBool(string! section, string! key) -> bool?
+Nalix.Environment.Configuration.Binding.IniConfig.GetByte(string! section, string! key) -> byte?
+Nalix.Environment.Configuration.Binding.IniConfig.GetChar(string! section, string! key) -> char?
+Nalix.Environment.Configuration.Binding.IniConfig.GetDateTime(string! section, string! key) -> System.DateTime?
+Nalix.Environment.Configuration.Binding.IniConfig.GetDecimal(string! section, string! key) -> decimal?
+Nalix.Environment.Configuration.Binding.IniConfig.GetDouble(string! section, string! key) -> double?
+Nalix.Environment.Configuration.Binding.IniConfig.GetEnum<TEnum>(string! section, string! key) -> TEnum?
+Nalix.Environment.Configuration.Binding.IniConfig.GetGuid(string! section, string! key) -> System.Guid?
+Nalix.Environment.Configuration.Binding.IniConfig.GetInt16(string! section, string! key) -> short?
+Nalix.Environment.Configuration.Binding.IniConfig.GetInt32(string! section, string! key) -> int?
+Nalix.Environment.Configuration.Binding.IniConfig.GetInt64(string! section, string! key) -> long?
+Nalix.Environment.Configuration.Binding.IniConfig.GetSByte(string! section, string! key) -> sbyte?
+Nalix.Environment.Configuration.Binding.IniConfig.GetSingle(string! section, string! key) -> float?
+Nalix.Environment.Configuration.Binding.IniConfig.GetString(string! section, string! key) -> string!
+Nalix.Environment.Configuration.Binding.IniConfig.GetTimeSpan(string! section, string! key) -> System.TimeSpan?
+Nalix.Environment.Configuration.Binding.IniConfig.GetUInt16(string! section, string! key) -> ushort?
+Nalix.Environment.Configuration.Binding.IniConfig.GetUInt32(string! section, string! key) -> uint?
+Nalix.Environment.Configuration.Binding.IniConfig.GetUInt64(string! section, string! key) -> ulong?
+Nalix.Environment.Configuration.Binding.IniConfig.IniConfig(string! path) -> void
+Nalix.Environment.Configuration.Binding.IniConfig.Reload() -> void
+Nalix.Environment.Configuration.Binding.IniConfig.WriteComment(string! section, string? key, string? comment) -> void
+Nalix.Environment.Configuration.Binding.IniConfig.WriteValue(string! section, string! key, object! value) -> void
+Nalix.Environment.Configuration.ConfigurationManager
+Nalix.Environment.Configuration.ConfigurationManager.ClearAll() -> void
+Nalix.Environment.Configuration.ConfigurationManager.ConfigFileExists.get -> bool
+Nalix.Environment.Configuration.ConfigurationManager.ConfigFilePath.get -> string!
+Nalix.Environment.Configuration.ConfigurationManager.ConfigurationManager() -> void
+Nalix.Environment.Configuration.ConfigurationManager.Dispose() -> void
+Nalix.Environment.Configuration.ConfigurationManager.Flush() -> void
+Nalix.Environment.Configuration.ConfigurationManager.Get<TClass>() -> TClass!
+Nalix.Environment.Configuration.ConfigurationManager.Get<TClass>(string! configFilePath, bool autoReload = true) -> TClass!
+Nalix.Environment.Configuration.ConfigurationManager.IsLoaded<TClass>() -> bool
+Nalix.Environment.Configuration.ConfigurationManager.LastReloadTime.get -> System.DateTime
+Nalix.Environment.Configuration.ConfigurationManager.MarkManuallyConfigured<TClass>() -> void
+Nalix.Environment.Configuration.ConfigurationManager.ReloadAll() -> void
+Nalix.Environment.Configuration.ConfigurationManager.Remove<TClass>() -> bool
+Nalix.Environment.Configuration.ConfigurationManager.SetConfigFilePath(string! newConfigFilePath, bool autoReload = true) -> void
+Nalix.Environment.Configuration.ConfigurationManager.UpdateValue<TClass>(string! key, object! value) -> void
+Nalix.Environment.Diagnostics.DiagnosticListenerFactory
+Nalix.Environment.DiagnosticsEvents
+Nalix.Environment.DiagnosticsEvents.Configuration
+Nalix.Environment.DiagnosticsEvents.IO
+Nalix.Environment.DiagnosticsEvents.Random
+Nalix.Environment.DiagnosticsEvents.Time
+Nalix.Environment.Extensions.HeaderExtensions
+Nalix.Environment.Fragments.FragmentAssembler
+Nalix.Environment.Fragments.FragmentAssembler.Add(in Nalix.Environment.Fragments.FragmentHeader header, System.ReadOnlySpan<byte> chunkBody, out bool streamEvicted) -> Nalix.Environment.Fragments.FragmentAssemblyResult?
+Nalix.Environment.Fragments.FragmentAssembler.Clear() -> void
+Nalix.Environment.Fragments.FragmentAssembler.Dispose() -> void
+Nalix.Environment.Fragments.FragmentAssembler.EvictExpired() -> int
+Nalix.Environment.Fragments.FragmentAssembler.FragmentAssembler() -> void
+Nalix.Environment.Fragments.FragmentAssembler.MaxOpenStreams.get -> int
+Nalix.Environment.Fragments.FragmentAssembler.MaxOpenStreams.init -> void
+Nalix.Environment.Fragments.FragmentAssembler.MaxStreamBytes.get -> int
+Nalix.Environment.Fragments.FragmentAssembler.MaxStreamBytes.init -> void
+Nalix.Environment.Fragments.FragmentAssembler.OpenStreamCount.get -> int
+Nalix.Environment.Fragments.FragmentAssembler.StreamTimeoutMs.get -> long
+Nalix.Environment.Fragments.FragmentAssembler.StreamTimeoutMs.init -> void
+Nalix.Environment.Fragments.FragmentAssemblyResult
+Nalix.Environment.Fragments.FragmentAssemblyResult.FragmentAssemblyResult() -> void
+Nalix.Environment.Fragments.FragmentAssemblyResult.FragmentAssemblyResult(Nalix.Environment.Memory.BufferLease! lease) -> void
+Nalix.Environment.Fragments.FragmentAssemblyResult.Lease.get -> Nalix.Environment.Memory.BufferLease!
+Nalix.Environment.Fragments.FragmentAssemblyResult.Length.get -> int
+Nalix.Environment.Fragments.FragmentAssemblyResult.Memory.get -> System.ReadOnlyMemory<byte>
+Nalix.Environment.Fragments.FragmentAssemblyResult.Span.get -> System.ReadOnlySpan<byte>
+Nalix.Environment.Fragments.FragmentHeader
+Nalix.Environment.Fragments.FragmentHeader.Equals(Nalix.Environment.Fragments.FragmentHeader other) -> bool
+Nalix.Environment.Fragments.FragmentHeader.FragmentHeader() -> void
+Nalix.Environment.Fragments.FragmentHeader.FragmentHeader(ushort streamId, ushort chunkIndex, ushort totalChunks, bool isLast) -> void
+Nalix.Environment.Fragments.FragmentHeader.IsLast.get -> bool
+Nalix.Environment.Fragments.FragmentHeader.WriteTo(System.Span<byte> dest) -> void
+Nalix.Environment.Fragments.FragmentStreamId
+Nalix.Environment.Hashing.Sha1
+Nalix.Environment.Hashing.XxHash32
+Nalix.Environment.IO.Directories
+Nalix.Environment.Memory.BufferLease
+Nalix.Environment.Memory.BufferLease.BufferLease() -> void
+Nalix.Environment.Memory.BufferLease.ByteArrayPool
+Nalix.Environment.Memory.BufferLease.Capacity.get -> int
+Nalix.Environment.Memory.BufferLease.CommitLength(int length) -> void
+Nalix.Environment.Memory.BufferLease.Dispose() -> void
+Nalix.Environment.Memory.BufferLease.EncryptedOnWire.get -> bool
+Nalix.Environment.Memory.BufferLease.EncryptedOnWire.set -> void
+Nalix.Environment.Memory.BufferLease.Headroom.get -> int
+Nalix.Environment.Memory.BufferLease.IsReliable.get -> bool
+Nalix.Environment.Memory.BufferLease.IsReliable.set -> void
+Nalix.Environment.Memory.BufferLease.Length.get -> int
+Nalix.Environment.Memory.BufferLease.Memory.get -> System.ReadOnlyMemory<byte>
+Nalix.Environment.Memory.BufferLease.OnRent() -> void
+Nalix.Environment.Memory.BufferLease.RawCapacity.get -> int
+Nalix.Environment.Memory.BufferLease.ReleaseOwnership(out byte[]? buffer, out int start, out int length) -> bool
+Nalix.Environment.Memory.BufferLease.ResetForPool() -> void
+Nalix.Environment.Memory.BufferLease.Retain() -> void
+Nalix.Environment.Memory.BufferLease.Span.get -> System.Span<byte>
+Nalix.Environment.Memory.BufferLease.SpanFull.get -> System.Span<byte>
+Nalix.Environment.Memory.BufferLease.TryGetSegmentWithHeader(int headerSize, out System.ArraySegment<byte> segment) -> bool
+Nalix.Environment.Memory.BufferLease.ZeroOnDispose.get -> bool
+Nalix.Environment.Memory.BufferLease.ZeroOnDispose.set -> void
+Nalix.Environment.Memory.DataReader
+Nalix.Environment.Memory.DataReader.Advance(int count) -> void
+Nalix.Environment.Memory.DataReader.BytesRead.get -> int
+Nalix.Environment.Memory.DataReader.BytesRemaining.get -> int
+Nalix.Environment.Memory.DataReader.DataReader() -> void
+Nalix.Environment.Memory.DataReader.DataReader(byte* ptr, int length) -> void
+Nalix.Environment.Memory.DataReader.DataReader(byte[]! buffer) -> void
+Nalix.Environment.Memory.DataReader.DataReader(System.ReadOnlyMemory<byte> memory) -> void
+Nalix.Environment.Memory.DataReader.DataReader(System.ReadOnlySpan<byte> span) -> void
+Nalix.Environment.Memory.DataReader.Dispose() -> void
+Nalix.Environment.Memory.DataReader.GetSpanReference(int sizeHint) -> byte
+Nalix.Environment.Memory.DataReader.IsFailed.get -> bool
+Nalix.Environment.Memory.DataReader.IsFailed.set -> void
+Nalix.Environment.Memory.DataWriter
+Nalix.Environment.Memory.DataWriter.Advance(int count) -> void
+Nalix.Environment.Memory.DataWriter.DataWriter() -> void
+Nalix.Environment.Memory.DataWriter.DataWriter(byte[]! buffer) -> void
+Nalix.Environment.Memory.DataWriter.DataWriter(int size) -> void
+Nalix.Environment.Memory.DataWriter.DataWriter(System.Span<byte> span) -> void
+Nalix.Environment.Memory.DataWriter.Dispose() -> void
+Nalix.Environment.Memory.DataWriter.Expand(int minimumSize) -> void
+Nalix.Environment.Memory.DataWriter.FreeBuffer.get -> System.Span<byte>
+Nalix.Environment.Memory.DataWriter.GetFreeBufferReference() -> byte
+Nalix.Environment.Memory.DataWriter.ToArray() -> byte[]!
+Nalix.Environment.Memory.DataWriter.Write(byte[]! value) -> void
+Nalix.Environment.Memory.DataWriter.Write(System.ReadOnlySpan<byte> value) -> void
+Nalix.Environment.Memory.DataWriter.Write<T>(T value) -> void
+Nalix.Environment.Memory.DataWriter.WrittenCount.get -> int
+Nalix.Environment.Memory.Leb128
+Nalix.Environment.Options.FragmentOptions
+Nalix.Environment.Options.FragmentOptions.FragmentOptions() -> void
+Nalix.Environment.Options.FragmentOptions.MaxChunkSize.get -> int
+Nalix.Environment.Options.FragmentOptions.MaxChunkSize.set -> void
+Nalix.Environment.Options.FragmentOptions.MaxPayloadSize.get -> int
+Nalix.Environment.Options.FragmentOptions.MaxPayloadSize.set -> void
+Nalix.Environment.Options.FragmentOptions.MaxReassemblyBytes.get -> int
+Nalix.Environment.Options.FragmentOptions.MaxReassemblyBytes.set -> void
+Nalix.Environment.Options.FragmentOptions.MinReceiveBufferSize.get -> int
+Nalix.Environment.Options.FragmentOptions.MinReceiveBufferSize.set -> void
+Nalix.Environment.Options.FragmentOptions.ReassemblyTimeoutMs.get -> long
+Nalix.Environment.Options.FragmentOptions.ReassemblyTimeoutMs.set -> void
+Nalix.Environment.Options.FragmentOptions.Validate() -> void
+Nalix.Environment.Options.MemoryOptions
+Nalix.Environment.Options.MemoryOptions.BufferLeaseSharedPoolSize.get -> int
+Nalix.Environment.Options.MemoryOptions.BufferLeaseSharedPoolSize.set -> void
+Nalix.Environment.Options.MemoryOptions.BufferLeaseThreadLocalCacheMaxSlots.get -> int
+Nalix.Environment.Options.MemoryOptions.BufferLeaseThreadLocalCacheMaxSlots.set -> void
+Nalix.Environment.Options.MemoryOptions.MaxWriterCapacity.get -> int
+Nalix.Environment.Options.MemoryOptions.MaxWriterCapacity.set -> void
+Nalix.Environment.Options.MemoryOptions.MemoryOptions() -> void
+Nalix.Environment.Options.MemoryOptions.Validate() -> void
+Nalix.Environment.Options.SequenceOptions
+Nalix.Environment.Options.SequenceOptions.SequenceOptions() -> void
+Nalix.Environment.Options.SequenceOptions.TcpWindow.get -> uint
+Nalix.Environment.Options.SequenceOptions.TcpWindow.set -> void
+Nalix.Environment.Options.SequenceOptions.UdpWindow.get -> uint
+Nalix.Environment.Options.SequenceOptions.UdpWindow.set -> void
+Nalix.Environment.Options.SequenceOptions.Validate() -> void
+Nalix.Environment.Random.Csprng
+Nalix.Environment.Sequencing.SequenceCounter
+Nalix.Environment.Sequencing.SequenceCounter.Current() -> uint
+Nalix.Environment.Sequencing.SequenceCounter.IsApproachingOverflow(uint margin = 1000000) -> bool
+Nalix.Environment.Sequencing.SequenceCounter.IsValid(uint? receivedSeq, uint window = 0) -> bool
+Nalix.Environment.Sequencing.SequenceCounter.Next() -> uint
+Nalix.Environment.Sequencing.SequenceCounter.Reset(uint newValue = 0) -> void
+Nalix.Environment.Sequencing.SequenceCounter.ResumeFrom(uint lastKnownSeq, uint safetyGap = 1000) -> void
+Nalix.Environment.Sequencing.SequenceCounter.SequenceCounter(uint initialValue = 0) -> void
+Nalix.Environment.Sequencing.SequenceCounter.UpdateTo(uint receivedSeq) -> void
+Nalix.Environment.Time.Clock
+Nalix.Environment.Time.TimingScope
+Nalix.Environment.Time.TimingScope.ElapsedTicks.get -> long
+Nalix.Environment.Time.TimingScope.GetElapsedMilliseconds() -> double
+Nalix.Environment.Time.TimingScope.TimingScope() -> void
+override Nalix.Environment.Fragments.FragmentHeader.Equals(object? obj) -> bool
+override Nalix.Environment.Fragments.FragmentHeader.GetHashCode() -> int
+override Nalix.Environment.Fragments.FragmentHeader.ToString() -> string!
+readonly Nalix.Environment.Fragments.FragmentHeader.ChunkIndex -> ushort
+readonly Nalix.Environment.Fragments.FragmentHeader.Flags -> byte
+readonly Nalix.Environment.Fragments.FragmentHeader.StreamId -> ushort
+readonly Nalix.Environment.Fragments.FragmentHeader.TotalChunks -> ushort
+static Nalix.Environment.Configuration.ConfigurationManager.Instance.get -> Nalix.Environment.Configuration.ConfigurationManager!
+static Nalix.Environment.Diagnostics.DiagnosticListenerFactory.Create(string! name) -> System.Diagnostics.DiagnosticListener!
+static Nalix.Environment.DiagnosticsEvents.Write<T>(string! name, T payload) -> void
+static Nalix.Environment.Extensions.HeaderExtensions.AsHeaderRef(this System.ReadOnlySpan<byte> this) -> Nalix.Abstractions.Primitives.PacketHeader
+static Nalix.Environment.Extensions.HeaderExtensions.AsHeaderRef(this System.Span<byte> this) -> Nalix.Abstractions.Primitives.PacketHeader
+static Nalix.Environment.Fragments.FragmentAssembler.IsFragmentedFrame(System.ReadOnlySpan<byte> payload, out Nalix.Environment.Fragments.FragmentHeader header) -> bool
+static Nalix.Environment.Fragments.FragmentHeader.operator !=(Nalix.Environment.Fragments.FragmentHeader left, Nalix.Environment.Fragments.FragmentHeader right) -> bool
+static Nalix.Environment.Fragments.FragmentHeader.operator ==(Nalix.Environment.Fragments.FragmentHeader left, Nalix.Environment.Fragments.FragmentHeader right) -> bool
+static Nalix.Environment.Fragments.FragmentHeader.ReadFrom(System.ReadOnlySpan<byte> src) -> Nalix.Environment.Fragments.FragmentHeader
+static Nalix.Environment.Fragments.FragmentStreamId.Next() -> ushort
+static Nalix.Environment.Hashing.Sha1.HashData(System.ReadOnlySpan<byte> data) -> byte[]!
+static Nalix.Environment.Hashing.Sha1.HashData(System.ReadOnlySpan<byte> data, System.Span<byte> destination) -> void
+static Nalix.Environment.Hashing.Sha1.TryHashData(System.ReadOnlySpan<byte> data, System.Span<byte> destination) -> bool
+static Nalix.Environment.Hashing.XxHash32.Compute(System.ReadOnlySpan<byte> data, uint seed = 0) -> uint
+static Nalix.Environment.Hashing.XxHash32.Compute(ulong hi, ulong lo, bool isIPv6) -> int
+static Nalix.Environment.IO.Directories.BackupsDirectory.get -> string!
+static Nalix.Environment.IO.Directories.BaseAssetsDirectory.get -> string!
+static Nalix.Environment.IO.Directories.CacheDirectory.get -> string!
+static Nalix.Environment.IO.Directories.CanAccessAllDirectories() -> bool
+static Nalix.Environment.IO.Directories.ConfigurationDirectory.get -> string!
+static Nalix.Environment.IO.Directories.DatabaseDirectory.get -> string!
+static Nalix.Environment.IO.Directories.DataDirectory.get -> string!
+static Nalix.Environment.IO.Directories.DeleteOldFiles(string! directoryPath, System.TimeSpan maxAge, string! searchPattern = "*") -> int
+static Nalix.Environment.IO.Directories.GetFilePath(string! directoryPath, string! fileName) -> string!
+static Nalix.Environment.IO.Directories.IsRunningInContainer.get -> bool
+static Nalix.Environment.IO.Directories.LogsDirectory.get -> string!
+static Nalix.Environment.IO.Directories.SetBasePathOverride(string! path) -> void
+static Nalix.Environment.IO.Directories.StorageDirectory.get -> string!
+static Nalix.Environment.IO.Directories.TemporaryDirectory.get -> string!
+static Nalix.Environment.IO.Directories.TryWriteNewFile(string! path, string! content, bool isPrivate) -> bool
+static Nalix.Environment.IO.Directories.UploadsDirectory.get -> string!
+static Nalix.Environment.Memory.BufferLease.ByteArrayPool.Configure(Nalix.Abstractions.IBufferPoolManager! manager) -> void
+static Nalix.Environment.Memory.BufferLease.ByteArrayPool.Rent(int capacity = 256) -> byte[]!
+static Nalix.Environment.Memory.BufferLease.ByteArrayPool.Return(byte[]! array) -> void
+static Nalix.Environment.Memory.BufferLease.ByteArrayPool.Return(byte[]! array, bool clearArray) -> void
+static Nalix.Environment.Memory.BufferLease.Configure(Nalix.Abstractions.IObjectPoolManager! manager) -> void
+static Nalix.Environment.Memory.BufferLease.CopyFrom(System.ReadOnlySpan<byte> src, bool zeroOnDispose = false) -> Nalix.Environment.Memory.BufferLease!
+static Nalix.Environment.Memory.BufferLease.FromRented(byte[]! buffer, int length, bool zeroOnDispose = false) -> Nalix.Environment.Memory.BufferLease!
+static Nalix.Environment.Memory.BufferLease.Rent(int capacity, bool zeroOnDispose = false) -> Nalix.Environment.Memory.BufferLease!
+static Nalix.Environment.Memory.BufferLease.Rent(int capacity, bool zeroOnDispose, int headroom) -> Nalix.Environment.Memory.BufferLease!
+static Nalix.Environment.Memory.BufferLease.TakeOwnership(byte[]! buffer, int start, int length, bool zeroOnDispose = false) -> Nalix.Environment.Memory.BufferLease!
+static Nalix.Environment.Memory.Leb128.GetByteCount(int value) -> int
+static Nalix.Environment.Memory.Leb128.GetByteCount(uint value) -> int
+static Nalix.Environment.Memory.Leb128.TryRead(System.ReadOnlySpan<byte> buffer, out int value, out int bytesRead) -> bool
+static Nalix.Environment.Memory.Leb128.TryRead(System.ReadOnlySpan<byte> buffer, out uint value, out int bytesRead) -> bool
+static Nalix.Environment.Memory.Leb128.Write(System.Span<byte> buffer, int value) -> int
+static Nalix.Environment.Memory.Leb128.Write(System.Span<byte> buffer, uint value) -> int
+static Nalix.Environment.Memory.Leb128.WriteUnrolled(System.Span<byte> buffer, uint value) -> int
+static Nalix.Environment.Random.Csprng.CreateNonce(int length = 12) -> byte[]!
+static Nalix.Environment.Random.Csprng.Fill(System.Span<byte> data) -> void
+static Nalix.Environment.Random.Csprng.GetBytes(int length) -> byte[]!
+static Nalix.Environment.Random.Csprng.GetInt32(int max) -> int
+static Nalix.Environment.Random.Csprng.GetInt32(int min, int max) -> int
+static Nalix.Environment.Random.Csprng.NextBytes(byte[]! buffer) -> void
+static Nalix.Environment.Random.Csprng.NextBytes(System.Span<byte> buffer) -> void
+static Nalix.Environment.Random.Csprng.NextDouble() -> double
+static Nalix.Environment.Random.Csprng.NextUInt32() -> uint
+static Nalix.Environment.Random.Csprng.NextUInt64() -> ulong
+static Nalix.Environment.Time.Clock.EpochMillisecondsNow() -> long
+static Nalix.Environment.Time.Clock.MonoTicksNow() -> long
+static Nalix.Environment.Time.Clock.MonoTicksToMilliseconds(long tickDelta) -> double
+static Nalix.Environment.Time.Clock.NowUtc() -> System.DateTime
+static Nalix.Environment.Time.Clock.TicksPerSecond.get -> long
+static Nalix.Environment.Time.Clock.UnixMicrosecondsNow() -> long
+static Nalix.Environment.Time.Clock.UnixMillisecondsNow() -> long
+static Nalix.Environment.Time.Clock.UnixSecondsNow() -> long
+static Nalix.Environment.Time.Clock.UnixSecondsNowUInt32() -> uint
+static Nalix.Environment.Time.Clock.UnixTicksNow() -> long
+static Nalix.Environment.Time.Clock.UnixTime() -> System.TimeSpan
+static Nalix.Environment.Time.TimingScope.Start() -> Nalix.Environment.Time.TimingScope
+static readonly Nalix.Environment.DiagnosticsEvents.Source -> System.Diagnostics.DiagnosticListener!
+static readonly Nalix.Environment.Memory.BufferLease.StackAllocThreshold -> int
+static readonly Nalix.Environment.Time.Clock.EpochMilliseconds -> long
+virtual Nalix.Environment.Configuration.Binding.ConfigurationLoader.BindProperties(Nalix.Environment.Configuration.Binding.IniConfig! configFile, string! section) -> void
+virtual Nalix.Environment.Configuration.Binding.ConfigurationLoader.CopyPropertiesTo(Nalix.Environment.Configuration.Binding.ConfigurationLoader! other) -> void
+virtual Nalix.Environment.Configuration.Binding.ConfigurationLoader.ValidateDataAnnotations() -> void

@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Codec.Transforms;
 using Nalix.Environment.Configuration;
@@ -203,6 +204,10 @@ internal sealed class TcpFrameReader : IDisposable
 
             if (!_sequence.IsValid(seq, s_sequenceOptions.TcpWindow))
             {
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Frames.ReplayRejected))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Frames.ReplayRejected, new DiagnosticLog("SDK.TcpFrameReader:Receive", $"replay-rejected transport=tcp seq={seq} current={_sequence.Current()}"));
+                }
                 if (Codec.DiagnosticsEvents.Source.IsEnabled(Codec.DiagnosticsEvents.Sequence.Rejected))
                 {
                     Codec.DiagnosticsEvents.Write(Codec.DiagnosticsEvents.Sequence.Rejected, new
@@ -218,6 +223,11 @@ internal sealed class TcpFrameReader : IDisposable
             if (seq.HasValue)
             {
                 _sequence.UpdateTo(seq.Value);
+            }
+
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Frames.Received) && lease.Length >= Nalix.Abstractions.Networking.Packets.PacketConstants.HeaderSize)
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Frames.Received, new DiagnosticLog("SDK.TcpFrameReader:Receive", $"received transport=tcp opcode=0x{System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(lease.Span):X4} length={lease.Length} seq={seq}"));
             }
 
             _onMessage(lease);

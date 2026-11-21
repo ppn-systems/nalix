@@ -482,14 +482,13 @@ public sealed partial class TaskManagerTests : IDisposable
             {
                 _ = started.TrySetResult(true);
 
-                using CancellationTokenRegistration registration = cancellationToken.Register(() => cancelled.TrySetResult(true));
-
                 try
                 {
                     await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
+                    _ = cancelled.TrySetResult(true);
                 }
             },
             new WorkerOptions

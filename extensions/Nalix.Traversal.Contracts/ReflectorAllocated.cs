@@ -34,6 +34,19 @@ public sealed partial class ReflectorAllocated : PacketBase<ReflectorAllocated>,
     public bool Success { get; set; }
 
     /// <summary>
+    /// The other peer of the session this allocation belongs to: the target for the requester's response, and the
+    /// requester for the notification sent to the target. Clients must ignore allocations that name another peer.
+    /// </summary>
+    [SerializeOrder(2)]
+    public ulong PeerId { get; set; }
+
+    /// <summary>
+    /// The <see cref="ReflectorInit.RequestNonce"/> this allocation answers, or 0 for a notification to the target.
+    /// </summary>
+    [SerializeOrder(3)]
+    public ulong RequestNonce { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ReflectorAllocated"/>.
     /// </summary>
     public ReflectorAllocated() => this.ResetForPool();
@@ -47,6 +60,8 @@ public sealed partial class ReflectorAllocated : PacketBase<ReflectorAllocated>,
         this.Flags = PacketFlags.NONE;
         this.ReflectorToken = 0;
         this.Success = false;
+        this.PeerId = 0;
+        this.RequestNonce = 0;
     }
 }
 

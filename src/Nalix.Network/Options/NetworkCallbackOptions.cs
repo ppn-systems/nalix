@@ -3,6 +3,7 @@
 
 using Nalix.Abstractions;
 using Nalix.Abstractions.Networking;
+using Nalix.Abstractions.Security;
 using Nalix.Abstractions.Validation;
 using Nalix.Environment.Configuration.Binding;
 
@@ -29,6 +30,13 @@ namespace Nalix.Network.Options;
 ///     always bypass these limits via <c>InvokeHighPriority</c>.
 ///   </item>
 /// </list>
+/// </para>
+/// <para><b>Rejected frames:</b><br/>
+/// A frame dropped by either layer is reported to the connection's frame processor through
+/// <see cref="IFrameProcessor.OnFrameRejected"/>. The hosting <c>DefaultFrameProcessor</c> answers it with a
+/// retryable <c>FAIL / RATE_LIMITED / RETRY</c> directive carrying the request's sequence id (at most one per
+/// connection per directive cooldown); a custom frame processor that does not override the method keeps the silent drop.
+/// Frames are not reported when <see cref="OverflowPolicy"/> is <see cref="NetworkOverflowPolicy.Disconnect"/>.
 /// </para>
 /// </summary>
 [IniComment("Async callback dispatcher and per-connection throttle settings (DDoS protection)")]
@@ -57,6 +65,18 @@ public sealed partial class NetworkCallbackOptions : ConfigurationLoader, IValid
     [IniComment("Max concurrently open fragmented streams per connection (Layer 1, default 4) (min=1, max=256)")]
     [ValueRange(1, 256)]
     public int MaxPerConnectionOpenFragmentStreams { get; set; } = 4;
+
+    /// <summary>
+    /// Minimum <see cref="PermissionLevel"/> a connection must hold before it may send fragmented frames.
+    /// <para>
+    /// Reassembly state is allocated per connection, so fragments from a connection below this level are
+    /// dropped before any buffer is created. The default <see cref="PermissionLevel.ESTABLISHED"/> is the level
+    /// granted when the handshake completes (or a session is resumed). Handshake frames are far smaller than
+    /// <c>FragmentOptions.MaxChunkSize</c> and are never fragmented.
+    /// </para>
+    /// </summary>
+    [IniComment("Minimum permission level required to send fragmented frames (default ESTABLISHED)")]
+    public PermissionLevel MinFragmentPermissionLevel { get; set; } = PermissionLevel.ESTABLISHED;
 
     #endregion Layer 1 — Per-connection receive throttle
 

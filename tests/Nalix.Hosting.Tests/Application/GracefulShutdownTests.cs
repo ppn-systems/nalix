@@ -25,7 +25,7 @@ public sealed class GracefulShutdownTests : IDisposable
     {
         int port = TestUtils.GetFreePort();
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
 
         using NetworkApplication app = builder.Build();
         await app.ActivateAsync().WaitAsync(TestUtils.Timeout);

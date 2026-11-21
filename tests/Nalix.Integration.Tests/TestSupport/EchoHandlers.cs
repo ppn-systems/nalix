@@ -15,11 +15,15 @@ namespace Nalix.Integration.Tests.TestSupport;
 [PacketHandler("Integration.EndToEnd.Echo")]
 public static class EchoHandlers
 {
+    /// <summary>Whether the last <see cref="EchoPacket"/> request arrived encrypted on the wire.</summary>
+    public static volatile bool LastEchoEncryptedOnWire;
+
     [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(EchoPacket.OpCode)]
     public static async ValueTask HandleEchoAsync(IPacketContext<EchoPacket> context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        LastEchoEncryptedOnWire = context.EncryptedOnWire;
 
         using PacketScope<EchoPacket> lease = PacketFactory<EchoPacket>.Acquire();
         EchoPacket response = lease.Value;
@@ -27,5 +31,25 @@ public static class EchoHandlers
         response.Text = context.Packet.Text.ToUpperInvariant();
 
         await context.Sender.ReplyAsync(response).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Replies with a whole batch in one call, the way a handler streaming a page of rows would.
+    /// </summary>
+    [PacketEncryption]
+    [PacketPermission(PermissionLevel.NONE)]
+    [PacketOpcode(EchoBatchRequest.OpCode)]
+    public static async ValueTask HandleEchoBatchAsync(IPacketContext<EchoBatchRequest> context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        using PacketBatchScope<EchoPacket> batch = PacketFactory<EchoPacket>.AcquireBatch(context.Packet.Count);
+        for (int i = 0; i < batch.Count; i++)
+        {
+            batch[i].Sequence = i;
+            batch[i].Text = EchoBatchRequest.TextFor(i);
+        }
+
+        await context.Sender.ReplyAsync(batch.AsReadOnlySpan()).ConfigureAwait(false);
     }
 }

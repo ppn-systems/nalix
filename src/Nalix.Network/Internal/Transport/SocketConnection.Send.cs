@@ -24,9 +24,10 @@ internal sealed partial class SocketConnection
     /// stack; larger ones use a pooled heap buffer.
     /// </summary>
     /// <param name="data"></param>
+    /// <param name="generation">The connection generation the caller captured; the send is rejected once the pooled instance has been reused for another connection.</param>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public SendResult Send(ReadOnlySpan<byte> data)
+    public SendResult Send(ReadOnlySpan<byte> data, int generation)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, nameof(SocketConnection));
 
@@ -37,12 +38,12 @@ internal sealed partial class SocketConnection
 
         if (_framing == TransportFraming.VarIntLengthPrefixed)
         {
-            return this.SEND_VARINT(data);
+            return this.SEND_VARINT(data, generation);
         }
 
         if (data.Length >= s_fragmentOptions.MaxChunkSize)
         {
-            return this.SEND_FRAGMENTED(data);
+            return this.SEND_FRAGMENTED(data, generation);
         }
 
         long totalLengthLong = (long)data.Length + HeaderSize;
@@ -57,11 +58,11 @@ internal sealed partial class SocketConnection
 
         int totalLength = (int)totalLengthLong;
 
-        return this.SEND_SAFE(data, totalLength);
+        return this.SEND_SAFE(data, totalLength, generation);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private SendResult SEND_SAFE(ReadOnlySpan<byte> data, int totalLength)
+    private SendResult SEND_SAFE(ReadOnlySpan<byte> data, int totalLength, int generation)
     {
         /*
          * [Fast Path: Stack Allocation]
@@ -78,6 +79,13 @@ internal sealed partial class SocketConnection
             SendResult result = SendResult.Success;
             lock (_sendLock)
             {
+                // Checked under the write lock: Dispose takes this lock before the instance can be returned,
+                // so a write either completes before the session ends or observes that it has.
+                if (!this.IS_CURRENT_SESSION(generation))
+                {
+                    return SendResult.SessionClosed;
+                }
+
                 try
                 {
                     while (sent < frameS.Length)
@@ -134,6 +142,13 @@ internal sealed partial class SocketConnection
             SendResult result = SendResult.Success;
             lock (_sendLock)
             {
+                // Checked under the write lock: Dispose takes this lock before the instance can be returned,
+                // so a write either completes before the session ends or observes that it has.
+                if (!this.IS_CURRENT_SESSION(generation))
+                {
+                    return SendResult.SessionClosed;
+                }
+
                 try
                 {
                     while (sent < totalLength)
@@ -183,11 +198,12 @@ internal sealed partial class SocketConnection
     /// Sends data asynchronously. Uses a pooled heap buffer for framing.
     /// </summary>
     /// <param name="data"></param>
+    /// <param name="generation">The connection generation the caller captured; the send is rejected once the pooled instance has been reused for another connection.</param>
     /// <param name="cancellationToken"></param>
     /// <returns><see langword="true"/> if the data was sent successfully.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ValueTask<SendResult> SendAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
+    public ValueTask<SendResult> SendAsync(ReadOnlyMemory<byte> data, int generation, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, nameof(SocketConnection));
 
@@ -196,6 +212,45 @@ internal sealed partial class SocketConnection
             return ValueTask.FromException<SendResult>(new ArgumentException("Data must not be empty.", nameof(data)));
         }
 
+        if (!this.ENTER_SEND(generation))
+        {
+            return ValueTask.FromResult(SendResult.SessionClosed);
+        }
+
+        ValueTask<SendResult> vt;
+        try
+        {
+            vt = this.SEND_ASYNC_ADMITTED(data, cancellationToken);
+        }
+        catch
+        {
+            this.EXIT_SEND();
+            throw;
+        }
+
+        if (vt.IsCompletedSuccessfully)
+        {
+            this.EXIT_SEND();
+            return vt;
+        }
+
+        return this.AWAIT_SEND_THEN_EXIT(vt);
+    }
+
+    private async ValueTask<SendResult> AWAIT_SEND_THEN_EXIT(ValueTask<SendResult> vt)
+    {
+        try
+        {
+            return await vt.ConfigureAwait(false);
+        }
+        finally
+        {
+            this.EXIT_SEND();
+        }
+    }
+
+    private ValueTask<SendResult> SEND_ASYNC_ADMITTED(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
+    {
         if (_framing == TransportFraming.VarIntLengthPrefixed)
         {
             return this.SEND_VARINT_ASYNC(data, cancellationToken);
@@ -227,6 +282,7 @@ internal sealed partial class SocketConnection
     /// <param name="buffer">The array holding <c>[header space][payload]</c>. Owned by the caller; not returned to any pool.</param>
     /// <param name="offset">Offset of the reserved header space (the payload starts at <c>offset + 2</c>).</param>
     /// <param name="payloadLength">Payload length in bytes.</param>
+    /// <param name="generation">The connection generation the caller captured; the send is rejected once the pooled instance has been reused for another connection.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The send result. The caller must keep <paramref name="buffer"/> alive until it completes.</returns>
     /// <remarks>
@@ -234,14 +290,36 @@ internal sealed partial class SocketConnection
     /// fragmentation threshold; <see cref="CanSendWithReservedHeader"/> checks both.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ValueTask<SendResult> SendWithReservedHeaderAsync(byte[] buffer, int offset, int payloadLength, CancellationToken cancellationToken)
+    public ValueTask<SendResult> SendWithReservedHeaderAsync(byte[] buffer, int offset, int payloadLength, int generation, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, nameof(SocketConnection));
 
         int totalLength = payloadLength + HeaderSize;
         BinaryPrimitives.WriteUInt16LittleEndian(MemoryExtensions.AsSpan(buffer, offset, HeaderSize), (ushort)totalLength);
 
-        return this.SEND_BUFFER_ASYNC(buffer, offset, totalLength, pooled: false, cancellationToken);
+        if (!this.ENTER_SEND(generation))
+        {
+            return ValueTask.FromResult(SendResult.SessionClosed);
+        }
+
+        ValueTask<SendResult> vt;
+        try
+        {
+            vt = this.SEND_BUFFER_ASYNC(buffer, offset, totalLength, pooled: false, cancellationToken);
+        }
+        catch
+        {
+            this.EXIT_SEND();
+            throw;
+        }
+
+        if (vt.IsCompletedSuccessfully)
+        {
+            this.EXIT_SEND();
+            return vt;
+        }
+
+        return this.AWAIT_SEND_THEN_EXIT(vt);
     }
 
     /// <summary>
@@ -411,7 +489,7 @@ internal sealed partial class SocketConnection
     /// fragment in order.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2014:Do not use stackalloc in loops", Justification = "<Pending>")]
-    private SendResult SEND_FRAGMENTED(ReadOnlySpan<byte> payload)
+    private SendResult SEND_FRAGMENTED(ReadOnlySpan<byte> payload, int generation)
     {
         if (payload.Length > s_fragmentOptions.MaxPayloadSize)
         {
@@ -477,11 +555,11 @@ internal sealed partial class SocketConnection
                 // Write the outer frame length.
                 BinaryPrimitives.WriteUInt16LittleEndian(frame, (ushort)totalFrameSize);
 
-                // Write FragmentHeader + magic + chunk body.
+                // Write FragmentHeader (packet header with FRAGMENTED) + chunk body.
                 headerBuffer.CopyTo(frame[HeaderSize..]);
                 payload.Slice(offset, thisChunkSize).CopyTo(frame[(HeaderSize + FragmentHeader.WireSize)..]);
 
-                SendResult res = SEND_RAW_FRAME(frame);
+                SendResult res = SEND_RAW_FRAME(frame, generation);
                 if (res != SendResult.Success)
                 {
                     return res;
@@ -500,7 +578,7 @@ internal sealed partial class SocketConnection
                     headerBuffer.CopyTo(MemoryExtensions.AsSpan(rented, HeaderSize));
                     payload.Slice(offset, thisChunkSize).CopyTo(MemoryExtensions.AsSpan(rented, HeaderSize + FragmentHeader.WireSize));
 
-                    SendResult res = SEND_RAW_FRAME(rented.AsSpan(0, totalFrameSize));
+                    SendResult res = SEND_RAW_FRAME(rented.AsSpan(0, totalFrameSize), generation);
                     if (res != SendResult.Success)
                     {
                         return res;
@@ -517,12 +595,19 @@ internal sealed partial class SocketConnection
         return SendResult.Success;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        SendResult SEND_RAW_FRAME(ReadOnlySpan<byte> frame)
+        SendResult SEND_RAW_FRAME(ReadOnlySpan<byte> frame, int generation)
         {
             int sent = 0;
             SendResult result = SendResult.Success;
             lock (_sendLock)
             {
+                // Checked under the write lock: Dispose takes this lock before the instance can be returned,
+                // so a write either completes before the session ends or observes that it has.
+                if (!this.IS_CURRENT_SESSION(generation))
+                {
+                    return SendResult.SessionClosed;
+                }
+
                 try
                 {
                     while (sent < frame.Length)

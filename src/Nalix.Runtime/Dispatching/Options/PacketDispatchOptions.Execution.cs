@@ -88,7 +88,9 @@ public sealed partial class PacketDispatchOptions<TPacket>
         // Permission / encryption policy check — sync, no allocation.
         if (!descriptor.CanExecute(context, out ProtocolReason denyReason))
         {
-            // Cold path: denied — requires async I/O to send directive.
+            // Cold path: denied — count it toward the connection's error budget so a peer that keeps
+            // sending unauthorized opcodes is disconnected at MaxErrorThreshold, then send the directive.
+            context.Connection.IncrementErrorCount();
             return SendDenyControlAsync(this, descriptor, context, denyReason);
         }
 
@@ -225,7 +227,8 @@ public sealed partial class PacketDispatchOptions<TPacket>
     private static async ValueTask SendStreamResponseAsync(
         PacketContext<TPacket> context, IAsyncEnumerable<IPacket> stream, CancellationToken ct)
     {
-        await using IAsyncEnumerator<IPacket> enumerator = stream.GetAsyncEnumerator(ct);
+        IAsyncEnumerator<IPacket> enumerator = stream.GetAsyncEnumerator(ct);
+        await using ConfiguredAsyncDisposable enumeratorScope = enumerator.ConfigureAwait(false);
 
         bool hasCurrent = await enumerator.MoveNextAsync().ConfigureAwait(false);
 
@@ -337,6 +340,9 @@ public sealed partial class PacketDispatchOptions<TPacket>
                     $"type-mismatch opcode=0x{descriptor.OpCode:X4} expected={descriptor.ExpectedPacketType!.Name} actual={actualName}"));
         }
 
+        // Counted like a denial: a peer that keeps sending mistyped packets must not get unlimited replies.
+        context.Connection.IncrementErrorCount();
+
         await owner.TrySendControlAsync(
             context,
             descriptor.OpCode,
@@ -358,6 +364,9 @@ public sealed partial class PacketDispatchOptions<TPacket>
                     "RT.PacketDispatchOptions:ExecuteHandlerAsync",
                     $"validation-failed opcode=0x{descriptor.OpCode} reason={failureReason} skipping-handler"));
         }
+
+        // Counted like a denial: a peer that keeps sending malformed packets must not get unlimited replies.
+        context.Connection.IncrementErrorCount();
 
         await owner.TrySendControlAsync(
             context,
@@ -417,16 +426,7 @@ public sealed partial class PacketDispatchOptions<TPacket>
     }
 
     private static async ValueTask SendRawAsync(PacketContext<TPacket> context, ReadOnlyMemory<byte> data)
-    {
-        if (context.IsReliable || context.Connection.UDP is null)
-        {
-            await context.Connection.TCP.SendAsync(data).ConfigureAwait(false);
-        }
-        else
-        {
-            await context.Connection.UDP.SendAsync(data).ConfigureAwait(false);
-        }
-    }
+        => await context.Connection.Transport.SendAsync(data).ConfigureAwait(false);
 
     #endregion Terminal Handler Static Helpers
 

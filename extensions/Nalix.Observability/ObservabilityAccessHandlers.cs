@@ -11,7 +11,7 @@ using Nalix.Observability.Contracts;
 namespace Nalix.Observability;
 
 /// <summary>
-/// Grants supervisor permission to connections that present the administrative observability key.
+/// Grants observer permission to connections that present the administrative observability key.
 /// </summary>
 [PacketHandler("Nalix.ObservabilityAccess")]
 public sealed class ObservabilityAccessHandlers
@@ -41,8 +41,8 @@ public sealed class ObservabilityAccessHandlers
             return RESPOND(ProtocolReason.UNAUTHORIZED, PermissionLevel.NONE);
         }
 
-        context.Connection.Level = PermissionLevel.SUPERVISOR;
-        return RESPOND(ProtocolReason.NONE, PermissionLevel.SUPERVISOR);
+        context.Connection.Level = PermissionLevel.OBSERVER;
+        return RESPOND(ProtocolReason.NONE, PermissionLevel.OBSERVER);
     }
 
     private static ValueTask<ObservabilityAccess> RESPOND(ProtocolReason reason, PermissionLevel level)

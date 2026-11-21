@@ -317,7 +317,6 @@ public sealed partial class PacketDispatchOptions<TPacket>
     /// <param name="descriptor">Resolved handler descriptor.</param>
     /// <param name="packet">Incoming packet.</param>
     /// <param name="connection">Source connection.</param>
-    /// <param name="reliable">Indicates whether the packet was received via a reliable transport.</param>
     /// <param name="encryptedOnWire">Indicates whether the inbound frame arrived encrypted on the wire.</param>
     /// <param name="token">Cancellation token for dispatch.</param>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -325,19 +324,16 @@ public sealed partial class PacketDispatchOptions<TPacket>
         in PacketHandler<TPacket> descriptor,
         TPacket packet,
         IConnection connection,
-        bool reliable,
         bool encryptedOnWire,
         CancellationToken token = default)
     {
         PacketContext<TPacket> context = _objectPool.Get<PacketContext<TPacket>>();
         try
         {
-            // Use the UNRELIABLE flag as the source of truth for transport logic.
             context.Initialize(
                 packet: packet,
                 connection: connection,
                 descriptor: descriptor.Metadata,
-                reliable: reliable,
                 encryptedOnWire: encryptedOnWire,
                 ownsPacket: true, token: token);
         }

@@ -113,7 +113,7 @@ public sealed class FramePipelineHeaderAuthenticationTests
         byte[] frame = new byte[FrameTransformer.Offset + payloadSize];
         frame[(int)PacketHeaderOffset.OpCode] = 0x34;
         frame[(int)PacketHeaderOffset.OpCode + 1] = 0x12;
-        frame[(int)PacketHeaderOffset.Flags] = (byte)PacketFlags.RELIABLE;
+        frame[(int)PacketHeaderOffset.Flags] = (byte)PacketFlags.SYSTEM;
         frame[(int)PacketHeaderOffset.Priority] = 1;
         frame[(int)PacketHeaderOffset.SequenceId] = 0x78;
         frame[(int)PacketHeaderOffset.SequenceId + 1] = 0x56;
@@ -156,7 +156,7 @@ public sealed class FramePipelineHeaderAuthenticationTests
         byte[] copy = (byte[])wire.Clone();
 
         // Flip a bit that keeps ENCRYPTED/COMPRESSED intact so the frame still takes the decrypt path.
-        copy[offset] ^= offset == (int)PacketHeaderOffset.Flags ? (byte)PacketFlags.RELIABLE : (byte)0x01;
+        copy[offset] ^= offset == (int)PacketHeaderOffset.Flags ? (byte)PacketFlags.SYSTEM : (byte)0x01;
         return copy;
     }
 

@@ -20,7 +20,7 @@ internal readonly struct ListenerBinding
     /// <summary>
     /// Gets the transport protocol type of the listener.
     /// </summary>
-    public NetworkTransport Transport { get; }
+    public NetworkTransport? Transport { get; }
 
     /// <summary>
     /// Gets the network listener responsible for accepting connections
@@ -31,7 +31,7 @@ internal readonly struct ListenerBinding
     /// <summary>
     /// Gets the protocol instance used to process incoming data.
     /// </summary>
-    public IProtocol Protocol { get; }
+    public IProtocol? Protocol { get; }
 
     /// <summary>
     /// Gets the runtime type of the associated protocol.
@@ -40,7 +40,7 @@ internal readonly struct ListenerBinding
     /// This value is cached to avoid repeated reflection calls when
     /// resolving protocol handlers.
     /// </remarks>
-    public Type ProtocolType { get; }
+    public Type? ProtocolType { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ListenerBinding"/> struct.
@@ -55,9 +55,10 @@ internal readonly struct ListenerBinding
     /// The concrete runtime type of the protocol.
     /// </param>
     /// <param name="transport">
-    /// The transport protocol type used by the listener.
+    /// The transport protocol type used by the listener, or <see langword="null"/> for a listener added with
+    /// <see cref="INetworkApplicationBuilder.AddListener"/> (not registered in the report registry).
     /// </param>
-    public ListenerBinding(IListener listener, IProtocol protocol, Type protocolType, NetworkTransport transport)
+    public ListenerBinding(IListener listener, IProtocol? protocol, Type? protocolType, NetworkTransport? transport)
     {
         this.Transport = transport;
         this.Listener = listener;

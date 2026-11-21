@@ -22,7 +22,6 @@ using Nalix.Framework.Identifiers;
 using Nalix.Framework.Injection;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Network.Internal.Connections;
-using Nalix.Network.Internal.Initialization;
 using Nalix.Network.Internal.Pooling;
 using Nalix.Network.Internal.Time;
 using Nalix.Network.Internal.Transport;
@@ -34,7 +33,7 @@ namespace Nalix.Network.Connections;
 /// Represents a network connection that manages WebSocket communication, stream
 /// transformation, and event handling.
 /// </summary>
-public sealed class WebSocketConnection :
+public sealed partial class WebSocketConnection :
     IConnection,
     IConnectionErrorTracked,
     IConnectionTrafficMetrics,
@@ -63,8 +62,6 @@ public sealed class WebSocketConnection :
         s_limitOptions = ConfigurationManager.Instance.Get<ConnectionGuardOptions>();
         s_timingWheelOptions = ConfigurationManager.Instance.Get<TimingWheelOptions>();
         s_callbackOptions = ConfigurationManager.Instance.Get<NetworkCallbackOptions>();
-
-        NetworkPoolInitializer.InitializeWebSocket();
     }
 
     /// <summary>
@@ -79,7 +76,7 @@ public sealed class WebSocketConnection :
     {
     }
 
-    internal WebSocketConnection(WebSocket webSocket, IOpCodeExtractor packetClassifier, EndPoint remoteEndPoint, TimingWheel? timingWheel)
+    internal WebSocketConnection(WebSocket webSocket, IOpCodeExtractor packetClassifier, EndPoint remoteEndPoint, TimingWheel? timingWheel, Internal.Transport.CoalescingWriteStream? writeBatcher = null)
     {
         ArgumentNullException.ThrowIfNull(webSocket);
         ArgumentNullException.ThrowIfNull(remoteEndPoint);
@@ -98,8 +95,7 @@ public sealed class WebSocketConnection :
         this.NetworkEndpoint = SocketEndpoint.FromEndPoint(remoteEndPoint ?? new IPEndPoint(IPAddress.Loopback, 0));
 
         // Transport owns WebSocket — ownership transfer
-        _backing.WsTransport = s_pool.Get<WebSocketTransport>();
-        _backing.WsTransport.Initialize(this, webSocket);
+        this.InitializeTransport(webSocket, writeBatcher);
 
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Trace))
         {
@@ -114,8 +110,6 @@ public sealed class WebSocketConnection :
     /// <inheritdoc/>
     public bool IsDisposed => _disposed || Volatile.Read(ref _backing) is null;
 
-    /// <inheritdoc/>
-    public bool IsUdpCreated => false; // UDP is not supported over WebSocket
 
     /// <inheritdoc/>
     public bool ExcludeFromIdleTimeout { get; set; }
@@ -130,10 +124,7 @@ public sealed class WebSocketConnection :
     public IOpCodeExtractor PacketClassifier { get; }
 
     /// <inheritdoc/>
-    public IConnection.ITransport TCP => Volatile.Read(ref _backing)?.WsTransport ?? throw new ObjectDisposedException(nameof(WebSocketConnection));
-
-    /// <inheritdoc/>
-    public IConnection.ITransport? UDP => null;
+    public IConnection.ITransport Transport => Volatile.Read(ref _backing) is not null ? this : throw new ObjectDisposedException(nameof(WebSocketConnection));
 
     /// <inheritdoc/>
     public INetworkEndpoint NetworkEndpoint { get; }
@@ -246,6 +237,12 @@ public sealed class WebSocketConnection :
     /// </summary>
     TimingWheel.TimeoutTask? TimingWheel.ITimeoutTrackedConnection.TimeoutTask { get; set; }
 
+    /// <inheritdoc />
+    long TimingWheel.ITimeoutTrackedConnection.AcceptedAtMs { get; set; }
+
+    /// <inheritdoc />
+    bool TimingWheel.ITimeoutTrackedConnection.AppliesHandshakeTimeout => true;
+
     #endregion Properties
 
     #region Events
@@ -318,8 +315,13 @@ public sealed class WebSocketConnection :
     }
     internal void UpdateLastPingTime() => this.LastPingTime = Clock.UnixMillisecondsNow();
 
+    /// <summary>Test seam: invoked at the start of the post-send notification, on the thread that completed the send.</summary>
+    internal static Action<WebSocketConnection>? s_postProcessHook;
+
     internal void TriggerPostProcessEvent()
     {
+        s_postProcessHook?.Invoke(this);
+
         // Only pay for event args + a thread-pool hop when someone listens to MessageProcessed.
         if (Volatile.Read(ref _backing)?.MessageProcessed is null)
         {
@@ -359,13 +361,18 @@ public sealed class WebSocketConnection :
         if (pending > s_callbackOptions.MaxPerConnectionPendingPackets)
         {
             _ = Interlocked.Decrement(ref backing.PendingProcessCallbacks);
-            lease.Dispose();
             this.IncrementPacketsDropped();
 
             if (s_callbackOptions.OverflowPolicy == NetworkOverflowPolicy.Disconnect)
             {
                 this.Disconnect("Exceeded MaxPerConnectionPendingPackets threshold.");
             }
+            else
+            {
+                Internal.Transport.AsyncCallback.NotifyFrameRejected(backing.MessageProcessing, this, lease.Span);
+            }
+
+            lease.Dispose();
 
             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
             {
@@ -385,6 +392,8 @@ public sealed class WebSocketConnection :
             ((IPooledConnectContextPool)this).ReleasePendingPacket();
             _ = args.ExchangeLease(null);
             args.Dispose();
+            this.IncrementPacketsDropped();
+            Internal.Transport.AsyncCallback.NotifyFrameRejected(backing.MessageProcessing, this, lease.Span);
             lease.Dispose();
         }
     }
@@ -484,7 +493,8 @@ public sealed class WebSocketConnection :
             return;
         }
 
-        int count = Interlocked.Increment(ref backing.ErrorCount);
+        long windowTicks = (long)(s_limitOptions.ErrorWindow.TotalSeconds * Clock.TicksPerSecond);
+        int count = backing.RecordError(Clock.MonoTicksNow(), windowTicks);
 
         if (s_limitOptions.MaxErrorThreshold > 0 && count >= s_limitOptions.MaxErrorThreshold)
         {
@@ -582,15 +592,10 @@ public sealed class WebSocketConnection :
                 try { b.Attributes?.Return(); b.Attributes = null; }
                 catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
 
-                // Transport.Dispose() handles WebSocket Abort + Dispose
+                // Closes the WebSocket and stops the receive loop.
                 try
                 {
-                    if (b.WsTransport != null)
-                    {
-                        b.WsTransport.Dispose();
-                        s_pool.Return(b.WsTransport);
-                        b.WsTransport = null;
-                    }
+                    this.DisposeTransport();
                 }
                 catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex)) { }
 

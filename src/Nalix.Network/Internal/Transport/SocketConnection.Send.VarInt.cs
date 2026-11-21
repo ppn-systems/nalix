@@ -15,7 +15,7 @@ namespace Nalix.Network.Internal.Transport;
 
 internal sealed partial class SocketConnection
 {
-    private SendResult SEND_VARINT(ReadOnlySpan<byte> data)
+    private SendResult SEND_VARINT(ReadOnlySpan<byte> data, int generation)
     {
         int varIntSize = Leb128.GetByteCount(data.Length);
         long totalLengthLong = (long)data.Length + varIntSize;
@@ -39,6 +39,13 @@ internal sealed partial class SocketConnection
             SendResult result = SendResult.Success;
             lock (_sendLock)
             {
+                // Checked under the write lock: Dispose takes this lock before the instance can be returned,
+                // so a write either completes before the session ends or observes that it has.
+                if (!this.IS_CURRENT_SESSION(generation))
+                {
+                    return SendResult.SessionClosed;
+                }
+
                 try
                 {
                     while (sent < frameS.Length)
@@ -87,6 +94,13 @@ internal sealed partial class SocketConnection
             SendResult result = SendResult.Success;
             lock (_sendLock)
             {
+                // Checked under the write lock: Dispose takes this lock before the instance can be returned,
+                // so a write either completes before the session ends or observes that it has.
+                if (!this.IS_CURRENT_SESSION(generation))
+                {
+                    return SendResult.SessionClosed;
+                }
+
                 try
                 {
                     while (sent < totalLength)

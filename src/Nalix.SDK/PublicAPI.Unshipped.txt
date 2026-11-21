@@ -1,0 +1,111 @@
+#nullable enable
+*REMOVED*Nalix.SDK.Options.RequestOptions.Encrypt.get -> bool
+*REMOVED*Nalix.SDK.Options.RequestOptions.WithEncrypt(bool encrypt = true) -> Nalix.SDK.Options.RequestOptions!
+Nalix.SDK.Options.RequestOptions.Encrypt.get -> bool?
+Nalix.SDK.Options.RequestOptions.WithEncrypt(bool? encrypt = true) -> Nalix.SDK.Options.RequestOptions!
+Nalix.SDK.Options.TransportOptions.EncryptRequestsByDefault.get -> bool
+Nalix.SDK.Options.TransportOptions.EncryptRequestsByDefault.set -> void
+Nalix.SDK.Options.RequestOptions.DeadlineMs.get -> int
+Nalix.SDK.Options.RequestOptions.DeadlineMs.init -> void
+Nalix.SDK.Options.RequestOptions.RetryDelayMs.get -> int
+Nalix.SDK.Options.RequestOptions.RetryDelayMs.init -> void
+Nalix.SDK.Options.RequestOptions.WithDeadline(int ms) -> Nalix.SDK.Options.RequestOptions!
+Nalix.SDK.Options.RequestOptions.WithRetryDelay(int ms) -> Nalix.SDK.Options.RequestOptions!
+Nalix.SDK.Transport.TransportSession.DisposeAsync() -> System.Threading.Tasks.ValueTask
+virtual Nalix.SDK.Transport.TransportSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
+override Nalix.SDK.Transport.TcpSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
+override Nalix.SDK.Transport.WebSocketSession.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
+Nalix.SDK.SdkTelemetry
+const Nalix.SDK.SdkTelemetry.ActivitySourceName = "Nalix.SDK" -> string!
+const Nalix.SDK.SdkTelemetry.MeterName = "Nalix.SDK" -> string!
+static Nalix.SDK.Transport.Extensions.TransportSessionSubscriptions.On<TPacket>(this Nalix.SDK.Transport.ITransportSession! client, System.Func<TPacket!, System.Threading.Tasks.Task!>! handler) -> System.IDisposable!
+static Nalix.SDK.Transport.Extensions.TransportSessionSubscriptions.On(this Nalix.SDK.Transport.ITransportSession! client, System.Func<Nalix.Abstractions.Networking.Packets.IPacket!, bool>! predicate, System.Func<Nalix.Abstractions.Networking.Packets.IPacket!, System.Threading.Tasks.Task!>! handler) -> System.IDisposable!
+Nalix.SDK.DiagnosticsEvents
+const Nalix.SDK.DiagnosticsEvents.ListenerName = "SDK" -> string!
+static readonly Nalix.SDK.DiagnosticsEvents.Source -> System.Diagnostics.DiagnosticListener!
+static Nalix.SDK.DiagnosticsEvents.Write<T>(string! name, T payload) -> void
+Nalix.SDK.DiagnosticsEvents.Session
+const Nalix.SDK.DiagnosticsEvents.Session.Connecting = "Session.Connecting" -> string!
+const Nalix.SDK.DiagnosticsEvents.Session.Connected = "Session.Connected" -> string!
+const Nalix.SDK.DiagnosticsEvents.Session.ConnectFailed = "Session.ConnectFailed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Session.Disconnected = "Session.Disconnected" -> string!
+const Nalix.SDK.DiagnosticsEvents.Session.TransportError = "Session.TransportError" -> string!
+Nalix.SDK.DiagnosticsEvents.Handshake
+const Nalix.SDK.DiagnosticsEvents.Handshake.Started = "Handshake.Started" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.ProofOfWorkRequested = "Handshake.ProofOfWorkRequested" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.TofuTrusted = "Handshake.TofuTrusted" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.TofuPersisted = "Handshake.TofuPersisted" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.TofuNotPersisted = "Handshake.TofuNotPersisted" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.ProofInvalid = "Handshake.ProofInvalid" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.Completed = "Handshake.Completed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Handshake.Failed = "Handshake.Failed" -> string!
+Nalix.SDK.DiagnosticsEvents.Resumption
+const Nalix.SDK.DiagnosticsEvents.Resumption.Resumed = "Resumption.Resumed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Resumption.Declined = "Resumption.Declined" -> string!
+const Nalix.SDK.DiagnosticsEvents.Resumption.Failed = "Resumption.Failed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Resumption.ProofInvalid = "Resumption.ProofInvalid" -> string!
+const Nalix.SDK.DiagnosticsEvents.Resumption.Fallback = "Resumption.Fallback" -> string!
+Nalix.SDK.DiagnosticsEvents.Reconnect
+const Nalix.SDK.DiagnosticsEvents.Reconnect.Scheduled = "Reconnect.Scheduled" -> string!
+const Nalix.SDK.DiagnosticsEvents.Reconnect.AttemptFailed = "Reconnect.AttemptFailed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Reconnect.Succeeded = "Reconnect.Succeeded" -> string!
+const Nalix.SDK.DiagnosticsEvents.Reconnect.GaveUp = "Reconnect.GaveUp" -> string!
+Nalix.SDK.DiagnosticsEvents.KeepAlive
+const Nalix.SDK.DiagnosticsEvents.KeepAlive.Missed = "KeepAlive.Missed" -> string!
+const Nalix.SDK.DiagnosticsEvents.KeepAlive.Failed = "KeepAlive.Failed" -> string!
+Nalix.SDK.DiagnosticsEvents.Rekey
+const Nalix.SDK.DiagnosticsEvents.Rekey.Started = "Rekey.Started" -> string!
+const Nalix.SDK.DiagnosticsEvents.Rekey.Completed = "Rekey.Completed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Rekey.Failed = "Rekey.Failed" -> string!
+Nalix.SDK.DiagnosticsEvents.Requests
+const Nalix.SDK.DiagnosticsEvents.Requests.Retrying = "Requests.Retrying" -> string!
+const Nalix.SDK.DiagnosticsEvents.Requests.Failed = "Requests.Failed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Requests.InboundFrameFailed = "Requests.InboundFrameFailed" -> string!
+Nalix.SDK.DiagnosticsEvents.Frames
+const Nalix.SDK.DiagnosticsEvents.Frames.Sent = "Frames.Sent" -> string!
+const Nalix.SDK.DiagnosticsEvents.Frames.Received = "Frames.Received" -> string!
+const Nalix.SDK.DiagnosticsEvents.Frames.ReplayRejected = "Frames.ReplayRejected" -> string!
+Nalix.SDK.DiagnosticsEvents.Subscriptions
+const Nalix.SDK.DiagnosticsEvents.Subscriptions.HandlerFailed = "Subscriptions.HandlerFailed" -> string!
+const Nalix.SDK.DiagnosticsEvents.Subscriptions.HandlerCanceled = "Subscriptions.HandlerCanceled" -> string!
+const Nalix.SDK.DiagnosticsEvents.Subscriptions.UnexpectedPacket = "Subscriptions.UnexpectedPacket" -> string!
+const Nalix.SDK.DiagnosticsEvents.Subscriptions.DisposeFailed = "Subscriptions.DisposeFailed" -> string!
+virtual Nalix.SDK.Transport.WebSocketSession.ResolveDialEndpointAsync(string! host, ushort port, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<System.Net.IPEndPoint?>
+Nalix.SDK.Transport.DatagramSession
+Nalix.SDK.Transport.DatagramSession.DatagramSession(Nalix.SDK.Transport.TransportSession! stream) -> void
+Nalix.SDK.Transport.DatagramSession.EngineReport.get -> string?
+Nalix.SDK.Transport.DatagramSession.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method, byte channel = 0, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Nalix.SDK.Transport.DatagramSession.SendWithReceiptAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, Nalix.Abstractions.Networking.Datagrams.DeliveryMethod method = Nalix.Abstractions.Networking.Datagrams.DeliveryMethod.ReliableOrdered, byte channel = 0) -> System.Threading.Tasks.Task<bool>!
+Nalix.SDK.Transport.DatagramSession.Ticket.get -> Nalix.Abstractions.Networking.Datagrams.DatagramTicketInfo?
+override Nalix.SDK.Transport.DatagramSession.ConnectAsync(string? host = null, ushort? port = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Nalix.SDK.Transport.DatagramSession.DisconnectAsync() -> System.Threading.Tasks.Task!
+override Nalix.SDK.Transport.DatagramSession.IsConnected.get -> bool
+override Nalix.SDK.Transport.DatagramSession.OnConnected -> System.EventHandler?
+override Nalix.SDK.Transport.DatagramSession.OnDisconnected -> System.EventHandler<System.Exception!>?
+override Nalix.SDK.Transport.DatagramSession.OnError -> System.EventHandler<System.Exception!>?
+override Nalix.SDK.Transport.DatagramSession.OnMessageReceived -> System.EventHandler<Nalix.Abstractions.IBufferLease!>?
+override Nalix.SDK.Transport.DatagramSession.Options.get -> Nalix.SDK.Options.TransportOptions!
+override Nalix.SDK.Transport.DatagramSession.ResetSequenceCounters() -> void
+override Nalix.SDK.Transport.DatagramSession.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Nalix.SDK.Transport.DatagramSession.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, bool? encrypt = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Nalix.SDK.Transport.DatagramSession.SendAsync(System.ReadOnlyMemory<byte> payload, bool? encrypt = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*Nalix.SDK.Options.TransportOptions.MaxUdpDatagramSize.get -> int
+*REMOVED*Nalix.SDK.Options.TransportOptions.MaxUdpDatagramSize.set -> void
+*REMOVED*Nalix.SDK.Transport.UdpSession
+*REMOVED*Nalix.SDK.Transport.UdpSession.OnMessageAsync -> System.Func<System.ReadOnlyMemory<byte>, System.Threading.Tasks.Task!>?
+*REMOVED*Nalix.SDK.Transport.UdpSession.SessionToken.get -> ulong
+*REMOVED*Nalix.SDK.Transport.UdpSession.SessionToken.set -> void
+*REMOVED*Nalix.SDK.Transport.UdpSession.UdpSession(Nalix.SDK.Options.TransportOptions! options, Nalix.SDK.Transport.SessionState? state = null) -> void
+*REMOVED*override Nalix.SDK.Transport.UdpSession.ConnectAsync(string? host = null, ushort? port = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*override Nalix.SDK.Transport.UdpSession.DisconnectAsync() -> System.Threading.Tasks.Task!
+*REMOVED*override Nalix.SDK.Transport.UdpSession.Dispose(bool disposing) -> void
+*REMOVED*override Nalix.SDK.Transport.UdpSession.IsConnected.get -> bool
+*REMOVED*override Nalix.SDK.Transport.UdpSession.OnConnected -> System.EventHandler?
+*REMOVED*override Nalix.SDK.Transport.UdpSession.OnDisconnected -> System.EventHandler<System.Exception!>?
+*REMOVED*override Nalix.SDK.Transport.UdpSession.OnError -> System.EventHandler<System.Exception!>?
+*REMOVED*override Nalix.SDK.Transport.UdpSession.OnMessageReceived -> System.EventHandler<Nalix.Abstractions.IBufferLease!>?
+*REMOVED*override Nalix.SDK.Transport.UdpSession.Options.get -> Nalix.SDK.Options.TransportOptions!
+*REMOVED*override Nalix.SDK.Transport.UdpSession.ResetSequenceCounters() -> void
+*REMOVED*override Nalix.SDK.Transport.UdpSession.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*override Nalix.SDK.Transport.UdpSession.SendAsync(Nalix.Abstractions.Networking.Packets.IPacket! packet, bool? encrypt = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+*REMOVED*override Nalix.SDK.Transport.UdpSession.SendAsync(System.ReadOnlyMemory<byte> payload, bool? encrypt = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!

@@ -15,7 +15,7 @@ public static class ObservableExtensions
 {
     /// <summary>
     /// Creates an observable sequence from the transport session for the specified packet type.
-    /// Uses <see cref="TransportSessionSubscriptions.On{TPacket}"/> under the hood.
+    /// Uses <see cref="TransportSessionSubscriptions.On{TPacket}(ITransportSession, Action{TPacket}, bool)"/> under the hood.
     /// </summary>
     /// <typeparam name="TEvent">The packet type to observe.</typeparam>
     /// <param name="client">The transport session.</param>

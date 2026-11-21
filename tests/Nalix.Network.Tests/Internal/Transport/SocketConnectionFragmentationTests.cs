@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Nalix.Abstractions.Networking.Protocols;
+using Nalix.Abstractions.Security;
 using Nalix.Environment.Fragments;
 using Nalix.Network.Connections;
 using Nalix.Network.Internal.Transport;
@@ -77,7 +78,7 @@ public sealed class SocketConnectionFragmentationTests
             }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
         await scope.ClientSocket.SendAsync(CreateFrame([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
 
         int receivedLength = await processObserved.Task.WaitAsync(TimeSpan.FromSeconds(15));
@@ -91,6 +92,7 @@ public sealed class SocketConnectionFragmentationTests
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
+        connection.Level = PermissionLevel.ESTABLISHED;
         TransportAsyncCallback.ResetStatistics();
 
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -101,7 +103,7 @@ public sealed class SocketConnectionFragmentationTests
             }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
         await scope.ClientSocket.SendAsync(CreateFrame(CreateFragmentPayload([9, 8, 7, 6, 5, 4])));
 
         byte[] receivedPayload = await processObserved.Task.WaitAsync(TimeSpan.FromSeconds(15));
@@ -115,6 +117,7 @@ public sealed class SocketConnectionFragmentationTests
     {
         using ConnectedSocketScope scope = await ConnectedSocketScope.CreateAsync();
         using Connection connection = new(scope.ServerSocket, s_testOpCodeExtractor);
+        connection.Level = PermissionLevel.ESTABLISHED;
         TransportAsyncCallback.ResetStatistics();
 
         TaskCompletionSource<byte[]> processObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -125,7 +128,7 @@ public sealed class SocketConnectionFragmentationTests
             }
         };
 
-        connection.TCP.BeginReceive();
+        connection.Transport.BeginReceive();
 
         // Send 10 pairs of duplicate ChunkIndex=0 frames on the same StreamId (exceeding MaxPerConnectionOpenFragmentStreams=4).
         // Previously, each duplicate ChunkIndex=0 incremented _openFragmentStreams and threw InvalidDataException without decrementing,

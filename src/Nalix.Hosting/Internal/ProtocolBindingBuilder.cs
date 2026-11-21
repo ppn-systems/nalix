@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Net;
 using Nalix.Abstractions.Networking;
 using Nalix.Runtime.Dispatching;
 
@@ -13,10 +12,8 @@ internal sealed class ProtocolBindingBuilder : IProtocolBindingBuilder
     private readonly INetworkApplicationBuilder _parent;
 
     internal ushort? Port { get; private set; }
-    public OperatingMode Mode { get; private set; } = OperatingMode.Server;
 
     internal Func<IPacketDispatch, IProtocol>? Factory { get; private set; }
-    internal Func<IConnection, EndPoint, ReadOnlySpan<byte>, bool>? Authen { get; private set; }
 
     internal ProtocolBindingBuilder(INetworkApplicationBuilder parent) => _parent = parent;
 
@@ -26,23 +23,10 @@ internal sealed class ProtocolBindingBuilder : IProtocolBindingBuilder
         return this;
     }
 
-    public IProtocolBindingBuilder WithMode(OperatingMode mode)
-    {
-        this.Mode = mode;
-        return this;
-    }
-
     public IProtocolBindingBuilder WithFactory(Func<IPacketDispatch, IProtocol> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
         this.Factory = factory;
-        return this;
-    }
-
-    public IProtocolBindingBuilder WithAuthentication(Func<IConnection, EndPoint, ReadOnlySpan<byte>, bool> authen)
-    {
-        ArgumentNullException.ThrowIfNull(authen);
-        this.Authen = authen;
         return this;
     }
 

@@ -2,11 +2,15 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Codec.DataFrames;
@@ -38,6 +42,13 @@ public class WebSocketSession : TransportSession
     private string? _connectingHost;
     private ushort _connectingPort;
     private int _disposed;
+
+    // When a subclass supplies a pre-resolved dial endpoint (see ResolveDialEndpointAsync), the TCP socket is
+    // opened through this invoker's ConnectCallback. ClientWebSocket does not take ownership of the invoker, so
+    // it must outlive the socket and is torn down together with it in DisconnectInternalAsync.
+#pragma warning disable CA2213
+    private HttpMessageInvoker? _connectInvoker;
+#pragma warning restore CA2213
 
     #endregion Fields
 
@@ -151,6 +162,16 @@ public class WebSocketSession : TransportSession
         return this.ConnectCoreAsync(effectiveHost, effectivePort, raiseConnected: false, ct);
     }
 
+    /// <summary>
+    /// Lets a subclass supply a pre-resolved IP endpoint to dial for this connection while the request URI keeps
+    /// the original hostname, so TLS SNI and the HTTP <c>Host</c> header stay the hostname. Returning
+    /// <see langword="null"/> (the default) uses the normal <see cref="ClientWebSocket"/> resolution. This exists
+    /// so a transport can resolve the host itself over a specific, locked network interface and avoid the OS
+    /// resolver picking a different interface.
+    /// </summary>
+    protected virtual ValueTask<IPEndPoint?> ResolveDialEndpointAsync(string host, ushort port, CancellationToken ct)
+        => ValueTask.FromResult<IPEndPoint?>(null);
+
     private async Task ConnectCoreAsync(string effectiveHost, ushort effectivePort, bool raiseConnected, CancellationToken ct)
     {
         await _connectionLock.WaitAsync(ct).ConfigureAwait(false);
@@ -166,7 +187,7 @@ public class WebSocketSession : TransportSession
                 await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
-            this.ResetSequenceCounters();
+            // Sequence counters are not reset here: a resume continues them, and a full handshake resets them.
 
             _socket = new ClientWebSocket();
 
@@ -185,7 +206,48 @@ public class WebSocketSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
-            await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connecting))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.WebSocketSession:Connect", $"connecting uri={uri} timeout-ms={this.Options.ConnectTimeoutMillis}"));
+            }
+
+            IPEndPoint? dialEndpoint = await this.ResolveDialEndpointAsync(effectiveHost, effectivePort, connectCts.Token).ConfigureAwait(false);
+            if (dialEndpoint is not null)
+            {
+                // Dial the pre-resolved IP via a custom ConnectCallback; the URI (and thus TLS SNI + Host header)
+                // keeps the hostname. The invoker owns the TCP socket and must live as long as the ClientWebSocket,
+                // so it is stored and disposed alongside the socket in DisconnectInternalAsync.
+                IPEndPoint endpointToDial = dialEndpoint;
+#pragma warning disable CA2000 // Ownership moves to the HttpMessageInvoker below, which disposes the handler with itself.
+                SocketsHttpHandler handler = new()
+                {
+                    ConnectCallback = async (context, cbCt) =>
+                    {
+                        Socket tcp = new(SocketType.Stream, ProtocolType.Tcp) { NoDelay = this.Options.NoDelay };
+                        try
+                        {
+                            await tcp.ConnectAsync(endpointToDial, cbCt).ConfigureAwait(false);
+                            return new NetworkStream(tcp, ownsSocket: true);
+                        }
+                        catch
+                        {
+                            tcp.Dispose();
+                            throw;
+                        }
+                    },
+                };
+#pragma warning restore CA2000
+                _connectInvoker = new HttpMessageInvoker(handler, disposeHandler: true);
+                await _socket.ConnectAsync(uri, _connectInvoker, connectCts.Token).ConfigureAwait(false);
+            }
+            else
+            {
+                await _socket.ConnectAsync(uri, connectCts.Token).ConfigureAwait(false);
+            }
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.WebSocketSession:Connect", $"connected uri={uri}"));
+            }
             connected = true;
             if (raiseConnected)
             {
@@ -208,6 +270,10 @@ public class WebSocketSession : TransportSession
             // the one signal. During an outage every failed retry would otherwise raise one, making
             // "one OnDisconnected per real transport close" not a guarantee callers can build on.
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.ConnectFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.ConnectFailed, new DiagnosticLog("SDK.WebSocketSession:Connect", "connect-failed", ex));
+            }
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"WebSocket Connection failed: {ex.Message}", ex);
         }
@@ -247,11 +313,12 @@ public class WebSocketSession : TransportSession
         }
     }
 
-    private async Task DisconnectInternalAsync(ClientWebSocket? expectedSocket = null, bool waitForLoop = false, bool raiseDisconnected = true)
+    private async Task DisconnectInternalAsync(ClientWebSocket? expectedSocket = null, bool waitForLoop = false, bool raiseDisconnected = true, Exception? cause = null)
     {
         ClientWebSocket? socket;
         CancellationTokenSource? loopCts;
         Task? loopTask;
+        HttpMessageInvoker? invoker;
 
         if (expectedSocket is not null)
         {
@@ -265,12 +332,14 @@ public class WebSocketSession : TransportSession
 
             loopCts = Interlocked.Exchange(ref _loopCts, null);
             loopTask = Interlocked.Exchange(ref _loopTask, null);
+            invoker = Interlocked.Exchange(ref _connectInvoker, null);
         }
         else
         {
             loopCts = Interlocked.Exchange(ref _loopCts, null);
             loopTask = Interlocked.Exchange(ref _loopTask, null);
             socket = Interlocked.Exchange(ref _socket, null);
+            invoker = Interlocked.Exchange(ref _connectInvoker, null);
         }
 
         try
@@ -312,7 +381,14 @@ public class WebSocketSession : TransportSession
             socket.Dispose();
             this.StopKeepAlive();
 
-            NetworkException disconnectEx = new("The WebSocket session was disconnected.");
+            // Keep the transport's reason (for example the server's close status) so in-flight requests can see why.
+            NetworkException disconnectEx = cause is null
+                ? new("The WebSocket session was disconnected.")
+                : new("The WebSocket session was disconnected.", cause);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Disconnected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Disconnected, new DiagnosticLog("SDK.WebSocketSession:Disconnect", "disconnected"));
+            }
             this.DispatchPendingDisconnect(disconnectEx);
 
             // #393: a socket that never reached OnConnected (a failed/timed-out/refused connect
@@ -324,6 +400,10 @@ public class WebSocketSession : TransportSession
                 this.OnDisconnected?.Invoke(this, disconnectEx);
             }
         }
+
+        // The ConnectCallback invoker (if any) is tied to this connection's socket; dispose it unconditionally
+        // here — after the socket — so it is never leaked, including when the socket was already cleared.
+        invoker?.Dispose();
 
         if (waitForLoop && loopTask is { IsCompleted: false })
         {
@@ -371,11 +451,51 @@ public class WebSocketSession : TransportSession
     public override async Task SendAsync(ReadOnlyMemory<byte> payload, bool? encrypt = null, CancellationToken ct = default)
         => await _sender.SendAsync(payload, encrypt, ct).ConfigureAwait(false);
 
+    internal override bool DeliversRekeyReliably => true;
+
+    internal override async Task SendThenSwitchAsync(IPacket packet, Action afterWrite, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+        _ = this.StampSequenceId(packet);
+
+        BufferLease lease = BufferLease.Rent(packet.Length);
+        lease.CommitLength(packet.Serialize(lease.SpanFull));
+        if (!await _sender.SendThenAsync(lease, this.State.EncryptionEnabled, afterWrite, ct).ConfigureAwait(false))
+        {
+            throw new NetworkException("Failed to send WebSocket packet: the frame was not delivered to the socket.");
+        }
+    }
+
     /// <inheritdoc/>
     public override void ResetSequenceCounters()
     {
         _sender.Sequence.Reset();
         _reader.Sequence.Reset();
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Waits for the receive loop to finish, which the public <see cref="DisconnectAsync"/> does not.</remarks>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose",
+        Justification = "Replaces the base disconnect (DisconnectAsync) with one that also waits for the receive loop.")]
+    protected override async ValueTask DisposeAsyncCore()
+    {
+        if (Volatile.Read(ref _disposed) == 1)
+        {
+            return;
+        }
+
+        this.MarkIntentionalDisconnect();
+        this.StopKeepAlive();
+
+        await _connectionLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ = _connectionLock.Release();
+        }
     }
 
     /// <inheritdoc/>
@@ -425,11 +545,15 @@ public class WebSocketSession : TransportSession
             return;
         }
 
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.TransportError))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Session.TransportError, new DiagnosticLog("SDK.WebSocketSession:HandleError", "transport-error", ex));
+        }
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually
         // an unexpected fault.
-        _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket, raiseDisconnected: !this.IsDisconnectSuppressed);
+        _ = this.DisconnectInternalAsync(expectedSocket: originatingSocket, raiseDisconnected: !this.IsDisconnectSuppressed, cause: ex);
     }
 
     private void HandleReceiveMessage([Borrowed] IBufferLease lease)

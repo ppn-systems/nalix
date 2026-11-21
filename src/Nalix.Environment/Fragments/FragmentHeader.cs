@@ -8,6 +8,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Nalix.Abstractions.Exceptions;
+using Nalix.Abstractions.Networking.Packets;
 using Nalix.Environment.Hashing;
 
 namespace Nalix.Environment.Fragments;
@@ -17,19 +18,21 @@ namespace Nalix.Environment.Fragments;
 //│                                                                           │
 //│  [2 B LE] FramedSocket outer frame length                                 │
 //│  payload:                                                                 │
-//│    [1 B] Magic        — 0xF0 (validate fragment)                          │
+//│    [6 B] Packet header — OpCode=0, Flags=FRAGMENTED, Priority=0, SeqId=0  │
 //│    [2 B LE] StreamId     — distinguishes parallel streams                 │
 //│    [2 B LE] ChunkIndex   — 0-based index                                  │
 //│    [2 B LE] TotalChunks  — known in advance                               │
 //│    [1 B] Flags        — bit0 = IsLastChunk                                │
 //│    [N B] Chunk body(split automatically)                                  │
 //│                                                                           │
-//│  Overhead / chunk = 2 B (frame) + 8 B (FragmentHeader) = 10 B             │
-//│  PacketFlags.FRAGMENTED is set so the receiver can detect it              │
+//│  Overhead / chunk = 2 B (frame) + 13 B (FragmentHeader) = 15 B            │
+//│  Receivers detect a chunk ONLY by PacketFlags.FRAGMENTED in the packet    │
+//│  header, never by payload content, so no opcode can be mistaken for one.  │
 //└───────────────────────────────────────────────────────────────────────────┘
 
 /// <summary>
-/// Fixed-size <b>7-byte</b> header located at the start of the payload for each chunk.
+/// Fixed-size header located at the start of the payload for each chunk: a standard packet header
+/// carrying <see cref="PacketFlags.FRAGMENTED"/>, followed by 7 bytes of chunk metadata.
 /// <para>
 /// <b>Shared contract</b> between SDK (<c>FrameSender</c> / <c>FrameReader</c>)
 /// and Server (<c>SocketConnection</c>).
@@ -42,14 +45,13 @@ public readonly struct FragmentHeader(ushort streamId, ushort chunkIndex, ushort
 {
     #region Constants
 
-    /// <inheritdoc/>
-    public const byte Magic = 0xF0;
     private const byte FlagIsLast = 0b0000_0001;
+    private const int MetadataSize = (sizeof(ushort) * 3) + sizeof(byte);
 
     /// <summary>
-    /// Number of bytes the header occupies on the wire (8 bytes).
+    /// Number of bytes the header occupies on the wire (13 bytes: 6-byte packet header + 7 bytes of chunk metadata).
     /// </summary>
-    public const int WireSize = (sizeof(ushort) * 3) + (sizeof(byte) * 2);
+    public const int WireSize = PacketConstants.HeaderSize + MetadataSize;
 
     #endregion Constants
 
@@ -87,12 +89,12 @@ public readonly struct FragmentHeader(ushort streamId, ushort chunkIndex, ushort
     static FragmentHeader()
     {
         int actual = Unsafe.SizeOf<FragmentHeader>();
-        int expected = WireSize - 1;
+        int expected = MetadataSize;
 
         if (actual != expected)
         {
             throw new InternalErrorException(
-                $"FragmentHeader size mismatch: actual={actual}, expected={expected} (WireSize-1).");
+                $"FragmentHeader size mismatch: actual={actual}, expected={expected} (WireSize-PacketHeader).");
         }
     }
 
@@ -108,11 +110,15 @@ public readonly struct FragmentHeader(ushort streamId, ushort chunkIndex, ushort
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteTo(Span<byte> dest)
     {
-        dest[0] = Magic;
-        BinaryPrimitives.WriteUInt16LittleEndian(dest[1..], StreamId);
-        BinaryPrimitives.WriteUInt16LittleEndian(dest[3..], ChunkIndex);
-        BinaryPrimitives.WriteUInt16LittleEndian(dest[5..], TotalChunks);
-        dest[7] = Flags;
+        Span<byte> header = dest[..WireSize];
+        header[..PacketConstants.HeaderSize].Clear();
+        header[(int)PacketHeaderOffset.Flags] = (byte)PacketFlags.FRAGMENTED;
+
+        Span<byte> meta = header[PacketConstants.HeaderSize..];
+        BinaryPrimitives.WriteUInt16LittleEndian(meta, StreamId);
+        BinaryPrimitives.WriteUInt16LittleEndian(meta[2..], ChunkIndex);
+        BinaryPrimitives.WriteUInt16LittleEndian(meta[4..], TotalChunks);
+        meta[6] = Flags;
     }
 
     /// <summary>
@@ -120,25 +126,37 @@ public readonly struct FragmentHeader(ushort streamId, ushort chunkIndex, ushort
     /// Requires <paramref name="src"/>.Length >= <see cref="WireSize"/>.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="src"/> is shorter than <see cref="WireSize"/>.</exception>
-    /// <exception cref="InvalidDataException">Thrown when the fragment magic marker is invalid.</exception>
+    /// <exception cref="InvalidDataException">Thrown when the packet header does not carry <see cref="PacketFlags.FRAGMENTED"/>.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static FragmentHeader ReadFrom(ReadOnlySpan<byte> src)
     {
-        if (src[0] != Magic)
+        ReadOnlySpan<byte> header = src[..WireSize];
+        if (!IsFragmentFlagSet(header))
         {
-            THROW_INVALID_MAGIC();
+            THROW_NOT_FRAGMENT();
         }
 
+        ReadOnlySpan<byte> meta = header[PacketConstants.HeaderSize..];
         return new(
-            streamId: BinaryPrimitives.ReadUInt16LittleEndian(src[1..]),
-            chunkIndex: BinaryPrimitives.ReadUInt16LittleEndian(src[3..]),
-            totalChunks: BinaryPrimitives.ReadUInt16LittleEndian(src[5..]),
-            isLast: (src[7] & FlagIsLast) != 0);
+            streamId: BinaryPrimitives.ReadUInt16LittleEndian(meta),
+            chunkIndex: BinaryPrimitives.ReadUInt16LittleEndian(meta[2..]),
+            totalChunks: BinaryPrimitives.ReadUInt16LittleEndian(meta[4..]),
+            isLast: (meta[6] & FlagIsLast) != 0);
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the packet header at the start of <paramref name="frame"/>
+    /// carries <see cref="PacketFlags.FRAGMENTED"/>. Frames shorter than a packet header return <see langword="false"/>.
+    /// </summary>
+    /// <param name="frame">The frame payload, starting at the packet header.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsFragmentFlagSet(ReadOnlySpan<byte> frame)
+        => frame.Length > (int)PacketHeaderOffset.Flags
+        && (frame[(int)PacketHeaderOffset.Flags] & (byte)PacketFlags.FRAGMENTED) != 0;
 
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void THROW_INVALID_MAGIC() => throw new InvalidDataException("Invalid fragment magic");
+    private static void THROW_NOT_FRAGMENT() => throw new InvalidDataException("Packet header does not carry the FRAGMENTED flag.");
 
     // ── Equality ─────────────────────────────────────────────────────────────
 

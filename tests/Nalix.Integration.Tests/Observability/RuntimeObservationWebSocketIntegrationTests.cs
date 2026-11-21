@@ -97,7 +97,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             options.WithMiddleware(new BoundaryTrackingMiddleware(counters));
         });
 
-        builder.ListenWebSocket<DefaultProtocol>()
+        builder.MapWebSocket<DefaultProtocol>()
                .OnPort(port)
                .WithPath("/ws/")
                .WithFactory(dispatch => new InstrumentedProtocol(dispatch, counters));
@@ -187,7 +187,7 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
 
             Assert.Equal(ObservabilityAccessStage.RESPONSE, accessResponse.Stage);
             Assert.Equal(ProtocolReason.NONE, accessResponse.Reason);
-            Assert.Equal(PermissionLevel.SUPERVISOR, accessResponse.AccessLevel);
+            Assert.Equal(PermissionLevel.OBSERVER, accessResponse.AccessLevel);
 
             // -- 5. Build RuntimeObservation request --
             RuntimeObservation runtimeRequest = PacketBase<RuntimeObservation>.Create();
@@ -294,9 +294,18 @@ public sealed class RuntimeObservationWebSocketIntegrationTests : IDisposable
             diagnostics.AppendLine($"  Response.OpCode              = 0x{runtimeResponse.OpCode:X4}");
 
             // -- 8. Assert all boundaries were crossed --
+            // The handler sends the response before the server middleware counts it (after next() returns), so the
+            // client can get here first: give the server thread a moment instead of failing on that race.
+            string? boundaryFailure = DetermineFirstFailingBoundary(counters);
+            for (long deadline = System.Environment.TickCount64 + TimeoutMs;
+                 boundaryFailure is not null && System.Environment.TickCount64 < deadline;
+                 boundaryFailure = DetermineFirstFailingBoundary(counters))
+            {
+                await Task.Delay(10);
+            }
+
             AppendBoundaryReport(diagnostics, counters);
 
-            string? boundaryFailure = DetermineFirstFailingBoundary(counters);
             if (boundaryFailure is not null)
             {
                 Assert.Fail(

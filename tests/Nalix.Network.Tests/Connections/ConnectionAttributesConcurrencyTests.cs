@@ -53,7 +53,9 @@ public sealed class ConnectionAttributesConcurrencyTests
     {
         for (int round = 0; round < Rounds; round++)
         {
-            using PassthroughConnection connection = new(s_extractor, new IPEndPoint(IPAddress.Loopback, 9000));
+            using Connection connection = new(
+                new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp),
+                s_extractor, new IPEndPoint(IPAddress.Loopback, 9000));
             using Barrier barrier = new(2);
 
             Task first = Task.Run(() => { barrier.SignalAndWait(); connection.Attributes[s_keyA] = 1; });

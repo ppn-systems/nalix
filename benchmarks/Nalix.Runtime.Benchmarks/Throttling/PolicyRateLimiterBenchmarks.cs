@@ -40,7 +40,6 @@ public class PolicyRateLimiterBenchmarks
     private class BenchmarkConnection : IConnection
     {
         public bool IsDisposed => false;
-        public bool IsUdpCreated => false;
         public ulong ConnectionId => 0;
         public string? UserId { get; set; }
         public long UpTime => 0;
@@ -76,8 +75,7 @@ public class PolicyRateLimiterBenchmarks
         public int ErrorCount => 0;
         public void IncrementErrorCount() { }
 
-        public IConnection.ITransport TCP => null!;
-        public IConnection.ITransport UDP => null!;
+        public IConnection.ITransport Transport => null!;
     }
 
     private class BenchmarkPacket : IPacket
@@ -96,7 +94,6 @@ public class PolicyRateLimiterBenchmarks
 
     private class BenchmarkPacketContext : IPacketContext<IPacket>
     {
-        public bool IsReliable => true;
         public bool EncryptedOnWire => false;
         public bool SkipOutbound => false;
         public IPacket Packet { get; }
@@ -115,8 +112,7 @@ public class PolicyRateLimiterBenchmarks
                 timeout: null,
                 permission: null,
                 encryption: null,
-                rateLimit: rateLimit,
-                transport: null);
+                rateLimit: rateLimit);
         }
 
         public void ResetForPool() { }

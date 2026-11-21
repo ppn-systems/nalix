@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Internal.Compilation;
 using Nalix.Runtime.Tests.TestSupport;
@@ -67,7 +68,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             Func<Task> act = async () => await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("sync boom");
         }
@@ -106,12 +107,169 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             observedException.Should().BeOfType<InvalidOperationException>().Which.Message.Should().Be("async boom");
             observedOpCode.Should().Be(descriptor.OpCode);
             connection.FakeTcp.SentMessages.Should().NotBeEmpty(
                 "an asynchronously-thrown handler exception must be converted into a sent control directive");
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A handler whose permission the connection does not hold is denied before it runs. Each denial must count
+    /// toward the connection's error budget so MaxErrorThreshold can disconnect a peer that keeps probing.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_WhenPermissionDenied_CountsErrorAndSkipsHandler()
+    {
+        PacketDispatchOptions<TestPacket> options = new();
+        bool invoked = false;
+        PacketHandler<TestPacket> descriptor = PacketHandlerFactory.CreateDescriptor(
+            (_, _) =>
+            {
+                invoked = true;
+                return new ValueTask<object?>((object?)null);
+            },
+            permission: PermissionLevel.SYSTEM_ADMINISTRATOR);
+
+        FakeConnection connection = new() { Level = PermissionLevel.NONE };
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
+
+            Assert.False(invoked);
+            Assert.Equal(1, connection.ErrorCount);
+            Assert.NotEmpty(connection.FakeTcp.SentMessages);
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A handler the connection is allowed to run must not touch the error budget.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_WhenPermissionGranted_LeavesErrorCountUntouched()
+    {
+        PacketDispatchOptions<TestPacket> options = new();
+        bool invoked = false;
+        PacketHandler<TestPacket> descriptor = PacketHandlerFactory.CreateDescriptor(
+            (_, _) =>
+            {
+                invoked = true;
+                return new ValueTask<object?>((object?)null);
+            },
+            permission: PermissionLevel.ESTABLISHED);
+
+        FakeConnection connection = new() { Level = PermissionLevel.ESTABLISHED };
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
+
+            Assert.True(invoked);
+            Assert.Equal(0, connection.ErrorCount);
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A packet that is not an instance of the handler's expected type is rejected with REQUEST_INVALID before the
+    /// handler runs. Each rejection must count toward the connection's error budget.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_WhenPacketTypeMismatches_CountsErrorAndSkipsHandler()
+    {
+        PacketDispatchOptions<IPacket> options = new();
+        bool invoked = false;
+        PacketHandler<IPacket> descriptor = PacketHandlerFactory.CreateDescriptor<IPacket>(
+            (_, _) =>
+            {
+                invoked = true;
+                return new ValueTask<object?>((object?)null);
+            },
+            expectedPacketType: typeof(ValidatingPacket));
+
+        FakeConnection connection = new();
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
+
+            Assert.False(invoked);
+            Assert.Equal(1, connection.ErrorCount);
+            Assert.NotEmpty(connection.FakeTcp.SentMessages);
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A packet that fails <see cref="IPacketValidatable"/> is rejected with MALFORMED_PACKET before the handler runs.
+    /// Each rejection must count toward the connection's error budget.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_WhenPacketValidationFails_CountsErrorAndSkipsHandler()
+    {
+        PacketDispatchOptions<ValidatingPacket> options = new();
+        bool invoked = false;
+        PacketHandler<ValidatingPacket> descriptor = PacketHandlerFactory.CreateDescriptor<ValidatingPacket>((_, _) =>
+        {
+            invoked = true;
+            return new ValueTask<object?>((object?)null);
+        });
+
+        FakeConnection connection = new();
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new ValidatingPacket(valid: false), connection, encryptedOnWire: false).AsTask();
+
+            Assert.False(invoked);
+            Assert.Equal(1, connection.ErrorCount);
+            Assert.NotEmpty(connection.FakeTcp.SentMessages);
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A well-formed, correctly typed packet that passes validation must not touch the error budget.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteResolvedHandlerAsync_WhenPacketValid_LeavesErrorCountUntouched()
+    {
+        PacketDispatchOptions<ValidatingPacket> options = new();
+        bool invoked = false;
+        PacketHandler<ValidatingPacket> descriptor = PacketHandlerFactory.CreateDescriptor<ValidatingPacket>((_, _) =>
+        {
+            invoked = true;
+            return new ValueTask<object?>((object?)null);
+        });
+
+        FakeConnection connection = new();
+        try
+        {
+            await options.ExecuteResolvedHandlerAsync(
+                descriptor, new ValidatingPacket(valid: true), connection, encryptedOnWire: false).AsTask();
+
+            Assert.True(invoked);
+            Assert.Equal(0, connection.ErrorCount);
         }
         finally
         {
@@ -142,7 +300,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             Func<Task> act = async () => await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false, token: cts.Token).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false, token: cts.Token).AsTask();
 
             await act.Should().ThrowAsync<OperationCanceledException>();
             invoked.Should().BeFalse("a pre-cancelled token must short-circuit before the handler runs");
@@ -184,7 +342,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, request, connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, request, connection, encryptedOnWire: false).AsTask();
 
             connection.FakeTcp.SentMessages.Should().HaveCount(3,
                 "every item the handler's stream yields must be sent as its own packet");
@@ -242,7 +400,7 @@ public sealed class PacketDispatchOptionsTests
         try
         {
             await options.ExecuteResolvedHandlerAsync(
-                descriptor, new TestPacket(), connection, reliable: true, encryptedOnWire: false).AsTask();
+                descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
 
             connection.FakeTcp.SentMessages.Should().HaveCount(2);
             yielded[0].IsEndOfStream.Should().BeFalse();
@@ -270,6 +428,20 @@ public sealed class PacketDispatchOptionsTests
         {
             buffer[0] = (byte)Value;
             return 1;
+        }
+    }
+
+    private sealed class ValidatingPacket(bool valid) : IPacket, IPacketValidatable
+    {
+        public int Length => 0;
+        public PacketHeader Header { get; set; }
+        public byte[] Serialize() => [];
+        public int Serialize(Span<byte> buffer) => 0;
+
+        public bool Validate([System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? failureReason)
+        {
+            failureReason = valid ? null : "invalid";
+            return valid;
         }
     }
 }

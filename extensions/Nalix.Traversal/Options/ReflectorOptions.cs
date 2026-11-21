@@ -10,7 +10,7 @@ namespace Nalix.Traversal.Options;
 /// Provides configuration options for NAT Traversal Reflector.
 /// </summary>
 [IniComment("Configuration for NAT Traversal and Reflector sessions")]
-public sealed class ReflectorOptions : ConfigurationLoader
+public sealed partial class ReflectorOptions : ConfigurationLoader
 {
     /// <summary>
     /// Gets or sets the UDP port used by the Reflector service.

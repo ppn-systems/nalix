@@ -3,7 +3,7 @@
 Client-side transport sessions, handshakes, request/response helpers, subscriptions, and cipher
 management for Nalix applications.
 
-Nalix.SDK is the client package. It exposes TCP, UDP, and WebSocket sessions, typed request
+Nalix.SDK is the client package. It exposes TCP, WebSocket, and datagram (NDP over UDP) sessions, typed request
 correlation, session resume helpers, subscription dispatch, and runtime cipher updates.
 
 ## Install
@@ -16,7 +16,7 @@ dotnet add package Nalix.SDK
 
 | Area | Purpose | Main types |
 | :--- | :--- | :--- |
-| Transport sessions | Shared client session base and concrete transports | `TransportSession`, `TcpSession`, `UdpSession`, `WebSocketSession` |
+| Transport sessions | Shared client session base and concrete transports | `TransportSession`, `TcpSession`, `WebSocketSession`, `DatagramSession` |
 | Request/response | Correlated typed request matching with timeout support | `RequestAsync<TResponse>`, `RequestOptions` |
 | Handshake and resume | X25519 connection setup and session resumption | `ConnectAsync`, `ConnectWithResumeAsync` |
 | Cipher control | Runtime cipher switching and rotation | `UpdateCipherAsync` |
@@ -59,6 +59,7 @@ using IDisposable subscription = session.On<ChatMessage>(message =>
 
 - Use one `TransportSession` per active client connection.
 - Request helpers correlate responses and clean up pending waiters on timeout.
+- After `HandshakeAsync()`, a request is encrypted only when `RequestOptions.Encrypt` is `true`, or when it is left `null` and `TransportOptions.EncryptRequestsByDefault` is enabled. The default (`false`) leaves encryption to an outer TLS layer.
 - WebSocket clients are useful for browser-compatible deployments behind reverse proxies.
 
 ## Documentation

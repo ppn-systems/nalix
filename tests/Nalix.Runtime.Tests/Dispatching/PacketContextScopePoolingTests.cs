@@ -36,7 +36,7 @@ public sealed class PacketContextScopePoolingTests
         try
         {
             // Act: Initialize without passing an explicit scope
-            context.Initialize(packet, connection, metadata, reliable: true, encryptedOnWire: false);
+            context.Initialize(packet, connection, metadata, encryptedOnWire: false);
 
             // Assert: Scope must be non-null and of type PacketScope
             context.Scope.Should().NotBeNull();
@@ -70,7 +70,7 @@ public sealed class PacketContextScopePoolingTests
         try
         {
             // First cycle
-            context.Initialize(packet, connection, metadata, reliable: true, encryptedOnWire: false);
+            context.Initialize(packet, connection, metadata, encryptedOnWire: false);
             Nalix.Abstractions.Injection.IPacketScope firstScope = context.Scope;
             DisposableTracker tracker1 = new();
             context.Scope.RegisterForDisposal(tracker1);
@@ -79,7 +79,7 @@ public sealed class PacketContextScopePoolingTests
             tracker1.IsDisposedSync.Should().BeTrue();
 
             // Second cycle: Re-initialize the same context
-            context.Initialize(packet, connection, metadata, reliable: true, encryptedOnWire: false);
+            context.Initialize(packet, connection, metadata, encryptedOnWire: false);
             Nalix.Abstractions.Injection.IPacketScope secondScope = context.Scope;
 
             // Assert: Must reuse the same embedded instance
@@ -112,7 +112,7 @@ public sealed class PacketContextScopePoolingTests
             // Act: Initialize passing custom scope
             context.Initialize(
                 packet, connection, metadata,
-                reliable: true, encryptedOnWire: false,
+                encryptedOnWire: false,
                 scope: customScope);
 
             // Assert: Scope must be the custom scope
@@ -143,7 +143,7 @@ public sealed class PacketContextScopePoolingTests
 
         try
         {
-            context.Initialize(packet, connection, metadata, reliable: true, encryptedOnWire: false);
+            context.Initialize(packet, connection, metadata, encryptedOnWire: false);
 
             context.Scope.RegisterForDisposal(new OrderTracker(1, order));
             context.Scope.RegisterForDisposal(new OrderTracker(2, order));
@@ -165,8 +165,7 @@ public sealed class PacketContextScopePoolingTests
             timeout: null,
             permission: null,
             encryption: null,
-            rateLimit: null,
-            transport: null);
+            rateLimit: null);
 
     private sealed class DisposableTracker : IDisposable
     {
@@ -218,7 +217,6 @@ public sealed class PacketContextScopePoolingTests
     {
         public FakeTransport FakeTcp { get; } = new();
         public bool IsDisposed { get; private set; }
-        public bool IsUdpCreated => false;
         public ulong ConnectionId => 1;
         public string? UserId { get; set; }
         public long UpTime => 0;
@@ -231,8 +229,7 @@ public sealed class PacketContextScopePoolingTests
         public Bytes32 Secret { get; set; }
         public PermissionLevel Level { get; set; }
         public CipherSuiteType Algorithm { get; set; }
-        public IConnection.ITransport TCP => FakeTcp;
-        public IConnection.ITransport? UDP => null;
+        public IConnection.ITransport Transport => FakeTcp;
 #pragma warning disable CS0067
         public event EventHandler<IConnectionEventArgs>? ConnectionClosed;
         public event EventHandler<IConnectionEventArgs>? MessageProcessing;

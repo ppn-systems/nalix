@@ -37,7 +37,6 @@ public static class FrameCompression
         // [SECURITY] A decompressed frame that arrived encrypted is plaintext: scrub it on release.
         IBufferLease dest = BufferLease.Rent(FrameTransformer
                                        .GetDecompressedLength(src.Span[FrameTransformer.Offset..]) + FrameTransformer.Offset, zeroOnDispose: src.EncryptedOnWire);
-        dest.IsReliable = src.IsReliable;
         dest.EncryptedOnWire = src.EncryptedOnWire;
         try
         {
@@ -80,7 +79,6 @@ public static class FrameCompression
 
         // [SECURITY] A decompressed frame that arrived encrypted is plaintext: scrub it on release.
         IBufferLease localDest = BufferLease.Rent(decompressedLength + FrameTransformer.Offset, zeroOnDispose: src.EncryptedOnWire);
-        localDest.IsReliable = src.IsReliable;
         localDest.EncryptedOnWire = src.EncryptedOnWire;
 
         if (!FrameTransformer.TryDecompress(src, localDest))
@@ -111,7 +109,6 @@ public static class FrameCompression
 
         IBufferLease dest = BufferLease.Rent(FrameTransformer
                                        .GetMaxCompressedSize(src.Length - FrameTransformer.Offset) + FrameTransformer.Offset, zeroOnDispose: false, BufferLease.TransportHeadroom);
-        dest.IsReliable = src.IsReliable;
         dest.EncryptedOnWire = src.EncryptedOnWire;
 
         try

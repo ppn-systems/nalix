@@ -43,7 +43,7 @@ public static class PingExtensions
 
             using TimeSync pong = await session.RequestAsync<TimeSync>(
                 ping,
-                options: RequestOptions.Default.WithTimeout(timeoutMs),
+                options: RequestOptions.Default.WithTimeout(timeoutMs).WithEncrypt(false),
                 predicate: p => p.Type == ControlType.PONG && p.SequenceId == seq,
                 ct: ct).ConfigureAwait(false);
 

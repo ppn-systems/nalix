@@ -6,6 +6,7 @@ using System.Buffers.Text;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Environment.Memory;
@@ -31,8 +32,34 @@ public abstract partial class WebSocketListenerBase
         _httpRoutes.RegisterStatic(HttpMethodType.Get, "/readyz", HealthzResponse);
         _httpRoutes.RegisterStatic(HttpMethodType.Get, "/startupz", HealthzResponse);
         _httpRoutes.RegisterStatic(HttpMethodType.Get, "/ping", HealthzResponse);
-        _httpRoutes.RegisterStatic(HttpMethodType.Get, "/version", _versionResponseBytes);
-        _httpRoutes.Register(HttpMethodType.Get, "/metrics", this.HANDLE_DEFAULT_METRICS_ROUTE);
+
+        // Fail closed: /version and /metrics are only served when a DevOps bearer token is configured.
+        if (string.IsNullOrEmpty(_wsconfig.DevOpsBearerToken))
+        {
+            return;
+        }
+
+        _devOpsBearerToken = Encoding.UTF8.GetBytes(_wsconfig.DevOpsBearerToken);
+        _httpRoutes.RegisterStatic(HttpMethodType.Get, "/version", _versionResponseBytes, requiresBearerAuth: true);
+        _httpRoutes.Register(HttpMethodType.Get, "/metrics", this.HANDLE_DEFAULT_METRICS_ROUTE, requiresBearerAuth: true);
+    }
+
+    /// <summary>
+    /// Checks an <c>Authorization</c> header value against the configured DevOps bearer token.
+    /// The scheme is matched case-insensitively; the token is compared in constant time.
+    /// </summary>
+    private bool IS_DEVOPS_AUTHORIZED(ReadOnlySpan<byte> authorization)
+    {
+        byte[]? expected = _devOpsBearerToken;
+        if (expected is null || authorization.Length <= 7 ||
+            !System.Text.Ascii.EqualsIgnoreCase(authorization[..6], "Bearer"u8) ||
+            authorization[6] != (byte)' ')
+        {
+            return false;
+        }
+
+        ReadOnlySpan<byte> presented = authorization[7..].TrimStart((byte)' ');
+        return CryptographicOperations.FixedTimeEquals(presented, expected);
     }
 
     private void HANDLE_DEFAULT_METRICS_ROUTE(in HttpRequestView request, ref HttpResponseWriter response)
@@ -92,7 +119,7 @@ public abstract partial class WebSocketListenerBase
         string ver = _wsconfig.ServerVersion ?? "1.0.0";
         string body = $"{{\"name\":\"Nalix\",\"version\":\"{ver}\",\"status\":\"running\"}}";
         byte[] bodyBytes = Encoding.UTF8.GetBytes(body);
-        string header = $"HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\nContent-Length: {bodyBytes.Length}\r\nConnection: close\r\n\r\n";
+        string header = $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {bodyBytes.Length}\r\nConnection: close\r\n\r\n";
         byte[] headerBytes = Encoding.ASCII.GetBytes(header);
 
         byte[] full = new byte[headerBytes.Length + bodyBytes.Length];
@@ -137,6 +164,12 @@ public abstract partial class WebSocketListenerBase
         in WebSocketUpgradeResult result,
         in HttpRouteEntry entry)
     {
+        if (entry.RequiresBearerAuth && !this.IS_DEVOPS_AUTHORIZED(result.Authorization))
+        {
+            this.SEND_STATIC_RESPONSE(state, args, UnauthorizedResponse);
+            return;
+        }
+
         if (entry.StaticResponseBytes is not null)
         {
             this.SEND_STATIC_RESPONSE(state, args, entry.StaticResponseBytes);
@@ -180,6 +213,7 @@ public abstract partial class WebSocketListenerBase
             Body = bodySpan,
             ContentType = result.ContentType,
             Origin = result.Origin,
+            Authorization = result.Authorization,
             RemoteEndPoint = remoteEndPoint
         };
 
@@ -187,7 +221,7 @@ public abstract partial class WebSocketListenerBase
         try
         {
             entry.Handler(in requestView, ref writer);
-            this.SEND_DYNAMIC_RESPONSE(state, args, ref writer);
+            this.SEND_DYNAMIC_RESPONSE(state, args, ref writer, allowAnyOrigin: !entry.RequiresBearerAuth);
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
@@ -200,7 +234,7 @@ public abstract partial class WebSocketListenerBase
         }
     }
 
-    private void SEND_DYNAMIC_RESPONSE(WebSocketUpgradeContext state, SocketAsyncEventArgs args, ref HttpResponseWriter writer)
+    private void SEND_DYNAMIC_RESPONSE(WebSocketUpgradeContext state, SocketAsyncEventArgs args, ref HttpResponseWriter writer, bool allowAnyOrigin)
     {
         try
         {
@@ -214,7 +248,7 @@ public abstract partial class WebSocketListenerBase
                     : writer.ContentType;
 
                 Span<byte> headerBuffer = stackalloc byte[512];
-                int headerWritten = FormatHttpResponseHeader(writer.StatusCode, contentType, bodySpan.Length, headerBuffer);
+                int headerWritten = FormatHttpResponseHeader(writer.StatusCode, contentType, bodySpan.Length, headerBuffer, allowAnyOrigin);
                 ReadOnlySpan<byte> headerSpan = headerBuffer[..headerWritten];
 
                 int totalLen = headerSpan.Length + bodySpan.Length;
@@ -259,7 +293,7 @@ public abstract partial class WebSocketListenerBase
         this.ReleaseWsUpgradeContext(state, args, success: true);
     }
 
-    internal static int FormatHttpResponseHeader(int statusCode, ReadOnlySpan<byte> contentType, int contentLength, Span<byte> destination)
+    internal static int FormatHttpResponseHeader(int statusCode, ReadOnlySpan<byte> contentType, int contentLength, Span<byte> destination, bool allowAnyOrigin)
     {
         if (statusCode is < 100 or > 599)
         {
@@ -286,9 +320,11 @@ public abstract partial class WebSocketListenerBase
             offset += 5;
         }
 
-        ReadOnlySpan<byte> corsAndCtPrefix = "Access-Control-Allow-Origin: *\r\nContent-Type: "u8;
-        corsAndCtPrefix.CopyTo(destination[offset..]);
-        offset += corsAndCtPrefix.Length;
+        ReadOnlySpan<byte> ctPrefix = allowAnyOrigin
+            ? "Access-Control-Allow-Origin: *\r\nContent-Type: "u8
+            : "Content-Type: "u8;
+        ctPrefix.CopyTo(destination[offset..]);
+        offset += ctPrefix.Length;
 
         int maxCtLen = Math.Min(contentType.Length, 128);
         int safeCtLen = 0;

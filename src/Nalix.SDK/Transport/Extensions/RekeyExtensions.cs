@@ -4,6 +4,8 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
+using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
@@ -41,29 +43,80 @@ public static class RekeyExtensions
         Control rekeyPacket = lease.Value;
         rekeyPacket.Initialize(ControlType.SESSION_REKEY, seqId, PacketFlags.SYSTEM, ProtocolReason.NONE);
 
+        TransportSession? transport = session as TransportSession;
+        bool switched = false;
+
+        void SWITCH_KEY()
+        {
+            // Switch to the new key and reset the sequence counters so that every later frame uses the new state.
+            session.State.Secret = newKey;
+            session.ResetSequenceCounters();
+            switched = true;
+        }
+
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Started))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Started, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-start"));
+        }
+
         try
         {
-            // Send the SESSION_REKEY packet and await the SESSION_REKEY_ACK from the server.
-            // We use AwaitAsync to ensure the server has processed the new key before we switch our local state.
+            // Send SESSION_REKEY and await SESSION_REKEY_ACK. On TCP/WebSocket the key switch runs under the send lock
+            // right after the request is written, so no frame encrypted with the old key can follow it on the wire.
             using Control ack = await PacketAwaiter.AwaitAsync<Control>(
                 session,
                 predicate: p => p.Type == ControlType.SESSION_REKEY_ACK && p.SequenceId == seqId,
                 sendAsync: async token =>
                 {
-                    await session.SendAsync(rekeyPacket, token).ConfigureAwait(false);
-
-                    // Immediately switch to the new key and reset sequence counters for outbound frames
-                    // so that subsequent frames (including any other concurrent sends) use the new state.
-                    session.State.Secret = newKey;
-                    session.ResetSequenceCounters();
+                    if (transport is not null)
+                    {
+                        await transport.SendThenSwitchAsync(rekeyPacket, SWITCH_KEY, token).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await session.SendAsync(rekeyPacket, token).ConfigureAwait(false);
+                        SWITCH_KEY();
+                    }
                 },
                 timeoutMs: session.Options.ConnectTimeoutMillis > 0 ? session.Options.ConnectTimeoutMillis : 5000,
                 ct: ct).ConfigureAwait(false);
+
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Completed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Completed, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-completed"));
+            }
         }
-        catch
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
-            session.State.Secret = previousKey;
-            session.ResetSequenceCounters();
+            if (!switched)
+            {
+                // SESSION_REKEY never left: the server still uses the current key and nothing changed locally.
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Failed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Failed, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-failed stage=send key=unchanged", ex));
+                }
+            }
+            else if (transport is { DeliversRekeyReliably: true })
+            {
+                // The request was written on an ordered transport, and the server switches as soon as it reads it. The
+                // acknowledgement is only late or lost: going back to the old key would leave the two sides on different
+                // keys, so the new key is kept.
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Failed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Failed, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-unacknowledged transport=ordered key=new", ex));
+                }
+            }
+            else
+            {
+                // Unordered transport: the request may never have arrived, and the server ignores it on a datagram session.
+                session.State.Secret = previousKey;
+                session.ResetSequenceCounters();
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Rekey.Failed))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Rekey.Failed, new DiagnosticLog("SDK.RekeyExtensions:Rekey", "rekey-unacknowledged transport=unordered key=restored", ex));
+                }
+            }
+
             throw;
         }
         finally

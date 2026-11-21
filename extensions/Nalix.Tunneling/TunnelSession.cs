@@ -49,12 +49,12 @@ public sealed class TunnelSession : IAsyncDisposable
         _consumerConnection.ExcludeFromIdleTimeout = true;
         providerDataConnection.ExcludeFromIdleTimeout = true;
 
-        if (_consumerConnection.TCP is not IConnection.ISocketTransport consumerSocketTransport)
+        if (_consumerConnection.Transport is not IConnection.ISocketTransport consumerSocketTransport)
         {
             throw new NotSupportedException("Consumer connection does not support socket unwrapping.");
         }
 
-        if (providerDataConnection.TCP is not IConnection.ISocketTransport providerSocketTransport)
+        if (providerDataConnection.Transport is not IConnection.ISocketTransport providerSocketTransport)
         {
             throw new NotSupportedException("Provider connection does not support socket unwrapping.");
         }
@@ -68,7 +68,7 @@ public sealed class TunnelSession : IAsyncDisposable
 
     private static async Task RecoverStolenDataAsync(IConnection sourceConnection, Socket destinationSocket)
     {
-        if (sourceConnection.TCP is IConnection.ISocketTransport transport)
+        if (sourceConnection.Transport is IConnection.ISocketTransport transport)
         {
             try
             {

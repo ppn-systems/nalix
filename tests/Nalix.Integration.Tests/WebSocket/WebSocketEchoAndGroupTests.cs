@@ -62,13 +62,17 @@ public sealed class WebSocketEchoAndGroupTests : IDisposable
         {
             FrameProcessor = new DeepFrameProcessor(this);
             this.SetConnectionAcceptance(true);
+
+            // The default closes the connection after every message the server sends, so a second multicast raced
+            // the close of the first one's recipients.
+            this.KeepConnectionOpen = true;
         }
 
         public override void ProcessMessage(object? sender, IConnectionEventArgs args)
         {
             if (args.Lease != null && args.Lease.Length > 0)
             {
-                args.Connection.TCP.SendAsync(args.Lease.Memory).AsTask().Wait();
+                args.Connection.Transport.SendAsync(args.Lease.Memory).AsTask().Wait();
             }
         }
     }
@@ -240,12 +244,12 @@ public sealed class WebSocketEchoAndGroupTests : IDisposable
             byte[] msgAlpha = CreatePayload(System.Text.Encoding.UTF8.GetBytes("ALPHA_MSG"));
             byte[] msgBeta = CreatePayload(System.Text.Encoding.UTF8.GetBytes("BETA_MSG"));
 
-#pragma warning disable CS0618
+#pragma warning disable NALIX_NET001 // exercises the raw pre-serialized overload on purpose
             await hub.MulticastAsync(groupStore, "alpha", msgAlpha);
             clientEvents.Enqueue($"alpha multicast done +{clock.ElapsedMilliseconds}ms");
             await hub.MulticastAsync(groupStore, "beta", msgBeta);
             clientEvents.Enqueue($"beta multicast done +{clock.ElapsedMilliseconds}ms");
-#pragma warning restore CS0618
+#pragma warning restore NALIX_NET001
 
             await Task.Delay(1000);
 

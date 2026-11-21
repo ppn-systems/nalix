@@ -53,7 +53,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.VoidOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.VoidOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.VoidOpCode), connection, encryptedOnWire: false);
 
         controller.VoidInvoked.Should().BeTrue();
         connection.FakeTcp.SentMessages.Should().BeEmpty("a void handler never produces an outbound payload");
@@ -67,7 +67,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.ValueTaskOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.ValueTaskOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.ValueTaskOpCode), connection, encryptedOnWire: false);
 
         controller.ValueTaskInvoked.Should().BeTrue("the generated invoker must await the ValueTask before returning");
         connection.FakeTcp.SentMessages.Should().BeEmpty();
@@ -81,7 +81,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.TaskOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.TaskOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.TaskOpCode), connection, encryptedOnWire: false);
 
         controller.TaskInvoked.Should().BeTrue();
         connection.FakeTcp.SentMessages.Should().BeEmpty();
@@ -104,7 +104,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.ValueTaskOfTOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.ValueTaskOfTOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.ValueTaskOfTOpCode), connection, encryptedOnWire: false);
 
         connection.FakeTcp.SentMessages.Should().NotBeEmpty(
             "a ValueTask<T> handler's result must be awaited and the resulting packet actually sent");
@@ -118,7 +118,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.TaskOfTOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.TaskOfTOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.TaskOfTOpCode), connection, encryptedOnWire: false);
 
         connection.FakeTcp.SentMessages.Should().NotBeEmpty(
             "a Task<T> handler's result must be awaited and the resulting packet actually sent");
@@ -132,7 +132,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.ContextOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.ContextOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.ContextOpCode), connection, encryptedOnWire: false);
 
         controller.ContextInvoked.Should().BeTrue();
         connection.FakeTcp.SentMessages.Should().NotBeEmpty(
@@ -147,7 +147,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.ThrowingOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.ThrowingOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.ThrowingOpCode), connection, encryptedOnWire: false);
 
         connection.FakeTcp.SentMessages.Should().NotBeEmpty(
             "an exception thrown asynchronously inside a generated handler must be converted to a FAIL control, not swallowed silently");
@@ -161,7 +161,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.SyncValueTaskOfTOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncValueTaskOfTOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncValueTaskOfTOpCode), connection, encryptedOnWire: false);
 
         connection.FakeTcp.SentMessages.Should().NotBeEmpty(
             "a synchronous ValueTask<T> handler must return result and send response via fast-path");
@@ -175,7 +175,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.SyncTaskOfTOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncTaskOfTOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncTaskOfTOpCode), connection, encryptedOnWire: false);
 
         connection.FakeTcp.SentMessages.Should().NotBeEmpty(
             "a completed Task<T> handler must return result and send response via fast-path");
@@ -189,7 +189,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.SyncDirectValueOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncDirectValueOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncDirectValueOpCode), connection, encryptedOnWire: false);
 
         connection.FakeTcp.SentMessages.Should().NotBeEmpty(
             "a synchronous direct IPacket handler must return result and send response");
@@ -203,7 +203,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         FakeConnection connection = new();
 
         _ = options.TryResolveHandler(EchoController.SyncThrowingOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncThrowingOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.SyncThrowingOpCode), connection, encryptedOnWire: false);
 
         connection.FakeTcp.SentMessages.Should().NotBeEmpty(
             "an exception thrown synchronously inside a generated handler must be converted to a FAIL control");
@@ -254,7 +254,6 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
             descriptor,
             new EchoPacket { Header = new PacketHeader { OpCode = EchoController.StreamOpCode, SequenceId = requestSeq } },
             connection,
-            reliable: true,
             encryptedOnWire: false);
 
         connection.FakeTcp.SentMessages.Should().HaveCount(1,
@@ -274,7 +273,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         ScopedServiceRegistry.Instance.RegisterScoped<IScopedEchoService>(_ => service);
 
         _ = options.TryResolveHandler(EchoController.FromScopeOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.FromScopeOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.FromScopeOpCode), connection, encryptedOnWire: false);
 
         controller.FromScopeInvoked.Should().BeTrue();
         controller.InjectedService.Should().BeSameAs(service);
@@ -294,7 +293,7 @@ public sealed class PacketDispatchOptionsGeneratedHandlerTests : IDisposable
         ScopedServiceRegistry.Instance.RegisterScoped<IScopedEchoService2>(_ => service2);
 
         _ = options.TryResolveHandler(EchoController.MultipleFromScopeOpCode, out PacketHandler<EchoPacket> descriptor);
-        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.MultipleFromScopeOpCode), connection, reliable: true, encryptedOnWire: false);
+        await options.ExecuteResolvedHandlerAsync(descriptor, MakePacket(EchoController.MultipleFromScopeOpCode), connection, encryptedOnWire: false);
 
         controller.FromScopeInvoked.Should().BeTrue();
         controller.InjectedService.Should().BeSameAs(service1);

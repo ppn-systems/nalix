@@ -17,9 +17,20 @@ internal sealed class FakeTransport : IConnection.ITransport
 
     public TransportFraming Framing => TransportFraming.UInt16LengthPrefixed;
 
-    public ISequenceCounter SendSequence { get; } = new FakeSequenceCounter();
+    public ISequenceCounter SendSequence { get; }
 
-    public ISequenceCounter ReceiveSequence { get; } = new FakeSequenceCounter();
+    public ISequenceCounter ReceiveSequence { get; }
+
+    public FakeTransport()
+        : this(new FakeSequenceCounter(), new FakeSequenceCounter())
+    {
+    }
+
+    public FakeTransport(ISequenceCounter sendSequence, ISequenceCounter receiveSequence)
+    {
+        this.SendSequence = sendSequence;
+        this.ReceiveSequence = receiveSequence;
+    }
 
     public uint NextSendSequence() => SendSequence.Next();
 

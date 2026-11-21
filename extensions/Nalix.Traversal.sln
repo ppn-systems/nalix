@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Traversal", "Nalix.Tr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Traversal.Contracts", "Nalix.Traversal.Contracts\Nalix.Traversal.Contracts.csproj", "{67FD1F8C-A7FD-FBBC-04A8-18DB4E890F31}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Traversal.Tests", "tests\Nalix.Traversal.Tests\Nalix.Traversal.Tests.csproj", "{0533E65D-F120-4826-BE12-6F4493F0AE0A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{67FD1F8C-A7FD-FBBC-04A8-18DB4E890F31}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{67FD1F8C-A7FD-FBBC-04A8-18DB4E890F31}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{67FD1F8C-A7FD-FBBC-04A8-18DB4E890F31}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0533E65D-F120-4826-BE12-6F4493F0AE0A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0533E65D-F120-4826-BE12-6F4493F0AE0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0533E65D-F120-4826-BE12-6F4493F0AE0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0533E65D-F120-4826-BE12-6F4493F0AE0A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

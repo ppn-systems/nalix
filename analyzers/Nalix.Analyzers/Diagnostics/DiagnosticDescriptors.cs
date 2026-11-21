@@ -375,12 +375,12 @@ internal static class DiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor NetworkHostingUdpWithoutTcpBinding = new(
         id: "NALIX045",
-        title: "NetworkApplicationBuilder should configure TCP before UDP",
-        messageFormat: "NetworkApplicationBuilder.Build() configures UDP bindings without any ListenTcp(...); UDP bindings are expected to run alongside TCP in this host setup",
+        title: "NetworkApplicationBuilder should configure TCP with datagram bindings",
+        messageFormat: "NetworkApplicationBuilder.Build() configures MapDatagram(...) without any ListenTcp(...); datagram sessions get their ticket over a stream session",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true,
-        description: "Nalix network hosting in this package expects UDP bindings to be paired with TCP bindings.");
+        description: "Datagram (NDP) sessions are bootstrapped over a TCP or WebSocket session, so a datagram binding needs a stream binding.");
 
     public static readonly DiagnosticDescriptor UnusuallyLargeSerializeOrderGap = new(
         id: "NALIX046",

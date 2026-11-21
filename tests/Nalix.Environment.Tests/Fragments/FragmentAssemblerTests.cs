@@ -132,6 +132,19 @@ public sealed class FragmentAssemblerTests
         Assert.Equal(FragmentAssembler.EvictInterval - 1, assembler.OpenStreamCount);
     }
 
+    [Fact]
+    public void IsFragmentedFrame_WhenNormalPacketOpcodeLowByteIs0xF0_ReturnsFalse()
+    {
+        // Regression: the old detector matched a 0xF0 "magic" at byte 0, which is the low byte of the
+        // little-endian OpCode, so a normal packet with OpCode 0x70F0 was routed into reassembly.
+        byte[] frame = [0xF0, 0x70, 0x00, 0x00, 0x00, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+
+        bool isFragment = FragmentAssembler.IsFragmentedFrame(frame, out FragmentHeader header);
+
+        Assert.False(isFragment);
+        Assert.Equal(default, header);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

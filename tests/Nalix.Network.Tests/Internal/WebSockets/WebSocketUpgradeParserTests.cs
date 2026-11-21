@@ -215,7 +215,8 @@ public sealed class WebSocketUpgradeParserTests
             200,
             maliciousContentType,
             4,
-            dest);
+            dest,
+            allowAnyOrigin: true);
 
         string formatted = Encoding.ASCII.GetString(dest[..written]);
         Assert.Contains("Content-Type: text/plain\r\n", formatted);

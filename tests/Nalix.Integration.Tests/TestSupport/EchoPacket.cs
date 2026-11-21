@@ -17,7 +17,7 @@ namespace Nalix.Integration.Tests.TestSupport;
 [SerializePackable(SerializeLayout.Explicit)]
 public sealed partial class EchoPacket : PacketBase<EchoPacket>, IPacketStaticOpcode
 {
-    public const ushort OpCode = 0x7E01;
+    public new const ushort OpCode = 0x7E01;
 
     public static ushort StaticOpCode => OpCode;
 

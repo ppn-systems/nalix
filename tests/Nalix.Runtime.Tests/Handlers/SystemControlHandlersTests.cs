@@ -37,7 +37,7 @@ public sealed class SystemControlHandlersTests
         Control packet = new();
         packet.Initialize(ControlType.CIPHER_UPDATE, sequenceId: 1, reasonCode: (ProtocolReason)CipherSuiteType.Salsa20Poly1305);
 
-        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, reliable: true, encryptedOnWire: false);
+        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, encryptedOnWire: false);
         try
         {
             await SystemControlHandlers.HandleAsync(context);
@@ -64,7 +64,7 @@ public sealed class SystemControlHandlersTests
         Control packet = new();
         packet.Initialize(ControlType.CIPHER_UPDATE, sequenceId: 1, reasonCode: (ProtocolReason)CipherSuiteType.None);
 
-        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, reliable: true, encryptedOnWire: true);
+        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, encryptedOnWire: true);
         try
         {
             await SystemControlHandlers.HandleAsync(context);
@@ -93,7 +93,7 @@ public sealed class SystemControlHandlersTests
         Control packet = new();
         packet.Initialize(ControlType.CIPHER_UPDATE, sequenceId: 1, reasonCode: (ProtocolReason)requested);
 
-        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, reliable: true, encryptedOnWire: true);
+        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, encryptedOnWire: true);
         try
         {
             await SystemControlHandlers.HandleAsync(context);
@@ -120,7 +120,7 @@ public sealed class SystemControlHandlersTests
         Control packet = new();
         packet.Initialize(ControlType.SESSION_REKEY, sequenceId: 1);
 
-        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, reliable: true, encryptedOnWire: false);
+        PacketContext<Control> context = PacketContextFactory.Create(packet, connection, encryptedOnWire: false);
         try
         {
             await SystemControlHandlers.HandleAsync(context);
@@ -142,8 +142,8 @@ public sealed class SystemControlHandlersTests
         Control powReq = new();
         powReq.Initialize(ControlType.POW_REQUEST, sequenceId: 1);
 
-        using (PacketContext<Control> ctx1 = PacketContextFactory.Create(powReq, connection, reliable: true, encryptedOnWire: false))
-        using (PacketContext<Control> ctx2 = PacketContextFactory.Create(powReq, connection, reliable: true, encryptedOnWire: false))
+        using (PacketContext<Control> ctx1 = PacketContextFactory.Create(powReq, connection, encryptedOnWire: false))
+        using (PacketContext<Control> ctx2 = PacketContextFactory.Create(powReq, connection, encryptedOnWire: false))
         {
             await SystemControlHandlers.HandleAsync(ctx1);
             await SystemControlHandlers.HandleAsync(ctx2);
@@ -154,8 +154,8 @@ public sealed class SystemControlHandlersTests
         Control pubKeyReq = new();
         pubKeyReq.Initialize(ControlType.PUBLIC_KEY_REQUEST, sequenceId: 2);
 
-        using (PacketContext<Control> ctx3 = PacketContextFactory.Create(pubKeyReq, connection, reliable: true, encryptedOnWire: false))
-        using (PacketContext<Control> ctx4 = PacketContextFactory.Create(pubKeyReq, connection, reliable: true, encryptedOnWire: false))
+        using (PacketContext<Control> ctx3 = PacketContextFactory.Create(pubKeyReq, connection, encryptedOnWire: false))
+        using (PacketContext<Control> ctx4 = PacketContextFactory.Create(pubKeyReq, connection, encryptedOnWire: false))
         {
             await SystemControlHandlers.HandleAsync(ctx3);
             await SystemControlHandlers.HandleAsync(ctx4);

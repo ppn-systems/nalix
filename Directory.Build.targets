@@ -1,0 +1,18 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+	<!--
+		Tracks the public API of every NuGet-packaged project (IsPackable=true) with
+		Microsoft.CodeAnalysis.PublicApiAnalyzers. Each such project keeps PublicAPI.Shipped.txt
+		(API of released versions) and PublicAPI.Unshipped.txt (API added since the last release).
+		Non-packable projects (tests, benchmarks, samples, analyzers) are not affected.
+		See CONTRIBUTING.md ("Public API tracking") for the update workflow.
+	-->
+	<PropertyGroup>
+		<_NalixIsPublicApiProject Condition="'$(IsPackable)' == 'true'">true</_NalixIsPublicApiProject>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(_NalixIsPublicApiProject)' == 'true'">
+		<PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" PrivateAssets="all" />
+	</ItemGroup>
+
+</Project>

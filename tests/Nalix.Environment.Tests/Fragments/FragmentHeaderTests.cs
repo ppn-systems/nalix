@@ -40,12 +40,25 @@ public sealed class FragmentHeaderTests
     }
 
     [Fact]
-    public void ReadFrom_WhenMagicIsInvalid_ThrowsInvalidDataException()
+    public void ReadFrom_WhenFragmentedFlagIsMissing_ThrowsInvalidDataException()
     {
         byte[] buffer = new byte[FragmentHeader.WireSize];
 
         InvalidDataException exception = Assert.Throws<InvalidDataException>(() => FragmentHeader.ReadFrom(buffer));
 
-        Assert.Equal("Invalid fragment magic", exception.Message);
+        Assert.Equal("Packet header does not carry the FRAGMENTED flag.", exception.Message);
+    }
+
+    [Fact]
+    public void WriteTo_WritesPacketHeaderWithOnlyFragmentedFlag()
+    {
+        byte[] buffer = new byte[FragmentHeader.WireSize];
+
+        new FragmentHeader(7, 0, 2, false).WriteTo(buffer);
+
+        Assert.Equal(13, FragmentHeader.WireSize);
+        Assert.Equal((byte)PacketFlags.FRAGMENTED, buffer[(int)PacketHeaderOffset.Flags]);
+        Assert.Equal(0, buffer[(int)PacketHeaderOffset.OpCode]);
+        Assert.Equal(0, buffer[(int)PacketHeaderOffset.OpCode + 1]);
     }
 }

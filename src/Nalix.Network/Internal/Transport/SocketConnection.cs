@@ -27,8 +27,6 @@ using Nalix.Network.Options;
 
 #pragma warning disable CA2213 // Disposable fields should be disposed
 
-#nullable enable
-
 namespace Nalix.Network.Internal.Transport;
 
 /// <summary>
@@ -59,6 +57,7 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
 
     internal void Initialize(Socket socket, IConnection owner)
     {
+        Volatile.Write(ref _returnedToPool, 0);
         _socket = socket;
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _connectionOwner = owner as Connection;
@@ -129,7 +128,10 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         Success,
         PeerClosed,
         Aborted,
-        Failed
+        Failed,
+
+        /// <summary>The session that admitted the send has ended, so nothing was written.</summary>
+        SessionClosed
     }
 
     #endregion Nested Types
@@ -144,6 +146,8 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     private static long s_receiveFaultedSuppressed;
     private static long s_fragmentErrorTicks;
     private static long s_fragmentErrorSuppressed;
+    private static long s_unauthorizedFragmentTicks;
+    private static long s_unauthorizedFragmentSuppressed;
     private static long s_receiveVarIntFaultedTicks;
     private static long s_receiveVarIntFaultedSuppressed;
     private static long s_protocolViolationTicks;
@@ -170,6 +174,11 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     private PooledSocketReceiveContext _recvCtx = null!;
 
     private int _generation;
+
+    // Sends admitted for the current session that have not finished yet. An instance whose sends are still in flight
+    // is not returned to the pool, so a stale sender can never write into a later session.
+    private int _sendsInFlight;
+    private int _returnedToPool;
 
     private int _packetCount;
     private long _bytesSent;
@@ -735,9 +744,16 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         ReadOnlySpan<byte> rawPayloadSpan = MemoryExtensions.AsSpan(_buffer, offset, payloadLen);
 
         // Fragment Assembly Check (Zero-Copy Peak).
-        // A FragmentHeader is 8 bytes. We peek directly from the SAEA buffer BEFORE renting any leases.
+        // A FragmentHeader is FragmentHeader.WireSize bytes and is detected by PacketFlags.FRAGMENTED. We peek directly from the SAEA buffer BEFORE renting any leases.
         if (FragmentAssembler.IsFragmentedFrame(rawPayloadSpan, out FragmentHeader header))
         {
+            // Reassembly state is allocated per connection, so only peers that completed the handshake may use it.
+            if (_owner.Level < s_opts.MinFragmentPermissionLevel)
+            {
+                this.REJECT_UNAUTHORIZED_FRAGMENT();
+                return;
+            }
+
             // Direct zero-copy handoff. Only the inner chunk body is passed.
             this.HANDLE_FRAGMENTED_FRAME_DIRECT(header, rawPayloadSpan[FragmentHeader.WireSize..]);
             return;
@@ -750,7 +766,6 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
          * handler to finish.
          */
         BufferLease lease = BufferLease.CopyFrom(rawPayloadSpan);
-        lease.IsReliable = true;
 
         // Safety: The application protocol (FramePipeline) requires a valid packet header.
         // If the payload is too small, it's a malformed packet that would cause OOB reads.
@@ -818,7 +833,6 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             if (assembled is not null)
             {
                 BufferLease assembledLease = assembled.Value.Lease;
-                assembledLease.IsReliable = true;
 
                 if (assembledLease.Length < PacketConstants.HeaderSize)
                 {
@@ -890,6 +904,23 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
+    private void REJECT_UNAUTHORIZED_FRAGMENT()
+    {
+        if (_owner is IConnectionTrafficMetrics trafficMetrics)
+        {
+            trafficMetrics.IncrementPacketsDropped();
+        }
+
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
+        {
+            if (Security.ThrottledEventGate.TryAcquire(ref s_unauthorizedFragmentTicks, ref s_unauthorizedFragmentSuppressed, DateTime.UtcNow.Ticks, TimeSpan.TicksPerSecond * 5, out long suppressed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Internal.Warning, new DiagnosticLog("NW.SocketConnection:Internal", $"dropped fragment from connection below MinFragmentPermissionLevel level={_owner.Level} required={s_opts.MinFragmentPermissionLevel} endpoint={_endpointString} suppressed-count={suppressed}"));
+            }
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private void HANDLE_FRAGMENT_ERROR(Exception ex)
     {
         if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Error))
@@ -909,6 +940,9 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
 
     #region Private Methods
 
+    /// <summary>Test seam: invoked after the socket has been shut down, before the write lock is taken.</summary>
+    internal static Action<SocketConnection>? s_afterShutdownHook;
+
     [DebuggerStepThrough]
     private void DISPOSE(bool disposing)
     {
@@ -916,6 +950,10 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         {
             return;
         }
+
+        // DISPOSE holds a send count for its whole duration. An admitted send that finishes while DISPOSE is still
+        // running must not return the instance to the pool; only this method's final EXIT_SEND can do that.
+        _ = Interlocked.Increment(ref _sendsInFlight);
 
         if (disposing)
         {
@@ -1014,7 +1052,14 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
             //    out of circulation.
             this.INVOKE_CLOSE_ONCE();
 
-            // 7. Dispose remaining resources.
+            s_afterShutdownHook?.Invoke(this);
+
+            // 7. Dispose remaining resources. Taking the write lock waits for a synchronous write that was admitted before
+            //    _disposed was set; the shutdown above has already unblocked it. Later writes see _disposed and abort.
+            lock (_sendLock)
+            {
+            }
+
             if (Volatile.Read(ref _socketDetached) == 0)
             {
                 _socket.Dispose();
@@ -1040,7 +1085,8 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
         }
 #endif
 
-        s_pool.Return(this);
+        // Releases the count taken above. The instance is returned here if no send is still in flight.
+        this.EXIT_SEND();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1132,6 +1178,52 @@ internal sealed partial class SocketConnection : IDisposable, IPoolable
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IS_CURRENT_GENERATION(int generation) => generation == Volatile.Read(ref _generation);
+
+    /// <summary>
+    /// Gets the session generation. It changes every time the instance is returned to the pool, so a caller that read it
+    /// earlier can tell that the instance now serves another connection.
+    /// </summary>
+    internal int Generation => Volatile.Read(ref _generation);
+
+    /// <summary>
+    /// Admits one send for the session <paramref name="generation"/>. Returns <see langword="false"/> when that session is
+    /// over. Pairs with <see cref="EXIT_SEND"/>. The count is incremented before the checks, and <see cref="DISPOSE"/> sets
+    /// the disposed flag before it reads the count, so either this send sees the disposal or the disposal sees this send.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool ENTER_SEND(int generation)
+    {
+        _ = Interlocked.Increment(ref _sendsInFlight);
+        if (this.IS_CURRENT_SESSION(generation))
+        {
+            return true;
+        }
+
+        this.EXIT_SEND();
+        return false;
+    }
+
+    /// <summary>Whether the session <paramref name="generation"/> is still the open session of this instance.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IS_CURRENT_SESSION(int generation)
+        => Volatile.Read(ref _generation) == generation && Volatile.Read(ref _disposed) == 0;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void EXIT_SEND()
+    {
+        if (Interlocked.Decrement(ref _sendsInFlight) == 0 && Volatile.Read(ref _disposed) != 0)
+        {
+            this.RETURN_WHEN_IDLE();
+        }
+    }
+
+    private void RETURN_WHEN_IDLE()
+    {
+        if (Interlocked.Exchange(ref _returnedToPool, 1) == 0)
+        {
+            s_pool.Return(this);
+        }
+    }
 
     [DebuggerStepThrough]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -1,0 +1,10 @@
+#nullable enable
+Nalix.SDK.Traversal.TraversalClient
+Nalix.SDK.Traversal.TraversalClient.ConnectAsync(ulong targetPeerId, System.Net.IPEndPoint! reflectorEndpoint, System.TimeSpan timeout, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Nalix.SDK.Traversal.TraversalSocket!>!
+Nalix.SDK.Traversal.TraversalClient.TraversalClient(Nalix.SDK.Transport.TransportSession! controlSession) -> void
+Nalix.SDK.Traversal.TraversalSocket
+Nalix.SDK.Traversal.TraversalSocket.Client.get -> System.Net.Sockets.UdpClient!
+Nalix.SDK.Traversal.TraversalSocket.Dispose() -> void
+Nalix.SDK.Traversal.TraversalSocket.IsReflected.get -> bool
+Nalix.SDK.Traversal.TraversalSocket.ReceiveAsync(System.Memory<byte> buffer, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+Nalix.SDK.Traversal.TraversalSocket.SendAsync(System.ReadOnlyMemory<byte> datagram, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>

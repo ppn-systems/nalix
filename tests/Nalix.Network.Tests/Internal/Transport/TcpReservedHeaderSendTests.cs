@@ -53,7 +53,7 @@ public sealed class TcpReservedHeaderSendTests
         payload.CopyTo(lease.SpanFull);
         lease.CommitLength(payload.Length);
 
-        IConnection.ITransport transport = connection.TCP;
+        IConnection.ITransport transport = connection.Transport;
         await transport.SendAsyncCore(lease, CancellationToken.None);
 
         byte[] frame = new byte[payload.Length + 2];

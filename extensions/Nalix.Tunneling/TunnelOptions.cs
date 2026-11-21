@@ -10,7 +10,7 @@ namespace Nalix.Tunneling;
 /// Provides configuration options for TCP Tunneling.
 /// </summary>
 [IniComment("Configuration for TCP Tunneling sessions")]
-public sealed class TunnelOptions : ConfigurationLoader
+public sealed partial class TunnelOptions : ConfigurationLoader
 {
     /// <summary>
     /// Gets or sets the maximum number of concurrent tunnel sessions allowed.

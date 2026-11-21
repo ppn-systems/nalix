@@ -71,6 +71,11 @@ public enum ProtocolOpCode : ushort
     /// </summary>
     POW_PROOF = 0x000B,
 
+    /// <summary>
+    /// Requests (client) or carries (server) a datagram session ticket over an established stream session.
+    /// </summary>
+    DATAGRAM_TICKET = 0x000C,
+
     #endregion System
 
     #region Extensions
@@ -94,6 +99,16 @@ public enum ProtocolOpCode : ushort
     /// Tunnel readiness notification sent when a tunnel endpoint is prepared for traffic forwarding.
     /// </summary>
     TUNNEL_READY = 0x00F6,
+
+    /// <summary>
+    /// Server challenge sent on a tunnel data connection; the provider answers with <c>TUNNEL_PROOF</c>.
+    /// </summary>
+    TUNNEL_CHALLENGE = 0x00F1,
+
+    /// <summary>
+    /// Provider proof of possession of the tunnel token, answering <c>TUNNEL_CHALLENGE</c>.
+    /// </summary>
+    TUNNEL_PROOF = 0x00F2,
 
     /// <summary>
     /// Tunnel provisioning packet used to provide tunnel endpoint or relay metadata.

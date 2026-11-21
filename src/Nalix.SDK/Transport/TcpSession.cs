@@ -5,6 +5,7 @@ using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Codec.DataFrames;
@@ -164,7 +165,7 @@ public class TcpSession : TransportSession
                 await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
-            this.ResetSequenceCounters();
+            // Sequence counters are not reset here: a resume continues them, and a full handshake resets them.
 
             // Initialize socket with NoDelay to reduce latency
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp) { NoDelay = this.Options.NoDelay };
@@ -175,7 +176,15 @@ public class TcpSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connecting))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.TcpSession:Connect", $"connecting host={effectiveHost} port={effectivePort} timeout-ms={this.Options.ConnectTimeoutMillis}"));
+            }
             await _socket.ConnectAsync(effectiveHost, effectivePort, connectCts.Token).ConfigureAwait(false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.TcpSession:Connect", $"connected host={effectiveHost} port={effectivePort}"));
+            }
 
             if (_socket.LocalEndPoint is IPEndPoint localEp)
             {
@@ -198,6 +207,10 @@ public class TcpSession : TransportSession
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected || !raiseConnected).ConfigureAwait(false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.ConnectFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.ConnectFailed, new DiagnosticLog("SDK.TcpSession:Connect", $"connect-failed host={effectiveHost} port={effectivePort}", ex));
+            }
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"Connection failed: {ex.Message}", ex);
         }
@@ -241,7 +254,7 @@ public class TcpSession : TransportSession
                 await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: false).ConfigureAwait(false);
             }
 
-            this.ResetSequenceCounters();
+            // Sequence counters are not reset here: a resume continues them, and a full handshake resets them.
 
             // Initialize socket with NoDelay to reduce latency
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp) { NoDelay = this.Options.NoDelay };
@@ -252,7 +265,15 @@ public class TcpSession : TransportSession
                 connectCts.CancelAfter(TimeSpan.FromMilliseconds(this.Options.ConnectTimeoutMillis));
             }
 
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connecting))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connecting, new DiagnosticLog("SDK.TcpSession:Connect", $"connecting host={effectiveHost} port={effectivePort} timeout-ms={this.Options.ConnectTimeoutMillis} proxy-v2=true"));
+            }
             await _socket.ConnectAsync(effectiveHost, effectivePort, connectCts.Token).ConfigureAwait(false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Connected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Connected, new DiagnosticLog("SDK.TcpSession:Connect", $"connected host={effectiveHost} port={effectivePort} proxy-v2=true"));
+            }
 
             if (_socket.LocalEndPoint is IPEndPoint localEp)
             {
@@ -275,6 +296,10 @@ public class TcpSession : TransportSession
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
         {
             await this.DisconnectInternalAsync(waitForLoop: true, raiseDisconnected: connected).ConfigureAwait(false);
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.ConnectFailed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.ConnectFailed, new DiagnosticLog("SDK.TcpSession:Connect", $"connect-failed host={(string.IsNullOrWhiteSpace(host) ? this.Options.Address : host)} port={port ?? this.Options.Port} proxy-v2=true", ex));
+            }
             this.OnError?.Invoke(this, ex);
             throw new NetworkException($"Connection failed: {ex.Message}", ex);
         }
@@ -381,6 +406,10 @@ public class TcpSession : TransportSession
             this.StopKeepAlive();
 
             NetworkException disconnectEx = new("The TCP session was disconnected.");
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.Disconnected))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Session.Disconnected, new DiagnosticLog("SDK.TcpSession:Disconnect", $"disconnected notified={raiseDisconnected}"));
+            }
             this.DispatchPendingDisconnect(disconnectEx);
 
             if (raiseDisconnected)
@@ -444,6 +473,46 @@ public class TcpSession : TransportSession
     public override async Task SendAsync(ReadOnlyMemory<byte> payload, bool? encrypt = null, CancellationToken ct = default)
         => await _sender.SendAsync(payload, encrypt, ct).ConfigureAwait(false);
 
+    internal override bool DeliversRekeyReliably => true;
+
+    internal override async Task SendThenSwitchAsync(IPacket packet, Action afterWrite, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+        _ = this.StampSequenceId(packet);
+
+        BufferLease lease = BufferLease.Rent(packet.Length);
+        lease.CommitLength(packet.Serialize(lease.SpanFull));
+        if (!await _sender.SendThenAsync(lease, this.State.EncryptionEnabled, afterWrite, ct).ConfigureAwait(false))
+        {
+            throw new NetworkException("Failed to send TCP packet: the frame was not delivered to the socket.");
+        }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Waits for the receive loop to finish, which the public <see cref="DisconnectAsync"/> does not.</remarks>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose",
+        Justification = "Replaces the base disconnect (DisconnectAsync) with one that also waits for the receive loop.")]
+    protected override async ValueTask DisposeAsyncCore()
+    {
+        if (Volatile.Read(ref _disposed) == 1)
+        {
+            return;
+        }
+
+        this.MarkIntentionalDisconnect();
+        this.StopKeepAlive();
+
+        await _connectionLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await this.DisconnectInternalAsync(waitForLoop: true).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ = _connectionLock.Release();
+        }
+    }
+
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
@@ -480,6 +549,10 @@ public class TcpSession : TransportSession
             return;
         }
 
+        if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Session.TransportError))
+        {
+            DiagnosticsEvents.Write(DiagnosticsEvents.Session.TransportError, new DiagnosticLog("SDK.TcpSession:HandleError", "transport-error", ex));
+        }
         this.OnError?.Invoke(this, ex);
         // Do not go through the public DisconnectAsync() path — that marks the disconnect as
         // intentional (app-initiated), which would suppress auto-reconnect for what is actually

@@ -1,0 +1,55 @@
+#nullable enable
+Nalix.Traversal.Packets.NatProbe
+Nalix.Traversal.Packets.NatProbe.NatProbe() -> void
+Nalix.Traversal.Packets.NatProbe.PeerId.get -> ulong
+Nalix.Traversal.Packets.NatProbe.PeerId.set -> void
+Nalix.Traversal.Packets.NatProbeAck
+Nalix.Traversal.Packets.NatProbeAck.NatProbeAck() -> void
+Nalix.Traversal.Packets.NatProbeAck.PeerId.get -> ulong
+Nalix.Traversal.Packets.NatProbeAck.PeerId.set -> void
+Nalix.Traversal.Packets.PeerSignal
+Nalix.Traversal.Packets.PeerSignal.AddressHigh.get -> ulong
+Nalix.Traversal.Packets.PeerSignal.AddressHigh.set -> void
+Nalix.Traversal.Packets.PeerSignal.AddressLow.get -> ulong
+Nalix.Traversal.Packets.PeerSignal.AddressLow.set -> void
+Nalix.Traversal.Packets.PeerSignal.PeerSignal() -> void
+Nalix.Traversal.Packets.PeerSignal.Port.get -> ushort
+Nalix.Traversal.Packets.PeerSignal.Port.set -> void
+Nalix.Traversal.Packets.PeerSignal.TargetPeerId.get -> ulong
+Nalix.Traversal.Packets.PeerSignal.TargetPeerId.set -> void
+Nalix.Traversal.Packets.PeerSignal.Type.get -> Nalix.Traversal.Packets.SignalType
+Nalix.Traversal.Packets.PeerSignal.Type.set -> void
+Nalix.Traversal.Packets.ReflectorAllocated
+Nalix.Traversal.Packets.ReflectorAllocated.ReflectorAllocated() -> void
+Nalix.Traversal.Packets.ReflectorAllocated.ReflectorToken.get -> ulong
+Nalix.Traversal.Packets.ReflectorAllocated.ReflectorToken.set -> void
+Nalix.Traversal.Packets.ReflectorAllocated.Success.get -> bool
+Nalix.Traversal.Packets.ReflectorAllocated.Success.set -> void
+Nalix.Traversal.Packets.ReflectorInit
+Nalix.Traversal.Packets.ReflectorInit.ReflectorInit() -> void
+Nalix.Traversal.Packets.ReflectorInit.TargetPeerId.get -> ulong
+Nalix.Traversal.Packets.ReflectorInit.TargetPeerId.set -> void
+Nalix.Traversal.Packets.SignalType
+Nalix.Traversal.Packets.SignalType.CandidateOffer = 1 -> Nalix.Traversal.Packets.SignalType
+Nalix.Traversal.Packets.SignalType.Request = 0 -> Nalix.Traversal.Packets.SignalType
+Nalix.Traversal.Packets.SignalType.Result = 2 -> Nalix.Traversal.Packets.SignalType
+override Nalix.Traversal.Packets.NatProbe.ResetForPool() -> void
+override Nalix.Traversal.Packets.NatProbeAck.ResetForPool() -> void
+override Nalix.Traversal.Packets.PeerSignal.ResetForPool() -> void
+override Nalix.Traversal.Packets.ReflectorAllocated.ResetForPool() -> void
+override Nalix.Traversal.Packets.ReflectorInit.ResetForPool() -> void
+static Nalix.Traversal.Packets.NatProbe.StaticOpCode.get -> ushort
+static Nalix.Traversal.Packets.NatProbeAck.StaticOpCode.get -> ushort
+static Nalix.Traversal.Packets.PeerSignal.StaticOpCode.get -> ushort
+static Nalix.Traversal.Packets.ReflectorAllocated.StaticOpCode.get -> ushort
+static Nalix.Traversal.Packets.ReflectorInit.StaticOpCode.get -> ushort
+override Nalix.Traversal.Packets.NatProbe.Length.get -> int
+override Nalix.Traversal.Packets.NatProbeAck.Length.get -> int
+override Nalix.Traversal.Packets.PeerSignal.Length.get -> int
+override Nalix.Traversal.Packets.ReflectorAllocated.Length.get -> int
+override Nalix.Traversal.Packets.ReflectorInit.Length.get -> int
+static Nalix.Traversal.Packets.NatProbe.Size.get -> int
+static Nalix.Traversal.Packets.NatProbeAck.Size.get -> int
+static Nalix.Traversal.Packets.PeerSignal.Size.get -> int
+static Nalix.Traversal.Packets.ReflectorAllocated.Size.get -> int
+static Nalix.Traversal.Packets.ReflectorInit.Size.get -> int

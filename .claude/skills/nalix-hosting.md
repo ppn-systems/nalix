@@ -30,7 +30,7 @@ Key methods on `INetworkApplicationBuilder`:
 | `ConfigureDispatchOptions(Action<PacketDispatchOptions<IPacket>>)` | Wire middleware, tune dispatch |
 | `MapHandlers<THandler>()` | Register a packet controller |
 | `ListenTcp<TProtocol>().Bind()` | Bind a TCP listener |
-| `ListenUdp<TProtocol>().Bind()` | Bind a UDP listener |
+| `MapDatagram<TProtocol>().Bind()` | Bind a datagram (NDP over UDP) listener; maps the ticket handler |
 | `ListenWebSocket<TProtocol>().Bind()` | Bind a WebSocket listener |
 | `Build()` | Produce a `NetworkApplication` |
 
@@ -71,7 +71,7 @@ The system handlers are registered by calling the corresponding builder `Use*` e
 ```csharp
 using var host = NetworkApplication.CreateBuilder()
     .ListenTcp<MyProtocol>().Bind()
-    .UseLogger(NLogix.Host.Instance)
+    .UseLogger(logger)                               // any Microsoft.Extensions.Logging ILogger
     .Configure<NetworkSocketOptions>(opt => opt.Port = 8080)
     .MapHandlers<MyPacketHandler>()
     .ConfigureDispatchOptions(opts => {
@@ -85,7 +85,7 @@ await host.RunAsync();                      // ActivateAsync → wait → Deacti
 
 ### Add a custom protocol
 1. Implement `IProtocol` — use `DefaultProtocol` as reference
-2. `builder.ListenTcp<MyProtocol>().Bind()` or `builder.ListenUdp<MyProtocol>().Bind()`
+2. `builder.MapTcp<MyProtocol>().Bind()` or `builder.MapDatagram<MyProtocol>().Bind()`
 3. Protocol receives the parsed packet before dispatch — inject pre-processing here if needed
 
 ### Add error/status strings
@@ -97,7 +97,6 @@ await host.RunAsync();                      // ActivateAsync → wait → Deacti
 1. Call `await host.DeactivateAsync()` — stops new packet processing
 2. Allow in-flight handler tasks to complete (await TaskManager workers if needed)
 3. Close listeners
-4. Call `NLogix.Host.Instance.Dispose()` — flushes the log channel before exit
 
 ---
 

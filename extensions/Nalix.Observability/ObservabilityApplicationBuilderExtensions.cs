@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using Nalix.Hosting;
+using Nalix.Observability.Internal;
 using Nalix.Observability.Internal.History;
 
 namespace Nalix.Observability;
@@ -37,6 +38,7 @@ public static class ObservabilityApplicationBuilderExtensions
         configure(options);
 
         ObservabilityKey.Load(options.PrivateKeyPath ?? ObservabilityKey.DefaultPath);
+        ObservabilityLimits.PayloadBudget = options.MaxPayloadBytes;
 
         if (options.HistoryEnabled)
         {

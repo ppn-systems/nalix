@@ -1,0 +1,20 @@
+#nullable enable
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.Dispose() -> void
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.FrameProcessor.get -> Nalix.Abstractions.Networking.IFrameProcessor!
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.GenerateReport() -> string!
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.KeepConnectionOpen.get -> bool
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.OnAccept(Nalix.Abstractions.Networking.IConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.OpCodeExtractor.get -> Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor!
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.PostProcessMessage(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.ProcessFrame(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.ProcessMessage(object? sender, Nalix.Abstractions.Networking.IConnectionEventArgs! args) -> void
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.ReflectorProtocol(Nalix.Traversal.Reflector.ReflectorManager! manager) -> void
+*REMOVED*Nalix.Traversal.Reflector.ReflectorProtocol.WriteReportData(System.Text.Json.Utf8JsonWriter! writer) -> void
+*REMOVED*Nalix.Traversal.Reflector.ReflectorSession.PeerAConnection.get -> Nalix.Abstractions.Networking.IConnection?
+*REMOVED*Nalix.Traversal.Reflector.ReflectorSession.PeerAConnection.set -> void
+*REMOVED*Nalix.Traversal.Reflector.ReflectorSession.PeerBConnection.get -> Nalix.Abstractions.Networking.IConnection?
+*REMOVED*Nalix.Traversal.Reflector.ReflectorSession.PeerBConnection.set -> void
+*REMOVED*static Nalix.Traversal.Reflector.ReflectorProtocol.Name.get -> string!
+Nalix.Traversal.Reflector.ReflectorSession.PeerAEndPoint.get -> System.Net.IPEndPoint?
+Nalix.Traversal.Reflector.ReflectorSession.PeerBEndPoint.get -> System.Net.IPEndPoint?

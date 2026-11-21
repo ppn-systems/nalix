@@ -99,7 +99,7 @@ public static class Setup
     public static void Configure()
     {
         _ = new NetworkApplicationBuilder()
-            .ListenUdp<DummyProtocol>().OnPort(9000).Bind()
+            .MapDatagram<DummyProtocol>().OnPort(9000).Bind()
             .Build();
     }
 }

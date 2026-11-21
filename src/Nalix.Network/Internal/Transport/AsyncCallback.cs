@@ -254,6 +254,47 @@ internal static class AsyncCallback
            && callback.Target is IFrameProcessor { SupportsInlineProcessing: true };
 
     /// <summary>
+    /// Tells every frame processor subscribed through <paramref name="callback"/> that the transport dropped
+    /// <paramref name="frame"/> under backpressure (see <see cref="IFrameProcessor.OnFrameRejected"/>).
+    /// </summary>
+    /// <remarks>Cold path: only runs when a frame is dropped. Exceptions are contained like any other callback.</remarks>
+    public static void NotifyFrameRejected(EventHandler<IConnectionEventArgs>? callback, IConnection connection, ReadOnlySpan<byte> frame)
+    {
+        if (callback is null)
+        {
+            return;
+        }
+
+        if (callback.HasSingleTarget)
+        {
+            NOTIFY_FRAME_REJECTED(callback.Target, connection, frame);
+            return;
+        }
+
+        foreach (Delegate handler in callback.GetInvocationList())
+        {
+            NOTIFY_FRAME_REJECTED(handler.Target, connection, frame);
+        }
+    }
+
+    private static void NOTIFY_FRAME_REJECTED(object? target, IConnection connection, ReadOnlySpan<byte> frame)
+    {
+        if (target is not IFrameProcessor processor)
+        {
+            return;
+        }
+
+        try
+        {
+            processor.OnFrameRejected(connection, frame);
+        }
+        catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+        {
+            LOG_THROTTLED_ERROR_SAFE(ref s_callbackErrorTicks, ref s_callbackErrorSuppressed, "async.callback_error", ex);
+        }
+    }
+
+    /// <summary>
     /// Runs a process-lane callback synchronously on the calling (receive) thread.
     /// </summary>
     /// <remarks>

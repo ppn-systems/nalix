@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0.
 
 using Nalix.Codec.Extensions;
-using Nalix.Codec.Internal;
 using Nalix.Codec.Serialization.Internal;
 using Nalix.Environment.Memory;
 

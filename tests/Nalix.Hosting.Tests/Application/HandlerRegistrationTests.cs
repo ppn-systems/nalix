@@ -42,7 +42,7 @@ public sealed class HandlerRegistrationTests : IDisposable
         int port = TestUtils.GetFreePort();
 
         var builder = NetworkApplication.CreateBuilder();
-        builder.ListenTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
+        builder.MapTcp<TestUtils.IntegrationTestProtocol>().OnPort((ushort)port);
         builder.MapHandlers<HandlerScanController>();
 
         using NetworkApplication app = builder.Build();

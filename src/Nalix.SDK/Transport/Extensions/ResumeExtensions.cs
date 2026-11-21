@@ -5,6 +5,7 @@ using System;
 using System.Buffers.Binary;
 using System.Threading;
 using System.Threading.Tasks;
+using Nalix.Abstractions.Diagnostics;
 using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
@@ -74,6 +75,10 @@ public static class ResumeExtensions
 
             if (response.Reason != ProtocolReason.NONE)
             {
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Declined))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Declined, new DiagnosticLog("SDK.ResumeExtensions:Resume", $"resume-declined reason={response.Reason}"));
+                }
                 return response.Reason;
             }
 
@@ -85,29 +90,52 @@ public static class ResumeExtensions
 
             if (response.Proof != new Bytes32(expectedResponseProofBytes))
             {
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.ProofInvalid))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.ProofInvalid, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-proof-invalid"));
+                }
                 throw new NetworkException("Session resume response proof is invalid. Possible Man-in-the-Middle attack or clock skew.");
             }
 
             session.State.SessionToken = response.SessionToken;
             session.State.EncryptionEnabled = true;
-            transportSession?.ResetSequenceCounters();
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Resumed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Resumed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resumed"));
+            }
             transportSession?.NotifyReady();
             return ProtocolReason.NONE;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Failed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-failed reason=canceled", ex));
+            }
             return ProtocolReason.CANCELLED;
         }
-        catch (TimeoutException)
+        catch (TimeoutException ex)
         {
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Failed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-failed reason=timeout", ex));
+            }
             return ProtocolReason.TIMEOUT;
         }
-        catch (NetworkException)
+        catch (NetworkException ex)
         {
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Failed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-failed reason=network-error", ex));
+            }
             return ProtocolReason.NETWORK_ERROR;
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
+            if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Failed))
+            {
+                DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Failed, new DiagnosticLog("SDK.ResumeExtensions:Resume", "resume-failed reason=invalid-state", ex));
+            }
             return ProtocolReason.STATE_VIOLATION;
         }
         finally
@@ -180,6 +208,11 @@ public static class ResumeExtensions
                 if (!session.Options.ResumeFallbackToHandshake)
                 {
                     throw new NetworkException($"Session resume failed: {reason}");
+                }
+
+                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Resumption.Fallback))
+                {
+                    DiagnosticsEvents.Write(DiagnosticsEvents.Resumption.Fallback, new DiagnosticLog("SDK.ResumeExtensions:ConnectWithResume", $"resume-fallback reason={reason}"));
                 }
 
                 if (transportSession is not null)

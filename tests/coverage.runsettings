@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Code coverage for CI, passed to dotnet test with the settings and collect "Code Coverage" options.
+  Microsoft.CodeCoverage (shipped with Microsoft.NET.Test.Sdk) instruments far more cheaply than coverlet:
+  the crypto loops of Nalix.Codec.Tests run in ~30 s instead of ~4 min. Only the Nalix product assemblies
+  are measured, not the test assemblies.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <CodeCoverage>
+            <ModulePaths>
+              <Include>
+                <ModulePath>.*[\\/]Nalix\.[^\\/]*\.dll$</ModulePath>
+              </Include>
+              <Exclude>
+                <ModulePath>.*Tests?\.dll$</ModulePath>
+                <ModulePath>.*Tests\.[^\\/]*\.dll$</ModulePath>
+                <ModulePath>.*[\\/]Nalix\.Analyzers[^\\/]*\.dll$</ModulePath>
+              </Exclude>
+            </ModulePaths>
+            <CollectFromChildProcesses>True</CollectFromChildProcesses>
+            <UseVerifiableInstrumentation>True</UseVerifiableInstrumentation>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

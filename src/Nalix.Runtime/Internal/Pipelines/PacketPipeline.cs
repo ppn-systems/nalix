@@ -2,15 +2,16 @@
 // Licensed under the Apache License, Version 2.0.
 
 using System;
-using System.Buffers.Binary;
+using System.Buffers;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Nalix.Abstractions;
+using Nalix.Abstractions.Exceptions;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
 using Nalix.Codec.Transforms;
-using Nalix.Environment.Hashing;
 using Nalix.Environment.Memory;
 
 namespace Nalix.Runtime.Internal.Pipelines;
@@ -21,7 +22,6 @@ namespace Nalix.Runtime.Internal.Pipelines;
 /// </summary>
 internal static class PacketPipeline
 {
-    private const int UdpMacTagSize = sizeof(uint);
     /// <summary>
     /// Serializes a packet into a pooled BufferLease.
     /// The caller owns the returned lease and must dispose it.
@@ -96,15 +96,7 @@ internal static class PacketPipeline
                 sequenceToUse,
                 connection.Algorithm);
 
-            ValueTask sendVt;
-            if (transport == connection.UDP)
-            {
-                sendVt = SEND_UDP_ASYNC(connection, transport, current, ct);
-            }
-            else
-            {
-                sendVt = transport.SendAsyncCore(current, ct);
-            }
+            ValueTask sendVt = transport.SendAsyncCore(current, ct);
 
             if (sendVt.IsCompletedSuccessfully)
             {
@@ -201,25 +193,83 @@ internal static class PacketPipeline
         }
     }
 
-    private static async ValueTask SEND_UDP_ASYNC(IConnection connection, IConnection.ITransport transport, [Borrowed] IBufferLease current, CancellationToken ct)
+    /// <summary>
+    /// Batch form of <see cref="ProcessAndSendAsync"/>: holds the send lock once, reserves a sequence and
+    /// transforms every frame in order, then hands the whole batch to the transport so it can coalesce the writes.
+    /// Takes ownership of <paramref name="frames"/> (rented from <see cref="ArrayPool{T}.Shared"/>) and of the
+    /// first <paramref name="count"/> leases in it.
+    /// </summary>
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    internal static async ValueTask ProcessAndSendBatchAsync(
+        IConnection connection, IConnection.ITransport transport, IBufferLease[] frames, int count,
+        bool needEncrypt, bool enableCompress, int minSizeToCompress, CancellationToken ct)
     {
-        int dataLen = current.Length;
-        BufferLease signedLease = BufferLease.Rent(dataLen + UdpMacTagSize);
         try
         {
-            current.Span.CopyTo(signedLease.SpanFull);
+            IAsyncDisposable sendScope = await transport.AcquireSendLockAsync(ct).ConfigureAwait(false);
+            try
+            {
+                int prepared = 0;
+                ExceptionDispatchInfo? failure = null;
 
-            uint payloadHash = XxHash32.Compute(signedLease.SpanFull[..dataLen]);
-            uint computedTag = XxHash32.Compute(connection.Secret.AsSpan(), seed: payloadHash);
-            BinaryPrimitives.WriteUInt32LittleEndian(signedLease.SpanFull.Slice(dataLen, UdpMacTagSize), computedTag);
+                try
+                {
+                    for (; prepared < count; prepared++)
+                    {
+                        if (needEncrypt && transport.SendSequence.IsApproachingOverflow())
+                        {
+                            connection.Disconnect("Send sequence counter approaching overflow; reconnect required.");
+                            break;
+                        }
 
-            signedLease.CommitLength(dataLen + UdpMacTagSize);
+                        uint? sequenceToUse = needEncrypt ? transport.NextSendSequence() : null;
 
-            await transport.SendAsyncCore(signedLease.Memory, ct).ConfigureAwait(false);
+                        IBufferLease original = frames[prepared];
+                        IBufferLease current = original;
+
+                        FramePipeline.ProcessOutbound(
+                            ref current,
+                            enableCompress,
+                            minSizeToCompress,
+                            needEncrypt,
+                            connection.Secret.AsSpan(),
+                            sequenceToUse,
+                            connection.Algorithm);
+
+                        if (!ReferenceEquals(current, original))
+                        {
+                            frames[prepared] = current;
+                            original.Dispose();
+                        }
+                    }
+                }
+                catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
+                {
+                    // Frames before the failing one already hold reserved sequences: send them, as a
+                    // loop of single sends would have, then surface the failure.
+                    failure = ExceptionDispatchInfo.Capture(ex);
+                }
+
+                if (prepared > 0)
+                {
+                    await transport.SendAsyncCore(new ReadOnlyMemory<IBufferLease>(frames, 0, prepared), ct).ConfigureAwait(false);
+                }
+
+                failure?.Throw();
+            }
+            finally
+            {
+                await sendScope.DisposeAsync().ConfigureAwait(false);
+            }
         }
         finally
         {
-            signedLease.Dispose();
+            for (int i = 0; i < count; i++)
+            {
+                frames[i].Dispose();
+            }
+
+            ArrayPool<IBufferLease>.Shared.Return(frames, clearArray: true);
         }
     }
 }

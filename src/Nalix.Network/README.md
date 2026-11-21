@@ -1,6 +1,6 @@
 # Nalix.Network
 
-Low-level TCP, UDP, WebSocket, connection, protocol, and admission-control infrastructure for
+Low-level TCP, WebSocket, datagram (NDP over UDP), connection, protocol, and admission-control infrastructure for
 Nalix servers.
 
 Nalix.Network owns the transport layer. It accepts sockets, creates connection objects, enforces
@@ -17,10 +17,10 @@ dotnet add package Nalix.Network
 
 | Area | Purpose | Main types |
 | :--- | :--- | :--- |
-| TCP listeners | High-throughput asynchronous TCP accept loops | `TcpListenerBase`, `TcpServerListener` |
-| UDP listeners | Session-aware UDP receive loops with endpoint pinning | `UdpListenerBase`, `UdpServerListener` |
-| WebSocket listeners | Raw WebSocket listener support for browser and proxy deployments | `WebSocketListenerBase`, `WebSocketServerListener` |
-| Connections | Active connection objects and lifecycle hooks | `Connection`, `WebSocketConnection`, `PassthroughConnection` |
+| TCP listeners | High-throughput asynchronous TCP accept loops | `TcpListenerBase` |
+| Datagram listener | NDP sessions over UDP: tickets, session table, AEAD per datagram | `DatagramListener`, `DatagramOptions` |
+| WebSocket listeners | Raw WebSocket listener support for browser and proxy deployments | `WebSocketListenerBase` |
+| Connections | Active connection objects and lifecycle hooks | `Connection`, `WebSocketConnection`, `DatagramConnection` |
 | Connection registry | Sharded active connection storage and broadcast support | `ConnectionHub`, `ConnectionTerminator` |
 | Protocols | Transport-neutral protocol lifecycle base | `Protocol` |
 | Admission control | Per-IP limits, flood protection, bans, and datagram guards | `ConnectionGuard`, `DatagramGuard` |
@@ -32,18 +32,11 @@ dotnet add package Nalix.Network
 using Nalix.Abstractions.Networking;
 using Nalix.Network.Listeners.Tcp;
 
-public sealed class CustomTcpListener : TcpListenerBase
-{
-    public CustomTcpListener(ushort port, IProtocol protocol, IConnectionHub hub)
-        : base(port, protocol, hub)
-    {
-    }
-
-    public override void ProcessFrame(object? sender, IConnectEventArgs args)
-    {
-        // Dispatch or inspect connection frames here.
-    }
-}
+// Frames are handled by the protocol's frame processor (IFrameProcessor.ProcessFrame),
+// so a listener subclass only supplies the port, protocol, hub and connection guard.
+public sealed class CustomTcpListener(
+    ushort port, IProtocol protocol, IConnectionHub hub, IConnectionGuard guard)
+    : TcpListenerBase(port, protocol, hub, guard);
 ```
 
 ## Operational Notes

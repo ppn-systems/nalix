@@ -30,4 +30,23 @@ public interface IFrameProcessor
     /// receive its next frame.
     /// </remarks>
     bool SupportsInlineProcessing => false;
+
+    /// <summary>
+    /// Called when the transport drops a received frame instead of passing it to <see cref="ProcessFrame"/>, because the
+    /// connection's or the remote address's pending-frame budget is full (see <c>NetworkCallbackOptions</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Lets the protocol answer the dropped request (for example with a retryable rate-limit error) instead of leaving
+    /// the client to time out. The default implementation does nothing, which keeps the previous silent drop.
+    /// </para>
+    /// <para>
+    /// Runs on the receive path while the connection is overloaded: it must not block, and it should not answer every
+    /// rejected frame of a flood. <paramref name="frame"/> is the raw frame as received (header in plain text, body still
+    /// encrypted or compressed) and is only valid for the duration of the call.
+    /// </para>
+    /// </remarks>
+    /// <param name="connection">The connection the frame arrived on.</param>
+    /// <param name="frame">The rejected frame.</param>
+    void OnFrameRejected(IConnection connection, System.ReadOnlySpan<byte> frame) { }
 }

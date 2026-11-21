@@ -183,13 +183,13 @@ internal sealed class QueueFormatter<
         {
             if (reader.IsFailed)
             {
-                return null!;
+                return null;
             }
 
             T item = GetElementFormatter().Deserialize(ref reader);
             if (reader.IsFailed)
             {
-                return null!;
+                return null;
             }
 
             queue.Enqueue(item);

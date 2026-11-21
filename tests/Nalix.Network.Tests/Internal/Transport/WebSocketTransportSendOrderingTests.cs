@@ -64,8 +64,7 @@ public sealed class WebSocketTransportSendOrderingTests
         // Arrange
         DelayingStubWebSocket socket = new DelayingStubWebSocket();
         WebSocketConnection wsConn = new WebSocketConnection(socket, new StubOpCodeExtractor(), new IPEndPoint(IPAddress.Loopback, 0));
-        WebSocketTransport transport = new WebSocketTransport();
-        transport.Initialize(wsConn, socket);
+        IConnection.ITransport transport = wsConn.Transport;
 
         IConnection.ITransport iface = transport;
 

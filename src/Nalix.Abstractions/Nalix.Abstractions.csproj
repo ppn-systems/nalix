@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<!-- Build & Lang -->
-		<TargetFramework>net10.0</TargetFramework>
+		<TargetFrameworks>net10.0;net11.0</TargetFrameworks>
 
 		<Nullable>enable</Nullable>
 		<IsPackable>true</IsPackable>
@@ -18,7 +18,7 @@
 		<Description><![CDATA[
 Nalix.Abstractions defines the fundamental abstractions, enums, and shared contracts for the Nalix ecosystem. It provides base interfaces, core metadata attributes, serialization primitives, and protocol definitions used across all Nalix modules.
 
-This library focuses on performance, consistency, and cross-platform reliability — serving as the foundation for higher-level components such as Nalix.Environment, Nalix.Codec, Nalix.Framework, Nalix.Network, Nalix.SDK, Nalix.Logging, and Nalix.Hosting.
+This library focuses on performance, consistency, and cross-platform reliability — serving as the foundation for higher-level components such as Nalix.Environment, Nalix.Codec, Nalix.Framework, Nalix.Network, Nalix.SDK, and Nalix.Hosting.
 		]]></Description>
 
 		<PackageReleaseNotes><![CDATA[

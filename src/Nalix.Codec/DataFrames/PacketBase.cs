@@ -19,8 +19,8 @@ namespace Nalix.Codec.DataFrames;
 /// Base class for all packets with automatic serialization and pooling.
 /// Eliminates boilerplate code for Length, Serialize, Deserialize, and ResetForPool.
 /// <para>
-/// <b>OpCode</b> is extracted automatically from <typeparamref name="TSelf"/>'s
-/// <c>[PacketOpcode]</c> attribute.
+/// <b>OpCode</b> is taken from <typeparamref name="TSelf"/>'s
+/// <see cref="IPacketStaticOpcode.StaticOpCode"/> (<see cref="IPacketStaticOpcode"/>).
 /// </para>
 /// </summary>
 /// <typeparam name="TSelf">The concrete packet type.</typeparam>
@@ -46,6 +46,7 @@ public abstract class PacketBase<[DynamicallyAccessedMembers(DynamicallyAccessed
     /// Debug only: 1 once the instance has been returned to its pool and not yet rented again, so a second
     /// <see cref="Dispose()"/> can be reported instead of silently doing nothing.
     /// </summary>
+    [SerializeIgnore]
     private int _isReturned;
 #endif
 

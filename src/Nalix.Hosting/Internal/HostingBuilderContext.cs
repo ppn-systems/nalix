@@ -39,14 +39,19 @@ internal sealed class HostingBuilderContext
     public List<TcpProtocolBinding> TcpBindings { get; } = [];
 
     /// <summary>
-    /// Gets the UDP protocol bindings configured for the host.
-    /// </summary>
-    public List<UdpProtocolBinding> UdpBindings { get; } = [];
-
-    /// <summary>
     /// Gets the WebSocket protocol bindings configured for the host.
     /// </summary>
     public List<WebSocketProtocolBinding> WebSocketBindings { get; } = [];
+
+    /// <summary>
+    /// Gets the registered datagram (NDP) protocol bindings.
+    /// </summary>
+    public List<DatagramProtocolBinding> DatagramBindings { get; } = [];
+
+    /// <summary>
+    /// Gets the factories of listeners added with <see cref="INetworkApplicationBuilder.AddListener"/>.
+    /// </summary>
+    public List<Func<IListener>> CustomListeners { get; } = [];
 
     /// <summary>
     /// Gets the configuration delegates applied to
@@ -217,24 +222,6 @@ internal sealed record TcpProtocolBinding(
     object? BindingBuilder = null);
 
 /// <summary>
-/// Represents a binding between a protocol type and its creation factory for UDP.
-/// </summary>
-/// <param name="ProtocolType">The type of the protocol.</param>
-/// <param name="Factory">The factory used to create the protocol instance.</param>
-/// <param name="Port">The optional port to listen on.</param>
-/// <param name="Authentication">The optional authentication predicate used to validate incoming datagrams.</param>
-/// <param name="BindingBuilder">
-/// Optional mutable builder populated by <c>ListenUdp</c> fluent API.
-/// When present, <see cref="Port"/> and <see cref="Authentication"/> are resolved from this builder at build time.
-/// </param>
-internal sealed record UdpProtocolBinding(
-    Type ProtocolType,
-    Func<IPacketDispatch, IProtocol> Factory,
-    ushort? Port = null,
-    Func<IConnection, System.Net.EndPoint, ReadOnlySpan<byte>, bool>? Authentication = null,
-    object? BindingBuilder = null);
-
-/// <summary>
 /// Represents a binding between a protocol type and its creation factory for WebSocket.
 /// </summary>
 /// <param name="ProtocolType">The type of the protocol.</param>
@@ -251,3 +238,14 @@ internal sealed record WebSocketProtocolBinding(
     ushort? Port = null,
     string? Path = null,
     object? BindingBuilder = null);
+
+/// <summary>
+/// A datagram (NDP) protocol binding: the protocol and the builder that holds its port and factory.
+/// </summary>
+/// <param name="ProtocolType">The protocol type.</param>
+/// <param name="Factory">Creates the protocol for a dispatch.</param>
+/// <param name="BindingBuilder">The fluent builder with the configured port.</param>
+internal sealed record DatagramProtocolBinding(
+    Type ProtocolType,
+    Func<IPacketDispatch, IProtocol> Factory,
+    ProtocolBindingBuilder BindingBuilder);

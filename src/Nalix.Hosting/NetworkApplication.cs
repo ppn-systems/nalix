@@ -170,11 +170,22 @@ public sealed class NetworkApplication : IActivatableAsync, IAsyncDisposable
                 {
                     ListenerBinding server = _serverFactories[i](_packetDispatch);
 
-                    _protocols.Add(server.Protocol);
+                    if (server.Protocol is not null)
+                    {
+                        _protocols.Add(server.Protocol);
+                    }
+
                     _listeners.Add(server.Listener);
 
-                    ReportRegistry.Instance.Register<IListener>(server.Transport, server.Listener);
-                    ReportRegistry.Instance.Register<IProtocol>(server.Transport, server.Protocol);
+                    if (server.Transport is NetworkTransport transport)
+                    {
+                        ReportRegistry.Instance.Register<IListener>(transport, server.Listener);
+
+                        if (server.Protocol is not null)
+                        {
+                            ReportRegistry.Instance.Register<IProtocol>(transport, server.Protocol);
+                        }
+                    }
 
                     server.Listener.Activate(cancellationToken);
                 }

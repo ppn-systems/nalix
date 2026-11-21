@@ -1,0 +1,3 @@
+#nullable enable
+*REMOVED*const Nalix.Framework.Tasks.TaskNaming.Tags.Udp = "udp" -> string!
+const Nalix.Framework.Tasks.TaskNaming.Tags.Datagram = "dgram" -> string!

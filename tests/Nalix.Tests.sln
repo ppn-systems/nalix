@@ -39,8 +39,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Environment.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Hosting", "..\src\Nalix.Hosting\Nalix.Hosting.csproj", "{D59A0374-6F0F-4E4E-B34C-9678589306D0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Logging", "..\extensions\Nalix.Logging\Nalix.Logging.csproj", "{39748CE7-F74B-4B9F-81BB-C1713B79781A}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Integration.Tests", "Nalix.Integration.Tests\Nalix.Integration.Tests.csproj", "{55985B5A-3068-4D19-B0A0-AFD639276348}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nalix.Analyzers.Generators", "..\analyzers\Nalix.Analyzers.Generators\Nalix.Analyzers.Generators.csproj", "{8BC45AE4-6546-43CE-8307-19AC9927CE4D}"
@@ -273,18 +271,6 @@ Global
 		{D59A0374-6F0F-4E4E-B34C-9678589306D0}.Release|x64.Build.0 = Release|Any CPU
 		{D59A0374-6F0F-4E4E-B34C-9678589306D0}.Release|x86.ActiveCfg = Release|Any CPU
 		{D59A0374-6F0F-4E4E-B34C-9678589306D0}.Release|x86.Build.0 = Release|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Debug|x64.Build.0 = Debug|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Debug|x86.Build.0 = Debug|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Release|x64.ActiveCfg = Release|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Release|x64.Build.0 = Release|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Release|x86.ActiveCfg = Release|Any CPU
-		{39748CE7-F74B-4B9F-81BB-C1713B79781A}.Release|x86.Build.0 = Release|Any CPU
 		{55985B5A-3068-4D19-B0A0-AFD639276348}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{55985B5A-3068-4D19-B0A0-AFD639276348}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{55985B5A-3068-4D19-B0A0-AFD639276348}.Debug|x64.ActiveCfg = Debug|Any CPU
