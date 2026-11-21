@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System;
+using Nalix.Environment.Datagrams.Congestion;
 using Nalix.Environment.Datagrams.Recovery;
 using Nalix.Environment.Datagrams.Wire;
 using Nalix.Environment.Datagrams;
@@ -164,5 +165,44 @@ public sealed class DatagramPrimitivesTests
         }
 
         return packets;
+    }
+
+    [Fact]
+    public void NewReno_WhenTheApplicationSendsLessThanHalfTheWindow_DoesNotGrowIt()
+    {
+        NewRenoController congestion = new(1200);
+        long initial = congestion.Window;
+
+        // One small packet per round trip, many times over: the window is never used.
+        for (int i = 0; i < 1000; i++)
+        {
+            congestion.OnPacketSent(100);
+            congestion.OnPacketAcked(100, timeSent: i);
+        }
+
+        Assert.Equal(initial, congestion.Window);
+        Assert.Equal(0, congestion.BytesInFlight);
+    }
+
+    [Fact]
+    public void NewReno_WhenTheWindowIsFilled_GrowsInSlowStart()
+    {
+        NewRenoController congestion = new(1200);
+        long initial = congestion.Window;
+        int packets = (int)(initial / 1200);
+
+        for (int i = 0; i < packets; i++)
+        {
+            congestion.OnPacketSent(1200);
+        }
+
+        for (int i = 0; i < packets; i++)
+        {
+            congestion.OnPacketAcked(1200, timeSent: i);
+        }
+
+        // The first acknowledgements arrive with the window full and grow it; nothing is sent to refill the
+        // flight, so the last ones find it under half the (now larger) window and stop the growth.
+        Assert.Equal(initial + (4 * 1200), congestion.Window);
     }
 }

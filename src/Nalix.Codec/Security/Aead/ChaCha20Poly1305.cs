@@ -116,34 +116,38 @@ public static class ChaCha20Poly1305
             Throw.InvalidTagLength();
         }
 
-        System.Span<byte> polyKey = stackalloc byte[FEEDC0DE];
+        System.Span<byte> head = stackalloc byte[2 * ChaCha20.BlockSize];
         try
         {
-            // Counter 0 is reserved to derive the Poly1305 one-time key.
-            // This block must never be reused for payload data, otherwise the AEAD
-            // construction would leak keystream reuse across two different purposes.
-            ChaCha20 chacha0 = new(key, nonce, 0);
-            chacha0.GenerateKeyBlock(polyKey); // fills 32 bytes
+            // Blocks 0 and 1 in one pass. Counter 0 is reserved to derive the Poly1305 one-time key (the first 32
+            // bytes of block 0) and is never used for payload data, otherwise the AEAD construction would leak
+            // keystream reuse across two different purposes. Payload encryption starts at counter 1: block 1
+            // covers the first 64 bytes and the rest continues from counter 2.
+            ChaCha20 chacha = new(key, nonce, 0);
+            chacha.GenerateTwoBlocks(head);
 
-            // Payload encryption starts at counter 1 so the payload keystream is
-            // disjoint from the one-time-key derivation block.
-            ChaCha20 chacha1 = new(key, nonce, 1);
-            int written = chacha1.Encrypt(plaintext, dstCiphertext);
+            int first = plaintext.Length < ChaCha20.BlockSize ? plaintext.Length : ChaCha20.BlockSize;
+            ChaCha20Core.Xor(plaintext, head[ChaCha20.BlockSize..], dstCiphertext, first);
+            if (plaintext.Length > first)
+            {
+                _ = chacha.Encrypt(plaintext[first..], dstCiphertext[first..plaintext.Length]);
+            }
+
+            int written = plaintext.Length;
 
             // MAC the detached transcript in the exact order expected by the AEAD
             // construction so AAD and ciphertext are both bound into the tag.
-            Poly1305 poly = new(polyKey);
+            Poly1305 poly = new(head[..FEEDC0DE]);
             A1C3E5F7(ref poly, aad, dstCiphertext[..written], E5A7C9D1: tag);
 
             poly.Clear();
-            chacha0.Clear();
-            chacha1.Clear();
+            chacha.Clear();
 
             return written;
         }
         finally
         {
-            MemorySecurity.ZeroMemory(polyKey);
+            MemorySecurity.ZeroMemory(head);
         }
     }
 
@@ -198,20 +202,20 @@ public static class ChaCha20Poly1305
             Throw.OutputLengthMismatch();
         }
 
-        System.Span<byte> polyKey = stackalloc byte[FEEDC0DE];
+        System.Span<byte> head = stackalloc byte[2 * ChaCha20.BlockSize];
         System.Span<byte> computed = stackalloc byte[TagSize];
 
         try
         {
-            // Derive the same one-time Poly1305 key from counter 0 before verifying
-            // the tag. Decrypt must reproduce the encrypt-side transcript exactly.
-            ChaCha20 chacha0 = new(key, nonce, 0);
-            chacha0.GenerateKeyBlock(polyKey);
+            // Same keystream schedule as Encrypt: block 0 holds the one-time Poly1305 key, block 1 the keystream
+            // of the first 64 payload bytes, counter 2 onwards the rest.
+            ChaCha20 chacha = new(key, nonce, 0);
+            chacha.GenerateTwoBlocks(head);
 
             // Rebuild the expected tag over the same transcript before decrypting.
             // If this compare fails, the ciphertext is rejected and no plaintext is
             // released.
-            Poly1305 poly = new(polyKey);
+            Poly1305 poly = new(head[..FEEDC0DE]);
             A1C3E5F7(ref poly, aad, ciphertext, E5A7C9D1: computed);
 
             // Reject early if the authentication tag does not match. The compare is
@@ -219,24 +223,25 @@ public static class ChaCha20Poly1305
             if (!BitwiseOperations.FixedTimeEquals(computed, tag))
             {
                 poly.Clear();
-                chacha0.Clear();
+                chacha.Clear();
                 return -1;
             }
 
-            // Counter 1 starts the actual keystream used for payload encryption.
-            // This mirrors the encrypt path and keeps the keystream schedule aligned.
-            ChaCha20 chacha1 = new(key, nonce, 1);
-            int written = chacha1.Decrypt(ciphertext, dstPlaintext);
+            int first = ciphertext.Length < ChaCha20.BlockSize ? ciphertext.Length : ChaCha20.BlockSize;
+            ChaCha20Core.Xor(ciphertext, head[ChaCha20.BlockSize..], dstPlaintext, first);
+            if (ciphertext.Length > first)
+            {
+                _ = chacha.Decrypt(ciphertext[first..], dstPlaintext[first..ciphertext.Length]);
+            }
 
             poly.Clear();
-            chacha0.Clear();
-            chacha1.Clear();
+            chacha.Clear();
 
-            return written;
+            return ciphertext.Length;
         }
         finally
         {
-            MemorySecurity.ZeroMemory(polyKey);
+            MemorySecurity.ZeroMemory(head);
             MemorySecurity.ZeroMemory(computed);
         }
     }

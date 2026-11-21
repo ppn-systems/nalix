@@ -132,6 +132,30 @@ public struct ChaCha20
         keystreamSpan[..n].CopyTo(dst);
     }
 
+    /// <summary>
+    /// Writes the keystream of the next two blocks (128 bytes) into <paramref name="dst"/> and advances the counter
+    /// by two: one pass of the two-block path where the hardware has it, which costs about as much as one block.
+    /// </summary>
+    /// <param name="dst">Receives the keystream; at least 128 bytes.</param>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    internal void GenerateTwoBlocks(scoped System.Span<byte> dst)
+    {
+        this.ThrowIfCleared();
+
+        System.Span<uint> stateSpan = _state;
+        if (ChaCha20Core.TwoBlockPathSupported)
+        {
+            ChaCha20Core.KeyStreamTwoBlocks(stateSpan, dst[..(2 * BlockSize)]);
+            AdvanceCounter(stateSpan, 2);
+        }
+        else
+        {
+            GenerateBlock(stateSpan, dst[..BlockSize]);
+            GenerateBlock(stateSpan, dst[BlockSize..(2 * BlockSize)]);
+        }
+    }
+
     #endregion Public — Generate Key Block
 
     #region Encryption Methods
@@ -319,6 +343,23 @@ public struct ChaCha20
 
         int offset = 0;
         int remaining = numBytes;
+
+        // Eight blocks per pass, keystream XORed in registers.
+        if (ChaCha20Core.EightBlockPathSupported)
+        {
+            const int eightSize = 8 * BlockSize;
+
+            while (remaining >= eightSize)
+            {
+                // Advance first: a counter overflow throws before any output uses a wrapped counter.
+                uint counter = stateSpan[12];
+                AdvanceCounter(stateSpan, 8);
+                ChaCha20Core.XorEightBlocks(stateSpan, counter, src[offset..], dst[offset..]);
+
+                offset += eightSize;
+                remaining -= eightSize;
+            }
+        }
 
         // Two blocks per pass while the payload is long enough to fill both 128-bit lanes.
         if (ChaCha20Core.TwoBlockPathSupported)

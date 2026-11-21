@@ -4,8 +4,6 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace Nalix.Codec.Security.Primitives;
 
@@ -44,21 +42,9 @@ public static class MemorySecurity
     /// <param name="buffer">
     /// The span representing sensitive byte data that should be cleared.
     /// </param>
-    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
-    public static void ZeroMemory(Span<byte> buffer)
-    {
-        if (buffer.Length == 0)
-        {
-            return;
-        }
-
-        // Use a ref-based loop to reduce bounds checks and make elimination harder.
-        ref byte r0 = ref MemoryMarshal.GetReference(buffer);
-
-        for (int i = 0; i < buffer.Length; i++)
-        {
-            // Volatile.Write acts as a barrier against certain optimizations.
-            Volatile.Write(ref Unsafe.Add(ref r0, i), 0);
-        }
-    }
+    // Same shape as CryptographicOperations.ZeroMemory (which NALIX071 keeps out of the core assemblies): a call
+    // the JIT can neither inline nor optimize, so the stores are never elided, around the vectorized Span.Clear.
+    // The byte-by-byte Volatile.Write loop it replaces was a large share of short AEAD calls.
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+    public static void ZeroMemory(Span<byte> buffer) => buffer.Clear();
 }
