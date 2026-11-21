@@ -256,6 +256,37 @@ public sealed partial class DatagramListener
         }
     }
 
+    /// <summary>
+    /// Sends a batch of datagrams produced by a session, in order: datagram <c>i</c> is
+    /// <c>buffer[(i * stride)..][..lengths[i]]</c>, for <c>targets[i]</c>. Several go out in one system call where
+    /// the platform allows it.
+    /// </summary>
+    internal void SendBatch(ReadOnlySpan<byte> buffer, int stride, ReadOnlySpan<int> lengths, ReadOnlySpan<SocketAddress?> targets)
+    {
+        Socket? socket = Volatile.Read(ref _socket);
+        if (socket is null)
+        {
+            return;
+        }
+
+        int next = 0;
+        while (next < lengths.Length)
+        {
+            if (lengths.Length - next > 1)
+            {
+                int sent = DatagramBatchSender.TrySend(socket, buffer[(next * stride)..], stride, lengths[next..], targets[next..]);
+                if (sent > 0)
+                {
+                    next += sent;
+                    continue;
+                }
+            }
+
+            this.SendTo(buffer.Slice(next * stride, lengths[next]), targets[next]!);
+            next++;
+        }
+    }
+
     /// <summary>Removes a disposed session from the routing table and releases its guard slot. Called once per session.</summary>
     internal void OnConnectionClosed(DatagramConnection connection)
     {

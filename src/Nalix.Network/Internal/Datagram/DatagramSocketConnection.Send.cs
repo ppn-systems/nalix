@@ -145,10 +145,11 @@ internal sealed partial class DatagramSocketConnection
                     this.ArmLocked();
                 }
 
+                _listener.SendBatch(buffer, DatagramEngine.MaxDatagramSize, lengths[..count], targets.AsSpan(0, count));
+
                 int sent = 0;
                 for (int i = 0; i < count; i++)
                 {
-                    _listener.SendTo(buffer.AsSpan(i * DatagramEngine.MaxDatagramSize, lengths[i]), targets[i]!);
                     sent += lengths[i];
                     targets[i] = null;
                 }
