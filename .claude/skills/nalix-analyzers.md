@@ -18,6 +18,7 @@ IDs are sequential: `NALIX001`–`NALIX078`, **not organized by hundreds**. Cate
 - `NALIX032–NALIX039`: Middleware behavior, buffer leaks, performance
 - `NALIX040–NALIX058`: Network, hosting, opcode ranges, allocations, return types
 - `NALIX071–NALIX078`: Crypto, formatting, logging, pooling, and AOT constraints
+- `NALIX108–NALIX110`: `IBufferLease` ownership (`NalixUsageAnalyzer.LeaseOwnership.cs`)
 
 When adding a new rule, append the next available ID — do not try to "slot" into a category range.
 
@@ -55,6 +56,8 @@ Do not suppress at the project level — suppressions should be local and docume
 ---
 
 ## Gotchas
+
+- **`[Borrowed]` is an ownership contract, not a NALIX039 suppressor**: NALIX108–110 treat every lease-typed parameter *without* `[Borrowed]` as taking ownership. Marking a parameter `[Borrowed]` while the method disposes or stores the lease raises NALIX110. Use `[Borrowed]` only when the caller keeps ownership; call `Retain()` when the callee needs its own reference. Delegate invocations, generic `T` parameters and `bool TryXxx(lease)` calls are treated as non-owning.
 
 - **Allocating in analyzer = IDE lag**: A `new List<>()` inside `AnalyzeInvocation` runs thousands of times per second. Use `ImmutableArray`, stackalloc, or pre-allocated pools instead.
 

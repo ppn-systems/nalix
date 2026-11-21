@@ -377,7 +377,7 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
     /// <param name="connection">The destination connection.</param>
     /// <param name="raw">The packet lease to enqueue.</param>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    public void Push(IConnection connection, [Borrowed] IBufferLease raw)
+    public void Push(IConnection connection, IBufferLease raw)
     {
         if (!this.PushCore(connection, raw, out _))
         {
@@ -1108,7 +1108,7 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-        public bool TryEnqueue([Borrowed] IBufferLease lease)
+        public bool TryEnqueue(IBufferLease lease)
         {
             SpinWait spin = default;
 
