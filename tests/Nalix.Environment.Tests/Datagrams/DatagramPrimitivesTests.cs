@@ -117,19 +117,27 @@ public sealed class DatagramPrimitivesTests
     }
 
     [Fact]
-    public void AckTracker_AcknowledgesImmediatelyOnAGapAndAfterTwoPackets()
+    public void AckTracker_AcknowledgesAtOnceOnAGapAndShortlyAfterTwoPackets()
     {
         AckTracker tracker = new();
 
         tracker.OnPacketReceived(0, true, now: 100, maxAckDelay: 25_000);
         Assert.Equal(25_100, tracker.AckDeadline);
 
+        // The second packet brings the ACK forward to the coalescing delay, for a reply to carry it.
         tracker.OnPacketReceived(1, true, now: 200, maxAckDelay: 25_000);
-        Assert.Equal(200, tracker.AckDeadline);
+        Assert.Equal(200 + AckTracker.AckCoalesceDelay, tracker.AckDeadline);
 
+        // A gap is acknowledged at once.
         tracker.OnAckSent();
         tracker.OnPacketReceived(5, true, now: 300, maxAckDelay: 25_000);
         Assert.Equal(300, tracker.AckDeadline);
+
+        // Never later than the peer's max ACK delay.
+        tracker.OnAckSent();
+        tracker.OnPacketReceived(6, true, now: 400, maxAckDelay: 500);
+        tracker.OnPacketReceived(7, true, now: 450, maxAckDelay: 500);
+        Assert.Equal(900, tracker.AckDeadline);
     }
 
     private static HashSet<ulong> Decode(ReadOnlySpan<byte> frame)

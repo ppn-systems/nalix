@@ -48,15 +48,29 @@ internal sealed class AckTracker
         }
 
         _ackElicitingSinceAck++;
-        if (gap || _ackElicitingSinceAck >= 2)
+        if (gap)
         {
+            // A gap is a loss signal: acknowledge at once, so the sender detects it quickly.
             this.AckDeadline = now;
+        }
+        else if (_ackElicitingSinceAck >= 2)
+        {
+            // Every second packet is acknowledged within AckCoalesceDelay rather than at once: an answer, or the
+            // next request, sent in the meantime carries the ACK. Sent at once it was a datagram of its own on
+            // most request/response exchanges, about 0.75 extra datagrams each way per request on a server.
+            this.AckDeadline = Math.Min(this.AckDeadline, now + Math.Min(maxAckDelay, AckCoalesceDelay));
         }
         else if (this.AckDeadline == long.MaxValue)
         {
             this.AckDeadline = now + maxAckDelay;
         }
     }
+
+    /// <summary>
+    /// How long an ACK due after two packets waits for a datagram to ride on: 1 ms, short against any WAN round
+    /// trip. The delay is reported in the ACK frame and taken out of the peer's RTT samples.
+    /// </summary>
+    public const long AckCoalesceDelay = 1_000;
 
     /// <summary>
     /// Writes an ACK frame (type byte included). Returns the bytes written, or 0 when nothing fits.

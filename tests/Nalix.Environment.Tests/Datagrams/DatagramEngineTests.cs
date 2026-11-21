@@ -425,6 +425,48 @@ public sealed class DatagramEngineTests
         Assert.InRange(elapsed, 4_000_000, 16_000_000);
     }
 
+    [Fact]
+    public void RequestResponse_AServerFlushingBeforeItsHandlerReplies_SendsOneDatagramThatCarriesTheAck()
+    {
+        // A server flushes as soon as a request arrives and its handler replies a little later. The request
+        // also acknowledges the previous reply, which frees flow-control budget: that used to make the flush send
+        // an ACK-only datagram ahead of the reply, nearly one per request.
+        using NetworkEmulator net = new(seed: 99);
+        Assert.True(net.RunUntil(() => net.Client.State == DatagramEngineState.Established && net.Server.State == DatagramEngineState.Established));
+        byte[] buffer = new byte[DatagramEngine.MaxDatagramSize];
+
+        for (int i = 0; i < 20; i++)
+        {
+            Assert.True(net.Client.TrySend(Message(i, 64), DeliveryMethod.ReliableOrdered, 0, 0, net.Now));
+            int requests = 0;
+            int length;
+            while ((length = net.Client.Poll(buffer, net.Now, out _)) > 0)
+            {
+                Assert.True(net.Server.Receive(buffer.AsSpan(0, length), net.ClientAddress, net.Now));
+                requests++;
+            }
+
+            Assert.Equal(1, requests); // The request carries the client's ACK of the previous reply.
+
+            // The flush on receipt: nothing is due, so nothing is sent.
+            Assert.Equal(0, net.Server.Poll(buffer, net.Now, out _));
+
+            // The handler replies: one datagram, with the reply and the ACK of the request.
+            Assert.True(net.Server.TrySend(Message(i, 64), DeliveryMethod.ReliableOrdered, 0, 0, net.Now));
+            int replies = 0;
+            while ((length = net.Server.Poll(buffer, net.Now, out _)) > 0)
+            {
+                Assert.True(net.Client.Receive(buffer.AsSpan(0, length), from: null, net.Now));
+                replies++;
+            }
+
+            Assert.Equal(1, replies);
+        }
+
+        Assert.Equal(20, net.ClientHandler.Messages.Count);
+        Assert.Equal(20, net.ServerHandler.Messages.Count);
+    }
+
     private static byte[] Message(int index, int size)
     {
         byte[] message = new byte[Math.Max(size, 4)];
