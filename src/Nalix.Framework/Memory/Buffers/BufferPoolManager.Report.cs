@@ -8,7 +8,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Threading;
 using Nalix.Framework.Memory.Internal.Buffers;
 
 namespace Nalix.Framework.Memory.Buffers;
@@ -36,16 +35,18 @@ public sealed partial class BufferPoolManager
     {
         ArgumentNullException.ThrowIfNull(writer);
 
+        (long rents, long returns, long bytesRented) = this.ReadCounters();
+
         writer.WriteStartObject();
         writer.WriteString("UtcNow", DateTime.UtcNow);
-        writer.WriteNumber("RentCount", Volatile.Read(ref _rentCount));
-        writer.WriteNumber("ReturnCount", Volatile.Read(ref _returnCount));
-        writer.WriteNumber("TotalBytesRented", Volatile.Read(ref _totalBytesRented));
-        writer.WriteNumber("OutstandingCount", Volatile.Read(ref _rentCount) - Volatile.Read(ref _returnCount));
+        writer.WriteNumber("RentCount", rents);
+        writer.WriteNumber("ReturnCount", returns);
+        writer.WriteNumber("TotalBytesRented", bytesRented);
+        writer.WriteNumber("OutstandingCount", rents - returns);
 
         double uptimeSec = (DateTime.UtcNow - _startTime).TotalSeconds;
         double throughputMBps = uptimeSec > 0
-            ? (double)Volatile.Read(ref _totalBytesRented) / (1024 * 1024) / uptimeSec
+            ? (double)bytesRented / (1024 * 1024) / uptimeSec
             : 0;
         writer.WriteNumber("ThroughputMBps", throughputMBps);
 
@@ -142,13 +143,15 @@ public sealed partial class BufferPoolManager
         _ = sb.AppendLine("======================================================================");
         _ = sb.AppendLine("Overall Statistics (ArrayPool.Shared wrapper)");
         _ = sb.AppendLine("======================================================================");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Rent Count                : {Volatile.Read(ref _rentCount)}");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Return Count              : {Volatile.Read(ref _returnCount)}");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Outstanding Count         : {Volatile.Read(ref _rentCount) - Volatile.Read(ref _returnCount)}");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Total Bytes Rented        : {Volatile.Read(ref _totalBytesRented)}");
+        (long rents, long returns, long bytesRented) = this.ReadCounters();
+
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Rent Count                : {rents}");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Return Count              : {returns}");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Outstanding Count         : {rents - returns}");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Total Bytes Rented        : {bytesRented}");
 
         double uptimeSec = (DateTime.UtcNow - _startTime).TotalSeconds;
-        double throughputMBps = uptimeSec > 0 ? (double)Volatile.Read(ref _totalBytesRented) / (1024 * 1024) / uptimeSec : 0;
+        double throughputMBps = uptimeSec > 0 ? (double)bytesRented / (1024 * 1024) / uptimeSec : 0;
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"Throughput                : {throughputMBps:F2} MB/s");
         _ = sb.AppendLine("======================================================================");
         _ = sb.AppendLine();

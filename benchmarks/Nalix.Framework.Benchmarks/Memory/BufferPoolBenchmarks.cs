@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Nalix.Environment.Configuration;
 using Nalix.Environment.Memory;
@@ -58,4 +59,29 @@ public class BufferPoolBenchmarks
         using BufferLease lease = BufferLease.Rent(Size);
         lease.SpanFull[0] = 1;
     }
+
+    private const int Workers = 4;
+    private const int PerWorker = 10_000;
+
+    /// <summary>Four threads renting and returning at once: what a multi-core server does on every packet.</summary>
+    [Benchmark(OperationsPerInvoke = Workers * PerWorker)]
+    public void ArrayPool_Shared_Parallel()
+        => _ = Parallel.For(0, Workers, _ =>
+        {
+            for (int i = 0; i < PerWorker; i++)
+            {
+                ArrayPool<byte>.Shared.Return(ArrayPool<byte>.Shared.Rent(Size));
+            }
+        });
+
+    /// <inheritdoc cref="ArrayPool_Shared_Parallel"/>
+    [Benchmark(OperationsPerInvoke = Workers * PerWorker)]
+    public void BufferPoolManager_RentReturn_Parallel()
+        => _ = Parallel.For(0, Workers, _ =>
+        {
+            for (int i = 0; i < PerWorker; i++)
+            {
+                _bufferPoolManager.Return(_bufferPoolManager.Rent(Size));
+            }
+        });
 }

@@ -174,4 +174,81 @@ public sealed class Poly1305ReferenceTests
             Assert.Equal(expected, actual);
         }
     }
+
+    /// <summary>
+    /// Runs of 256 bytes and more go through the four-way AVX2 loop (after the blocks that do not fill a group
+    /// of four), shorter ones through the scalar one: every length around and well past the switch.
+    /// </summary>
+    [Theory]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(0x7A11)]
+    public void Compute_ForEveryLengthAcrossBothBlockLoops_MatchesReferenceModel(int seed)
+    {
+        byte[] key = KeyFrom(seed);
+
+        for (int length = 0; length <= 700; length++)
+        {
+            byte[] message = new byte[length];
+            for (int i = 0; i < length; i++)
+            {
+                message[i] = (byte)((i * 31) + seed);
+            }
+
+            Assert.Equal(ReferenceTag(key, message), Poly1305.Compute(key, message));
+        }
+    }
+
+    /// <summary>
+    /// All-ones keys and messages keep the partially reduced accumulator and the powers of r at their
+    /// largest, which is where a carry dropped between the scalar and the four-way loop would show.
+    /// </summary>
+    [Theory]
+    [InlineData(0xFF)]
+    [InlineData(0xFE)]
+    public void Compute_WithSaturatedLongInput_MatchesReferenceModel(byte fill)
+    {
+        byte[] key = new byte[Poly1305.KeySize];
+        Array.Fill(key, fill);
+
+        foreach (int length in new[] { 256, 257, 271, 272, 320, 1024, 1472, 4096 + 13 })
+        {
+            byte[] message = new byte[length];
+            Array.Fill(message, (byte)0xFF);
+
+            Assert.Equal(ReferenceTag(key, message), Poly1305.Compute(key, message));
+        }
+    }
+
+    [Fact]
+    public void UpdateFinalizeTag_AlternatingShortAndLongChunks_MatchesReferenceModel()
+    {
+        // The accumulator moves between the scalar and the four-way loop on every chunk.
+        byte[] key = KeyFrom(13);
+        Array.Fill(key, (byte)0xFF, 0, 16);
+        byte[] message = new byte[3000];
+        Array.Fill(message, (byte)0xFF);
+        int[] chunks = [16, 256, 3, 320, 16, 13, 272, 1, 500, 48, 1024, 7];
+
+        byte[] actual = new byte[Poly1305.TagSize];
+        Poly1305 mac = new(key);
+        try
+        {
+            int offset = 0;
+            for (int i = 0; offset < message.Length; i++)
+            {
+                int take = Math.Min(chunks[i % chunks.Length], message.Length - offset);
+                mac.Update(message.AsSpan(offset, take));
+                offset += take;
+            }
+
+            mac.FinalizeTag(actual);
+        }
+        finally
+        {
+            mac.Clear();
+        }
+
+        Assert.Equal(ReferenceTag(key, message), actual);
+    }
 }

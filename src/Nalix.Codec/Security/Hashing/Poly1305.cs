@@ -623,6 +623,36 @@ public ref struct Poly1305
     {
         System.Diagnostics.Debug.Assert(blocks.Length % BlockBytes == 0);
 
+        // Long runs: the leading blocks that do not fill a group of four here, then the groups four-way.
+        if (Poly1305Core.FourWayPathSupported && blocks.Length >= Poly1305Core.FourWayMinimumBytes)
+        {
+            int lead = blocks.Length % (4 * BlockBytes);
+            if (lead > 0)
+            {
+                this.AbsorbFullBlocksScalar(ref h, blocks[..lead]);
+            }
+
+            Poly1305Core.AbsorbGroups(
+                System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref h.L0, 5),
+                System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(in _r.L0, 5),
+                blocks[lead..]);
+            return;
+        }
+
+        this.AbsorbFullBlocksScalar(ref h, blocks);
+    }
+
+    /// <summary>
+    /// Absorbs whole 16-byte blocks one at a time.
+    /// </summary>
+    /// <param name="h">The accumulator, updated in place.</param>
+    /// <param name="blocks">A whole number of 16-byte blocks.</param>
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private readonly void AbsorbFullBlocksScalar(
+        ref Limbs h,
+        scoped System.ReadOnlySpan<byte> blocks)
+    {
         // The same arithmetic as AbsorbBlock, with the accumulator and the key limbs kept in locals for the
         // whole run instead of being loaded from and stored to memory once per block.
         uint h0 = h.L0, h1 = h.L1, h2 = h.L2, h3 = h.L3, h4 = h.L4;
