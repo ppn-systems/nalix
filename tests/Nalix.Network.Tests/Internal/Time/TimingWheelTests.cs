@@ -36,6 +36,7 @@ using Xunit;
 namespace Nalix.Network.Tests.Internal.Time;
 
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
+[Collection(TestCollections.NetworkConfig)] // new TimingWheel() reads TimingWheelOptions, which other tests change
 public sealed class TimingWheelTests
 {
     private static readonly IOpCodeExtractor s_testOpCodeExtractor = new TestOpCodeExtractor();
