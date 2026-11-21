@@ -82,6 +82,9 @@ public sealed partial class NalixUsageAnalyzer
                     case IParameterReferenceOperation parameterReference:
                         ClassifyLeaseReference(context, leaseType, parameterReference, parameterReference.Parameter, parameterReference.Parameter.Type, ref events, ref borrowedViolations, ref excluded);
                         break;
+
+                    default:
+                        break;
                 }
             }
         }
@@ -279,6 +282,9 @@ public sealed partial class NalixUsageAnalyzer
                 }
 
                 break;
+
+            default:
+                break;
         }
 
         if (kind == LeaseEventKind.Release && isBorrowedParameter)
@@ -373,6 +379,9 @@ public sealed partial class NalixUsageAnalyzer
                     return lambda.Symbol;
                 case ILocalFunctionOperation localFunction:
                     return localFunction.Symbol;
+
+                default:
+                    break;
             }
         }
 
