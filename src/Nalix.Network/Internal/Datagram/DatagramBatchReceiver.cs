@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Nalix.Environment.Datagrams;
 using static Nalix.Network.Internal.Datagram.DatagramBatchSender;
 
@@ -118,6 +119,8 @@ internal sealed unsafe partial class DatagramBatchReceiver
         return count;
     }
 
+    // Linux only: callers check IsSupported (Linux, 64-bit) first, so the binding is never loaded elsewhere.
+    [SupportedOSPlatform("linux")]
     [LibraryImport("libc", EntryPoint = "recvmmsg", SetLastError = true)]
     private static partial int ReceiveMultipleMessages(int fd, MultiMessageHeader* messages, uint count, int flags, void* timeout);
 }
