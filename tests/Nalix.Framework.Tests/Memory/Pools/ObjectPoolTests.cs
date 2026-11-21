@@ -34,6 +34,28 @@ public sealed class ObjectPoolTests
     }
 
     [Fact]
+    public void GetAndReturn_FromManyThreads_CountsEveryRentAndReturn()
+    {
+        ObjectPool pool = new(defaultMaxItemsPerType: 64);
+        const int Threads = 8, PerThread = 5_000;
+
+        _ = System.Threading.Tasks.Parallel.For(0, Threads, new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = Threads }, _ =>
+        {
+            for (int i = 0; i < PerThread; i++)
+            {
+                pool.Return(pool.Get<TestPoolable>());
+            }
+        });
+
+        Assert.Equal(Threads * PerThread, pool.TotalRentedCount);
+        Assert.Equal(Threads * PerThread, pool.TotalReturnedCount);
+
+        pool.ResetStatistics();
+        Assert.Equal(0, pool.TotalRentedCount);
+        Assert.Equal(0, pool.TotalReturnedCount);
+    }
+
+    [Fact]
     public void Return_WhenInstanceReturnedTwice_RejectsSecondReturn()
     {
         ObjectPool pool = new(defaultMaxItemsPerType: 8);

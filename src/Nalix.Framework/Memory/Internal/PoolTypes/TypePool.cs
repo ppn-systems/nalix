@@ -46,7 +46,7 @@ internal class TypePool(int maxCapacity)
     /// One shared counter made every core write the same cache line on every push and pop, and cost most of a
     /// pooled Get and Return on a multi-core server. <see cref="AvailableCount"/> stays a best-effort figure.
     /// </summary>
-    private readonly CountSlot[] _counts = new CountSlot[CountSlotCount()];
+    private readonly CountSlot[] _counts = new CountSlot[CountSlotCount() + 1];
 
     #endregion Fields
 
@@ -145,12 +145,14 @@ internal class TypePool(int maxCapacity)
     }
 
     /// <summary>
-    /// Where the current processor starts scanning: its own run of eight slots (one 64-byte cache line), so threads
-    /// on different cores push and pop on different lines instead of all fighting over the first slots. A scan
-    /// still wraps over the whole array, so capacity and what can be found are unchanged.
+    /// Where the current processor starts scanning: its own run of eight slots (64 bytes), so threads on different
+    /// cores push and pop on different cache lines instead of all fighting over the first slots. Runs start 16 slots
+    /// (128 bytes) apart: the array is not cache-line aligned, so runs placed back to back shared a line with their
+    /// neighbours. The first run starts 16 slots in, away from the array's length, which every access reads for its
+    /// bounds check. A scan still wraps over the whole array, so capacity and what can be found are unchanged.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int RegionStart(int length) => (int)((uint)(Thread.GetCurrentProcessorId() * RegionSize) % (uint)length);
+    private static int RegionStart(int length) => (int)((uint)((Thread.GetCurrentProcessorId() * RegionStride) + RegionStride) % (uint)length);
 
     /// <summary>
     /// Tries to get an object from the pool.
@@ -180,6 +182,18 @@ internal class TypePool(int maxCapacity)
             return false;
         }
 
+        // Then the other processors' runs, where pushes land: an object returned on another core (an async
+        // continuation, a send completion) sits there. Scanning the whole array for it read up to 2048 slots,
+        // through cache lines the other cores keep writing.
+        for (int r = 1; r < _counts.Length - 1; r++)
+        {
+            if (TryTake(slots, (int)((uint)(start + (r * RegionStride)) % (uint)length), region, length, out obj))
+            {
+                _ = Interlocked.Decrement(ref this.CurrentCount);
+                return true;
+            }
+        }
+
         if (TryTake(slots, start + region, length - region, length, out obj))
         {
             _ = Interlocked.Decrement(ref this.CurrentCount);
@@ -189,8 +203,11 @@ internal class TypePool(int maxCapacity)
         return false;
     }
 
-    /// <summary>Slots per processor region: eight references, one 64-byte cache line.</summary>
+    /// <summary>Slots per processor region: eight references, 64 bytes.</summary>
     private const int RegionSize = 8;
+
+    /// <summary>Slots between the starts of two processors' regions: 128 bytes, so no two regions share a cache line.</summary>
+    private const int RegionStride = 16;
 
     /// <summary>Takes the first object among <paramref name="count"/> slots from <paramref name="from"/>, wrapping.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -326,7 +343,9 @@ internal class TypePool(int maxCapacity)
     #endregion Public Methods
 
     /// <summary>Gets the count slot of the current processor.</summary>
-    private ref int CurrentCount => ref _counts[Thread.GetCurrentProcessorId() & (_counts.Length - 1)].Value;
+    // Slot 0 is never used: it shares a cache line with the array's length, which every core reads for the bounds
+    // check, so a core writing it slowed down every other core's access to the array.
+    private ref int CurrentCount => ref _counts[(Thread.GetCurrentProcessorId() & (_counts.Length - 2)) + 1].Value;
 
     private int SumCounts()
     {
@@ -343,8 +362,12 @@ internal class TypePool(int maxCapacity)
     private static int CountSlotCount()
         => (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)System.Math.Clamp(System.Environment.ProcessorCount, 1, 64));
 
-    /// <summary>The count of one processor, alone on a 64-byte cache line.</summary>
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 64)]
+    /// <summary>
+    /// The count of one processor. 128 bytes apart from the next slot's: an array's elements start 16 bytes into the
+    /// object, which is not cache-line aligned, so 64-byte slots straddled two lines and each line was shared by two
+    /// processors' slots.
+    /// </summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 128)]
     private struct CountSlot
     {
         [System.Runtime.InteropServices.FieldOffset(0)]

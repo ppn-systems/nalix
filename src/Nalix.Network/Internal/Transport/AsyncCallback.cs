@@ -254,6 +254,17 @@ internal static class AsyncCallback
            && callback.Target is IFrameProcessor { SupportsInlineProcessing: true };
 
     /// <summary>
+    /// Returns <see langword="true"/> when the post-process handler is a single <see cref="Protocols.Protocol"/> that
+    /// declared <see cref="Protocols.Protocol.SupportsInlinePostProcessing"/>, so the send completion may run it
+    /// directly instead of queuing a thread-pool work item.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool CanPostProcessInline([NotNullWhen(true)] EventHandler<IConnectionEventArgs>? callback)
+        => callback is not null
+           && callback.HasSingleTarget
+           && callback.Target is Protocols.Protocol { SupportsInlinePostProcessing: true };
+
+    /// <summary>
     /// Tells every frame processor subscribed through <paramref name="callback"/> that the transport dropped
     /// <paramref name="frame"/> under backpressure (see <see cref="IFrameProcessor.OnFrameRejected"/>).
     /// </summary>

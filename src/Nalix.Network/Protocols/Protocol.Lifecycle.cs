@@ -28,6 +28,17 @@ public abstract partial class Protocol
     public virtual TransportFraming Framing { get; set; } = TransportFraming.UInt16LengthPrefixed;
 
     /// <summary>
+    /// Gets a value indicating whether <see cref="PostProcessMessage"/> is short and never blocks, so a transport may
+    /// run it on the thread that completed the send instead of queuing it to the thread pool.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="false"/>. Return <see langword="true"/> only when <see cref="OnPostProcess"/> does
+    /// next to nothing and <see cref="KeepConnectionOpen"/> is <see langword="true"/>: otherwise post-processing
+    /// disconnects, which must not run on the send path.
+    /// </remarks>
+    public virtual bool SupportsInlinePostProcessing => false;
+
+    /// <summary>
     /// Gets or sets whether the protocol keeps the connection open after a message is processed.
     /// The flag is stored atomically because it is read during hot-path post-processing.
     /// </summary>

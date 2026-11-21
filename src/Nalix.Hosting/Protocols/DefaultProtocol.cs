@@ -48,6 +48,13 @@ public sealed class DefaultProtocol : Protocol
     /// <inheritdoc/>
     public override IOpCodeExtractor OpCodeExtractor => s_opCodeExtractor;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Post-processing only counts the message while the connection stays open, so it runs where the send completed
+    /// instead of costing a thread-pool hop per sent message.
+    /// </remarks>
+    public override bool SupportsInlinePostProcessing => this.KeepConnectionOpen;
+
     /// <summary>
     /// Creates a new <see cref="DefaultProtocol"/> that routes packets into the given dispatch pipeline.
     /// </summary>

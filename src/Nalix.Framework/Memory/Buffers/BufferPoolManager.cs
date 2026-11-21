@@ -28,7 +28,7 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
 
     // Diagnostics counters, one padded slot per processor (summed by the report): a single shared counter
     // made every core write the same cache line on every rent and return.
-    private readonly CounterSlot[] _counters = new CounterSlot[CounterSlotCount()];
+    private readonly CounterSlot[] _counters = new CounterSlot[CounterSlotCount() + 1];
     private readonly DateTime _startTime = DateTime.UtcNow;
 
     // Leak detection
@@ -200,8 +200,10 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     }
 
     /// <summary>Gets the counter slot of the current processor.</summary>
+    // Slot 0 is never used: it shares a cache line with the array's length, which every core reads for the bounds
+    // check, so a core writing it slowed down every other core's access to the array.
     private ref CounterSlot Counters
-        => ref _counters[Thread.GetCurrentProcessorId() & (_counters.Length - 1)];
+        => ref _counters[(Thread.GetCurrentProcessorId() & (_counters.Length - 2)) + 1];
 
     /// <summary>Sums the counter slots.</summary>
     private (long Rents, long Returns, long BytesRented) ReadCounters()
@@ -222,8 +224,12 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     private static int CounterSlotCount()
         => (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)System.Math.Clamp(System.Environment.ProcessorCount, 1, 64));
 
-    /// <summary>The counters of one processor, alone on a 64-byte cache line.</summary>
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 64)]
+    /// <summary>
+    /// The counters of one processor. 128 bytes apart from the next slot's: an array's elements start 16 bytes into the
+    /// object, which is not cache-line aligned, so 64-byte slots straddled two lines and each line was shared by two
+    /// processors' slots.
+    /// </summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 128)]
     private struct CounterSlot
     {
         [System.Runtime.InteropServices.FieldOffset(0)]
