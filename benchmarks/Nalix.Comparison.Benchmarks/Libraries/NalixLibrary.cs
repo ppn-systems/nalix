@@ -66,6 +66,11 @@ public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
         q.MinConnectionIntervalMs = 0;
         q.BurstThreshold = 100;
 
+        // The plaintext modes never handshake, so their connections stay below ESTABLISHED and the
+        // default HandshakeTimeoutMs (15 s, an anti-abuse policy) would close them mid-measurement.
+        // The benchmark measures long-lived connections, so the timeout is disabled (0).
+        Nalix.Environment.Configuration.ConfigurationManager.Instance.Get<TimingWheelOptions>().HandshakeTimeoutMs = 0;
+
         if (mode == NalixMode.TcpNoCompression)
         {
             Nalix.Environment.Configuration.ConfigurationManager.Instance.Get<Nalix.Codec.Options.CompressionOptions>().Enabled = false;
