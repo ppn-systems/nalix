@@ -104,10 +104,11 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     /// Statistics tracking
     /// </summary>
     /// <summary>
-    /// Return, hit and miss counts (a get is a hit or a miss), one padded slot per processor: a single shared counter made every core
-    /// write the same cache line on every pooled packet and lease. Summed when read.
+    /// The manager-wide return, hit and miss counts at the last <see cref="ResetStatistics"/>, by
+    /// <see cref="StatField"/>. The manager does not count these itself: the totals are the sums of the per-type
+    /// counts (<see cref="PoolMetrics"/>), which every Get and Return already updates, minus these baselines.
     /// </summary>
-    private readonly StatSlot[] _stats = new StatSlot[StatSlotCount() + 1];
+    private readonly long[] _statBaselines = new long[StatFieldCount];
     internal long _totalCreated;
     internal long _totalDisposed;
     internal DateTime _startTime = DateTime.UtcNow;
@@ -263,8 +264,6 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T Get<T>() where T : IPoolable, new()
     {
-        ref StatSlot stats = ref this.CurrentStats;
-
         int id = PoolType<T>.Id;
         ObjectPool? pool = id < _pools.Length ? _pools[id] : null;
         PoolMetrics? metrics = id < _metrics.Length ? _metrics[id] : null;
@@ -283,17 +282,13 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
 
         (T? result, bool isCacheHit) = pool.GetWithInfoFast<T>(id);
 
-        if (isCacheHit)
+        if (!isCacheHit)
         {
-            _ = Interlocked.Increment(ref stats.Hits);
-        }
-        else
-        {
-            _ = Interlocked.Increment(ref stats.Misses);
             _ = Interlocked.Increment(ref _totalCreated);
         }
 
-        // 1. Per-type counts, always: trimming reads them. They are per processor, so they stay cheap.
+        // 1. Per-type counts, always: trimming reads them, and the manager-wide totals are their sums. They are per
+        //    processor, so they stay cheap.
         ref StatSlot typeStats = ref metrics.Current;
         if (isCacheHit)
         {
@@ -358,8 +353,6 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
         {
             THROW_NULL_OBJECT();
         }
-
-        _ = Interlocked.Increment(ref this.CurrentStats.Returns);
 
         int id = PoolType<T>.Id;
         ObjectPool? pool = id < _pools.Length ? _pools[id] : null;
@@ -505,10 +498,6 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ResetMetrics()
     {
-        this.ResetStats(StatField.Returns);
-        this.ResetStats(StatField.Hits);
-        this.ResetStats(StatField.Misses);
-
         foreach (PoolMetrics metrics in _metricsDict.Values)
         {
             metrics.Reset(StatField.Returns);
@@ -526,6 +515,9 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             _ = Interlocked.Exchange(ref metrics.LastPoolFailureLogUtcTicks, 0);
             _ = Interlocked.Exchange(ref metrics.LastPoolFailureSeverity, 0);
         }
+
+        // The per-type counts are zero now, so are the manager-wide totals.
+        Array.Clear(_statBaselines);
     }
 
     /// <summary>Gets information about a specific type's pool.</summary>
@@ -785,7 +777,7 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private ObjectPool CREATE_POOL_SLOW<T>(Type type) where T : IPoolable
     {
-        ObjectPool pool = new(_defaultMaxPoolSize, _threadCacheDepth);
+        ObjectPool pool = new(_defaultMaxPoolSize, _threadCacheDepth, countTraffic: false);
         if (_poolDict.TryAdd(type, pool))
         {
             // Update peak pool count on new pool creation.

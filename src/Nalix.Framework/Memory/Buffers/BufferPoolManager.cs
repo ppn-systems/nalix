@@ -23,7 +23,6 @@ namespace Nalix.Framework.Memory.Buffers;
 [Injectable(typeof(IBufferPoolManager))]
 public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
 {
-    private readonly ArrayPool<byte> _pool = ArrayPool<byte>.Shared;
     private readonly BufferOptions _config;
 
     // Diagnostics counters, one padded slot per processor (summed by the report): a single shared counter
@@ -82,12 +81,18 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public byte[] Rent(int minimumLength = 256)
     {
-        byte[] array = _pool.Rent(minimumLength);
+        // ArrayPool<byte>.Shared called directly, not through a field of the abstract ArrayPool<byte> type: the JIT
+        // then knows the pool's exact type, devirtualizes and inlines the call instead of going through a stub.
+        byte[] array = ArrayPool<byte>.Shared.Rent(minimumLength);
         this.UntrackFree(array);
 
         ref CounterSlot counters = ref this.Counters;
         _ = Interlocked.Increment(ref counters.Rents);
-        _ = Interlocked.Add(ref counters.BytesRented, array.Length);
+
+        // A plain add: the byte count only feeds the throughput figure of the report, and the slot belongs to this
+        // processor, so an update is lost only if a thread migrated mid-add. Rents and Returns stay exact (atomic):
+        // their difference is the outstanding count leak monitoring reads.
+        counters.BytesRented += array.Length;
 
         if (_config.EnableBufferLeakDetection)
         {
@@ -175,6 +180,13 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
     }
 
     /// <summary>Removes a buffer from the pooled set when it is handed out.</summary>
+    /// <remarks>
+    /// A plain write, not a compare-and-swap: the renter now holds the buffer, so no other thread looks for this key,
+    /// and a slot holding it is only ever changed by clearing it. (A thread returning the buffer twice at this very
+    /// moment can at worst leave its entry behind or lose it, which drops one buffer or misses one double return; it
+    /// can never let the buffer be pooled twice, which <see cref="TrackFree"/> decides with its own swap.) A locked
+    /// instruction here cost about as much as the rest of the rent.
+    /// </remarks>
     private void UntrackFree(byte[] array)
     {
         int key = FreeTrackKey(array);
@@ -183,9 +195,9 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
         for (int probe = 0; probe < FREE_TRACK_PROBES; probe++)
         {
             int index = (start + probe) & (FREE_TRACK_SIZE - 1);
-            if (Volatile.Read(ref _freeTrack[index]) == key &&
-                Interlocked.CompareExchange(ref _freeTrack[index], 0, key) == key)
+            if (Volatile.Read(ref _freeTrack[index]) == key)
             {
+                Volatile.Write(ref _freeTrack[index], 0);
                 return;
             }
         }
@@ -293,7 +305,7 @@ public sealed partial class BufferPoolManager : IBufferPoolManager, IDisposable
             }
         }
 
-        _pool.Return(array, clearArray: false);
+        ArrayPool<byte>.Shared.Return(array, clearArray: false);
         _ = Interlocked.Increment(ref this.Counters.Returns);
     }
 

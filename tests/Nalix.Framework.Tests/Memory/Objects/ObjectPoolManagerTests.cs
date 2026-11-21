@@ -112,6 +112,32 @@ public sealed class ObjectPoolManagerTests
     }
 
     [Fact]
+    public void ResetStatistics_RestartsTheManagerTotalsButKeepsThePerTypeCounts()
+    {
+        using ObjectPoolManager manager = new(new ObjectPoolOptions { EnableObjectTrimming = false, DefaultPreallocate = 0 });
+        for (int i = 0; i < 10; i++)
+        {
+            manager.Return(manager.Get<TestPoolable>());
+        }
+
+        manager.ResetStatistics();
+        Assert.Equal(0, manager.TotalGetOperations);
+        Assert.Equal(0, manager.TotalReturnOperations);
+        Assert.Equal(0, manager.TotalCacheHits + manager.TotalCacheMisses);
+        Assert.Equal(10L, manager.GetTypeInfo<TestPoolable>()["TotalGets"]); // Per-type counts are not reset.
+
+        // The totals count again from there.
+        for (int i = 0; i < 3; i++)
+        {
+            manager.Return(manager.Get<TestPoolable>());
+        }
+
+        Assert.Equal(3, manager.TotalGetOperations);
+        Assert.Equal(3, manager.TotalReturnOperations);
+        Assert.Equal(3, manager.TotalCacheHits);
+    }
+
+    [Fact]
     public void GetAndReturn_WithMultipleTypes_KeepsPoolsIndependent()
     {
         ObjectPoolOptions options = new()
