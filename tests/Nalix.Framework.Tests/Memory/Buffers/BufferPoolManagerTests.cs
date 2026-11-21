@@ -85,6 +85,32 @@ public sealed class BufferPoolManagerTests
     }
 
     [Fact]
+    public void RentAndReturn_FromManyThreads_KeepExactCountsAndNoOutstandingBuffers()
+    {
+        using BufferPoolManager manager = new(MemoryTestSupport.CreateBufferOptions(enableMemoryTrimming: false));
+        const int Threads = 8, PerThread = 5_000;
+
+        _ = Parallel.For(0, Threads, new ParallelOptions { MaxDegreeOfParallelism = Threads }, _ =>
+        {
+            for (int i = 0; i < PerThread; i++)
+            {
+                manager.Return(manager.Rent(1500));
+            }
+        });
+
+        using MemoryStream stream = new();
+        using (Utf8JsonWriter writer = new(stream))
+        {
+            manager.WriteReportData(writer);
+        }
+
+        using JsonDocument report = JsonDocument.Parse(stream.ToArray());
+        Assert.Equal(Threads * PerThread, report.RootElement.GetProperty("RentCount").GetInt64());
+        Assert.Equal(Threads * PerThread, report.RootElement.GetProperty("ReturnCount").GetInt64());
+        Assert.Equal(0, report.RootElement.GetProperty("OutstandingCount").GetInt64());
+    }
+
+    [Fact]
     public void Rent_AfterDoubleReturnsMixedWithOtherTraffic_NeverHandsOutABufferThatIsHeld()
     {
         // The guard must find an earlier return wherever it landed, also after other buffers left the table.

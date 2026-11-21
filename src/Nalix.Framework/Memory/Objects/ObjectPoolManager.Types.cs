@@ -35,10 +35,15 @@ public sealed partial class ObjectPoolManager
         /// </summary>
         public long CacheHits => SumOf(_stats, StatField.Hits);
 
-        /// <summary>Gets the counters of the current processor (slot 0 is never used, see <see cref="CurrentStats"/>).</summary>
+        /// <summary>
+        /// Gets the counters of the current processor. Slot 0 is never used: it shares a cache line with the array's
+        /// length, which every core reads for the bounds check.
+        /// </summary>
         public ref StatSlot Current => ref _stats[(System.Threading.Thread.GetCurrentProcessorId() & (_stats.Length - 2)) + 1];
 
         public void Reset(StatField field) => ResetOf(_stats, field);
+
+        public long Sum(StatField field) => SumOf(_stats, field);
 
         /// <summary>
         /// Number of objects evicted/trimmed from this pool.
@@ -144,11 +149,7 @@ public sealed partial class ObjectPoolManager
         Misses,
     }
 
-    /// <summary>Gets the counter slot of the current processor.</summary>
-    // Slot 0 is never used: it shares a cache line with the array's length, which every core reads for the bounds
-    // check, so a core writing it slowed down every other core's access to the array.
-    private ref StatSlot CurrentStats
-        => ref _stats[(System.Threading.Thread.GetCurrentProcessorId() & (_stats.Length - 2)) + 1];
+    private const int StatFieldCount = 3;
 
     /// <summary>A power of two of at least the processor count, capped at 64.</summary>
     private static int StatSlotCount()
@@ -168,9 +169,24 @@ public sealed partial class ObjectPoolManager
         }
     }
 
-    private long SumStats(StatField field) => SumOf(_stats, field);
+    /// <summary>The manager-wide count of <paramref name="field"/> since the last <see cref="ResetStatistics"/>.</summary>
+    private long SumStats(StatField field)
+        => Math.Max(0, this.SumOverTypes(field) - System.Threading.Interlocked.Read(ref _statBaselines[(int)field]));
 
-    private void ResetStats(StatField field) => ResetOf(_stats, field);
+    /// <summary>Starts the manager-wide count of <paramref name="field"/> again from zero.</summary>
+    private void ResetStats(StatField field)
+        => System.Threading.Interlocked.Exchange(ref _statBaselines[(int)field], this.SumOverTypes(field));
+
+    private long SumOverTypes(StatField field)
+    {
+        long sum = 0;
+        foreach (PoolMetrics metrics in _metricsDict.Values)
+        {
+            sum += metrics.Sum(field);
+        }
+
+        return sum;
+    }
 
     private static long SumOf(StatSlot[] stats, StatField field)
     {
