@@ -5,6 +5,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Threading;
 
 namespace Nalix.Network.Internal.Datagram;
@@ -39,6 +40,7 @@ internal static unsafe partial class DatagramBatchSender
     private static int s_disabled = OperatingSystem.IsLinux() && IntPtr.Size == 8 ? 0 : 1;
 
     /// <summary>Gets a value indicating whether batches are sent with one system call.</summary>
+    [SupportedOSPlatformGuard("linux")]
     public static bool IsSupported => Volatile.Read(ref s_disabled) == 0;
 
     /// <summary>
@@ -124,12 +126,14 @@ internal static unsafe partial class DatagramBatchSender
         }
     }
 
+    // Linux only: callers check IsSupported (Linux, 64-bit) first, so the binding is never loaded elsewhere.
+    [SupportedOSPlatform("linux")]
     [LibraryImport("libc", EntryPoint = "sendmmsg", SetLastError = true)]
     private static partial int SendMultipleMessages(int fd, MultiMessageHeader* messages, uint count, int flags);
 
     /// <summary>A <c>struct iovec</c> (64-bit).</summary>
     [StructLayout(LayoutKind.Sequential)]
-    private struct IoVector
+    internal struct IoVector
     {
         public byte* Base;
         public nuint Length;
@@ -137,7 +141,7 @@ internal static unsafe partial class DatagramBatchSender
 
     /// <summary>A <c>struct mmsghdr</c>: a <c>struct msghdr</c> followed by <c>msg_len</c> (64-bit, 64 bytes).</summary>
     [StructLayout(LayoutKind.Explicit, Size = 64)]
-    private struct MultiMessageHeader
+    internal struct MultiMessageHeader
     {
         [FieldOffset(0)]
         public byte* Name;

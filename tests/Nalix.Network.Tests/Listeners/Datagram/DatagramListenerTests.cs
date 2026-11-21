@@ -185,6 +185,48 @@ public sealed class DatagramListenerTests
     }
 
     [Fact]
+    public void BatchReceiver_ReadsQueuedDatagramsInOrderWithTheirSources_AndNeverWaits()
+    {
+        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        Nalix.Network.Internal.Datagram.DatagramBatchReceiver? receiver = Nalix.Network.Internal.Datagram.DatagramBatchReceiver.TryCreate(socket);
+        Assert.Equal(Nalix.Network.Internal.Datagram.DatagramBatchSender.IsSupported, receiver is not null);
+        if (receiver is null)
+        {
+            return; // Windows / macOS: the listener keeps its one-datagram-per-receive loop.
+        }
+
+        socket.Blocking = false; // As the listener's socket is once it has awaited a receive.
+        Assert.Equal(0, receiver.Receive(socket)); // Nothing queued: returns at once.
+
+        using Socket peer = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        peer.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        for (int i = 0; i < 11; i++)
+        {
+            byte[] payload = new byte[10 + i];
+            payload.AsSpan().Fill((byte)i);
+            _ = peer.SendTo(payload, socket.LocalEndPoint!);
+        }
+
+        System.Threading.SpinWait.SpinUntil(() => socket.Available > 0, 2_000);
+        int seen = 0;
+        long deadline = System.Environment.TickCount64 + 5_000;
+        while (seen < 11 && System.Environment.TickCount64 < deadline)
+        {
+            int count = receiver.Receive(socket);
+            for (int i = 0; i < count; i++, seen++)
+            {
+                ReadOnlySpan<byte> datagram = receiver.Datagram(i);
+                Assert.Equal(10 + seen, datagram.Length);
+                Assert.True(datagram.IndexOfAnyExcept((byte)seen) < 0);
+                Assert.Equal(peer.LocalEndPoint, new IPEndPoint(IPAddress.Any, 0).Create(receiver.Address(i)));
+            }
+        }
+
+        Assert.Equal(11, seen);
+    }
+
+    [Fact]
     public void BatchSender_IsUsedOnlyOn64BitLinux()
         => Assert.Equal(OperatingSystem.IsLinux() && IntPtr.Size == 8, Nalix.Network.Internal.Datagram.DatagramBatchSender.IsSupported);
 
