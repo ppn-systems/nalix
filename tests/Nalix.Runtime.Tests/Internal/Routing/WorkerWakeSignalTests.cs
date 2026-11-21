@@ -162,17 +162,24 @@ public sealed class WorkerWakeSignalTests
         using CancellationTokenSource stop = new();
         const int iterations = 20_000;
 
+        // The setters run on their own threads and give the CPU up now and then. Spinning without pause on
+        // thread-pool workers, they starved the waiter, whose continuations run on the thread pool: on a busy
+        // 4-core CI runner (the whole test suite at once) its 20 000 waits took over 30 s without any hang.
         Task[] setters = new Task[3];
         for (int t = 0; t < setters.Length; t++)
         {
-            setters[t] = Task.Run(() =>
+            setters[t] = Task.Factory.StartNew(() =>
             {
-                while (!stop.IsCancellationRequested)
+                for (int n = 0; !stop.IsCancellationRequested; n++)
                 {
                     _ = signal.Set();
                     Thread.SpinWait(16);
+                    if ((n & 63) == 63)
+                    {
+                        _ = Thread.Yield();
+                    }
                 }
-            });
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         Task waiter = Task.Run(async () =>

@@ -25,7 +25,7 @@ public sealed class NetworkBanRepositoryTests
         using ConfigurationOptionsScope<ConnectionBanStoreOptions> storeScope = new();
         ConnectionBanStoreOptions storeConfig = storeScope.Options;
         storeConfig.Enabled = true;
-        storeConfig.StoreFileName = "bans_test_config.bin";
+        storeConfig.StoreFileName = $"bans_test_config_{Guid.NewGuid():N}.bin";
 
         NetworkBanRepository repo = new();
 
@@ -39,7 +39,7 @@ public sealed class NetworkBanRepositoryTests
         using ConfigurationOptionsScope<ConnectionBanStoreOptions> storeScope = new();
         ConnectionBanStoreOptions storeConfig = storeScope.Options;
         storeConfig.Enabled = true;
-        storeConfig.StoreFileName = "bans_test_temp.bin";
+        storeConfig.StoreFileName = $"bans_test_temp_{Guid.NewGuid():N}.bin";
         storeConfig.MaxPersistedBans = 100;
 
         string path = Path.Combine(Directories.DataDirectory, storeConfig.StoreFileName);
@@ -120,7 +120,7 @@ public sealed class NetworkBanRepositoryTests
         using ConfigurationOptionsScope<ConnectionBanStoreOptions> storeScope = new();
         ConnectionBanStoreOptions storeConfig = storeScope.Options;
         storeConfig.Enabled = true;
-        storeConfig.StoreFileName = "bans_test_corrupt.bin";
+        storeConfig.StoreFileName = $"bans_test_corrupt_{Guid.NewGuid():N}.bin";
 
         string path = Path.Combine(Directories.DataDirectory, storeConfig.StoreFileName);
         if (File.Exists(path))
@@ -166,7 +166,7 @@ public sealed class NetworkBanRepositoryTests
         using ConfigurationOptionsScope<ConnectionBanStoreOptions> storeScope = new();
         ConnectionBanStoreOptions storeConfig = storeScope.Options;
         storeConfig.Enabled = true;
-        storeConfig.StoreFileName = "bans_test_expired.bin";
+        storeConfig.StoreFileName = $"bans_test_expired_{Guid.NewGuid():N}.bin";
         storeConfig.MaxPersistedBans = 100;
         storeConfig.BanCountDecayWindow = TimeSpan.FromHours(1);
 
@@ -218,7 +218,7 @@ public sealed class NetworkBanRepositoryTests
         using ConfigurationOptionsScope<ConnectionBanStoreOptions> storeScope = new();
         ConnectionBanStoreOptions storeConfig = storeScope.Options;
         storeConfig.Enabled = true;
-        storeConfig.StoreFileName = "bans_test_dirty.bin";
+        storeConfig.StoreFileName = $"bans_test_dirty_{Guid.NewGuid():N}.bin";
 
         string path = Path.Combine(Directories.DataDirectory, storeConfig.StoreFileName);
         if (File.Exists(path))

@@ -407,8 +407,16 @@ public abstract partial class WebSocketListenerBase
             {
                 connection.ConnectionClosed += this.HandleConnectionClose;
                 connection.ConnectionClosed += _limiter.OnConnectionClosed;
-                this.TrackLiveConnection(connection);
+                bool tracked = this.TrackLiveConnection(connection);
                 _ = System.Threading.Interlocked.Exchange(ref state.LimiterSlotReleased, 1);
+                if (!tracked)
+                {
+                    // The listener is shutting down: the connection is already closing (1001) and owns the socket.
+                    connection = null;
+                    this.ReleaseWsUpgradeContext(state, args, success: true);
+                    return;
+                }
+
                 connection.MessageProcessed += _protocol.PostProcessMessage;
                 connection.MessageProcessing += _protocol.FrameProcessor.ProcessFrame;
 

@@ -58,8 +58,10 @@ public sealed class PacketDispatchOptionsTimeoutLifetimeTests
             Task dispatchA = options.ExecuteResolvedHandlerAsync(
                 slow, new TestPacket(), connA, encryptedOnWire: false).AsTask();
 
-            // Wait until the timeout fired and the TIMEOUT directive went out.
-            for (int i = 0; i < 200 && connA.FakeTcp.SentMessages.Count == 0; i++)
+            // Wait until the timeout fired and the TIMEOUT directive went out. A deadline rather than 200 turns of
+            // Task.Delay(10): with the thread pool starved by the rest of the suite, two seconds were not always enough.
+            long deadline = System.Environment.TickCount64 + 30_000;
+            while (connA.FakeTcp.SentMessages.Count == 0 && System.Environment.TickCount64 < deadline)
             {
                 await Task.Delay(10);
             }

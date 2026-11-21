@@ -25,6 +25,66 @@ public sealed class WebSocketListenerUpgradeOwnershipTests
     }
 
     [Fact]
+    public async Task TrackLiveConnection_AfterDeactivateWentOverTheLiveConnections_ClosesWithEndpointUnavailable()
+    {
+        // The 101 response completes the client's connect before the server tracks the connection, so Deactivate
+        // can run in between. A connection tracked after that must still get the shutdown close status (1001),
+        // not be left open and closed later with NormalClosure.
+        using StubWebSocketListener listener = new(Substitute.For<IProtocol>(), Substitute.For<IConnectionHub>(), Substitute.For<IConnectionGuard>());
+        listener.Deactivate();
+
+        RecordingWebSocket webSocket = new();
+        using Nalix.Network.Connections.WebSocketConnection connection = new(webSocket, Substitute.For<Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor>(), new IPEndPoint(IPAddress.Loopback, 0));
+
+        Assert.False(listener.TrackLiveConnection(connection));
+        Assert.Equal(System.Net.WebSockets.WebSocketCloseStatus.EndpointUnavailable, await webSocket.Closed.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public void TrackLiveConnection_WhileActive_KeepsTheConnectionOpen()
+    {
+        using StubWebSocketListener listener = new(Substitute.For<IProtocol>(), Substitute.For<IConnectionHub>(), Substitute.For<IConnectionGuard>());
+
+        RecordingWebSocket webSocket = new();
+        using Nalix.Network.Connections.WebSocketConnection connection = new(webSocket, Substitute.For<Nalix.Abstractions.Networking.Protocols.IOpCodeExtractor>(), new IPEndPoint(IPAddress.Loopback, 0));
+
+        Assert.True(listener.TrackLiveConnection(connection));
+        Assert.False(webSocket.Closed.Task.IsCompleted);
+    }
+
+    private sealed class RecordingWebSocket : System.Net.WebSockets.WebSocket
+    {
+        private System.Net.WebSockets.WebSocketState _state = System.Net.WebSockets.WebSocketState.Open;
+
+        public TaskCompletionSource<System.Net.WebSockets.WebSocketCloseStatus> Closed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override System.Net.WebSockets.WebSocketCloseStatus? CloseStatus => null;
+        public override string? CloseStatusDescription => null;
+        public override System.Net.WebSockets.WebSocketState State => _state;
+        public override string? SubProtocol => null;
+
+        public override void Abort() => _state = System.Net.WebSockets.WebSocketState.Aborted;
+
+        public override Task CloseAsync(System.Net.WebSockets.WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken)
+            => this.CloseOutputAsync(closeStatus, statusDescription, cancellationToken);
+
+        public override Task CloseOutputAsync(System.Net.WebSockets.WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken)
+        {
+            _state = System.Net.WebSockets.WebSocketState.CloseSent;
+            _ = this.Closed.TrySetResult(closeStatus);
+            return Task.CompletedTask;
+        }
+
+        public override void Dispose() { }
+
+        public override Task<System.Net.WebSockets.WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer, CancellationToken cancellationToken)
+            => Task.FromResult(new System.Net.WebSockets.WebSocketReceiveResult(0, System.Net.WebSockets.WebSocketMessageType.Close, true));
+
+        public override Task SendAsync(ArraySegment<byte> buffer, System.Net.WebSockets.WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    [Fact]
     public void OnWebSocketReadCompleted_AfterSweepDetached_DoesNotTouchContextAndSweepClosesWholeChain()
     {
         IConnectionGuard guard = Substitute.For<IConnectionGuard>();
