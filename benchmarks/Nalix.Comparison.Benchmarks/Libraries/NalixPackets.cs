@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Abstractions.Serialization;
 using Nalix.Codec.DataFrames;
 using Nalix.Codec.Pooling;
@@ -39,6 +40,7 @@ public sealed partial class EchoResponsePacket : PacketBase<EchoResponsePacket>,
 public static class EchoHandlers
 {
     [PacketOpcode(0x7301)]
+    [PacketPermission(PermissionLevel.NONE)]
     public static async ValueTask EchoAsync(IPacketContext<EchoRequestPacket> context)
     {
         using PacketScope<EchoResponsePacket> lease = PacketFactory<EchoResponsePacket>.Acquire();
@@ -52,6 +54,7 @@ public static class EchoHandlers
 public static class EchoEncryptedHandlers
 {
     [PacketOpcode(0x7301)]
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketEncryption(true)]
     public static async ValueTask EchoAsync(IPacketContext<EchoRequestPacket> context)
     {
