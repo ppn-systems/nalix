@@ -41,17 +41,12 @@ internal class TypePool(int maxCapacity)
     private readonly Lock _growLock = new();
 
     /// <summary>
-    /// Conservative count of objects in the pool.
-    /// <para>
-    /// Incremented by <see cref="TryPush"/> before the CAS attempt (optimistic);
-    /// decremented by <see cref="TryPop"/> after a successful slot exchange.
-    /// This means the count can temporarily exceed the true number of non-null slots
-    /// (e.g., when a push fails its CAS and decrements) or briefly dip negative
-    /// under concurrent pop/clear races. External consumers should treat
-    /// <see cref="AvailableCount"/> as a best-effort approximation.
-    /// </para>
+    /// Count of objects in the pool, one padded slot per processor: a push adds one to the slot of the pushing
+    /// core, a pop takes one from the popping core's, so a single slot can go negative but the sum is the count.
+    /// One shared counter made every core write the same cache line on every push and pop, and cost most of a
+    /// pooled Get and Return on a multi-core server. <see cref="AvailableCount"/> stays a best-effort figure.
     /// </summary>
-    private int _count;
+    private readonly CountSlot[] _counts = new CountSlot[CountSlotCount()];
 
     #endregion Fields
 
@@ -60,7 +55,7 @@ internal class TypePool(int maxCapacity)
     /// <summary>
     /// Gets the number of objects available in this pool.
     /// </summary>
-    public int AvailableCount => System.Math.Max(0, Volatile.Read(ref _count));
+    public int AvailableCount => System.Math.Max(0, this.SumCounts());
 
     /// <summary>
     /// Gets the maximum capacity of this pool.
@@ -125,31 +120,37 @@ internal class TypePool(int maxCapacity)
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryPush(IPoolable obj)
     {
-        int max = Volatile.Read(ref _maxCapacity);
         IPoolable?[] slots = _slots;
+        int length = slots.Length;
 
-        // Pessimistic capacity gate: if we are already at or over capacity, reject immediately.
-        if (Volatile.Read(ref _count) >= max)
+        // The slot array bounds the pool: when it is full the scan finds no empty slot. Only a capacity lowered
+        // below the array's length (SetMaxCapacity) needs the count, which is summed for it.
+        int max = Volatile.Read(ref _maxCapacity);
+        if (max < length && this.SumCounts() >= max)
         {
             return false;
         }
 
-        // Optimistic increment: if we are still under capacity after the increment, proceed with CAS.
-        if (Interlocked.Increment(ref _count) <= max)
+        for (int n = 0, i = RegionStart(length); n < length; n++, i = i + 1 == length ? 0 : i + 1)
         {
-            for (int i = 0; i < slots.Length; i++)
+            // Read first: a CAS on an occupied slot is a locked instruction for nothing.
+            if (Volatile.Read(ref slots[i]) == null && Interlocked.CompareExchange(ref slots[i], obj, null) == null)
             {
-                if (Interlocked.CompareExchange(ref slots[i], obj, null) == null)
-                {
-                    return true; // Slot claimed successfully.
-                }
+                _ = Interlocked.Increment(ref this.CurrentCount);
+                return true; // Slot claimed successfully.
             }
         }
 
-        // Pool is full or all slots are occupied — undo the optimistic increment.
-        _ = Interlocked.Decrement(ref _count);
-        return false;
+        return false; // Every slot is occupied: the pool is full.
     }
+
+    /// <summary>
+    /// Where the current processor starts scanning: its own run of eight slots (one 64-byte cache line), so threads
+    /// on different cores push and pop on different lines instead of all fighting over the first slots. A scan
+    /// still wraps over the whole array, so capacity and what can be found are unchanged.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int RegionStart(int length) => (int)((uint)(Thread.GetCurrentProcessorId() * 8) % (uint)length);
 
     /// <summary>
     /// Tries to get an object from the pool.
@@ -161,14 +162,15 @@ internal class TypePool(int maxCapacity)
     {
         IPoolable?[] slots = _slots;
 
-        for (int i = 0; i < slots.Length; i++)
+        int length = slots.Length;
+        for (int n = 0, i = RegionStart(length); n < length; n++, i = i + 1 == length ? 0 : i + 1)
         {
             IPoolable? candidate = Volatile.Read(ref slots[i]);
             if (candidate != null &&
                 Interlocked.CompareExchange(ref slots[i], null, candidate) == candidate)
             {
                 obj = candidate;
-                _ = Interlocked.Decrement(ref _count);
+                _ = Interlocked.Decrement(ref this.CurrentCount);
                 return true;
             }
         }
@@ -187,23 +189,15 @@ internal class TypePool(int maxCapacity)
         IPoolable?[] slots = _slots;
         int removed = 0;
 
-        // Atomically null each slot. Decrement _count per removed slot so that
-        // concurrent TryPush increments that land between individual clears are
-        // still accounted for.
+        // Atomically null each slot, and count each removal, so that concurrent pushes that land between
+        // individual clears are still accounted for.
         for (int i = 0; i < slots.Length; i++)
         {
             if (Interlocked.Exchange(ref slots[i], null) != null)
             {
                 removed++;
-                _ = Interlocked.Decrement(ref _count);
+                _ = Interlocked.Decrement(ref this.CurrentCount);
             }
-        }
-
-        // Clamp to zero to handle any transient negative value from concurrent
-        // TryPop that also decremented _count for a slot we already cleared.
-        if (Volatile.Read(ref _count) < 0)
-        {
-            Volatile.Write(ref _count, 0);
         }
 
         return removed;
@@ -241,7 +235,7 @@ internal class TypePool(int maxCapacity)
             ? max
             : max * percentage / 100;
 
-        int currentCount = Volatile.Read(ref _count);
+        int currentCount = this.SumCounts();
         if (currentCount <= targetSize)
         {
             return 0;
@@ -254,13 +248,8 @@ internal class TypePool(int maxCapacity)
 
         int removed = RemoveObjects(_slots, toRemove);
 
-        // Decrement _count for each actually removed slot.  Then clamp to zero
-        // to absorb any transient negative value from concurrent TryPop operations.
-        _ = Interlocked.Add(ref _count, -removed);
-        if (Volatile.Read(ref _count) < 0)
-        {
-            Volatile.Write(ref _count, 0);
-        }
+        // Count each actually removed slot.
+        _ = Interlocked.Add(ref this.CurrentCount, -removed);
 
         return removed;
 
@@ -304,5 +293,30 @@ internal class TypePool(int maxCapacity)
     }
 
     #endregion Public Methods
-}
 
+    /// <summary>Gets the count slot of the current processor.</summary>
+    private ref int CurrentCount => ref _counts[Thread.GetCurrentProcessorId() & (_counts.Length - 1)].Value;
+
+    private int SumCounts()
+    {
+        int sum = 0;
+        for (int i = 0; i < _counts.Length; i++)
+        {
+            sum += Volatile.Read(ref _counts[i].Value);
+        }
+
+        return sum;
+    }
+
+    /// <summary>A power of two of at least the processor count, capped at 64.</summary>
+    private static int CountSlotCount()
+        => (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)System.Math.Clamp(System.Environment.ProcessorCount, 1, 64));
+
+    /// <summary>The count of one processor, alone on a 64-byte cache line.</summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 64)]
+    private struct CountSlot
+    {
+        [System.Runtime.InteropServices.FieldOffset(0)]
+        public int Value;
+    }
+}

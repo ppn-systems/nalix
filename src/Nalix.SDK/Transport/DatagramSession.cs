@@ -185,7 +185,7 @@ public sealed class DatagramSession : TransportSession
                 _timer = new Timer(static state => ((DatagramSession)state!).OnTimer(), this, Timeout.Infinite, Timeout.Infinite);
                 _loopCts = new CancellationTokenSource();
                 CancellationToken token = _loopCts.Token;
-                _loopTask = Task.Factory.StartNew(() => this.ReceiveLoopAsync(socket, token), token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+                _loopTask = Task.Factory.StartNew(() => this.ReceiveLoop(socket, token), token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
 
             this.Flush();
@@ -368,23 +368,29 @@ public sealed class DatagramSession : TransportSession
         this.Flush();
     }
 
-    private async Task ReceiveLoopAsync(Socket socket, CancellationToken ct)
+    /// <summary>
+    /// Receives on the session's own long-running thread with blocking calls: one socket, one reader, so a
+    /// datagram goes from the kernel straight to the engine, without the hop from the socket engine's thread to
+    /// the thread pool an awaited receive takes (about a sixth of a loopback round trip). Teardown cancels
+    /// <paramref name="ct"/> and then closes the socket, which ends the blocked call.
+    /// </summary>
+    private void ReceiveLoop(Socket socket, CancellationToken ct)
     {
-        byte[] buffer = GC.AllocateUninitializedArray<byte>(DatagramEngine.MaxDatagramSize + 1, pinned: true);
+        byte[] buffer = GC.AllocateUninitializedArray<byte>(DatagramEngine.MaxDatagramSize + 1);
         while (!ct.IsCancellationRequested)
         {
             int received;
             try
             {
-                received = await socket.ReceiveAsync(buffer, SocketFlags.None, ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
+                received = socket.Receive(buffer, SocketFlags.None);
             }
             catch (ObjectDisposedException)
             {
                 return;
+            }
+            catch (SocketException) when (ct.IsCancellationRequested)
+            {
+                return; // The socket was closed under the blocked call.
             }
             catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionReset or SocketError.ConnectionRefused or SocketError.MessageSize)
             {
@@ -405,8 +411,11 @@ public sealed class DatagramSession : TransportSession
                 }
             }
 
-            this.Flush();
+            // Deliver first, then send: what the datagram calls for (an ACK, mostly) would otherwise cost the
+            // application a socket send before it sees the message, and a reply the handler queues goes out in
+            // the same flush.
             this.DispatchDeliveries();
+            this.Flush();
         }
     }
 
