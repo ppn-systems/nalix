@@ -49,8 +49,11 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
     /// </summary>
     private long _totalCreated;
 
-    private long _totalReturned;
-    private long _totalRented;
+
+    // Rent and return counts, one slot per processor (summed when read): two shared counters made every core write
+    // the same cache line on every Get and Return. Slot 0 is never used: it shares a cache line with the array's
+    // length, which every access reads for its bounds check.
+    private readonly TrafficSlot[] _traffic = new TrafficSlot[TrafficSlotCount() + 1];
     private long _totalDropped;
     private long _totalRejectedReturns;
     private readonly System.Diagnostics.Stopwatch _uptime = System.Diagnostics.Stopwatch.StartNew();
@@ -110,12 +113,12 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
     /// <summary>
     /// Gets the total number of objects returned to the pool.
     /// </summary>
-    public long TotalReturnedCount => Interlocked.Read(ref _totalReturned);
+    public long TotalReturnedCount => this.SumTraffic(returned: true);
 
     /// <summary>
     /// Gets the total number of objects rented from the pool.
     /// </summary>
-    public long TotalRentedCount => Interlocked.Read(ref _totalRented);
+    public long TotalRentedCount => this.SumTraffic(returned: false);
 
     /// <summary>
     /// Gets the total number of objects dropped (discarded) because the pool was full.
@@ -158,7 +161,7 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
             if (localObj != null)
             {
                 MarkRented(localObj);
-                _ = Interlocked.Increment(ref _totalRented);
+                _ = Interlocked.Increment(ref this.Traffic.Rented);
                 return (localObj, true);
             }
         }
@@ -175,7 +178,7 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
         if (typePool.TryPop(out IPoolable? obj) && obj != null)
         {
             MarkRented(obj);
-            _ = Interlocked.Increment(ref _totalRented);
+            _ = Interlocked.Increment(ref this.Traffic.Rented);
             return ((T)obj, true);
         }
 
@@ -184,7 +187,7 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
         MarkRented(newObj);
 
         _ = Interlocked.Increment(ref _totalCreated);
-        _ = Interlocked.Increment(ref _totalRented);
+        _ = Interlocked.Increment(ref this.Traffic.Rented);
         return (newObj, false);
     }
 
@@ -209,14 +212,14 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
             // If it's empty, prioritize pushing to the central pool so other threads can use it.
             if (typePool.AvailableCount == 0 && typePool.TryPush(obj))
             {
-                _ = Interlocked.Increment(ref _totalReturned);
+                _ = Interlocked.Increment(ref this.Traffic.Returned);
                 return true;
             }
 
             // Then the fast-path thread-local slot.
             if (ThreadLocalCache<T>.TryPush(this, obj))
             {
-                _ = Interlocked.Increment(ref _totalReturned);
+                _ = Interlocked.Increment(ref this.Traffic.Returned);
                 return true;
             }
         }
@@ -224,7 +227,7 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
         // Fallback to central pool if thread-local slot is occupied or disabled
         if (typePool.TryPush(obj))
         {
-            _ = Interlocked.Increment(ref _totalReturned);
+            _ = Interlocked.Increment(ref this.Traffic.Returned);
             return true;
         }
 
@@ -332,7 +335,7 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
             {
                 created++;
                 _ = Interlocked.Increment(ref _totalCreated);
-                _ = Interlocked.Increment(ref _totalReturned);
+                _ = Interlocked.Increment(ref this.Traffic.Returned);
             }
             else
             {
@@ -478,8 +481,11 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
     public void ResetStatistics()
     {
         _ = Interlocked.Exchange(ref _totalCreated, 0);
-        _ = Interlocked.Exchange(ref _totalRented, 0);
-        _ = Interlocked.Exchange(ref _totalReturned, 0);
+        for (int i = 0; i < _traffic.Length; i++)
+        {
+            _ = Interlocked.Exchange(ref _traffic[i].Rented, 0);
+            _ = Interlocked.Exchange(ref _traffic[i].Returned, 0);
+        }
         _ = Interlocked.Exchange(ref _totalDropped, 0);
         _ = Interlocked.Exchange(ref _totalRejectedReturns, 0);
         _uptime.Restart();
@@ -540,7 +546,7 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
             if (typePool.TryPush(obj))
             {
                 returnedCount++;
-                _ = Interlocked.Increment(ref _totalReturned);
+                _ = Interlocked.Increment(ref this.Traffic.Returned);
             }
         }
 
@@ -634,6 +640,35 @@ public sealed class ObjectPool(int defaultMaxItemsPerType, int threadCacheDepth 
         }
 
         return Interlocked.CompareExchange(ref tracked.PoolState, 1, 0) == 0;
+    }
+
+    /// <summary>Gets the traffic slot of the current processor.</summary>
+    private ref TrafficSlot Traffic => ref _traffic[(Thread.GetCurrentProcessorId() & (_traffic.Length - 2)) + 1];
+
+    private long SumTraffic(bool returned)
+    {
+        long sum = 0;
+        for (int i = 0; i < _traffic.Length; i++)
+        {
+            sum += returned ? Volatile.Read(ref _traffic[i].Returned) : Volatile.Read(ref _traffic[i].Rented);
+        }
+
+        return sum;
+    }
+
+    /// <summary>A power of two of at least the processor count, capped at 64.</summary>
+    private static int TrafficSlotCount()
+        => (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)Math.Clamp(System.Environment.ProcessorCount, 1, 64));
+
+    /// <summary>The counts of one processor, 128 bytes from the next slot's so no two processors share a cache line.</summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 128)]
+    private struct TrafficSlot
+    {
+        [System.Runtime.InteropServices.FieldOffset(0)]
+        public long Rented;
+
+        [System.Runtime.InteropServices.FieldOffset(8)]
+        public long Returned;
     }
 
     [System.Diagnostics.CodeAnalysis.DoesNotReturn]

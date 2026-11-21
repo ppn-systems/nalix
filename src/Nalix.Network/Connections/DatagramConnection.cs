@@ -413,13 +413,22 @@ public sealed partial class DatagramConnection :
     /// <summary>Raises <see cref="MessageProcessed"/> after a send, like the other connection types.</summary>
     private void TriggerPostProcessEvent()
     {
-        if (Volatile.Read(ref _backing)?.MessageProcessed is null)
+        EventHandler<IConnectionEventArgs>? processed = Volatile.Read(ref _backing)?.MessageProcessed;
+        if (processed is null)
         {
             return;
         }
 
         ConnectionEventArgs args = this.AcquireEventArgs();
         args.Initialize(this);
+        // A protocol whose post-processing only counts the message runs it here: a thread-pool hop per sent message
+        // cost a work item and a thread wake-up for that.
+        if (Internal.Transport.AsyncCallback.CanPostProcessInline(processed))
+        {
+            Internal.Transport.AsyncCallback.InvokeInline(MessageProcessedBridge, this, args);
+            return;
+        }
+
         if (!Internal.Transport.AsyncCallback.Invoke(MessageProcessedBridge, this, args, Internal.Transport.CallbackLane.Post))
         {
             args.Dispose();

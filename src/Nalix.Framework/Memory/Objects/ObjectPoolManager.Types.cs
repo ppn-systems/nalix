@@ -15,12 +15,13 @@ public sealed partial class ObjectPoolManager
     private sealed class PoolMetrics
     {
         /// <summary>
-        /// Gets, Returns, hits and misses of this type, one padded slot per processor (the type is shared by every
+        /// Returns, hits and misses of this type, one padded slot per processor (the type is shared by every
         /// thread renting it, so a single counter made them all write one cache line). Summed when read.
         /// </summary>
-        private readonly StatSlot[] _stats = new StatSlot[StatSlotCount()];
+        private readonly StatSlot[] _stats = new StatSlot[StatSlotCount() + 1];
 
-        public long TotalGets => SumOf(_stats, StatField.Gets);
+        /// <summary>Gets the number of gets: every get is a hit or a miss, so it is not counted on its own.</summary>
+        public long TotalGets => SumOf(_stats, StatField.Hits) + SumOf(_stats, StatField.Misses);
 
         public long TotalReturns => SumOf(_stats, StatField.Returns);
 
@@ -34,8 +35,8 @@ public sealed partial class ObjectPoolManager
         /// </summary>
         public long CacheHits => SumOf(_stats, StatField.Hits);
 
-        /// <summary>Gets the counter slot of the current processor.</summary>
-        public ref StatSlot Current => ref _stats[System.Threading.Thread.GetCurrentProcessorId() & (_stats.Length - 1)];
+        /// <summary>Gets the counters of the current processor (slot 0 is never used, see <see cref="CurrentStats"/>).</summary>
+        public ref StatSlot Current => ref _stats[(System.Threading.Thread.GetCurrentProcessorId() & (_stats.Length - 2)) + 1];
 
         public void Reset(StatField field) => ResetOf(_stats, field);
 
@@ -118,34 +119,36 @@ public sealed partial class ObjectPoolManager
     #endregion Nested Types
 
 
-    /// <summary>The counters of one processor, alone on a 64-byte cache line.</summary>
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 64)]
+    /// <summary>
+    /// The counters of one processor. 128 bytes apart from the next slot's: an array's elements start 16 bytes into the
+    /// object, which is not cache-line aligned, so 64-byte slots straddled two lines and each line was shared by two
+    /// processors' slots.
+    /// </summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 128)]
     private struct StatSlot
     {
         [System.Runtime.InteropServices.FieldOffset(0)]
-        public long Gets;
-
-        [System.Runtime.InteropServices.FieldOffset(8)]
         public long Returns;
 
-        [System.Runtime.InteropServices.FieldOffset(16)]
+        [System.Runtime.InteropServices.FieldOffset(8)]
         public long Hits;
 
-        [System.Runtime.InteropServices.FieldOffset(24)]
+        [System.Runtime.InteropServices.FieldOffset(16)]
         public long Misses;
     }
 
     private enum StatField
     {
-        Gets,
         Returns,
         Hits,
         Misses,
     }
 
     /// <summary>Gets the counter slot of the current processor.</summary>
+    // Slot 0 is never used: it shares a cache line with the array's length, which every core reads for the bounds
+    // check, so a core writing it slowed down every other core's access to the array.
     private ref StatSlot CurrentStats
-        => ref _stats[System.Threading.Thread.GetCurrentProcessorId() & (_stats.Length - 1)];
+        => ref _stats[(System.Threading.Thread.GetCurrentProcessorId() & (_stats.Length - 2)) + 1];
 
     /// <summary>A power of two of at least the processor count, capped at 64.</summary>
     private static int StatSlotCount()
@@ -155,8 +158,6 @@ public sealed partial class ObjectPoolManager
     {
         switch (field)
         {
-            case StatField.Gets:
-                return ref slot.Gets;
             case StatField.Returns:
                 return ref slot.Returns;
             case StatField.Hits:

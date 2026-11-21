@@ -21,8 +21,9 @@ namespace Nalix.Network.Tests.Connections;
 
 /// <summary>
 /// Covers the thread-pool hop shortcuts on the connection callback path:
-/// no post-send work item without a <c>MessageProcessed</c> subscriber, and inline frame
-/// processing for processors that declare <see cref="IFrameProcessor.SupportsInlineProcessing"/>.
+/// no post-send work item without a <c>MessageProcessed</c> subscriber, inline frame processing for processors that
+/// declare <see cref="IFrameProcessor.SupportsInlineProcessing"/>, and inline post-processing for protocols that
+/// declare <see cref="Nalix.Network.Protocols.Protocol.SupportsInlinePostProcessing"/>.
 /// </summary>
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 [Collection(TestCollections.AsyncCallback)]
@@ -118,6 +119,81 @@ public sealed class ConnectionCallbackHopTests
         _ = TransportAsyncCallback.CanRunInline(queued.ProcessFrame).Should().BeFalse();
         _ = TransportAsyncCallback.CanRunInline(lambda).Should().BeFalse();
         _ = TransportAsyncCallback.CanRunInline(null).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Send_PostProcessing_RunsOnTheSendingThreadOnlyWhenTheProtocolAllowsIt(bool inline)
+    {
+        EnsureLoggerRegistered();
+        (Socket client, Socket server, Socket listener) = await ConnectPairAsync();
+        using (listener)
+        using (client)
+        using (server)
+        using (Connection connection = new(server, s_extractor))
+        using (RecordingProtocol protocol = new(inline))
+        {
+            connection.MessageProcessed += protocol.PostProcessMessage;
+
+            connection.Transport.Send([7, 8, 9, 10]);
+            int sendingThread = System.Environment.CurrentManagedThreadId;
+
+            await protocol.Observed.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            _ = protocol.Calls.Should().Be(1);
+            if (inline)
+            {
+                // No thread-pool hop: the send itself ran the post-processing.
+                _ = protocol.ThreadId.Should().Be(sendingThread);
+            }
+        }
+    }
+
+    [Fact]
+    public void CanPostProcessInline_WithVariousHandlerShapes_AcceptsOnlySingleInlineCapableProtocol()
+    {
+        using RecordingProtocol inline = new(inline: true);
+        using RecordingProtocol queued = new(inline: false);
+
+        EventHandler<IConnectionEventArgs> multi = inline.PostProcessMessage;
+        multi += queued.PostProcessMessage;
+        static void lambda(object? _1, IConnectionEventArgs _2) { }
+
+        _ = TransportAsyncCallback.CanPostProcessInline(inline.PostProcessMessage).Should().BeTrue();
+        _ = TransportAsyncCallback.CanPostProcessInline(multi).Should().BeFalse();
+        _ = TransportAsyncCallback.CanPostProcessInline(queued.PostProcessMessage).Should().BeFalse();
+        _ = TransportAsyncCallback.CanPostProcessInline(lambda).Should().BeFalse();
+        _ = TransportAsyncCallback.CanPostProcessInline(null).Should().BeFalse();
+    }
+
+    private sealed class RecordingProtocol : Nalix.Network.Protocols.Protocol
+    {
+        private readonly bool _inline;
+
+        public RecordingProtocol(bool inline)
+        {
+            _inline = inline;
+            this.KeepConnectionOpen = true;
+        }
+
+        public int Calls;
+        public int ThreadId;
+        public TaskCompletionSource Observed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override IFrameProcessor FrameProcessor { get; } = new RecordingProcessor(inline: false);
+
+        public override IOpCodeExtractor OpCodeExtractor => s_extractor;
+
+        public override bool SupportsInlinePostProcessing => _inline;
+
+        public override void ProcessMessage(object? sender, IConnectionEventArgs args) { }
+
+        protected override void OnPostProcess(IConnectionEventArgs args)
+        {
+            ThreadId = System.Environment.CurrentManagedThreadId;
+            _ = Interlocked.Increment(ref Calls);
+            _ = this.Observed.TrySetResult();
+        }
     }
 
     private sealed class RecordingProcessor(bool inline) : IFrameProcessor

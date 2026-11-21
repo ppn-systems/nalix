@@ -10,3 +10,4 @@ Nalix.Hosting.NetworkApplicationBuilder.MapDatagram<TProtocol>() -> Nalix.Hostin
 *REMOVED*Nalix.Hosting.NetworkApplicationBuilder.ListenUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
 *REMOVED*Nalix.Hosting.NetworkApplicationBuilder.MapUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
 Nalix.Hosting.Protocols.DefaultFrameProcessor.OnFrameRejected(Nalix.Abstractions.Networking.IConnection! connection, System.ReadOnlySpan<byte> frame) -> void
+override Nalix.Hosting.Protocols.DefaultProtocol.SupportsInlinePostProcessing.get -> bool

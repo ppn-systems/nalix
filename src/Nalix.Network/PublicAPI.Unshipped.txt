@@ -207,3 +207,4 @@ Nalix.Network.Listeners.Datagram.DatagramListener.PendingTicketCount.get -> int
 Nalix.Network.Options.DatagramOptions.ReceiveWorkers.get -> int
 Nalix.Network.Options.DatagramOptions.ReceiveWorkers.set -> void
 Nalix.Network.Connections.DatagramConnection.StreamConnectionId.get -> ulong
+virtual Nalix.Network.Protocols.Protocol.SupportsInlinePostProcessing.get -> bool

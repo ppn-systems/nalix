@@ -104,10 +104,10 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     /// Statistics tracking
     /// </summary>
     /// <summary>
-    /// Get, Return, hit and miss counts, one padded slot per processor: a single shared counter made every core
+    /// Return, hit and miss counts (a get is a hit or a miss), one padded slot per processor: a single shared counter made every core
     /// write the same cache line on every pooled packet and lease. Summed when read.
     /// </summary>
-    private readonly StatSlot[] _stats = new StatSlot[StatSlotCount()];
+    private readonly StatSlot[] _stats = new StatSlot[StatSlotCount() + 1];
     internal long _totalCreated;
     internal long _totalDisposed;
     internal DateTime _startTime = DateTime.UtcNow;
@@ -147,7 +147,8 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     /// <summary>
     /// Gets the total number of get operations performed.
     /// </summary>
-    public long TotalGetOperations => this.SumStats(StatField.Gets);
+    /// <remarks>Every get is a hit or a miss, so it is not counted on its own.</remarks>
+    public long TotalGetOperations => this.SumStats(StatField.Hits) + this.SumStats(StatField.Misses);
 
     /// <summary>
     /// Gets the total number of return operations performed.
@@ -263,7 +264,6 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     public T Get<T>() where T : IPoolable, new()
     {
         ref StatSlot stats = ref this.CurrentStats;
-        _ = Interlocked.Increment(ref stats.Gets);
 
         int id = PoolType<T>.Id;
         ObjectPool? pool = id < _pools.Length ? _pools[id] : null;
@@ -304,8 +304,6 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             _ = Interlocked.Increment(ref typeStats.Misses);
             _ = Interlocked.Increment(ref metrics.TotalCreated);
         }
-
-        _ = Interlocked.Increment(ref typeStats.Gets);
 
         // 2. Exact outstanding and peak tracking (EnableMetrics): one counter every thread renting the type writes.
         if (_config.EnableMetrics || _config.EnableDiagnostics)
@@ -507,12 +505,12 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ResetMetrics()
     {
-        this.ResetStats(StatField.Gets);
         this.ResetStats(StatField.Returns);
+        this.ResetStats(StatField.Hits);
+        this.ResetStats(StatField.Misses);
 
         foreach (PoolMetrics metrics in _metricsDict.Values)
         {
-            metrics.Reset(StatField.Gets);
             metrics.Reset(StatField.Returns);
             metrics.Reset(StatField.Hits);
             metrics.Reset(StatField.Misses);
@@ -731,7 +729,7 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     public void ResetStatistics()
     {
         // Capture snapshot before reset
-        long gets = this.SumStats(StatField.Gets);
+        long gets = this.TotalGetOperations;
         long returns = this.SumStats(StatField.Returns);
         long hits = this.SumStats(StatField.Hits);
         long misses = this.SumStats(StatField.Misses);
@@ -743,7 +741,6 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             DiagnosticsEvents.Write(DiagnosticsEvents.Memory.PoolReturned, new DiagnosticLog("FW.ObjectPoolManager:ResetStatistics", $"reset-statistics phase=before-reset gets={gets} returns={returns} hits={hits} misses={misses} hit-rate={hitRateStr}% uptime-seconds={uptimeStr} pool-count={this.PoolCount}"));
         }
 
-        this.ResetStats(StatField.Gets);
         this.ResetStats(StatField.Returns);
         this.ResetStats(StatField.Hits);
         this.ResetStats(StatField.Misses);

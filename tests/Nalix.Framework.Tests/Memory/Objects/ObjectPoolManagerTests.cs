@@ -87,6 +87,31 @@ public sealed class ObjectPoolManagerTests
     }
 
     [Fact]
+    public void GetAndReturn_FromManyThreads_CountsEveryOperationAndResetMetricsClearsThem()
+    {
+        using ObjectPoolManager manager = new(new ObjectPoolOptions { EnableObjectTrimming = false, DefaultPreallocate = 0 });
+        const int Threads = 8, PerThread = 5_000;
+
+        _ = System.Threading.Tasks.Parallel.For(0, Threads, new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = Threads }, _ =>
+        {
+            for (int i = 0; i < PerThread; i++)
+            {
+                manager.Return(manager.Get<TestPoolable>());
+            }
+        });
+
+        // The counters are spread over one slot per processor; their sums must still be exact.
+        Assert.Equal(Threads * PerThread, manager.TotalGetOperations);
+        Assert.Equal(Threads * PerThread, manager.TotalReturnOperations);
+        Assert.Equal(manager.TotalGetOperations, manager.TotalCacheHits + manager.TotalCacheMisses);
+        Assert.Equal((long)(Threads * PerThread), manager.GetTypeInfo<TestPoolable>()["TotalGets"]);
+
+        manager.ResetMetrics();
+        Assert.Equal(0, manager.TotalGetOperations);
+        Assert.Equal(0, manager.TotalReturnOperations);
+    }
+
+    [Fact]
     public void GetAndReturn_WithMultipleTypes_KeepsPoolsIndependent()
     {
         ObjectPoolOptions options = new()
