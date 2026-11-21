@@ -30,7 +30,10 @@ public sealed partial class DatagramEngine
     /// <summary>Gets the number of received datagrams that were dropped (malformed, duplicate, or not authentic).</summary>
     public long DatagramsDropped { get; private set; }
 
-    /// <summary>Gets the number of sent datagrams declared lost.</summary>
+    /// <summary>
+    /// Gets the number of sent ack-eliciting datagrams declared lost. ACK-only datagrams are not counted: the peer
+    /// does not acknowledge them on their own, so a reordered one would read as a loss.
+    /// </summary>
     public long DatagramsLost { get; private set; }
 
     /// <summary>Gets the bytes the receive side currently holds back for ordering and reassembly.</summary>
