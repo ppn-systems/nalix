@@ -9,3 +9,4 @@ Nalix.Hosting.NetworkApplicationBuilder.MapDatagram<TProtocol>() -> Nalix.Hostin
 *REMOVED*Nalix.Hosting.IProtocolBindingBuilder.WithMode(Nalix.Abstractions.Networking.OperatingMode mode) -> Nalix.Hosting.IProtocolBindingBuilder!
 *REMOVED*Nalix.Hosting.NetworkApplicationBuilder.ListenUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
 *REMOVED*Nalix.Hosting.NetworkApplicationBuilder.MapUdp<TProtocol>() -> Nalix.Hosting.IProtocolBindingBuilder!
+Nalix.Hosting.Protocols.DefaultFrameProcessor.OnFrameRejected(Nalix.Abstractions.Networking.IConnection! connection, System.ReadOnlySpan<byte> frame) -> void

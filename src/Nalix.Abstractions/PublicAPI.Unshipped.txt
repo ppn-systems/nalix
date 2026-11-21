@@ -87,3 +87,4 @@ Nalix.Abstractions.Networking.Packets.PacketMetadata.PacketMetadata(Nalix.Abstra
 *REMOVED*Nalix.Abstractions.Networking.Packets.PacketTransportAttribute.PacketTransportAttribute(Nalix.Abstractions.Networking.NetworkTransport transportType) -> void
 *REMOVED*Nalix.Abstractions.Networking.Packets.PacketTransportAttribute.TransportType.get -> Nalix.Abstractions.Networking.NetworkTransport
 *REMOVED*readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.Transport -> Nalix.Abstractions.Networking.Packets.PacketTransportAttribute?
+Nalix.Abstractions.Networking.IFrameProcessor.OnFrameRejected(Nalix.Abstractions.Networking.IConnection! connection, System.ReadOnlySpan<byte> frame) -> void

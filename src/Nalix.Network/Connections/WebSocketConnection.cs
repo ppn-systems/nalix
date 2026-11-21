@@ -361,13 +361,18 @@ public sealed partial class WebSocketConnection :
         if (pending > s_callbackOptions.MaxPerConnectionPendingPackets)
         {
             _ = Interlocked.Decrement(ref backing.PendingProcessCallbacks);
-            lease.Dispose();
             this.IncrementPacketsDropped();
 
             if (s_callbackOptions.OverflowPolicy == NetworkOverflowPolicy.Disconnect)
             {
                 this.Disconnect("Exceeded MaxPerConnectionPendingPackets threshold.");
             }
+            else
+            {
+                Internal.Transport.AsyncCallback.NotifyFrameRejected(backing.MessageProcessing, this, lease.Span);
+            }
+
+            lease.Dispose();
 
             if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Internal.Warning))
             {
@@ -387,6 +392,8 @@ public sealed partial class WebSocketConnection :
             ((IPooledConnectContextPool)this).ReleasePendingPacket();
             _ = args.ExchangeLease(null);
             args.Dispose();
+            this.IncrementPacketsDropped();
+            Internal.Transport.AsyncCallback.NotifyFrameRejected(backing.MessageProcessing, this, lease.Span);
             lease.Dispose();
         }
     }

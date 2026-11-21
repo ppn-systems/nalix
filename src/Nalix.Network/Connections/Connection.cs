@@ -732,6 +732,10 @@ public sealed partial class Connection :
             {
                 this.Disconnect("Exceeded MaxPerConnectionPendingPackets threshold.");
             }
+            else
+            {
+                Internal.Transport.AsyncCallback.NotifyFrameRejected(backing.MessageProcessing, this, lease.Span);
+            }
 
             return false;
         }
@@ -744,6 +748,7 @@ public sealed partial class Connection :
             _ = Interlocked.Decrement(ref backing.PendingProcessCallbacks);
             _ = args.ExchangeLease(null);
             args.Dispose();
+            Internal.Transport.AsyncCallback.NotifyFrameRejected(backing.MessageProcessing, this, lease.Span);
             return false;
         }
 

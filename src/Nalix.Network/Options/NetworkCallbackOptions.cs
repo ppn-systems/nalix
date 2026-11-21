@@ -31,6 +31,13 @@ namespace Nalix.Network.Options;
 ///   </item>
 /// </list>
 /// </para>
+/// <para><b>Rejected frames:</b><br/>
+/// A frame dropped by either layer is reported to the connection's frame processor through
+/// <see cref="IFrameProcessor.OnFrameRejected"/>. The hosting <c>DefaultFrameProcessor</c> answers it with a
+/// retryable <c>FAIL / RATE_LIMITED / RETRY</c> directive carrying the request's sequence id (at most one per
+/// connection per directive cooldown); a custom frame processor that does not override the method keeps the silent drop.
+/// Frames are not reported when <see cref="OverflowPolicy"/> is <see cref="NetworkOverflowPolicy.Disconnect"/>.
+/// </para>
 /// </summary>
 [IniComment("Async callback dispatcher and per-connection throttle settings (DDoS protection)")]
 public sealed partial class NetworkCallbackOptions : ConfigurationLoader, IValidatableConfiguration
