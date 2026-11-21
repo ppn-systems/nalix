@@ -109,6 +109,30 @@ public sealed class DatagramListenerTests
         Assert.Equal(2, listener.PendingTicketCount);
     }
 
+    [Fact]
+    public async Task IssueTicket_WhenNoDatagramArrivesBeforeItsLifetime_IsSweptAndCounted()
+    {
+        using DatagramListener listener = CreateListener(0, new DatagramOptions { TicketLifetimeSeconds = 1 });
+        listener.Activate();
+
+        _ = listener.IssueTicket(CreateStreamConnection(1));
+        Assert.Equal(1, listener.PendingTicketCount);
+
+        // The sweep runs every second; the ticket expires after one.
+        long deadline = System.Environment.TickCount64 + 5_000;
+        while (listener.PendingTicketCount > 0 && System.Environment.TickCount64 < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.Equal(0, listener.PendingTicketCount);
+        Assert.Equal(1, listener.Metrics.TicketsExpired);
+
+        // A new ticket for the same stream connection is issued normally afterwards.
+        _ = listener.IssueTicket(CreateStreamConnection(1));
+        Assert.Equal(1, listener.PendingTicketCount);
+    }
+
     private static IConnection CreateStreamConnection(ulong id)
     {
         byte[] secret = new byte[32];

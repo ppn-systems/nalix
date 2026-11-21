@@ -252,11 +252,97 @@ public sealed class DatagramEndToEndTests : IDisposable
         Assert.Equal(3, guard.Accepted);
     }
 
-    /// <summary>Admits everything and counts slots taken and released.</summary>
-    private sealed class CountingGuard : IConnectionGuard
+    [Fact]
+    public async Task ServerDatagramConnection_ExposesItsStateAndSendsThroughDeliveryViews()
+    {
+        (ushort tcpPort, ushort udpPort) = (NextPort(), NextPort());
+        await using NetworkApplication app = await this.StartServerAsync(tcpPort, udpPort);
+        IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()!;
+
+        using TcpSession stream = await ConnectStreamAsync(tcpPort);
+        using DatagramSession datagram = new(stream);
+        TaskCompletionSource<int> pushed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        datagram.OnMessageReceived += (_, lease) => pushed.TrySetResult(lease.Length);
+        await datagram.ConnectAsync().WaitAsync(s_timeout);
+
+        DatagramConnection server = hub.ListConnections().OfType<DatagramConnection>().Single();
+
+        Assert.Contains("DatagramConnection", server.ToString(), StringComparison.Ordinal);
+        Assert.False(string.IsNullOrEmpty(server.EngineReport));
+        Assert.NotNull(server.Attributes);
+        Assert.NotNull(server.RateLimitCache);
+        Assert.True(server.BytesReceived > 0);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => server.UpdateIdleTimeout(0));
+
+        // The default delivery is the connection itself; other views are cached per method and channel.
+        Assert.Same(server, server.WithDelivery(DeliveryMethod.ReliableOrdered, 0));
+        IConnection.ITransport view = server.WithDelivery(DeliveryMethod.ReliableUnordered, 2);
+        Assert.Same(view, server.WithDelivery(DeliveryMethod.ReliableUnordered, 2));
+
+        byte[] frame = new EchoPacket { Sequence = 5, Text = "view" }.Serialize();
+        await view.SendAsync(frame);
+        Assert.Equal(frame.Length, await pushed.Task.WaitAsync(s_timeout));
+        Assert.True(server.BytesSent > 0);
+    }
+
+    [Fact]
+    public async Task ServerDatagramConnection_PastTheErrorThreshold_DisconnectsTheClient()
+    {
+        (ushort tcpPort, ushort udpPort) = (NextPort(), NextPort());
+        await using NetworkApplication app = await this.StartServerAsync(tcpPort, udpPort);
+        IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()!;
+        DatagramListener listener = (DatagramListener)InstanceManager.Instance.GetExistingInstance<IDatagramTicketIssuer>()!;
+
+        using TcpSession stream = await ConnectStreamAsync(tcpPort);
+        using DatagramSession datagram = new(stream);
+        TaskCompletionSource disconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        datagram.OnDisconnected += (_, _) => disconnected.TrySetResult();
+        await datagram.ConnectAsync().WaitAsync(s_timeout);
+
+        DatagramConnection server = hub.ListConnections().OfType<DatagramConnection>().Single();
+        // The options instance the connection reads (other tests raise the shared threshold, e.g. to 2000).
+        var limits = (ConnectionGuardOptions)typeof(DatagramConnection)
+            .GetField("s_limitOptions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        int threshold = limits.MaxErrorThreshold;
+        int errors = 0;
+        while (!server.IsDisposed && errors < threshold * 2)
+        {
+            server.IncrementErrorCount();
+            errors++;
+        }
+
+        // Disconnect disposes the session before it returns, like the stream connections.
+        Assert.True(server.IsDisposed);
+        Assert.Equal(threshold, errors);
+        await disconnected.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await WaitUntilAsync(() => listener.SessionCount == 0);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WhenTheGuardRefusesTheSession_FailsAndCountsTheRejection()
+    {
+        ConfigurationManager.Instance.Get<DatagramOptions>().TicketLifetimeSeconds = 1;
+        (ushort tcpPort, ushort udpPort) = (NextPort(), NextPort());
+        CountingGuard guard = new(acceptFirst: 1); // the stream connection only
+        await using NetworkApplication app = await this.StartServerAsync(tcpPort, udpPort, guard);
+        DatagramListener listener = (DatagramListener)InstanceManager.Instance.GetExistingInstance<IDatagramTicketIssuer>()!;
+
+        using TcpSession stream = await ConnectStreamAsync(tcpPort);
+        using DatagramSession datagram = new(stream);
+
+        _ = await Assert.ThrowsAsync<NetworkException>(() => datagram.ConnectAsync().WaitAsync(s_timeout));
+
+        Assert.Equal(1, listener.Metrics.TotalGuardRejections);
+        Assert.Equal(0, listener.SessionCount);
+        Assert.Equal(0, listener.Metrics.TotalAccepted);
+    }
+
+    /// <summary>Counts slots taken and released; admits the first <c>acceptFirst</c> requests, or all of them.</summary>
+    private sealed class CountingGuard(int acceptFirst = int.MaxValue) : IConnectionGuard
     {
         private int _accepted;
         private int _released;
+        private int _requests;
 
         public int Accepted => Volatile.Read(ref _accepted);
 
@@ -264,6 +350,11 @@ public sealed class DatagramEndToEndTests : IDisposable
 
         public bool TryAccept(System.Net.IPEndPoint endPoint)
         {
+            if (Interlocked.Increment(ref _requests) > acceptFirst)
+            {
+                return false;
+            }
+
             _ = Interlocked.Increment(ref _accepted);
             return true;
         }
@@ -313,6 +404,41 @@ public sealed class DatagramEndToEndTests : IDisposable
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => server.WithDelivery(DeliveryMethod.Unreliable, channels));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => server.WithDelivery(DeliveryMethod.ReliableSequenced, 100));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => server.WithDelivery((DeliveryMethod)9, 0));
+    }
+
+    [Fact]
+    public async Task ClientReceive_WhileItsSendPathIsBusy_KeepsDelivering()
+    {
+        (ushort tcpPort, ushort udpPort) = (NextPort(), NextPort());
+        await using NetworkApplication app = await this.StartServerAsync(tcpPort, udpPort);
+        IConnectionHub hub = InstanceManager.Instance.GetExistingInstance<IConnectionHub>()!;
+
+        using TcpSession stream = await ConnectStreamAsync(tcpPort);
+        using DatagramSession datagram = new(stream);
+        await datagram.ConnectAsync().WaitAsync(s_timeout);
+
+        DatagramConnection server = hub.ListConnections().OfType<DatagramConnection>().Single();
+        TaskCompletionSource received = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        datagram.OnMessageReceived += (_, _) => received.TrySetResult();
+
+        // Hold the client's send lock, as a thread blocked in a slow socket send does. Sends happen outside the
+        // engine lock, so the receive loop still processes and delivers what the server pushes.
+        Lock sendLock = (Lock)typeof(DatagramSession).GetField("_sendLock", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(datagram)!;
+        sendLock.Enter();
+        try
+        {
+            await server.SendAsync(new EchoPacket { Sequence = 7, Text = "push" }.Serialize(), DeliveryMethod.Unreliable, 1);
+            Assert.True(received.Task.Wait(s_timeout), "the client must receive while its send path is busy");
+        }
+        finally
+        {
+            sendLock.Exit();
+        }
+
+        // Once the send path is free again, what was queued meanwhile goes out and the session keeps working.
+        EchoPacket response = await datagram.RequestAsync<EchoPacket>(
+            new EchoPacket { Sequence = 1, Text = "after" }, s_request).AsTask().WaitAsync(s_timeout);
+        Assert.Equal("AFTER", response.Text);
     }
 
     private static async Task<TcpSession> ConnectStreamAsync(ushort port)

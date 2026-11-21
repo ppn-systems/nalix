@@ -85,6 +85,74 @@ public sealed class DatagramTimingWheelTests
     }
 
     [Fact]
+    public async Task Activate_WithNothingScheduled_SleepsAndWakesForTheNextDeadline()
+    {
+        DatagramTimingWheel wheel = new("test.dgram.timers");
+        wheel.Activate(CancellationToken.None);
+        try
+        {
+            // Idle: no tick at all (it used to tick every millisecond).
+            await Task.Delay(300);
+            Assert.Equal(0, wheel.Iterations);
+
+            // An entry wakes it, and the deadline is still honoured.
+            Target target = new();
+            long start = DatagramEngine.NowMicros();
+            target.Arm(wheel, start + 30_000);
+            await target.Fired.Task.WaitAsync(s_timeout);
+            Assert.True(DatagramEngine.NowMicros() - start >= 29_000, "the deadline must not fire early");
+
+            // Once the bucket is empty again it goes back to sleep.
+            Assert.Equal(0, wheel.EntryCount);
+            long iterations = wheel.Iterations;
+            await Task.Delay(300);
+            Assert.InRange(wheel.Iterations - iterations, 0, 2);
+        }
+        finally
+        {
+            wheel.Deactivate();
+        }
+    }
+
+    [Fact]
+    public async Task Deactivate_WhileSleeping_StopsTheWorkerAndCanBeActivatedAgain()
+    {
+        DatagramTimingWheel wheel = new("test.dgram.timers");
+        for (int round = 0; round < 3; round++)
+        {
+            wheel.Activate(CancellationToken.None);
+            await WaitForAsync(() => wheel.IsRunning);
+
+            // Asleep (nothing scheduled): stopping must still end the worker, or host shutdown waits forever.
+            wheel.Deactivate();
+            await WaitForAsync(() => !wheel.IsRunning);
+        }
+
+        // Still works after the restarts.
+        wheel.Activate(CancellationToken.None);
+        try
+        {
+            Target target = new();
+            target.Arm(wheel, DatagramEngine.NowMicros() + 10_000);
+            await target.Fired.Task.WaitAsync(s_timeout);
+        }
+        finally
+        {
+            wheel.Deactivate();
+        }
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        long deadline = System.Environment.TickCount64 + 5_000;
+        while (!condition())
+        {
+            Assert.True(System.Environment.TickCount64 < deadline, "condition not met in 5 s");
+            await Task.Delay(10);
+        }
+    }
+
+    [Fact]
     public async Task Advance_WhenATargetIsScheduledWhileItsBucketIsProcessed_FiresItOnTheNextTick()
     {
         // Not activated: the test drives the ticks.

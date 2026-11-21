@@ -22,6 +22,7 @@ internal sealed class NetworkConfigSnapshot : IDisposable
         this.Capture(ConfigurationManager.Instance.Get<ConnectionGuardOptions>());
         this.Capture(ConfigurationManager.Instance.Get<ConnectionQuotaOptions>());
         this.Capture(ConfigurationManager.Instance.Get<NetworkWebSocketOptions>());
+        this.Capture(ConfigurationManager.Instance.Get<DatagramOptions>());
     }
 
     public void Dispose()
