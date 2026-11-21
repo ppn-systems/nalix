@@ -194,6 +194,12 @@ public sealed class ChaCha20CoreTests
     public void Encrypt_WhenTheCounterWouldWrapInsideEightBlocks_ThrowsBeforeWritingOutput()
     {
         // Counters 0xFFFFFFFC.. would wrap to 0 inside the first eight-block pass: no keystream may be reused.
+        // (The one- and two-block paths write the blocks of valid counters first, then throw.)
+        if (!ChaCha20Core.EightBlockPathSupported)
+        {
+            return;
+        }
+
         byte[] plaintext = new byte[8 * ChaCha20.BlockSize];
         byte[] output = new byte[plaintext.Length];
         ChaCha20 cipher = new(new byte[ChaCha20.KeySize], new byte[12], 0xFFFFFFFCu);

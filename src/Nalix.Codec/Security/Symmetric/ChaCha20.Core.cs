@@ -218,7 +218,38 @@ internal static class ChaCha20Core
     [System.Runtime.CompilerServices.MethodImpl(
         System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     private static Vector256<uint> RotateLeft(Vector256<uint> v, byte bits)
-        => Vector256.ShiftLeft(v, bits) | Vector256.ShiftRightLogical(v, 32 - bits);
+    {
+        // One instruction instead of shift, shift and or: vprold with AVX-512VL; otherwise the byte-aligned
+        // rotations (16 and 8) are a byte shuffle within each 32-bit word. bits is a constant once inlined.
+        if (Avx512F.VL.IsSupported)
+        {
+            // ChaCha20 rotates by 16, 12, 8 and 7 only; the immediate must be a constant.
+            System.Diagnostics.Debug.Assert(bits is 16 or 12 or 8 or 7);
+            return bits switch
+            {
+                16 => Avx512F.VL.RotateLeft(v, 16),
+                12 => Avx512F.VL.RotateLeft(v, 12),
+                8 => Avx512F.VL.RotateLeft(v, 8),
+                _ => Avx512F.VL.RotateLeft(v, 7),
+            };
+        }
+
+        if (bits == 16 && Avx2.IsSupported)
+        {
+            return Avx2.Shuffle(v.AsByte(), Vector256.Create(
+                (byte)2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13,
+                2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13)).AsUInt32();
+        }
+
+        if (bits == 8 && Avx2.IsSupported)
+        {
+            return Avx2.Shuffle(v.AsByte(), Vector256.Create(
+                (byte)3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 15, 12, 13, 14,
+                3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 15, 12, 13, 14)).AsUInt32();
+        }
+
+        return Vector256.ShiftLeft(v, bits) | Vector256.ShiftRightLogical(v, 32 - bits);
+    }
 
     /// <summary>Rotates each 128-bit lane left by <paramref name="words"/> 32-bit elements.</summary>
     [System.Runtime.CompilerServices.MethodImpl(
@@ -311,7 +342,33 @@ internal static class ChaCha20Core
     [System.Runtime.CompilerServices.MethodImpl(
         System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     private static Vector128<uint> RotateLeft(Vector128<uint> v, byte bits)
-        => Vector128.ShiftLeft(v, bits) | Vector128.ShiftRightLogical(v, 32 - bits);
+    {
+        // As the Vector256 overload: vprold, or a byte shuffle for the byte-aligned rotations.
+        if (Avx512F.VL.IsSupported)
+        {
+            // ChaCha20 rotates by 16, 12, 8 and 7 only; the immediate must be a constant.
+            System.Diagnostics.Debug.Assert(bits is 16 or 12 or 8 or 7);
+            return bits switch
+            {
+                16 => Avx512F.VL.RotateLeft(v, 16),
+                12 => Avx512F.VL.RotateLeft(v, 12),
+                8 => Avx512F.VL.RotateLeft(v, 8),
+                _ => Avx512F.VL.RotateLeft(v, 7),
+            };
+        }
+
+        if (bits == 16 && Ssse3.IsSupported)
+        {
+            return Ssse3.Shuffle(v.AsByte(), Vector128.Create((byte)2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13)).AsUInt32();
+        }
+
+        if (bits == 8 && Ssse3.IsSupported)
+        {
+            return Ssse3.Shuffle(v.AsByte(), Vector128.Create((byte)3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 15, 12, 13, 14)).AsUInt32();
+        }
+
+        return Vector128.ShiftLeft(v, bits) | Vector128.ShiftRightLogical(v, 32 - bits);
+    }
 
     [System.Runtime.CompilerServices.MethodImpl(
         System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
