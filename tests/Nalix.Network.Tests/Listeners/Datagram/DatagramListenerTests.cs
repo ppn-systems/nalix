@@ -1,6 +1,7 @@
 // Copyright (c) 2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
+using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using Nalix.Abstractions.Networking;
@@ -142,6 +143,50 @@ public sealed class DatagramListenerTests
         _ = connection.Secret.Returns(new Bytes32(secret));
         return connection;
     }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(8)]
+    [InlineData(19)]
+    public void SendBatch_DeliversEveryDatagramInOrder(int count)
+    {
+        // One sendmmsg per 8 datagrams on Linux; one SendTo per datagram elsewhere (Windows has no equivalent).
+        using DatagramListener listener = CreateListener(0);
+        listener.Activate();
+        Socket socket = (Socket)typeof(DatagramListener).GetField("_socket", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(listener)!;
+
+        // The peer address in the form the listener receives it: IPv4-mapped on a dual-stack socket.
+        using Socket peer = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        peer.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        peer.ReceiveTimeout = 5_000;
+        IPAddress loopback = socket.AddressFamily == AddressFamily.InterNetworkV6 ? IPAddress.Loopback.MapToIPv6() : IPAddress.Loopback;
+        SocketAddress target = new IPEndPoint(loopback, ((IPEndPoint)peer.LocalEndPoint!).Port).Serialize();
+
+        const int Stride = 1500;
+        byte[] buffer = new byte[count * Stride];
+        int[] lengths = new int[count];
+        SocketAddress?[] targets = new SocketAddress?[count];
+        for (int i = 0; i < count; i++)
+        {
+            lengths[i] = 100 + (i * 50);
+            buffer.AsSpan(i * Stride, lengths[i]).Fill((byte)i);
+            targets[i] = target;
+        }
+
+        listener.SendBatch(buffer, Stride, lengths, targets);
+
+        byte[] received = new byte[2048];
+        for (int i = 0; i < count; i++)
+        {
+            int length = peer.Receive(received);
+            Assert.Equal(lengths[i], length);
+            Assert.All(received.AsSpan(0, length).ToArray(), b => Assert.Equal((byte)i, b));
+        }
+    }
+
+    [Fact]
+    public void BatchSender_IsUsedOnlyOn64BitLinux()
+        => Assert.Equal(OperatingSystem.IsLinux() && IntPtr.Size == 8, Nalix.Network.Internal.Datagram.DatagramBatchSender.IsSupported);
 
     private static DatagramListener CreateListener(ushort port, DatagramOptions? options = null)
         => new(port, Substitute.For<IProtocol>(), Substitute.For<IConnectionHub>(), Substitute.For<IDatagramProtectionFactory>(), options: options);
