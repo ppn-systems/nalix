@@ -61,6 +61,9 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
 
     private const string ShutdownCloseReason = "Server shutting down";
 
+    /// <summary>1 from the start of <see cref="Deactivate"/> until the next <see cref="Activate"/>.</summary>
+    private int _shuttingDown;
+
     #endregion Fields
 
     #region Constructors
@@ -151,6 +154,7 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
     /// <inheritdoc/>
     public override void Activate(CancellationToken cancellationToken = default)
     {
+        Volatile.Write(ref _shuttingDown, 0);
         base.Activate(cancellationToken);
 
         // IsRunning is only true while a sweep callback executes, so it cannot tell whether the job is scheduled.
@@ -182,6 +186,9 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
     /// </remarks>
     public override void Deactivate(CancellationToken cancellationToken = default)
     {
+        // Published before the live connections are read: an upgrade finishing now either is among them or sees
+        // the flag and closes its connection itself (see TrackLiveConnection).
+        _ = Interlocked.Exchange(ref _shuttingDown, 1);
         this.CLOSE_LIVE_CONNECTIONS();
 
         base.Deactivate(cancellationToken);
@@ -208,10 +215,25 @@ public abstract partial class WebSocketListenerBase : TcpListenerBase
         base.Dispose(disposing);
     }
 
-    internal void TrackLiveConnection(WebSocketConnection connection)
+    /// <summary>
+    /// Adds an upgraded connection to the ones <see cref="Deactivate"/> closes. Returns <see langword="false"/> when
+    /// the listener is shutting down: the connection is then closed here, with the same 1001 close frame, because
+    /// <see cref="Deactivate"/> may already have gone over the live connections. (The 101 response, which completes
+    /// the client's connect, goes out before the connection is tracked.)
+    /// </summary>
+    internal bool TrackLiveConnection(WebSocketConnection connection)
     {
         _ = _liveConnections.TryAdd(connection, 0);
         connection.ConnectionClosed += _onLiveConnectionClosed;
+
+        Interlocked.MemoryBarrier(); // The add above, then the flag: pairs with the exchange in Deactivate.
+        if (Volatile.Read(ref _shuttingDown) == 0)
+        {
+            return true;
+        }
+
+        _ = connection.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, ShutdownCloseReason);
+        return false;
     }
 
     private void OnLiveConnectionClosed(object? sender, IConnectionEventArgs args)

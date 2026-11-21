@@ -22,12 +22,12 @@ public sealed class NetworkAccessListTests
         using ConfigurationOptionsScope<ConnectionBlacklistStoreOptions> blacklistScope = new();
         ConnectionBlacklistStoreOptions blacklistOptions = blacklistScope.Options;
         blacklistOptions.Enabled = true;
-        blacklistOptions.StoreFileName = "blacklist_nal_test.txt";
+        blacklistOptions.StoreFileName = $"blacklist_nal_test_{Guid.NewGuid():N}.txt";
         blacklistOptions.MaxBlacklistedIps = 10;
 
         using ConfigurationOptionsScope<TrustedProxyOptions> proxyScope = new();
         TrustedProxyOptions proxyOptions = proxyScope.Options;
-        proxyOptions.StoreFileName = "trusted_proxies_nal_test.txt";
+        proxyOptions.StoreFileName = $"trusted_proxies_nal_test_{Guid.NewGuid():N}.txt";
 
         string blacklistPath = Path.Combine(Directories.ConfigurationDirectory, blacklistOptions.StoreFileName);
         string proxyPath = Path.Combine(Directories.ConfigurationDirectory, proxyOptions.StoreFileName);
@@ -73,12 +73,12 @@ public sealed class NetworkAccessListTests
         using ConfigurationOptionsScope<ConnectionBlacklistStoreOptions> blacklistScope = new();
         ConnectionBlacklistStoreOptions blacklistOptions = blacklistScope.Options;
         blacklistOptions.Enabled = true;
-        blacklistOptions.StoreFileName = "blacklist_cidr_nal_test.txt";
+        blacklistOptions.StoreFileName = $"blacklist_cidr_nal_test_{Guid.NewGuid():N}.txt";
         blacklistOptions.MaxBlacklistedIps = 10;
 
         using ConfigurationOptionsScope<TrustedProxyOptions> proxyScope = new();
         TrustedProxyOptions proxyOptions = proxyScope.Options;
-        proxyOptions.StoreFileName = "trusted_proxies_nal_test.txt";
+        proxyOptions.StoreFileName = $"trusted_proxies_nal_test_{Guid.NewGuid():N}.txt";
 
         string blacklistPath = Path.Combine(Directories.ConfigurationDirectory, blacklistOptions.StoreFileName);
         string proxyPath = Path.Combine(Directories.ConfigurationDirectory, proxyOptions.StoreFileName);
@@ -124,11 +124,11 @@ public sealed class NetworkAccessListTests
         using ConfigurationOptionsScope<ConnectionBlacklistStoreOptions> blacklistScope = new();
         ConnectionBlacklistStoreOptions blacklistOptions = blacklistScope.Options;
         blacklistOptions.Enabled = false;
-        blacklistOptions.StoreFileName = "blacklist_nal_test.txt";
+        blacklistOptions.StoreFileName = $"blacklist_nal_test_{Guid.NewGuid():N}.txt";
 
         using ConfigurationOptionsScope<TrustedProxyOptions> proxyScope = new();
         TrustedProxyOptions proxyOptions = proxyScope.Options;
-        proxyOptions.StoreFileName = "trusted_proxies_nal_test.txt";
+        proxyOptions.StoreFileName = $"trusted_proxies_nal_test_{Guid.NewGuid():N}.txt";
         proxyOptions.MaxTrustedProxies = 10;
 
         string proxyPath = Path.Combine(Directories.ConfigurationDirectory, proxyOptions.StoreFileName);
@@ -168,11 +168,11 @@ public sealed class NetworkAccessListTests
         using ConfigurationOptionsScope<ConnectionBlacklistStoreOptions> blacklistScope = new();
         ConnectionBlacklistStoreOptions blacklistOptions = blacklistScope.Options;
         blacklistOptions.Enabled = true;
-        blacklistOptions.StoreFileName = "blacklist_autocreate_test.txt";
+        blacklistOptions.StoreFileName = $"blacklist_autocreate_test_{Guid.NewGuid():N}.txt";
 
         using ConfigurationOptionsScope<TrustedProxyOptions> proxyScope = new();
         TrustedProxyOptions proxyOptions = proxyScope.Options;
-        proxyOptions.StoreFileName = "trusted_proxies_autocreate_test.txt";
+        proxyOptions.StoreFileName = $"trusted_proxies_autocreate_test_{Guid.NewGuid():N}.txt";
 
         string blacklistPath = Path.Combine(Directories.ConfigurationDirectory, blacklistOptions.StoreFileName);
         string proxyPath = Path.Combine(Directories.ConfigurationDirectory, proxyOptions.StoreFileName);
@@ -206,12 +206,12 @@ public sealed class NetworkAccessListTests
         using ConfigurationOptionsScope<ConnectionBlacklistStoreOptions> blacklistScope = new();
         ConnectionBlacklistStoreOptions blacklistOptions = blacklistScope.Options;
         blacklistOptions.Enabled = true;
-        blacklistOptions.StoreFileName = "blacklist_reload_test.txt";
+        blacklistOptions.StoreFileName = $"blacklist_reload_test_{Guid.NewGuid():N}.txt";
         blacklistOptions.MaxBlacklistedIps = 10;
 
         using ConfigurationOptionsScope<TrustedProxyOptions> proxyScope = new();
         TrustedProxyOptions proxyOptions = proxyScope.Options;
-        proxyOptions.StoreFileName = "trusted_proxies_reload_test.txt";
+        proxyOptions.StoreFileName = $"trusted_proxies_reload_test_{Guid.NewGuid():N}.txt";
         proxyOptions.MaxTrustedProxies = 10;
 
         string blacklistPath = Path.Combine(Directories.ConfigurationDirectory, blacklistOptions.StoreFileName);

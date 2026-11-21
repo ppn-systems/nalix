@@ -222,7 +222,7 @@ public sealed class ConnectionGuardTests
         using ConfigurationOptionsScope<ConnectionBlacklistStoreOptions> blacklistScope = new();
         ConnectionBlacklistStoreOptions blacklistOptions = blacklistScope.Options;
         blacklistOptions.Enabled = true;
-        blacklistOptions.StoreFileName = "blacklist_test.txt";
+        blacklistOptions.StoreFileName = $"blacklist_test_{Guid.NewGuid():N}.txt";
         blacklistOptions.MaxBlacklistedIps = 10;
 
         string path = System.IO.Path.Combine(Nalix.Environment.IO.Directories.ConfigurationDirectory, blacklistOptions.StoreFileName);
@@ -269,7 +269,7 @@ public sealed class ConnectionGuardTests
         using ConfigurationOptionsScope<ConnectionBlacklistStoreOptions> blacklistScope = new();
         ConnectionBlacklistStoreOptions blacklistOptions = blacklistScope.Options;
         blacklistOptions.Enabled = true;
-        blacklistOptions.StoreFileName = "blacklist_cidr_test.txt";
+        blacklistOptions.StoreFileName = $"blacklist_cidr_test_{Guid.NewGuid():N}.txt";
         blacklistOptions.MaxBlacklistedIps = 10;
 
         string path = System.IO.Path.Combine(Nalix.Environment.IO.Directories.ConfigurationDirectory, blacklistOptions.StoreFileName);
@@ -315,7 +315,7 @@ public sealed class ConnectionGuardTests
     {
         using ConfigurationOptionsScope<TrustedProxyOptions> proxyScope = new();
         TrustedProxyOptions proxyOptions = proxyScope.Options;
-        proxyOptions.StoreFileName = "trusted_proxies_test.txt";
+        proxyOptions.StoreFileName = $"trusted_proxies_test_{Guid.NewGuid():N}.txt";
         proxyOptions.MaxTrustedProxies = 10;
         proxyOptions.MaxConnectionsPerTrustedProxy = 3;
 

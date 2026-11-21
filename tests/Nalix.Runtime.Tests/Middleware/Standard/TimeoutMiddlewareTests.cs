@@ -29,10 +29,14 @@ public sealed class TimeoutMiddlewareTests
         PacketDispatchOptions<IPacket> options = new PacketDispatchOptions<IPacket>()
             .WithMiddleware(new TimeoutMiddleware());
 
+        // The handler only finishes once the test has seen the directive. A fixed delay (it was 5 s) raced the 50 ms
+        // timer: with the thread pool starved by the rest of the suite, both callbacks ran late and the handler
+        // could complete first, so no timeout was reported.
+        TaskCompletionSource gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         PacketHandler<IPacket> descriptor = PacketHandlerFactory.CreateDescriptor<IPacket>(
             async (_, _) =>
             {
-                await Task.Delay(TimeSpan.FromSeconds(5));
+                await gate.Task;
                 return (object?)null;
             },
             timeoutMs: 50);
@@ -40,14 +44,24 @@ public sealed class TimeoutMiddlewareTests
         FakeConnection connection = new();
         try
         {
-            await options.ExecuteResolvedHandlerAsync(
+            Task dispatch = options.ExecuteResolvedHandlerAsync(
                 descriptor, new TestPacket(), connection, encryptedOnWire: false).AsTask();
+
+            long deadline = System.Environment.TickCount64 + 30_000;
+            while (connection.FakeTcp.SentMessages.Count == 0 && System.Environment.TickCount64 < deadline)
+            {
+                await Task.Delay(10);
+            }
 
             connection.FakeTcp.SentMessages.Should().NotBeEmpty(
                 "a handler exceeding its configured timeout must cause a TIMEOUT directive to be sent");
+
+            gate.SetResult();
+            await dispatch.WaitAsync(TimeSpan.FromSeconds(30));
         }
         finally
         {
+            gate.TrySetResult();
             connection.Dispose();
         }
     }
