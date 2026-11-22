@@ -76,28 +76,30 @@ How Nalix compares with the usual .NET choices for realtime traffic (competitor 
 ## 📈 Benchmarks
 
 End-to-end echo over loopback, every framework with its own client, same machine:
-Ubuntu 24.04 (4 vCPU Intel Xeon @ 2.10 GHz), .NET 10 runtime 10.0.15 (SDK 11.0.100-rc.3), Release, median of 3 runs. 32 B payload unless noted.
-All 14 configurations were benchmarked on one machine in two back-to-back batches on 2026-11-21. Raw data and all cells: **[full comparison](https://docs.ppnsys.com/en-us/benchmarks/network-comparison)**.
+Ubuntu 24.04 (4 vCPU Intel Xeon @ 2.10 GHz), .NET 10 runtime 10.0.15 (SDK 11.0.100-rc.3), Release, default configuration, median of 3 runs. 32 B payload unless noted.
+All 14 configurations were benchmarked in one pass on 2026-11-22. Raw data and all cells: **[full comparison](https://docs.ppnsys.com/en-us/benchmarks/network-comparison)**.
 
 | Library | p50 latency (µs) | p99 latency (µs) | ops/s, 64 clients | ops/s, 64 clients, 1 KB | server alloc/op (B) | server CPU/op (µs) |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Nalix TCP** | **60.0** | **153.4** | **85,258** | **65,652** | **56** | 27.2 |
-| Nalix WebSocket | 67.7 | 173.5 | 74,799 | 56,129 | **56** | 26.5 |
-| SignalR (WebSocket, MessagePack) | 96.5 | 265.4 | 67,717 | 63,087 | 672 | **25.0** |
-| gRPC bidi stream (h2c) | 77.4 | 181.0 | 64,936 | 60,948 | 264 | 27.7 |
-| gRPC unary (h2c) | 115.1 | 377.0 | 51,176 | 49,102 | 968 | 32.7 |
-| MagicOnion StreamingHub | 93.8 | 221.9 | 59,796 | 50,862 | 200 | 33.5 |
-| MagicOnion unary | 133.2 | 441.1 | 50,395 | 44,226 | 1,432 | 35.8 |
-| *Nalix TCP + X25519/ChaCha20-Poly1305* | 72.7 | 187.3 | 72,631 | 57,189 | **56** | 31.1 |
-| *gRPC bidi stream + TLS* | 116.7 | 314.5 | 50,934 | 42,167 | 813 | 37.6 |
+| **Nalix TCP** | **56.7** | **120.0** | 97,029 | 86,232 | **56** | 23.4 |
+| *Nalix TCP, inline dispatcher (opt-in)* | 56.8 | 122.7 | **135,884** | **92,857** | **56** | **15.0** |
+| Nalix WebSocket | 64.5 | 137.5 | 91,565 | 76,881 | **56** | 20.9 |
+| SignalR (WebSocket, MessagePack) | 79.8 | 175.7 | 79,533 | 69,339 | 672 | 21.0 |
+| gRPC bidi stream (h2c) | 70.4 | 145.0 | 75,682 | 63,399 | 264 | 24.9 |
+| gRPC unary (h2c) | 99.6 | 262.9 | 63,040 | 56,136 | 968 | 28.4 |
+| MagicOnion StreamingHub | 81.3 | 197.3 | 72,165 | 58,927 | 200 | 26.5 |
+| MagicOnion unary | 115.1 | 308.7 | 58,445 | 53,808 | 1,432 | 30.3 |
+| *Nalix TCP + X25519/ChaCha20-Poly1305* | 58.4 | 137.3 | 86,507 | 66,910 | **56** | 26.1 |
+| *gRPC bidi stream + TLS* | 105.2 | 289.1 | 51,805 | 49,251 | 809 | 36.2 |
 
 Latency is one client, sequential calls; allocation and CPU are per message at 64 clients.
 
-- **Nalix wins** single-client latency among the full frameworks (p50 60.0 µs vs 77.4 µs for gRPC bidi stream and 96.5 µs for SignalR) and server allocations per message (**56 B**, lowest among full-featured frameworks). A hand-written raw socket (29.0 µs) and a raw Kestrel WebSocket echo (55.7 µs) are faster.
-- **Throughput:** at 64 clients Nalix TCP reaches **85k ops/s** at 32 B (SignalR 68k, gRPC bidi stream 65k) and **66k ops/s** at 1 KB (SignalR 63k, gRPC bidi stream 61k). All frameworks are CPU-bound on this 4-core machine; SignalR uses the least server CPU per message (25.0 µs vs 27.2 µs for Nalix TCP).
-- **Encrypted transport:** Nalix AEAD beats gRPC over TLS on p50 (**72.7 µs** vs 116.7 µs), on 64-client throughput (73k vs 51k ops/s at 32 B; 57k vs 42k at 1 KB) and on allocations (**56 B/op** vs 813 B).
+- **Nalix wins** single-client latency among the full frameworks (p50 56.7 µs vs 70.4 µs for gRPC bidi stream and 79.8 µs for SignalR) and server allocations per message (**56 B**, lowest among full-featured frameworks). A hand-written raw socket (28.5 µs) and a raw Kestrel WebSocket echo (50.7 µs) are faster.
+- **Throughput:** at 64 clients Nalix TCP reaches **97k ops/s** at 32 B (SignalR 80k, gRPC bidi stream 76k) and **86k ops/s** at 1 KB (SignalR 69k, gRPC bidi stream 63k). All frameworks are CPU-bound on this 4-core machine.
+- **Inline dispatcher:** `ConfigureDispatch(opts => new InlinePacketDispatcher(opts))` hands each packet straight to a thread-pool work item instead of the dispatch channel. For short handlers that do not block it reaches **136k ops/s** at 32 B with **15.0 µs** of server CPU per message, on par with the raw Kestrel WebSocket echo (134k).
+- **Encrypted transport:** Nalix AEAD beats gRPC over TLS on p50 (**58.4 µs** vs 105.2 µs), on 64-client throughput (87k vs 52k ops/s at 32 B; 67k vs 49k at 1 KB) and on allocations (**56 B/op** vs 809 B).
 
-> **Caveats:** Loopback on a 4-vCPU cloud VM where the load generator and server share the same cores; absolute numbers move between runs and machines (this pass measured most libraries slower on latency than the previous one), so compare rows within one table. Absolute capacity on bare metal with dedicated network hardware will differ. Encrypted rows use per-packet AEAD vs TLS stream transport.
+> **Caveats:** Loopback on a 4-vCPU cloud VM where the load generator and server share the same cores; absolute numbers move between runs and machines, so compare rows within one table. Absolute capacity on bare metal with dedicated network hardware will differ. Encrypted rows use per-packet AEAD vs TLS stream transport.
 
 Micro-benchmarks (serialization, codec, memory) are in [benchmarks](https://docs.ppnsys.com/en-us/benchmarks/).
 
