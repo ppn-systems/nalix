@@ -15,6 +15,7 @@ using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
 using Nalix.Codec.DataFrames;
 using Nalix.Environment.Extensions;
+using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Internal.Compilation;
 using Nalix.Runtime.Internal.Diagnostics;
 using Nalix.Runtime.Middleware;
@@ -33,6 +34,8 @@ public sealed class InlinePacketDispatcher
 {
     private static readonly Internal.Diagnostics.ThrottleKey s_keyExecute = new("dispatch.execute");
     private static readonly Internal.Diagnostics.ThrottleKey s_keyExecutePrep = new("dispatch.execute_prep");
+
+    private static readonly ObjectPoolManager s_pool = ObjectPoolManager.Shared;
 
     private int _running;
     private long _deserializationErrors;
@@ -82,12 +85,11 @@ public sealed class InlinePacketDispatcher
         lease.Retain();
 
         // Queue to thread pool to avoid blocking the IO thread.
-        // Uses UnsafeQueueUserWorkItem to bypass ExecutionContext flow for maximum performance.
-        _ = ThreadPool.UnsafeQueueUserWorkItem(state =>
-        {
-            (InlinePacketDispatcher? dispatcher, IBufferLease? l, IConnection? c) = state;
-            _ = dispatcher.ExecutePacketAsync(c, l, CancellationToken.None).AsTask();
-        }, (this, lease, connection), preferLocal: true);
+        // A pooled IThreadPoolWorkItem bypasses ExecutionContext flow and, unlike a callback with a state
+        // tuple, allocates nothing per packet.
+        InlineWorkItem item = s_pool.Get<InlineWorkItem>();
+        item.Initialize(this, connection, lease);
+        _ = ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: true);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -236,6 +238,49 @@ public sealed class InlinePacketDispatcher
         {
             // Guaranteed release for async path (the packet is released by its context)
             lease.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The thread-pool work item that runs one packet; pooled so queuing a packet allocates nothing.
+    /// </summary>
+    private sealed class InlineWorkItem : IThreadPoolWorkItem, IPoolable
+    {
+        private InlinePacketDispatcher? _dispatcher;
+        private IConnection? _connection;
+        private IBufferLease? _lease;
+
+        static InlineWorkItem()
+        {
+            _ = s_pool.SetMaxCapacity<InlineWorkItem>(2048);
+            _ = s_pool.Prealloc<InlineWorkItem>(64);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Initialize(InlinePacketDispatcher dispatcher, IConnection connection, IBufferLease lease)
+        {
+            _dispatcher = dispatcher;
+            _connection = connection;
+            _lease = lease;
+        }
+
+        public void Execute()
+        {
+            InlinePacketDispatcher dispatcher = _dispatcher!;
+            IConnection connection = _connection!;
+            IBufferLease lease = _lease!;
+
+            // Returned before the packet runs: the handler may queue the next packet, which can reuse this item.
+            s_pool.Return(this);
+
+            _ = dispatcher.ExecutePacketAsync(connection, lease, CancellationToken.None).AsTask();
+        }
+
+        public void ResetForPool()
+        {
+            _dispatcher = null;
+            _connection = null;
+            _lease = null;
         }
     }
 

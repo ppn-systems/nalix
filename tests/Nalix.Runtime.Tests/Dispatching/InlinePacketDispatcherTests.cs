@@ -47,6 +47,74 @@ public sealed class InlinePacketDispatcherTests
         Assert.Equal(1, connection.ErrorCount);
     }
 
+    /// <summary>
+    /// Every queued packet runs exactly once, also when the pooled work items are reused across many packets.
+    /// </summary>
+    [Fact]
+    public async Task HandlePacket_ManyPackets_RunsEachOnceAndReleasesEveryLease()
+    {
+        using InlinePacketDispatcher dispatcher = new();
+        dispatcher.Activate();
+        using FakeConnection connection = new() { PacketClassifier = new ThrowingExtractor() };
+
+        CountingLease[] leases = new CountingLease[500];
+        for (int i = 0; i < leases.Length; i++)
+        {
+            leases[i] = new CountingLease(new byte[16]);
+            dispatcher.HandlePacket(leases[i], connection);
+        }
+
+        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
+        while (Array.Exists(leases, l => l.DisposeCount == 0) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.All(leases, l => Assert.Equal(1, l.DisposeCount));
+    }
+
+    /// <summary>
+    /// Queuing a packet uses a pooled work item instead of a callback with a state tuple (48 B per packet).
+    /// </summary>
+    [Fact]
+    public async Task HandlePacket_AfterWarmUp_DoesNotAllocatePerPacket()
+    {
+        using InlinePacketDispatcher dispatcher = new();
+        dispatcher.Activate();
+        using FakeConnection connection = new() { PacketClassifier = new ThrowingExtractor() };
+        CountingLease lease = new(new byte[16]);
+
+        const int Count = 1000;
+        for (int i = 0; i < Count; i++)
+        {
+            dispatcher.HandlePacket(lease, connection);
+        }
+
+        await WaitForDisposeCountAsync(lease, Count);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < Count; i++)
+        {
+            dispatcher.HandlePacket(lease, connection);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        await WaitForDisposeCountAsync(lease, 2 * Count);
+
+        Assert.True(allocated < Count * 16, $"Queuing {Count} packets allocated {allocated} bytes on the calling thread.");
+    }
+
+    private static async Task WaitForDisposeCountAsync(CountingLease lease, int expected)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
+        while (lease.DisposeCount < expected && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.Equal(expected, lease.DisposeCount);
+    }
+
     private sealed class ThrowingExtractor : IOpCodeExtractor
     {
         public ushort Extract(ReadOnlySpan<byte> payload) => throw new InvalidOperationException("malformed frame");
