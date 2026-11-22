@@ -25,7 +25,7 @@ namespace Nalix.Abstractions;
 /// on every access.
 /// </para>
 /// </remarks>
-public readonly ref struct BorrowedLease
+public readonly ref struct LeaseRef
 {
     private readonly IBufferLease? _lease;
     private readonly int _generation;
@@ -35,7 +35,7 @@ public readonly ref struct BorrowedLease
     /// </summary>
     /// <param name="lease">The lease to view. The caller keeps ownership.</param>
     /// <exception cref="ArgumentNullException"><paramref name="lease"/> is <see langword="null"/>.</exception>
-    public BorrowedLease(IBufferLease lease)
+    public LeaseRef(IBufferLease lease)
     {
         ArgumentNullException.ThrowIfNull(lease);
 
@@ -82,11 +82,11 @@ public readonly ref struct BorrowedLease
     {
         get
         {
-            IBufferLease lease = _lease ?? throw new InvalidOperationException("The borrowed lease view is not initialized.");
+            IBufferLease lease = _lease ?? throw new InvalidOperationException("The lease reference is not initialized.");
 #if DEBUG
             if (lease.Generation != _generation)
             {
-                Debug.Fail("BorrowedLease used after its lease was released. The buffer may already belong to another owner.");
+                Debug.Fail("LeaseRef used after its lease was released. The buffer may already belong to another owner.");
             }
 #endif
             return lease;

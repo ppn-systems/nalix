@@ -30,7 +30,7 @@ public static class FrameCipher
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static IBufferLease DecryptFrame(
-        BorrowedLease src,
+        LeaseRef src,
         ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
     {
         if (src.Length < FrameTransformer.Offset + EnvelopeCipher.HeaderSize)
@@ -63,13 +63,13 @@ public static class FrameCipher
         }
     }
 
-    /// <inheritdoc cref="DecryptFrame(BorrowedLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
+    /// <inheritdoc cref="DecryptFrame(LeaseRef, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
     public static IBufferLease DecryptFrame(
         [Borrowed] IBufferLease src,
         ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
     {
         ArgumentNullException.ThrowIfNull(src);
-        return DecryptFrame(src.Borrow(), key, expectedAlgorithm, out seq);
+        return DecryptFrame(src.AsRef(), key, expectedAlgorithm, out seq);
     }
 
     /// <summary>
@@ -78,7 +78,7 @@ public static class FrameCipher
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static bool TryDecryptFrame(
-        BorrowedLease src,
+        LeaseRef src,
         ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm,
         out uint seq,
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IBufferLease? dest)
@@ -121,7 +121,7 @@ public static class FrameCipher
         return true;
     }
 
-    /// <inheritdoc cref="TryDecryptFrame(BorrowedLease, ReadOnlySpan{byte}, CipherSuiteType, out uint, out IBufferLease?)"/>
+    /// <inheritdoc cref="TryDecryptFrame(LeaseRef, ReadOnlySpan{byte}, CipherSuiteType, out uint, out IBufferLease?)"/>
     public static bool TryDecryptFrame(
         [Borrowed] IBufferLease src,
         ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm,
@@ -135,14 +135,14 @@ public static class FrameCipher
             return false;
         }
 
-        return TryDecryptFrame(src.Borrow(), key, expectedAlgorithm, out seq, out dest);
+        return TryDecryptFrame(src.AsRef(), key, expectedAlgorithm, out seq, out dest);
     }
 
     /// <summary>
     /// Encrypts a framed packet and sets the encrypted flag in the resulting buffer.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static IBufferLease EncryptFrame(BorrowedLease src, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
+    public static IBufferLease EncryptFrame(LeaseRef src, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
     {
         // Ciphertext only; reserve transport headroom so the wire header is written in place.
         IBufferLease dest = BufferLease.Rent(FrameTransformer.Offset + FrameTransformer
@@ -163,10 +163,10 @@ public static class FrameCipher
         }
     }
 
-    /// <inheritdoc cref="EncryptFrame(BorrowedLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>
+    /// <inheritdoc cref="EncryptFrame(LeaseRef, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>
     public static IBufferLease EncryptFrame([Borrowed] IBufferLease src, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
     {
         ArgumentNullException.ThrowIfNull(src);
-        return EncryptFrame(src.Borrow(), key, seq, suite);
+        return EncryptFrame(src.AsRef(), key, seq, suite);
     }
 }

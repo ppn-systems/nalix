@@ -25,7 +25,7 @@ public static class FrameCompression
     /// Decompresses a framed packet and clears the compressed flag in the resulting buffer.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static IBufferLease DecompressFrame(BorrowedLease src)
+    public static IBufferLease DecompressFrame(LeaseRef src)
     {
         if (src.Length <= FrameTransformer.Offset)
         {
@@ -52,11 +52,11 @@ public static class FrameCompression
         }
     }
 
-    /// <inheritdoc cref="DecompressFrame(BorrowedLease)"/>
+    /// <inheritdoc cref="DecompressFrame(LeaseRef)"/>
     public static IBufferLease DecompressFrame([Borrowed] IBufferLease src)
     {
         ArgumentNullException.ThrowIfNull(src);
-        return DecompressFrame(src.Borrow());
+        return DecompressFrame(src.AsRef());
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ public static class FrameCompression
     /// Returns true and a new leased buffer on success, or false on failure.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static bool TryDecompressFrame(BorrowedLease src, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IBufferLease? dest)
+    public static bool TryDecompressFrame(LeaseRef src, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IBufferLease? dest)
     {
         dest = null;
         if (src.IsDefault)
@@ -99,7 +99,7 @@ public static class FrameCompression
         return true;
     }
 
-    /// <inheritdoc cref="TryDecompressFrame(BorrowedLease, out IBufferLease?)"/>
+    /// <inheritdoc cref="TryDecompressFrame(LeaseRef, out IBufferLease?)"/>
     public static bool TryDecompressFrame([Borrowed] IBufferLease src, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IBufferLease? dest)
     {
         if (src is null)
@@ -108,14 +108,14 @@ public static class FrameCompression
             return false;
         }
 
-        return TryDecompressFrame(src.Borrow(), out dest);
+        return TryDecompressFrame(src.AsRef(), out dest);
     }
 
     /// <summary>
     /// Compresses a framed packet and sets the compressed flag in the resulting buffer.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static IBufferLease CompressFrame(BorrowedLease src)
+    public static IBufferLease CompressFrame(LeaseRef src)
     {
         if (src.Length <= FrameTransformer.Offset)
         {
@@ -142,10 +142,10 @@ public static class FrameCompression
         }
     }
 
-    /// <inheritdoc cref="CompressFrame(BorrowedLease)"/>
+    /// <inheritdoc cref="CompressFrame(LeaseRef)"/>
     public static IBufferLease CompressFrame([Borrowed] IBufferLease src)
     {
         ArgumentNullException.ThrowIfNull(src);
-        return CompressFrame(src.Borrow());
+        return CompressFrame(src.AsRef());
     }
 }

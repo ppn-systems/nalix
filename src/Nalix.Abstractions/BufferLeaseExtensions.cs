@@ -15,5 +15,5 @@ public static class BufferLeaseExtensions
     /// </summary>
     /// <param name="lease">The lease to view. The caller keeps ownership.</param>
     /// <exception cref="ArgumentNullException"><paramref name="lease"/> is <see langword="null"/>.</exception>
-    public static BorrowedLease Borrow([Borrowed] this IBufferLease lease) => new(lease);
+    public static LeaseRef AsRef([Borrowed] this IBufferLease lease) => new(lease);
 }

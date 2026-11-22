@@ -41,7 +41,7 @@ public interface IBufferLease : IDisposable
     /// <remarks>
     /// Lease instances are pooled and reused, so a reference kept after the release can point at a
     /// lease that now belongs to another owner. A holder that recorded this value can detect that
-    /// (see <see cref="BorrowedLease.IsAlive"/>). Implementations that are never reused may keep
+    /// (see <see cref="LeaseRef.IsAlive"/>). Implementations that are never reused may keep
     /// the default of 0.
     /// </remarks>
     int Generation => 0;

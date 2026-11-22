@@ -179,7 +179,7 @@ public static class FrameTransformer
     /// Thrown when the selected cipher rejects the supplied key or destination envelope.
     /// </exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Encrypt(BorrowedLease src, [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
+    public static void Encrypt(LeaseRef src, [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
     {
         ArgumentNullException.ThrowIfNull(dest);
 
@@ -210,12 +210,12 @@ public static class FrameTransformer
         dest.CommitLength(Offset + encrypted);
     }
 
-    /// <inheritdoc cref="Encrypt(BorrowedLease, IBufferLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>
+    /// <inheritdoc cref="Encrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Encrypt([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
     {
         ArgumentNullException.ThrowIfNull(src);
-        Encrypt(src.Borrow(), dest, key, seq, suite);
+        Encrypt(src.AsRef(), dest, key, seq, suite);
     }
 
     /// <summary>
@@ -236,7 +236,7 @@ public static class FrameTransformer
     /// <exception cref="NotSupportedException">Thrown when the encrypted payload declares an unsupported cipher suite.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Decrypt(
-        BorrowedLease src,
+        LeaseRef src,
         [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
     {
         ArgumentNullException.ThrowIfNull(dest);
@@ -268,14 +268,14 @@ public static class FrameTransformer
         dest.CommitLength(Offset + decrypted);
     }
 
-    /// <inheritdoc cref="Decrypt(BorrowedLease, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
+    /// <inheritdoc cref="Decrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Decrypt(
         [Borrowed] IBufferLease src,
         [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
     {
         ArgumentNullException.ThrowIfNull(src);
-        Decrypt(src.Borrow(), dest, key, expectedAlgorithm, out seq);
+        Decrypt(src.AsRef(), dest, key, expectedAlgorithm, out seq);
     }
 
     /// <summary>
@@ -283,7 +283,7 @@ public static class FrameTransformer
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryDecrypt(
-        BorrowedLease src,
+        LeaseRef src,
         [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
     {
         seq = 0;
@@ -313,7 +313,7 @@ public static class FrameTransformer
         return true;
     }
 
-    /// <inheritdoc cref="TryDecrypt(BorrowedLease, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
+    /// <inheritdoc cref="TryDecrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryDecrypt(
         [Borrowed] IBufferLease src,
@@ -325,7 +325,7 @@ public static class FrameTransformer
             return false;
         }
 
-        return TryDecrypt(src.Borrow(), dest, key, expectedAlgorithm, out seq);
+        return TryDecrypt(src.AsRef(), dest, key, expectedAlgorithm, out seq);
     }
 
     /// <summary>
@@ -336,8 +336,8 @@ public static class FrameTransformer
     /// <remarks>
     /// The <see cref="PacketFlags.ENCRYPTED"/> bit is forced to 1. Every encrypted frame carries
     /// it on the wire, but it is transform-internal bookkeeping: <see cref="FrameCipher"/> sets it
-    /// only after <see cref="Encrypt(BorrowedLease, IBufferLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/> returns and clears it after decryption, and direct callers
-    /// of <see cref="Encrypt(BorrowedLease, IBufferLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>/<see cref="Decrypt(BorrowedLease, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/> may not have it set at all. Fixing it to 1 keeps
+    /// only after <see cref="Encrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/> returns and clears it after decryption, and direct callers
+    /// of <see cref="Encrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>/<see cref="Decrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/> may not have it set at all. Fixing it to 1 keeps
     /// sender and receiver byte-identical regardless of when the bit is toggled. All other bits,
     /// including <see cref="PacketFlags.COMPRESSED"/>, must already be in their on-wire state.
     /// </remarks>
@@ -361,7 +361,7 @@ public static class FrameTransformer
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="src"/> or <paramref name="dest"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when the packet header or payload buffers are too small.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Compress(BorrowedLease src, [Borrowed] IBufferLease dest)
+    public static void Compress(LeaseRef src, [Borrowed] IBufferLease dest)
     {
         ArgumentNullException.ThrowIfNull(dest);
 
@@ -379,12 +379,12 @@ public static class FrameTransformer
         dest.CommitLength(Offset + compressed);
     }
 
-    /// <inheritdoc cref="Compress(BorrowedLease, IBufferLease)"/>
+    /// <inheritdoc cref="Compress(LeaseRef, IBufferLease)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Compress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
     {
         ArgumentNullException.ThrowIfNull(src);
-        Compress(src.Borrow(), dest);
+        Compress(src.AsRef(), dest);
     }
 
     /// <summary>
@@ -398,7 +398,7 @@ public static class FrameTransformer
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="src"/> or <paramref name="dest"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when the packet header or payload buffers are too small.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Decompress(BorrowedLease src, [Borrowed] IBufferLease dest)
+    public static void Decompress(LeaseRef src, [Borrowed] IBufferLease dest)
     {
         ArgumentNullException.ThrowIfNull(dest);
 
@@ -415,19 +415,19 @@ public static class FrameTransformer
         dest.CommitLength(Offset + decoded);
     }
 
-    /// <inheritdoc cref="Decompress(BorrowedLease, IBufferLease)"/>
+    /// <inheritdoc cref="Decompress(LeaseRef, IBufferLease)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Decompress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
     {
         ArgumentNullException.ThrowIfNull(src);
-        Decompress(src.Borrow(), dest);
+        Decompress(src.AsRef(), dest);
     }
 
     /// <summary>
     /// Attempts to decompress the payload (DATA_REGION) of a packet using LZ4 without throwing exceptions.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryDecompress(BorrowedLease src, [Borrowed] IBufferLease dest)
+    public static bool TryDecompress(LeaseRef src, [Borrowed] IBufferLease dest)
     {
         if (src.IsDefault || dest is null)
         {
@@ -452,8 +452,8 @@ public static class FrameTransformer
         return true;
     }
 
-    /// <inheritdoc cref="TryDecompress(BorrowedLease, IBufferLease)"/>
+    /// <inheritdoc cref="TryDecompress(LeaseRef, IBufferLease)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryDecompress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
-        => src is not null && TryDecompress(src.Borrow(), dest);
+        => src is not null && TryDecompress(src.AsRef(), dest);
 }

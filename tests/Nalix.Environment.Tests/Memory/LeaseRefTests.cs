@@ -6,15 +6,15 @@ using Nalix.Environment.Memory;
 
 namespace Nalix.Environment.Tests.Memory;
 
-public sealed class BorrowedLeaseTests
+public sealed class LeaseRefTests
 {
     [Fact]
-    public void Borrow_ExposesPayloadWithoutTakingAReference()
+    public void AsRef_ExposesPayloadWithoutTakingAReference()
     {
         using BufferLease lease = BufferLease.CopyFrom([1, 2, 3]);
         lease.EncryptedOnWire = true;
 
-        BorrowedLease view = lease.Borrow();
+        LeaseRef view = lease.AsRef();
 
         Assert.False(view.IsDefault);
         Assert.True(view.IsAlive);
@@ -31,7 +31,7 @@ public sealed class BorrowedLeaseTests
     public void IsAlive_AfterTheLeaseIsReleasedAndReused_IsFalse()
     {
         BufferLease lease = BufferLease.CopyFrom([1, 2, 3]);
-        BorrowedLease view = lease.Borrow();
+        LeaseRef view = lease.AsRef();
         int generation = lease.Generation;
 
         lease.Dispose();
@@ -51,7 +51,7 @@ public sealed class BorrowedLeaseTests
         lease.Dispose();
 
         Assert.Equal(generation, lease.Generation);
-        Assert.True(lease.Borrow().IsAlive);
+        Assert.True(lease.AsRef().IsAlive);
 
         lease.Dispose();
     }
@@ -61,7 +61,7 @@ public sealed class BorrowedLeaseTests
     {
         BufferLease lease = BufferLease.CopyFrom([7, 8]);
 
-        IBufferLease owned = lease.Borrow().Retain();
+        IBufferLease owned = lease.AsRef().Retain();
         lease.Dispose();
 
         Assert.Same(lease, owned);
@@ -74,12 +74,55 @@ public sealed class BorrowedLeaseTests
     [Fact]
     public void DefaultView_IsNotAliveAndThrowsOnAccess()
     {
-        Assert.True(default(BorrowedLease).IsDefault);
-        Assert.False(default(BorrowedLease).IsAlive);
-        _ = Assert.Throws<InvalidOperationException>(static () => default(BorrowedLease).Length);
+        Assert.True(default(LeaseRef).IsDefault);
+        Assert.False(default(LeaseRef).IsAlive);
+        _ = Assert.Throws<InvalidOperationException>(static () => default(LeaseRef).Length);
     }
 
     [Fact]
-    public void Borrow_WhenLeaseIsNull_ThrowsArgumentNullException()
-        => _ = Assert.Throws<ArgumentNullException>(static () => ((IBufferLease)null!).Borrow());
+    public void AsRef_WhenLeaseIsNull_ThrowsArgumentNullException()
+        => _ = Assert.Throws<ArgumentNullException>(static () => ((IBufferLease)null!).AsRef());
+
+    /// <summary>
+    /// A lease that is never pooled keeps the default generation, so a reference to it stays alive.
+    /// </summary>
+    [Fact]
+    public void Generation_OfALeaseThatDoesNotTrackIt_IsZeroAndTheReferenceStaysAlive()
+    {
+        IBufferLease lease = new UnpooledLease();
+
+        Assert.Equal(0, lease.Generation);
+        Assert.True(lease.AsRef().IsAlive);
+    }
+
+    private sealed class UnpooledLease : IBufferLease
+    {
+        private readonly byte[] _buffer = new byte[4];
+
+        public int Length => _buffer.Length;
+
+        public bool EncryptedOnWire { get; set; }
+
+        public int Capacity => _buffer.Length;
+
+        public Span<byte> Span => _buffer;
+
+        public Span<byte> SpanFull => _buffer;
+
+        public ReadOnlyMemory<byte> Memory => _buffer;
+
+        public void Retain() { }
+
+        public void CommitLength(int length) { }
+
+        public bool ReleaseOwnership(out byte[]? buffer, out int start, out int length)
+        {
+            buffer = null;
+            start = 0;
+            length = 0;
+            return false;
+        }
+
+        public void Dispose() { }
+    }
 }

@@ -88,15 +88,15 @@ Nalix.Abstractions.Networking.Packets.PacketMetadata.PacketMetadata(Nalix.Abstra
 *REMOVED*Nalix.Abstractions.Networking.Packets.PacketTransportAttribute.TransportType.get -> Nalix.Abstractions.Networking.NetworkTransport
 *REMOVED*readonly Nalix.Abstractions.Networking.Packets.PacketMetadata.Transport -> Nalix.Abstractions.Networking.Packets.PacketTransportAttribute?
 Nalix.Abstractions.Networking.IFrameProcessor.OnFrameRejected(Nalix.Abstractions.Networking.IConnection! connection, System.ReadOnlySpan<byte> frame) -> void
-Nalix.Abstractions.BorrowedLease
-Nalix.Abstractions.BorrowedLease.BorrowedLease() -> void
-Nalix.Abstractions.BorrowedLease.BorrowedLease(Nalix.Abstractions.IBufferLease! lease) -> void
-Nalix.Abstractions.BorrowedLease.EncryptedOnWire.get -> bool
-Nalix.Abstractions.BorrowedLease.IsAlive.get -> bool
-Nalix.Abstractions.BorrowedLease.IsDefault.get -> bool
-Nalix.Abstractions.BorrowedLease.Length.get -> int
-Nalix.Abstractions.BorrowedLease.Retain() -> Nalix.Abstractions.IBufferLease!
-Nalix.Abstractions.BorrowedLease.Span.get -> System.ReadOnlySpan<byte>
+Nalix.Abstractions.LeaseRef
+Nalix.Abstractions.LeaseRef.LeaseRef() -> void
+Nalix.Abstractions.LeaseRef.LeaseRef(Nalix.Abstractions.IBufferLease! lease) -> void
+Nalix.Abstractions.LeaseRef.EncryptedOnWire.get -> bool
+Nalix.Abstractions.LeaseRef.IsAlive.get -> bool
+Nalix.Abstractions.LeaseRef.IsDefault.get -> bool
+Nalix.Abstractions.LeaseRef.Length.get -> int
+Nalix.Abstractions.LeaseRef.Retain() -> Nalix.Abstractions.IBufferLease!
+Nalix.Abstractions.LeaseRef.Span.get -> System.ReadOnlySpan<byte>
 Nalix.Abstractions.BufferLeaseExtensions
 Nalix.Abstractions.IBufferLease.Generation.get -> int
-static Nalix.Abstractions.BufferLeaseExtensions.Borrow(this Nalix.Abstractions.IBufferLease! lease) -> Nalix.Abstractions.BorrowedLease
+static Nalix.Abstractions.BufferLeaseExtensions.AsRef(this Nalix.Abstractions.IBufferLease! lease) -> Nalix.Abstractions.LeaseRef
