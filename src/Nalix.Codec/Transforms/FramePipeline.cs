@@ -231,6 +231,12 @@ public static class FramePipeline
 
         int payloadSize = current.Length - FrameTransformer.Offset;
         bool doCompress = enableCompress && payloadSize >= minSizeToCompress;
+        ushort opCode = 0;
+        if (doCompress)
+        {
+            opCode = current.Span.AsHeaderRef().OpCode;
+            doCompress = AdaptiveCompression.ShouldAttempt(opCode);
+        }
 
         if (enableEncrypt && algorithm == CipherSuiteType.None)
         {
@@ -252,15 +258,17 @@ public static class FramePipeline
                 Throw.EncryptRequestedButNoSeq();
             }
 
-            ProcessOutboundFused(ref current, payloadSize, secret, seq.Value, algorithm);
+            ProcessOutboundFused(ref current, payloadSize, opCode, secret, seq.Value, algorithm);
             return;
         }
 
         if (doCompress)
         {
             IBufferLease compressed = FrameCompression.CompressFrame(current);
+            bool worthwhile = IsCompressionWorthwhile(compressed.Length - FrameTransformer.Offset, payloadSize);
+            AdaptiveCompression.Record(opCode, worthwhile);
 
-            if (IsCompressionWorthwhile(compressed.Length - FrameTransformer.Offset, payloadSize))
+            if (worthwhile)
             {
                 current = compressed;
             }
@@ -286,7 +294,7 @@ public static class FramePipeline
 
     private static void ProcessOutboundFused(
         [Borrowed] ref IBufferLease current,
-        int payloadSize, ReadOnlySpan<byte> secret, uint seq, CipherSuiteType algorithm)
+        int payloadSize, ushort opCode, ReadOnlySpan<byte> secret, uint seq, CipherSuiteType algorithm)
     {
         // 1. Calculate maximum required sizes
         int maxCompSize = FrameTransformer.GetMaxCompressedSize(payloadSize);
@@ -308,6 +316,7 @@ public static class FramePipeline
             // 4. LZ4 compress directly into tempRegion
             int compLen = LZ4.LZ4Codec.Encode(srcSpan[FrameTransformer.Offset..], tempRegion);
             bool compressedWins = IsCompressionWorthwhile(compLen, payloadSize);
+            AdaptiveCompression.Record(opCode, compressedWins);
 
             // 5. Encrypt the compressed block, or the raw payload when compression did not pay off
             //    (maxFinalSize is sized from maxCompSize >= payloadSize, so the raw payload fits too).
