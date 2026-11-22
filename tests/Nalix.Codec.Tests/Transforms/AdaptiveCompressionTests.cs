@@ -19,32 +19,32 @@ namespace Nalix.Codec.Tests.Transforms;
 /// later. The learned state is process-wide, so these tests run alone and use their own opcodes.
 /// </summary>
 [Collection(TestCollections.CompressionStats)]
-public sealed class FramePipelineAdaptiveCompressionTests : IDisposable
+public sealed class AdaptiveCompressionTests : IDisposable
 {
     private const ushort Op = 0x6A5E;
     private const ushort OtherOp = 0x6A5F;
 
     private static readonly byte[] s_key = CreateKey();
 
-    public FramePipelineAdaptiveCompressionTests() => FramePipeline.ResetCompressionStats();
+    public AdaptiveCompressionTests() => AdaptiveCompression.Reset();
 
-    public void Dispose() => FramePipeline.ResetCompressionStats();
+    public void Dispose() => AdaptiveCompression.Reset();
 
     [Fact]
     public void ProcessOutbound_AfterRepeatedIncompressiblePayloads_SkipsTheAttemptForAWindow()
     {
-        for (int i = 0; i < FramePipeline.MissesBeforeBackoff; i++)
+        for (int i = 0; i < AdaptiveCompression.MissesBeforeBackoff; i++)
         {
             Assert.False(SendIsCompressed(Op, compressible: false, encrypt: false));
         }
 
         // The window is open: the opcode is not attempted for MinSkipFrames frames, then probed again.
-        for (int i = 0; i < FramePipeline.MinSkipFrames; i++)
+        for (int i = 0; i < AdaptiveCompression.MinSkipFrames; i++)
         {
-            Assert.False(FramePipeline.ShouldAttemptCompression(Op));
+            Assert.False(AdaptiveCompression.ShouldAttempt(Op));
         }
 
-        Assert.True(FramePipeline.ShouldAttemptCompression(Op));
+        Assert.True(AdaptiveCompression.ShouldAttempt(Op));
     }
 
     [Fact]
@@ -71,9 +71,9 @@ public sealed class FramePipelineAdaptiveCompressionTests : IDisposable
 
         // The probe compresses, so the opcode goes back to compressing every frame.
         Assert.True(SendIsCompressed(Op, compressible: true, encrypt: false));
-        for (int i = 0; i < FramePipeline.MinSkipFrames * 2; i++)
+        for (int i = 0; i < AdaptiveCompression.MinSkipFrames * 2; i++)
         {
-            Assert.True(FramePipeline.ShouldAttemptCompression(Op));
+            Assert.True(AdaptiveCompression.ShouldAttempt(Op));
         }
     }
 
@@ -82,17 +82,17 @@ public sealed class FramePipelineAdaptiveCompressionTests : IDisposable
     {
         OpenSkipWindow(Op);
 
-        int expected = FramePipeline.MinSkipFrames;
+        int expected = AdaptiveCompression.MinSkipFrames;
         for (int round = 0; round < 8; round++)
         {
             Assert.Equal(expected, DrainSkipWindow(Op));
 
             // The probe fails: one failure is enough to open the next, longer window.
             Assert.False(SendIsCompressed(Op, compressible: false, encrypt: false));
-            expected = Math.Min(expected * 2, FramePipeline.MaxSkipFrames);
+            expected = Math.Min(expected * 2, AdaptiveCompression.MaxSkipFrames);
         }
 
-        Assert.Equal(FramePipeline.MaxSkipFrames, DrainSkipWindow(Op));
+        Assert.Equal(AdaptiveCompression.MaxSkipFrames, DrainSkipWindow(Op));
     }
 
     [Fact]
@@ -108,12 +108,12 @@ public sealed class FramePipelineAdaptiveCompressionTests : IDisposable
     [InlineData(true)]
     public void ProcessOutbound_FusedAndPlainPaths_BothLearnAndStillRoundTrip(bool encrypt)
     {
-        for (int i = 0; i < FramePipeline.MissesBeforeBackoff; i++)
+        for (int i = 0; i < AdaptiveCompression.MissesBeforeBackoff; i++)
         {
             Assert.False(SendIsCompressed(Op, compressible: false, encrypt));
         }
 
-        Assert.False(FramePipeline.ShouldAttemptCompression(Op));
+        Assert.False(AdaptiveCompression.ShouldAttempt(Op));
 
         // A skipped frame takes the uncompressed path and still decodes on the receiving side.
         byte[] payload = CompressiblePayload();
@@ -144,7 +144,7 @@ public sealed class FramePipelineAdaptiveCompressionTests : IDisposable
 
     private static void OpenSkipWindow(ushort opCode)
     {
-        for (int i = 0; i < FramePipeline.MissesBeforeBackoff; i++)
+        for (int i = 0; i < AdaptiveCompression.MissesBeforeBackoff; i++)
         {
             _ = SendIsCompressed(opCode, compressible: false, encrypt: false);
         }
@@ -153,7 +153,7 @@ public sealed class FramePipelineAdaptiveCompressionTests : IDisposable
     private static int DrainSkipWindow(ushort opCode)
     {
         int skipped = 0;
-        while (!FramePipeline.ShouldAttemptCompression(opCode))
+        while (!AdaptiveCompression.ShouldAttempt(opCode))
         {
             skipped++;
         }
