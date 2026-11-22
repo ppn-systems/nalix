@@ -63,6 +63,25 @@ public sealed class WebSocketCloseFrameTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_WhenTokenIsCanceled_SendsEndpointUnavailableClose()
+    {
+        ushort port = (ushort)TestPorts.Next();
+        using NetworkApplication app = this.BuildApp(port);
+        using CancellationTokenSource shutdown = new();
+
+        // The way a host runs in a deploy: RunAsync with the token that SIGTERM cancels.
+        Task run = app.RunAsync(shutdown.Token);
+
+        using ClientWebSocket client = await ConnectWhenListeningAsync(port);
+        Task<WebSocketCloseStatus?> close = ReceiveCloseStatusAsync(client);
+
+        await shutdown.CancelAsync();
+
+        Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, await close.WaitAsync(CloseTimeout));
+        await run.WaitAsync(CloseTimeout);
+    }
+
+    [Fact]
     public async Task DeactivateAsync_WhenRequestInFlight_FailsRequestWithCloseStatus()
     {
         ushort port = (ushort)TestPorts.Next();
@@ -136,6 +155,22 @@ public sealed class WebSocketCloseFrameTests : IDisposable
         using CancellationTokenSource cts = new(CloseTimeout);
         await client.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/"), cts.Token);
         return client;
+    }
+
+    /// <summary>Connects once the listener accepts, for a host whose activation runs in the background.</summary>
+    private static async Task<ClientWebSocket> ConnectWhenListeningAsync(ushort port)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await ConnectAsync(port);
+            }
+            catch (WebSocketException) when (attempt < 50)
+            {
+                await Task.Delay(100);
+            }
+        }
     }
 
     /// <summary>
