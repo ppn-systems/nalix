@@ -19,9 +19,7 @@ namespace SecureMultiTransportHelloWorld.Server;
 internal static class Program
 {
     private const ushort TcpPort = 57210;
-    // UDP must share the same port as TCP so that the server's endpoint-pinning
-    // (SEC-30) can match the UDP datagram source against the TCP connection.
-    private const ushort UdpPort = 57210;
+    private const ushort UdpPort = 57211;
     private const ushort WebSocketPort = 57212;
 
     public static async Task Main()
@@ -37,14 +35,14 @@ internal static class Program
 
         // Build the network application using the canonical Hosting API.
         // UseSecureConnections() enables X25519 handshake and key exchange,
-        // which is required for UDP authentication (session token).
+        // which the datagram (UDP) session needs to derive its keys.
         await using NetworkApplication app = NetworkApplication.CreateBuilder()
             .UseLogger(logger)
             .UseSecureConnections()
             .UseSystemControl()
             .MapHandlers(typeof(HelloHandlers))
             .MapTcp<DefaultProtocol>().OnPort(TcpPort).Bind()
-            .MapUdp<DefaultProtocol>().OnPort(UdpPort).Bind()
+            .MapDatagram<DefaultProtocol>().OnPort(UdpPort).Bind()
             .MapWebSocket<DefaultProtocol>().OnPort(WebSocketPort).WithPath("/ws").Bind()
             .Build();
 
@@ -57,7 +55,8 @@ internal static class Program
         };
 
         Console.WriteLine("SecureMultiTransport server is running.");
-        Console.WriteLine($"  TCP + UDP  : 127.0.0.1:{TcpPort}");
+        Console.WriteLine($"  TCP        : 127.0.0.1:{TcpPort}");
+        Console.WriteLine($"  UDP (NDP)  : 127.0.0.1:{UdpPort}");
         Console.WriteLine($"  WebSocket  : ws://127.0.0.1:{WebSocketPort}/ws");
         Console.WriteLine("Press Ctrl+C to stop.");
 

@@ -3,6 +3,7 @@
 
 using HelloWorld.Contracts;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Codec.Pooling;
 
 namespace HelloWorld.Server;
@@ -21,6 +22,9 @@ public static class HelloHandlers
     /// <param name="context">
     /// The packet context carrying the request, connection, and sender.
     /// </param>
+    // Handlers require PermissionLevel.USER by default; a connection that has not authenticated
+    // is NONE, so this demo lowers the requirement explicitly.
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(0x7001)]
     public static async ValueTask HandleHelloAsync(IPacketContext<HelloRequestPacket> context)
     {

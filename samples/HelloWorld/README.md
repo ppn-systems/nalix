@@ -96,7 +96,7 @@ Bootstraps the server using the canonical Hosting API:
 NetworkApplication.CreateBuilder()
     .UseLogger(logger)
     .MapHandlers(typeof(HelloHandlers))
-    .ListenTcp<DefaultProtocol>().OnPort(57206).Bind()
+    .MapTcp<DefaultProtocol>().OnPort(57206).Bind()
     .Build();
 ```
 
@@ -146,6 +146,13 @@ constant in `Program.cs` (server) and the `TransportOptions` (client).
 Make sure the server is running **before** you start the client.
 Verify that `127.0.0.1:57206` is reachable (no firewall blocking it).
 
+### Request times out although the server is running
+
+Handlers require `PermissionLevel.USER` by default, and a connection that has not
+authenticated is `NONE`, so the request is dropped. The sample handler lowers the
+requirement with `[PacketPermission(PermissionLevel.NONE)]`; a real server
+authenticates the user and raises the connection's level instead.
+
 ### Packet handler not found at runtime
 
 Ensure the `HelloWorld.Contracts` assembly is loaded.
@@ -153,8 +160,8 @@ The source-generated `ModuleInitializer` registers packets automatically
 when the assembly loads. If you removed the `[Packet]` attribute or changed
 the base class, re-add it and rebuild.
 
-### Build fails due to missing local packages
+### Build fails with a restore error
 
-This sample uses **project references** to the Nalix source tree.
-Make sure you cloned the full repository and that the paths in the `.csproj`
-files resolve correctly relative to the sample folder.
+This sample uses the published `Nalix.*` NuGet packages (see the versions in the
+`.csproj` files). Make sure `https://api.nuget.org/v3/index.json` is reachable and
+that the .NET 10 SDK is installed.

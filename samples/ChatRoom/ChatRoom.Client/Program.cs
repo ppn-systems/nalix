@@ -93,7 +93,7 @@ internal static class Program
         // Clean up: unsubscribe, disconnect, and dispose.
         subscription.Dispose();
         await session.DisconnectAsync().ConfigureAwait(false);
-        session.Dispose();
+        await session.DisposeAsync().ConfigureAwait(false);
 
         Console.WriteLine("Disconnected.");
     }
