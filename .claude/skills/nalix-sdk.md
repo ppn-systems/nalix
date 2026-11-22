@@ -21,7 +21,7 @@ ConnectAsync() → HandshakeAsync() → subscribe On<T>() → use RequestAsync /
 
 ### Subscription Management
 - `On<T>()` returns `IDisposable` — **must be disposed** to unsubscribe; leaking it = handler fires forever
-- Use `SubscribeTemp<T>()` when the subscription should auto-clean up on disconnect
+- Use `SubscribeTemp<T>()` for a scoped subscription (`using var sub = ...`); it can also invoke an `onDisconnected` callback, but it does **not** dispose itself on disconnect
 - Use `CompositeSubscription` (via `.Subscribe(sub1, sub2, ...)`) to manage multiple subscriptions as one unit
 
 ### Graceful Disconnect
@@ -40,7 +40,7 @@ Use `DisconnectGracefullyAsync()` instead of `DisconnectAsync()` — sends a `Co
 | `On<T>(Action<T>) → IDisposable` | Subscribe to all packets of type T |
 | `OnExact<T>(Action<T>) → IDisposable` | Exact type match only — no subtype matching |
 | `OnOnce<T>(Func<T,bool>, Action<T>) → IDisposable` | Fire once when predicate matches, then auto-unsubscribe |
-| `SubscribeTemp<T>(Action<T>, Action<Exception>?) → IDisposable` | Auto-disposes when session disconnects |
+| `SubscribeTemp<T>(Action<T>, Action<Exception>?) → IDisposable` | Scoped subscription; invokes `onDisconnected` on disconnect but must still be disposed |
 | `Subscribe(params IDisposable[]) → CompositeSubscription` | Manage multiple subscriptions as one unit |
 
 ### Request-Response (`RequestExtensions.cs`)
@@ -117,6 +117,6 @@ session.Dispose();
 
 - **`OnExact<T>` vs `On<T>`**: `On<T>` matches T and any subtype. `OnExact<T>` matches only the exact type. Use `OnExact` when multiple packet types share a base class and you need precise routing.
 
-- **`SubscribeTemp<T>` vs `On<T>`**: `SubscribeTemp` automatically disposes when the session disconnects — useful for fire-and-forget UI patterns. `On<T>` must be manually disposed; use it when you control the subscription lifetime explicitly.
+- **`SubscribeTemp<T>` vs `On<T>`**: `SubscribeTemp` is meant for a scoped operation (`using var sub = ...`) and can notify you via `onDisconnected`, but it does not dispose itself when the session disconnects. Both it and `On<T>` must be disposed to unsubscribe; discarding the result is reported as `NALIX116`.
 
 - **`DisconnectAsync()` vs `DisconnectGracefullyAsync()`**: `DisconnectAsync()` closes the socket immediately. `DisconnectGracefullyAsync()` sends a control frame first, giving the server a chance to save state. Always prefer the graceful variant unless the connection is already broken.

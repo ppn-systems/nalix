@@ -643,4 +643,68 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "A [Borrowed] IBufferLease is owned by the caller. The method must not dispose it, pass it to a parameter that takes ownership, or store it in a field or property that is not itself marked [Borrowed]. Mark the target [Borrowed], call Retain() for a new owner, or remove [Borrowed] if ownership is really transferred.");
+
+    public static readonly DiagnosticDescriptor HandlerMissingPermission = new(
+        id: "NALIX111",
+        title: "Packet handler is missing [PacketPermission]",
+        messageFormat: "Handler method '{0}' has no [PacketPermission]; the dispatcher is fail-closed and rejects every packet for it with UNAUTHORIZED",
+        category: "Security",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "PacketHandler<T>.CanExecute denies a handler that has no [PacketPermission] (fail-closed). Handler metadata is built only from attributes on the handler method, so the handler can never run until it declares the permission level it requires, e.g. [PacketPermission(PermissionLevel.USER)] or [PacketPermission(PermissionLevel.NONE)] for public handlers.");
+
+    public static readonly DiagnosticDescriptor PacketRateLimitInvalidValue = new(
+        id: "NALIX112",
+        title: "PacketRateLimit has a non-positive value",
+        messageFormat: "[PacketRateLimit] on '{0}' sets {1}={2}; {3}",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "PolicyRateLimiter skips the limit when RequestsPerSecond is not positive, and denies every request to the handler when Burst is not positive. Use a positive RequestsPerSecond and a Burst of at least 1.");
+
+    public static readonly DiagnosticDescriptor PacketTimeoutNonPositive = new(
+        id: "NALIX113",
+        title: "PacketTimeout is not positive",
+        messageFormat: "[PacketTimeout({0})] on '{1}' is not positive; TimeoutMiddleware treats it as no timeout",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "TimeoutMiddleware only applies a deadline when the configured value is greater than zero. A zero or negative [PacketTimeout] silently disables the timeout; remove the attribute or use a positive number of milliseconds.");
+
+    public static readonly DiagnosticDescriptor PolicyAttributeWithoutMiddleware = new(
+        id: "NALIX114",
+        title: "Handler policy attribute has no middleware that enforces it",
+        messageFormat: "[{0}] on '{1}' has no effect: this project builds a NetworkApplication but never registers {2}",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "[PacketRateLimit] and [PacketTimeout] are enforced only by RateLimitMiddleware and TimeoutMiddleware; neither is added by NetworkApplicationBuilder. Register it with options.WithMiddleware(new ...) in ConfigureDispatchOptions. Not reported when the middleware is registered from another assembly.",
+        customTags: WellKnownDiagnosticTags.CompilationEnd);
+
+    public static readonly DiagnosticDescriptor RetryOnNonIdempotentPacket = new(
+        id: "NALIX115",
+        title: "Request is retried but its packet is not marked [PacketIdempotent]",
+        messageFormat: "RequestAsync retries {0} up to {1} time(s), but the packet type is not marked [PacketIdempotent]; a timeout does not prove the server skipped the request, so a retry can repeat its side effects",
+        category: "SDK",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "RequestOptions.RetryCount > 0 resends the request after a timeout, while the server may already have processed the first attempt. Mark packet types that are safe to repeat with [PacketIdempotent], or remove the retry for non-idempotent operations.");
+
+    public static readonly DiagnosticDescriptor DiscardedSubscription = new(
+        id: "NALIX116",
+        title: "Packet subscription is discarded",
+        messageFormat: "The IDisposable returned by '{0}' is discarded, so this subscription can never be removed and its handler stays registered for the whole session",
+        category: "SDK",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "On, OnExact and SubscribeTemp attach a handler to the session and return the IDisposable that detaches it. Keep the result and dispose it (using, or a field released on teardown) unless the handler is meant to live as long as the session.");
+
+    public static readonly DiagnosticDescriptor NonConstantTimeSecretComparison = new(
+        id: "NALIX117",
+        title: "Secret is compared with a non-constant-time method",
+        messageFormat: "'{0}' looks like secret data but is compared with SequenceEqual, which stops at the first differing byte and leaks timing; use a fixed-time comparison such as CryptographicOperations.FixedTimeEquals",
+        category: "Security",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "Comparing a MAC, tag, signature, proof, challenge, token or password with SequenceEqual returns as soon as a byte differs, which lets an attacker recover the value one byte at a time from response timing. Use a fixed-time comparison. The check is name-based, so rename the variable or suppress the diagnostic when the data is not secret.");
 }

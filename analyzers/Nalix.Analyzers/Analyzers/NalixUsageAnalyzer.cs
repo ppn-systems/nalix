@@ -92,7 +92,14 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.PacketResetForPoolMissingMemberReset,
             DiagnosticDescriptors.BufferLeaseReleasedTwice,
             DiagnosticDescriptors.BufferLeaseUsedAfterRelease,
-            DiagnosticDescriptors.BorrowedBufferLeaseReleased
+            DiagnosticDescriptors.BorrowedBufferLeaseReleased,
+            DiagnosticDescriptors.HandlerMissingPermission,
+            DiagnosticDescriptors.PacketRateLimitInvalidValue,
+            DiagnosticDescriptors.PacketTimeoutNonPositive,
+            DiagnosticDescriptors.PolicyAttributeWithoutMiddleware,
+            DiagnosticDescriptors.RetryOnNonIdempotentPacket,
+            DiagnosticDescriptors.DiscardedSubscription,
+            DiagnosticDescriptors.NonConstantTimeSecretComparison
         ];
 
     public override void Initialize(AnalysisContext context)
@@ -179,6 +186,8 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
                 OperationKind.SimpleAssignment,
                 OperationKind.Invocation,
                 OperationKind.EventAssignment);
+
+            RegisterPolicyAnalysis(startContext, symbols);
         });
     }
 
