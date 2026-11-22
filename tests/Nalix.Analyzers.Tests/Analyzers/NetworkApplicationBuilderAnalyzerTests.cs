@@ -128,25 +128,4 @@ public static class Setup
 
         await AnalyzerTestHarness.AssertDiagnosticIdsAsync(source, "NALIX042");
     }
-
-    [Fact]
-    public async Task Analyze_AddMetadataProviderWithInvalidType_ReportsNalix043()
-    {
-        const string source = """
-namespace Demo;
-using Nalix.Hosting;
-
-public interface IProvider { }
-
-public static class Setup
-{
-    public static void Configure()
-    {
-        _ = new NetworkApplicationBuilder().AddMetadataProvider<IProvider>();
-    }
-}
-""";
-
-        await AnalyzerTestHarness.AssertDiagnosticIdsAsync(source, "NALIX043");
-    }
 }

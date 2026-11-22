@@ -60,6 +60,7 @@ using Nalix.SDK.Options;
 using Nalix.SDK.Transport;
 using Nalix.SDK.Transport.Extensions;
 
+[PacketIdempotent]
 public sealed class DemoPacket : PacketBase<DemoPacket>, IPacketStaticOpcode
 {
     public static ushort StaticOpCode => 9999;

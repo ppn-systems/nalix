@@ -21,7 +21,6 @@ public sealed partial class SessionStoreOptions : ConfigurationLoader, IValidata
     /// This does not keep an idle live connection open; it only retains disconnected session state for resume.
     /// </summary>
     [IniComment("Duration after which an inactive session expires (default 5m)")]
-    [Required]
     public TimeSpan SessionTtl { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>

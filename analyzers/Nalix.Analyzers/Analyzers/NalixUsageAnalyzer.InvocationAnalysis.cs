@@ -39,10 +39,6 @@ public sealed partial class NalixUsageAnalyzer
             {
                 AnalyzeNetworkApplicationTypeRegistration(context, invocation, targetMethod.TypeArguments[0], DiagnosticDescriptors.NetworkHostingHandlerTypeInvalid);
             }
-            else if (targetMethod.Name == "AddMetadataProvider" && targetMethod.TypeArguments.Length == 1)
-            {
-                AnalyzeNetworkApplicationTypeRegistration(context, invocation, targetMethod.TypeArguments[0], DiagnosticDescriptors.NetworkHostingMetadataProviderTypeInvalid);
-            }
 
             return;
         }

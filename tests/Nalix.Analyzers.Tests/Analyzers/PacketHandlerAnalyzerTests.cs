@@ -22,6 +22,7 @@ using Nalix.Abstractions.Networking.Packets;
 public sealed class MyController
 {
     [PacketOpcode(0x0200)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<LoginPacket> context) 
     { 
         var x = new object(); // Allocation in hot path
@@ -53,6 +54,7 @@ public interface IMyService { }
 public sealed class MyController
 {
     [PacketOpcode(0x0200)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<LoginPacket> context, [FromScope] IMyService service) { }
 }
 
@@ -203,6 +205,7 @@ public sealed class DemoPacket : PacketBase<DemoPacket>, IPacketStaticOpcode
 public sealed class ControllerA
 {
     [PacketOpcode(0x1240)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context)
     {
         _ = new Helper();
@@ -260,6 +263,7 @@ public sealed class DemoPacket : PacketBase<DemoPacket>, IPacketStaticOpcode
 public sealed class ControllerA
 {
     [PacketOpcode(0x1243)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context) { }
 }
 
@@ -267,6 +271,7 @@ public sealed class ControllerA
 public sealed class ControllerB
 {
     [PacketOpcode(0x1244)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context) { }
 }
 """;
@@ -294,6 +299,7 @@ public sealed class DemoPacket : PacketBase<DemoPacket>, IPacketStaticOpcode
 public sealed class ControllerA
 {
     [PacketOpcode(0x1245)]
+    [PacketPermission]
     public void Handle(PacketContext<DemoPacket> context)
     {
         _ = (DemoPacket)context.Packet;
@@ -358,6 +364,7 @@ public sealed class OtherPacket : PacketBase<OtherPacket>, IPacketStaticOpcode
 public sealed class DemoController
 {
     [PacketOpcode(0x1250)]
+    [PacketPermission]
     public void Handle(PacketContext<OtherPacket> context) { }
 }
 
@@ -401,6 +408,7 @@ public sealed class OtherPacket : PacketBase<OtherPacket>, IPacketStaticOpcode
 public sealed class DemoController
 {
     [PacketOpcode(0x1251)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<OtherPacket> context) { }
 }
 

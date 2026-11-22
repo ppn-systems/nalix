@@ -22,6 +22,7 @@ using Nalix.Abstractions.Networking.Packets;
 public sealed class MyController
 {
     [PacketOpcode(0x0001)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<LoginPacket> context) { }
 }
 
@@ -47,6 +48,7 @@ using Nalix.Abstractions.Networking.Packets;
 public sealed class Controller1
 {
     [PacketOpcode(0x0200)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<LoginPacket> context) { }
 }
 
@@ -64,6 +66,7 @@ using Nalix.Abstractions.Networking.Packets;
 public sealed class Controller2
 {
     [PacketOpcode(0x0200)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<LoginPacket> context) { }
 }
 """;
@@ -84,6 +87,7 @@ using Nalix.Abstractions.Networking.Packets;
 public sealed class MyController
 {
     [PacketOpcode(0x0150)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<LoginPacket> context) { }
 }
 
@@ -110,6 +114,7 @@ public sealed class MyController
     /// Authenticates a user. OpCode: 0x0150
     /// </summary>
     [PacketOpcode(0x0300)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<LoginPacket> context) { }
 }
 
@@ -165,6 +170,7 @@ using Nalix.Codec.DataFrames;
 public sealed class DemoController
 {
     [PacketOpcode(0x000A)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context)
     {
     }
@@ -194,9 +200,12 @@ using Nalix.Codec.DataFrames;
 public sealed class DemoController
 {
     [PacketOpcode(0x1201)]
+    [PacketPermission]
     public void HandleA(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context) { }
 
     [PacketOpcode(0x1201)]
+
+    [PacketPermission]
     public void HandleB(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context) { }
 }
 
@@ -257,6 +266,7 @@ public sealed class DemoPacket : PacketBase<DemoPacket>, IPacketStaticOpcode
 public sealed class ControllerA
 {
     [PacketOpcode(0x1234)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context) { }
 }
 
@@ -264,6 +274,7 @@ public sealed class ControllerA
 public sealed class ControllerB
 {
     [PacketOpcode(0x1234)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context) { }
 }
 """;
@@ -292,6 +303,7 @@ public sealed class ControllerA
 {
     /// <summary>Handles packet opcode 0x8888.</summary>
     [PacketOpcode(0x1241)]
+    [PacketPermission]
     public void Handle(Nalix.Runtime.Dispatching.PacketContext<DemoPacket> context) { }
 }
 """;

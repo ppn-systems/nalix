@@ -19,6 +19,11 @@ IDs are sequential: `NALIX001`–`NALIX078`, **not organized by hundreds**. Cate
 - `NALIX040–NALIX058`: Network, hosting, opcode ranges, allocations, return types
 - `NALIX071–NALIX078`: Crypto, formatting, logging, pooling, and AOT constraints
 - `NALIX108–NALIX110`: `IBufferLease` ownership (`NalixUsageAnalyzer.LeaseOwnership.cs`)
+- `NALIX111–NALIX114`: Handler policy attributes — missing `[PacketPermission]`, non-positive `[PacketRateLimit]`/`[PacketTimeout]`, policy attribute with no middleware (`NalixUsageAnalyzer.HandlerPolicy.cs`)
+- `NALIX115–NALIX116`: SDK usage — retry on a packet without `[PacketIdempotent]`, discarded `On`/`OnExact`/`SubscribeTemp` subscription (`NalixUsageAnalyzer.SdkUsage.cs`)
+- `NALIX117`: byte-wise `SequenceEqual` on secret-named data (`NalixUsageAnalyzer.SecretComparison.cs`)
+- `NALIX118`: validation attributes that do not fit their `ConfigurationLoader` property (`NalixUsageAnalyzer.ConfigurationValidation.cs`)
+- `NALIX025`, `NALIX026`, `NALIX043` were removed (the metadata-provider types no longer exist); do not reuse the IDs
 
 When adding a new rule, append the next available ID — do not try to "slot" into a category range.
 
@@ -33,6 +38,7 @@ When adding a new rule, append the next available ID — do not try to "slot" in
 - `NalixUsageAnalyzer.cs` — registration, main `Initialize()` entry
 - `NalixUsageAnalyzer.InvocationAnalysis.cs` — invocation-specific analysis
 - `NalixUsageAnalyzer.SymbolSet.cs` — cached Roslyn symbol lookups
+- `NalixUsageAnalyzer.HandlerPolicy.cs` / `.SdkUsage.cs` / `.SecretComparison.cs` / `.ConfigurationValidation.cs` — NALIX111–118; they resolve their own optional symbols in `PolicySymbols` (null = rule skipped) and share one `Invocation` action, `AnalyzePolicyInvocation`
 
 ---
 
@@ -58,6 +64,10 @@ Do not suppress at the project level — suppressions should be local and docume
 ## Gotchas
 
 - **`[Borrowed]` is an ownership contract, not a NALIX039 suppressor**: NALIX108–110 treat every lease-typed parameter *without* `[Borrowed]` as taking ownership. Marking a parameter `[Borrowed]` while the method disposes or stores the lease raises NALIX110. Use `[Borrowed]` only when the caller keeps ownership; call `Retain()` when the callee needs its own reference. Delegate invocations, generic `T` parameters and `bool TryXxx(lease)` calls are treated as non-owning.
+
+- **The analyzer is not attached to every Nalix project**: `src/Directory.Build.props` skips `Nalix.Abstractions`, `Nalix.Environment`, `Nalix.Framework` and `Nalix.Network` (every rule needs `Nalix.Codec` symbols), so a clean `src` build says nothing about code in those four projects. Info-level diagnostics are not printed by `dotnet build`; use `-p:ErrorLog=out.sarif` to see them.
+
+- **Analyzer tests see the real Nalix assemblies**: the test harness references the whole trusted-platform assembly list, which includes the real `Nalix.Abstractions`. A type defined as a stub in the test source wins over it, but a type the stubs do not define still resolves to the real one. A new rule that keys on an attribute therefore also fires in older tests whose fixtures lack it (NALIX111 did for handlers without `[PacketPermission]`); put new-rule stubs in a separate source (`PolicyTestSources`) or fix the fixtures.
 
 - **Allocating in analyzer = IDE lag**: A `new List<>()` inside `AnalyzeInvocation` runs thousands of times per second. Use `ImmutableArray`, stackalloc, or pre-allocated pools instead.
 
