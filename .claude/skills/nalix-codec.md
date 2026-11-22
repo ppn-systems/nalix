@@ -23,7 +23,7 @@ Inbound:   decrypt   → decompress     → deserialize
 ```
 Never swap compress and encrypt. Encrypting before compressing produces high-entropy ciphertext that compresses poorly (near-zero gain). Compressing before encrypting is the correct security model. `FramePipeline` enforces this order — do not reorder stages.
 
-- The source of `FrameTransformer`, `FrameCipher` and `FrameCompression` is a `LeaseRef`: call them with `src.AsRef()`. The overloads that take the source as `IBufferLease` are `[Obsolete]` and will be removed
+- The source of `FrameTransformer`, `FrameCipher` and `FrameCompression` is a `LeaseRef`: call them with `src.AsRef()`. There is no overload that takes the source as `IBufferLease`
 
 ### Cryptography Invariants
 - **Never generate nonces outside `EnvelopeCipher`** — nonce management (counter, uniqueness) is internal to the cipher engine
