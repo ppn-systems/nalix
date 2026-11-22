@@ -98,3 +98,4 @@ Nalix.Environment.Options.DatagramEngineOptions.Validate() -> void
 const Nalix.Environment.Options.DatagramEngineOptions.MaxChannels = 64 -> int
 const Nalix.Environment.Options.DatagramEngineOptions.MinimumMtu = 1200 -> int
 static Nalix.Environment.Datagrams.DatagramPeerLimits.From(Nalix.Environment.Options.DatagramEngineOptions! options) -> Nalix.Environment.Datagrams.DatagramPeerLimits
+Nalix.Environment.Memory.BufferLease.Generation.get -> int

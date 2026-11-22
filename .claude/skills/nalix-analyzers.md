@@ -18,7 +18,7 @@ IDs are sequential: `NALIX001`–`NALIX078`, **not organized by hundreds**. Cate
 - `NALIX032–NALIX039`: Middleware behavior, buffer leaks, performance
 - `NALIX040–NALIX058`: Network, hosting, opcode ranges, allocations, return types
 - `NALIX071–NALIX078`: Crypto, formatting, logging, pooling, and AOT constraints
-- `NALIX108–NALIX110`: `IBufferLease` ownership (`NalixUsageAnalyzer.LeaseOwnership.cs`)
+- `NALIX039`, `NALIX108–NALIX110`, `NALIX119`: `IBufferLease` ownership. `NalixUsageAnalyzer.LeaseFlow.cs` + `.LeaseFlow.Transfer.cs` run a data-flow analysis over the control-flow graph for owned leases (NALIX039/108/109 and aliases of borrowed parameters); `NalixUsageAnalyzer.LeaseOwnership.cs` holds the signature-based `[Borrowed]` checks (NALIX110/119)
 - `NALIX111–NALIX114`: Handler policy attributes — missing `[PacketPermission]`, non-positive `[PacketRateLimit]`/`[PacketTimeout]`, policy attribute with no middleware (`NalixUsageAnalyzer.HandlerPolicy.cs`)
 - `NALIX115–NALIX116`: SDK usage — retry on a packet without `[PacketIdempotent]`, discarded `On`/`OnExact`/`SubscribeTemp` subscription (`NalixUsageAnalyzer.SdkUsage.cs`)
 - `NALIX117`: byte-wise `SequenceEqual` on secret-named data (`NalixUsageAnalyzer.SecretComparison.cs`)
@@ -63,7 +63,9 @@ Do not suppress at the project level — suppressions should be local and docume
 
 ## Gotchas
 
-- **`[Borrowed]` is an ownership contract, not a NALIX039 suppressor**: NALIX108–110 treat every lease-typed parameter *without* `[Borrowed]` as taking ownership. Marking a parameter `[Borrowed]` while the method disposes or stores the lease raises NALIX110. Use `[Borrowed]` only when the caller keeps ownership; call `Retain()` when the callee needs its own reference. Delegate invocations, generic `T` parameters and `bool TryXxx(lease)` calls are treated as non-owning.
+- **`[Borrowed]` is an ownership contract, not a NALIX039 suppressor**: NALIX108–110 treat every lease-typed parameter *without* `[Borrowed]` as taking ownership. Marking a parameter `[Borrowed]` while the method disposes or stores the lease raises NALIX110. Use `[Borrowed]` only when the caller keeps ownership; call `Retain()` when the callee needs its own reference. Delegate invocations, generic `T` parameters and calls to methods that return `bool` are treated as non-owning (a `bool` method is a conditional transfer: it keeps the lease only on success, whatever its name). A parameter inherits `[Borrowed]` from the interface member or base method it implements, so put the attribute on the base declaration (NALIX119 flags an implementation that adds it alone). One `Retain()` grants one release, and only for releases after it. A borrowed lease may not be returned, have its `Memory` stored, or be captured by a lambda queued to `Task`/`ThreadPool` without `Retain()`.
+
+- **Lease flow analysis is "possibly released", like a Rust move**: after `if (x) lease.Dispose();` the lease is possibly released, so any later use or release is NALIX109/NALIX108. A `catch` block starts from every state reached before a statement of its `try` block that can throw, so `lease.Dispose(); Log(); ` inside `try` followed by `lease.Dispose()` in `catch` is reported: release last, right before `return`. NALIX039 is only raised when a lease is certainly still owned at a `return`. NALIX108/109/110/119 are errors in this repository (`.editorconfig`). The analysis gives up on a lease (no reports) once it is stored, retained, passed by `ref`, captured by a lambda, or put behind names that do not always refer to the same lease.
 
 - **The analyzer is not attached to every Nalix project**: `src/Directory.Build.props` skips `Nalix.Abstractions`, `Nalix.Environment`, `Nalix.Framework` and `Nalix.Network` (every rule needs `Nalix.Codec` symbols), so a clean `src` build says nothing about code in those four projects. Info-level diagnostics are not printed by `dotnet build`; use `-p:ErrorLog=out.sarif` to see them.
 

@@ -90,6 +90,7 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.BufferLeaseReleasedTwice,
             DiagnosticDescriptors.BufferLeaseUsedAfterRelease,
             DiagnosticDescriptors.BorrowedBufferLeaseReleased,
+            DiagnosticDescriptors.BorrowedContractMismatch,
             DiagnosticDescriptors.HandlerMissingPermission,
             DiagnosticDescriptors.PacketRateLimitInvalidValue,
             DiagnosticDescriptors.PacketTimeoutNonPositive,
@@ -1702,7 +1703,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         IMethodSymbol method = (IMethodSymbol)context.Symbol;
         AnalyzePacketOpcodeOnNonController(context, method, symbols);
         AnalyzeOpCodeDocumentation(context, method, symbols);
-        AnalyzeBufferLeaseLeak(context, method, symbols);
     }
 
     private static void AnalyzePacketOpcodeOnNonController(SymbolAnalysisContext context, IMethodSymbol method, SymbolSet symbols)
@@ -1900,64 +1900,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
                 if (docOpcode != opcode.Value)
                 {
                     Report(context, DiagnosticDescriptors.OpCodeDocMismatch, method, method.Name, docOpcode, opcode.Value);
-                }
-            }
-        }
-    }
-
-    private static void AnalyzeBufferLeaseLeak(SymbolAnalysisContext context, IMethodSymbol method, SymbolSet symbols)
-    {
-        if (method.MethodKind != MethodKind.Ordinary || (method.ContainingType.TypeKind == TypeKind.Interface && method.IsAbstract))
-        {
-            return;
-        }
-
-        List<IParameterSymbol> leaseParams = [.. method.Parameters.Where(p => IsSymbol(p.Type, symbols.BufferLeaseType))];
-        if (leaseParams.Count == 0)
-        {
-            return;
-        }
-
-        // Skip if the method itself is marked as [Pure]
-        if (method.GetAttributes().Any(a => a.AttributeClass?.Name == "PureAttribute"))
-        {
-            return;
-        }
-
-        foreach (SyntaxReference reference in method.DeclaringSyntaxReferences)
-        {
-            SyntaxNode syntax = reference.GetSyntax(context.CancellationToken);
-            string code = syntax.ToString();
-
-            // Look for disposal or return via next delegate
-            // This is still a heuristic but we'll make it slightly more specific
-            foreach (IParameterSymbol p in leaseParams)
-            {
-                // Skip parameters explicitly marked as borrowed/no-dispose, or 'out' parameters 
-                // where ownership is transferred to the caller.
-                if (p.GetAttributes().Any(a => a.AttributeClass?.Name is "BorrowedAttribute" or "NoDisposeAttribute") || p.RefKind == RefKind.Out)
-                {
-                    continue;
-                }
-
-                string name = p.Name;
-                // Heuristic: check if the lease is disposed, used in a using block, 
-                // passed to a next delegate, or returned in any form.
-                // Also consider passing to a constructor as 'potentially owned' by the new object.
-                // Storing the lease in a field, property or slot also hands off ownership.
-                bool isDisposed = code.Contains($"{name}.Dispose()")
-                                || code.Contains($"{name}?.Dispose()")
-                                || Regex.IsMatch(code, $@"[^=!<>]=\s*{name}\s*;")
-                                || code.Contains($"using (var {name}")
-                                || code.Contains($"using var {name}")
-                                || (code.Contains($"new ") && code.Contains(name)) // Passed to constructor
-                                || Regex.IsMatch(code, $@"\b(next|nextHandler|ExecuteAsync|InvokeAsync|SendAsync|ReceiveAsync|WriteAsync|ReadAsync)\s*\([^)]*\b{name}\b")
-                                || Regex.IsMatch(code, $@"return\s+[^;]*\b{name}\b")
-                                || Regex.IsMatch(code, $@"=> \s*[^;]*\b{name}\b");
-
-                if (!isDisposed)
-                {
-                    Report(context, DiagnosticDescriptors.PotentialBufferLeaseLeak, p, name);
                 }
             }
         }

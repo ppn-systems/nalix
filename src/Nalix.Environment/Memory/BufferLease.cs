@@ -227,6 +227,9 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
     /// </summary>
     private int _isRented;
 
+    /// <summary>Incremented on every final release; never reset, so stale holders can be detected.</summary>
+    private int _generation;
+
     #endregion Fields
 
     #region Constructors
@@ -313,6 +316,9 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
 
     /// <inheritdoc/>
     public bool EncryptedOnWire { get; set; }
+
+    /// <inheritdoc/>
+    public int Generation => Volatile.Read(ref _generation);
 
     /// <summary>
     /// Gets the capacity of the owned slice (from <c>_start</c> to end of the array).
@@ -514,6 +520,9 @@ public sealed class BufferLease : IBufferLease, IPoolable, IPoolRentable
         {
             return;
         }
+
+        // From here on the instance may be handed out again: invalidate every stale holder.
+        _ = Interlocked.Increment(ref _generation);
 
         GC.SuppressFinalize(this);
 

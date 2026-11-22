@@ -12,6 +12,8 @@
 
 ### `BufferLease` Lifecycle
 - `BufferLease` is ref-counted: `Retain()` increments, `Dispose()` decrements — reaches zero = returned to pool
+- `lease.AsRef()` gives a `LeaseRef`: a read-only `ref struct` view with no `Dispose` that cannot be stored, captured or kept across `await`; `view.Retain()` is the only way to keep the buffer. Prefer it for parameters that only read the payload
+- `Generation` changes on every final release (never reset by pooling); `LeaseRef.IsAlive` compares it, and debug builds assert it on every access
 - **Call `Retain()` before any async handoff** — if the original owner `Dispose()`s while you still hold it, the buffer is reclaimed mid-use
 - `ReleaseOwnership()` detaches the raw buffer permanently from the lease shell, preventing pool return on disposal; the caller is then responsible for returning/freeing the buffer
 - Thread-local cache absorbs small bursts before falling back to the shared pool

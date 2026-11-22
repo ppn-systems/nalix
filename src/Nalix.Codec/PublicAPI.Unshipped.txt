@@ -67,3 +67,15 @@ override Nalix.Codec.ProtocolFrames.DatagramTicket.Length.get -> int
 override Nalix.Codec.ProtocolFrames.DatagramTicket.ResetForPool() -> void
 static Nalix.Codec.ProtocolFrames.DatagramTicket.Size.get -> int
 static Nalix.Codec.ProtocolFrames.DatagramTicket.StaticOpCode.get -> ushort
+static Nalix.Codec.Transforms.FrameCipher.DecryptFrame(Nalix.Abstractions.LeaseRef src, System.ReadOnlySpan<byte> key, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out uint seq) -> Nalix.Abstractions.IBufferLease!
+static Nalix.Codec.Transforms.FrameCipher.EncryptFrame(Nalix.Abstractions.LeaseRef src, System.ReadOnlySpan<byte> key, uint? seq, Nalix.Abstractions.Security.CipherSuiteType suite) -> Nalix.Abstractions.IBufferLease!
+static Nalix.Codec.Transforms.FrameCipher.TryDecryptFrame(Nalix.Abstractions.LeaseRef src, System.ReadOnlySpan<byte> key, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out uint seq, out Nalix.Abstractions.IBufferLease? dest) -> bool
+static Nalix.Codec.Transforms.FrameCompression.CompressFrame(Nalix.Abstractions.LeaseRef src) -> Nalix.Abstractions.IBufferLease!
+static Nalix.Codec.Transforms.FrameCompression.DecompressFrame(Nalix.Abstractions.LeaseRef src) -> Nalix.Abstractions.IBufferLease!
+static Nalix.Codec.Transforms.FrameCompression.TryDecompressFrame(Nalix.Abstractions.LeaseRef src, out Nalix.Abstractions.IBufferLease? dest) -> bool
+static Nalix.Codec.Transforms.FrameTransformer.Compress(Nalix.Abstractions.LeaseRef src, Nalix.Abstractions.IBufferLease! dest) -> void
+static Nalix.Codec.Transforms.FrameTransformer.Decompress(Nalix.Abstractions.LeaseRef src, Nalix.Abstractions.IBufferLease! dest) -> void
+static Nalix.Codec.Transforms.FrameTransformer.Decrypt(Nalix.Abstractions.LeaseRef src, Nalix.Abstractions.IBufferLease! dest, System.ReadOnlySpan<byte> key, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out uint seq) -> void
+static Nalix.Codec.Transforms.FrameTransformer.Encrypt(Nalix.Abstractions.LeaseRef src, Nalix.Abstractions.IBufferLease! dest, System.ReadOnlySpan<byte> key, uint? seq, Nalix.Abstractions.Security.CipherSuiteType suite) -> void
+static Nalix.Codec.Transforms.FrameTransformer.TryDecompress(Nalix.Abstractions.LeaseRef src, Nalix.Abstractions.IBufferLease! dest) -> bool
+static Nalix.Codec.Transforms.FrameTransformer.TryDecrypt(Nalix.Abstractions.LeaseRef src, Nalix.Abstractions.IBufferLease! dest, System.ReadOnlySpan<byte> key, Nalix.Abstractions.Security.CipherSuiteType expectedAlgorithm, out uint seq) -> bool

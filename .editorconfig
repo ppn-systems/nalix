@@ -345,6 +345,12 @@ dotnet_diagnostic.CA2016.severity = warning  # Forward CancellationToken
 dotnet_code_quality.api_surface = public
 
 dotnet_analyzer_diagnostic.severity = warning
+
+# IBufferLease ownership: a violation frees or leaks the pooled buffer of another owner, so it must not build.
+dotnet_diagnostic.NALIX108.severity = error
+dotnet_diagnostic.NALIX109.severity = error
+dotnet_diagnostic.NALIX110.severity = error
+dotnet_diagnostic.NALIX119.severity = error
 warn_as_error = true
 
 dotnet_diagnostic.CA1040.severity = warning  # Avoid empty interfaces-
