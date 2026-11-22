@@ -108,6 +108,9 @@ public sealed partial class ObjectPoolManager
 
             if (_metricsDict.TryGetValue(type, out PoolMetrics? metrics))
             {
+                metrics.ObserveActivity();
+                _ = metrics.SamplePeak();
+
                 gets = metrics.TotalGets;
                 returns = metrics.TotalReturns;
                 peak = metrics.PeakOutstanding;
@@ -220,6 +223,9 @@ public sealed partial class ObjectPoolManager
 
             if (_metricsDict.TryGetValue(kvp.Key, out PoolMetrics? metrics))
             {
+                metrics.ObserveActivity();
+                _ = metrics.SamplePeak();
+
                 long gets = metrics.TotalGets, hits = metrics.CacheHits, misses = metrics.CacheMisses;
                 double hitPercent = gets > 0 ? (hits / (double)gets * 100.0) : 0.0;
 

@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 PPN Corporation. All rights reserved.
 // Licensed under the Apache License, Version 2.0.
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -416,5 +417,77 @@ public sealed class ObjectPoolManagerTests
         Exception? ex = Record.Exception(() => manager.Return(first));
 
         Assert.Null(ex);
+    }
+    /// <summary>
+    /// Per-type metrics no longer depend on EnableMetrics: the outstanding count, the peak and the last activity are
+    /// reported with it off (the default), without Get or Return writing a counter shared by every thread.
+    /// </summary>
+    [Fact]
+    public void GetTypeInfo_WithMetricsOff_ReportsOutstandingPeakAndLastActivity()
+    {
+        using ObjectPoolManager manager = new(new ObjectPoolOptions
+        {
+            EnableObjectTrimming = false,
+            EnableMetrics = false,
+            DefaultPreallocate = 0,
+        });
+
+        Assert.Equal(DateTime.MinValue, (DateTime)manager.GetTypeInfo<TestPoolable>()["LastAccessUtc"]);
+
+        TestPoolable a = manager.Get<TestPoolable>();
+        TestPoolable b = manager.Get<TestPoolable>();
+        TestPoolable c = manager.Get<TestPoolable>();
+        manager.Return(a);
+
+        Dictionary<string, object> info = manager.GetTypeInfo<TestPoolable>();
+        Assert.Equal(2L, (long)info["Outstanding"]);
+        Assert.Equal(3L, (long)info["PeakOutstanding"]);
+        Assert.Equal("Return", (string)info["LastAccessType"]);
+        Assert.NotEqual(DateTime.MinValue, (DateTime)info["LastAccessUtc"]);
+
+        manager.Return(b);
+        manager.Return(c);
+        info = manager.GetTypeInfo<TestPoolable>();
+        Assert.Equal(0L, (long)info["Outstanding"]);
+        Assert.Equal(3L, (long)info["PeakOutstanding"]);
+    }
+
+    /// <summary>
+    /// The peak is sampled when the pool misses, so a working set that came and went between two reads is not lost.
+    /// </summary>
+    [Fact]
+    public void PeakOutstanding_WhenWorkingSetIsReturnedBeforeAnyRead_IsStillReported()
+    {
+        using ObjectPoolManager manager = new(new ObjectPoolOptions { EnableObjectTrimming = false, DefaultPreallocate = 0 });
+
+        List<TestPoolable> rented = [];
+        for (int i = 0; i < 10; i++)
+        {
+            rented.Add(manager.Get<TestPoolable>());
+        }
+
+        foreach (TestPoolable item in rented)
+        {
+            manager.Return(item);
+        }
+
+        Dictionary<string, object> info = manager.GetTypeInfo<TestPoolable>();
+        Assert.Equal(10L, (long)info["PeakOutstanding"]);
+        Assert.Equal(0L, (long)info["Outstanding"]);
+    }
+
+    /// <summary>A read with no Get or Return since the previous one does not move the last activity.</summary>
+    [Fact]
+    public void LastAccessUtc_WithoutActivitySinceLastRead_DoesNotMove()
+    {
+        using ObjectPoolManager manager = new(new ObjectPoolOptions { EnableObjectTrimming = false, DefaultPreallocate = 0 });
+        manager.Return(manager.Get<TestPoolable>());
+
+        DateTime first = (DateTime)manager.GetTypeInfo<TestPoolable>()["LastAccessUtc"];
+        System.Threading.Thread.Sleep(30);
+        DateTime second = (DateTime)manager.GetTypeInfo<TestPoolable>()["LastAccessUtc"];
+
+        // LastAccessUtc is rebuilt from a tick count on every read, so allow a few milliseconds of rounding.
+        Assert.InRange((second - first).TotalMilliseconds, -10, 10);
     }
 }
