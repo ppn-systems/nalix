@@ -69,6 +69,24 @@ public sealed class PacketDispatchChannelLifecycleTests
         }
     }
 
+    /// <summary>
+    /// The lease is borrowed: when the channel rejects a packet without queuing it, the caller still owns the
+    /// lease and releases it. Disposing it here as well would release the caller's reference a second time.
+    /// </summary>
+    [Fact]
+    public void HandlePacket_WhenPacketIsRejected_DoesNotDisposeBorrowedLease()
+    {
+        using PacketDispatchChannel channel = new(_ => { });
+        using FakeConnection connection = new();
+        FakeBufferLease shortFrame = new(new byte[1]);
+
+        channel.HandlePacket(shortFrame, connection);
+        channel.HandlePacket(shortFrame, null!);
+
+        Assert.False(shortFrame.IsDisposed);
+        Assert.Equal(1, connection.ErrorCount);
+    }
+
     private static FakeBufferLease CreateLease()
     {
         byte[] buffer = new byte[PacketHeader.Size];
