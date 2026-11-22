@@ -18,7 +18,7 @@ IDs are sequential: `NALIX001`–`NALIX078`, **not organized by hundreds**. Cate
 - `NALIX032–NALIX039`: Middleware behavior, buffer leaks, performance
 - `NALIX040–NALIX058`: Network, hosting, opcode ranges, allocations, return types
 - `NALIX071–NALIX078`: Crypto, formatting, logging, pooling, and AOT constraints
-- `NALIX108–NALIX110`: `IBufferLease` ownership (`NalixUsageAnalyzer.LeaseOwnership.cs`)
+- `NALIX108–NALIX110`, `NALIX119`: `IBufferLease` ownership (`NalixUsageAnalyzer.LeaseOwnership.cs`)
 - `NALIX111–NALIX114`: Handler policy attributes — missing `[PacketPermission]`, non-positive `[PacketRateLimit]`/`[PacketTimeout]`, policy attribute with no middleware (`NalixUsageAnalyzer.HandlerPolicy.cs`)
 - `NALIX115–NALIX116`: SDK usage — retry on a packet without `[PacketIdempotent]`, discarded `On`/`OnExact`/`SubscribeTemp` subscription (`NalixUsageAnalyzer.SdkUsage.cs`)
 - `NALIX117`: byte-wise `SequenceEqual` on secret-named data (`NalixUsageAnalyzer.SecretComparison.cs`)
@@ -63,7 +63,7 @@ Do not suppress at the project level — suppressions should be local and docume
 
 ## Gotchas
 
-- **`[Borrowed]` is an ownership contract, not a NALIX039 suppressor**: NALIX108–110 treat every lease-typed parameter *without* `[Borrowed]` as taking ownership. Marking a parameter `[Borrowed]` while the method disposes or stores the lease raises NALIX110. Use `[Borrowed]` only when the caller keeps ownership; call `Retain()` when the callee needs its own reference. Delegate invocations, generic `T` parameters and `bool TryXxx(lease)` calls are treated as non-owning.
+- **`[Borrowed]` is an ownership contract, not a NALIX039 suppressor**: NALIX108–110 treat every lease-typed parameter *without* `[Borrowed]` as taking ownership. Marking a parameter `[Borrowed]` while the method disposes or stores the lease raises NALIX110. Use `[Borrowed]` only when the caller keeps ownership; call `Retain()` when the callee needs its own reference. Delegate invocations, generic `T` parameters and `bool TryXxx(lease)` calls are treated as non-owning. A parameter inherits `[Borrowed]` from the interface member or base method it implements, so put the attribute on the base declaration (NALIX119 flags an implementation that adds it alone). One `Retain()` grants one release, and only for releases after it. A borrowed lease may not be returned, have its `Memory` stored, or be captured by a lambda queued to `Task`/`ThreadPool` without `Retain()`.
 
 - **The analyzer is not attached to every Nalix project**: `src/Directory.Build.props` skips `Nalix.Abstractions`, `Nalix.Environment`, `Nalix.Framework` and `Nalix.Network` (every rule needs `Nalix.Codec` symbols), so a clean `src` build says nothing about code in those four projects. Info-level diagnostics are not printed by `dotnet build`; use `-p:ErrorLog=out.sarif` to see them.
 

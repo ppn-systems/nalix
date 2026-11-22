@@ -21,6 +21,7 @@ public sealed class Lease : IBufferLease, IDisposable
 {
     public static Lease Rent() => new();
     public int Length => 0;
+    public ReadOnlyMemory<byte> Memory => default;
     public void Retain() { }
     public void Dispose() { }
 }
@@ -158,6 +159,93 @@ public sealed class C
 }
 """, "NALIX110");
 
+    [Fact]
+    public Task BorrowedInheritedFromInterface_Disposed_ReportsNalix110() => AssertAsync("""
+public interface ISink { void Handle([Borrowed] Lease lease); }
+public sealed class C : ISink
+{
+    public void Handle(Lease lease) => lease.Dispose();
+}
+""", "NALIX110");
+
+    [Fact]
+    public Task BorrowedInheritedFromBaseMethod_Disposed_ReportsNalix110() => AssertAsync("""
+public abstract class Base { public abstract void Handle([Borrowed] Lease lease); }
+public sealed class C : Base
+{
+    public override void Handle(Lease lease) => lease.Dispose();
+}
+""", "NALIX110");
+
+    [Fact]
+    public Task BorrowedParameterReleasedTwiceAfterOneRetain_ReportsNalix110() => AssertAsync("""
+public sealed class C
+{
+    public void M([Borrowed] Lease lease)
+    {
+        lease.Retain();
+        Api.Take(lease);
+        lease.Dispose();
+    }
+}
+""", "NALIX110");
+
+    [Fact]
+    public Task BorrowedParameterDisposedBeforeRetain_ReportsNalix110() => AssertAsync("""
+public sealed class C
+{
+    public void M([Borrowed] Lease lease, bool reject)
+    {
+        if (reject)
+        {
+            lease.Dispose();
+            return;
+        }
+
+        lease.Retain();
+        Api.Take(lease);
+    }
+}
+""", "NALIX110");
+
+    [Fact]
+    public Task BorrowedParameterReturned_ReportsNalix110() => AssertAsync("""
+public sealed class C
+{
+    public Lease M([Borrowed] Lease lease) => lease;
+}
+""", "NALIX110");
+
+    [Fact]
+    public Task BorrowedParameterMemoryStoredInField_ReportsNalix110() => AssertAsync("""
+public sealed class C
+{
+    private ReadOnlyMemory<byte> _data;
+    public void M([Borrowed] Lease lease) => _data = lease.Memory;
+    public int Size => _data.Length;
+}
+""", "NALIX110");
+
+    [Fact]
+    public Task BorrowedParameterCapturedByQueuedLambda_ReportsNalix110() => AssertAsync("""
+public sealed class C
+{
+    public void M([Borrowed] Lease lease)
+        => _ = System.Threading.Tasks.Task.Run(() => lease.Length);
+}
+""", "NALIX110");
+
+    // ── NALIX119: [Borrowed] only on the implementation ─────────────────────
+
+    [Fact]
+    public Task BorrowedOnlyOnImplementation_ReportsNalix119() => AssertAsync("""
+public interface ISink { void Handle(Lease lease); }
+public sealed class C : ISink
+{
+    public void Handle([Borrowed] Lease lease) { _ = lease.Length; }
+}
+""", "NALIX119");
+
     // ── No diagnostics ─────────────────────────────────────────────────────
 
     [Fact]
@@ -289,6 +377,66 @@ public sealed class C
     {
         lease.Retain();
         lease.Dispose();
+    }
+}
+""");
+
+    [Fact]
+    public Task CallerOfInheritedBorrowedParameter_KeepsOwnership_NoDiagnostic() => AssertAsync("""
+public interface ISink { void Handle([Borrowed] Lease lease); }
+public sealed class Sink : ISink
+{
+    public void Handle(Lease lease) { _ = lease.Length; }
+}
+public sealed class C
+{
+    public void M(Sink sink)
+    {
+        Lease lease = Lease.Rent();
+        sink.Handle(lease);
+        lease.Dispose();
+    }
+}
+""");
+
+    [Fact]
+    public Task BorrowedParameterRetainedThenReleasedOnExclusiveBranches_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    public void M([Borrowed] Lease lease, bool queue)
+    {
+        lease.Retain();
+        if (queue)
+        {
+            Api.Take(lease);
+            return;
+        }
+
+        lease.Dispose();
+    }
+}
+""");
+
+    [Fact]
+    public Task BorrowedParameterRetainedThenCapturedByQueuedLambda_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    public void M([Borrowed] Lease lease)
+    {
+        lease.Retain();
+        _ = System.Threading.Tasks.Task.Run(() => lease.Dispose());
+    }
+}
+""");
+
+    [Fact]
+    public Task BorrowedParameterCapturedBySynchronousLambda_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    public int M([Borrowed] Lease lease)
+    {
+        Func<int> length = () => lease.Length;
+        return length();
     }
 }
 """);

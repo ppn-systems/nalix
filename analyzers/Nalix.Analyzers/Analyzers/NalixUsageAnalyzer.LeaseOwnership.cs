@@ -10,12 +10,16 @@ using Nalix.Analyzers.Diagnostics;
 
 namespace Nalix.Analyzers.Analyzers;
 
-// ─── NALIX108 / NALIX109 / NALIX110: IBufferLease ownership ─────────────────
+// ─── NALIX108 / NALIX109 / NALIX110 / NALIX119: IBufferLease ownership ──────
 //
 // Ownership contract (shared with NALIX039):
 //   * A parameter, field or property marked [Borrowed] does NOT own the lease.
+//   * A parameter inherits [Borrowed] from the interface member or base method it implements.
 //   * Any other parameter of a lease type takes ownership of the argument.
-//   * Dispose() releases ownership. Retain() adds an owner (analysis is skipped).
+//   * Dispose() releases ownership. Retain() on a borrowed parameter grants one release;
+//     on an owned lease it adds an owner (analysis is skipped).
+//   * A borrowed lease must not outlive the call: it cannot be returned, stored (nor its
+//     Memory), or captured by a lambda queued to Task/ThreadPool without Retain().
 //
 // The analysis is intraprocedural; cross-method correctness comes from the
 // [Borrowed] contract on signatures. To avoid false positives it only reports
@@ -49,6 +53,19 @@ public sealed partial class NalixUsageAnalyzer
         public string Description { get; }
     }
 
+    private readonly struct RetainInfo
+    {
+        public RetainInfo(int count, int firstPosition)
+        {
+            this.Count = count;
+            this.FirstPosition = firstPosition;
+        }
+
+        public int Count { get; }
+
+        public int FirstPosition { get; }
+    }
+
     private static void AnalyzeLeaseOwnership(OperationBlockAnalysisContext context, SymbolSet symbols)
     {
         INamedTypeSymbol? leaseType = symbols.BufferLeaseType;
@@ -61,6 +78,12 @@ public sealed partial class NalixUsageAnalyzer
         List<LeaseEvent>? borrowedViolations = null;
         HashSet<ISymbol>? excluded = null;
         HashSet<ISymbol>? usingLocals = null;
+        Dictionary<ISymbol, RetainInfo>? retains = null;
+
+        if (context.OwningSymbol is IMethodSymbol owningMethod)
+        {
+            ReportBorrowedContractMismatch(context, owningMethod, leaseType);
+        }
 
         foreach (IOperation root in context.OperationBlocks)
         {
@@ -77,10 +100,10 @@ public sealed partial class NalixUsageAnalyzer
                         CollectUsingLocals(group, ref usingLocals);
                         break;
                     case ILocalReferenceOperation localReference:
-                        ClassifyLeaseReference(context, leaseType, localReference, localReference.Local, localReference.Local.Type, ref events, ref borrowedViolations, ref excluded);
+                        ClassifyLeaseReference(context, leaseType, localReference, localReference.Local, localReference.Local.Type, ref events, ref borrowedViolations, ref excluded, ref retains);
                         break;
                     case IParameterReferenceOperation parameterReference:
-                        ClassifyLeaseReference(context, leaseType, parameterReference, parameterReference.Parameter, parameterReference.Parameter.Type, ref events, ref borrowedViolations, ref excluded);
+                        ClassifyLeaseReference(context, leaseType, parameterReference, parameterReference.Parameter, parameterReference.Parameter.Type, ref events, ref borrowedViolations, ref excluded, ref retains);
                         break;
 
                     default:
@@ -91,18 +114,7 @@ public sealed partial class NalixUsageAnalyzer
 
         if (borrowedViolations is not null)
         {
-            foreach (LeaseEvent violation in borrowedViolations)
-            {
-                // Retain() makes this method an additional owner, so releasing is allowed.
-                if (excluded is null || !excluded.Contains(violation.Symbol))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        DiagnosticDescriptors.BorrowedBufferLeaseReleased,
-                        violation.Anchor.Syntax.GetLocation(),
-                        violation.Symbol.Name,
-                        violation.Description));
-                }
-            }
+            ReportBorrowedViolations(context, borrowedViolations, retains);
         }
 
         if (events is null)
@@ -172,6 +184,82 @@ public sealed partial class NalixUsageAnalyzer
         }
     }
 
+    private static void ReportBorrowedViolations(
+        OperationBlockAnalysisContext context,
+        List<LeaseEvent> violations,
+        Dictionary<ISymbol, RetainInfo>? retains)
+    {
+        violations.Sort(static (a, b) => a.Anchor.Syntax.SpanStart.CompareTo(b.Anchor.Syntax.SpanStart));
+
+        HashSet<ISymbol>? reported = null;
+        for (int i = 0; i < violations.Count; i++)
+        {
+            LeaseEvent violation = violations[i];
+            RetainInfo retain = default;
+            _ = retains?.TryGetValue(violation.Symbol, out retain);
+            int retainCount = retain.Count;
+
+            // Retain() only covers releases that come after it. Inside a loop the textual order
+            // says nothing, so those are left alone.
+            if (retainCount == 0
+                || (violation.Anchor.Syntax.SpanStart < retain.FirstPosition && !IsInsideLoop(violation.Anchor)))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.BorrowedBufferLeaseReleased,
+                    violation.Anchor.Syntax.GetLocation(),
+                    violation.Symbol.Name,
+                    violation.Description));
+                continue;
+            }
+
+            // A single Retain() makes this method the owner of exactly one reference. A second
+            // release that always follows the first one gives away the caller's reference.
+            if (retainCount != 1
+                || (reported is not null && reported.Contains(violation.Symbol))
+                || !TryGetUnconditionalStatement(violation.Anchor, out IBlockOperation? block, out int statementIndex))
+            {
+                continue;
+            }
+
+            for (int j = i + 1; j < violations.Count; j++)
+            {
+                LeaseEvent next = violations[j];
+                if (SymbolEqualityComparer.Default.Equals(next.Symbol, violation.Symbol)
+                    && IsInLaterStatement(next.Anchor, block!, statementIndex))
+                {
+                    reported ??= new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+                    _ = reported.Add(violation.Symbol);
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.BorrowedBufferLeaseReleased,
+                        next.Anchor.Syntax.GetLocation(),
+                        violation.Symbol.Name,
+                        "released more than once after a single Retain()"));
+                    break;
+                }
+            }
+        }
+    }
+
+    // NALIX119: an implementation that declares [Borrowed] while the member it implements takes
+    // ownership. Callers that go through the interface hand the lease over and never release it.
+    private static void ReportBorrowedContractMismatch(OperationBlockAnalysisContext context, IMethodSymbol method, INamedTypeSymbol leaseType)
+    {
+        foreach (IParameterSymbol parameter in method.Parameters)
+        {
+            if (IsLeaseType(parameter.Type, leaseType)
+                && IsBorrowed(parameter)
+                && TryFindBaseParameter(parameter, borrowed: false, out IParameterSymbol? baseParameter)
+                && parameter.Locations.Length > 0)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.BorrowedContractMismatch,
+                    parameter.Locations[0],
+                    parameter.Name,
+                    baseParameter!.ContainingSymbol.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat)));
+            }
+        }
+    }
+
     private static void ClassifyLeaseReference(
         OperationBlockAnalysisContext context,
         INamedTypeSymbol leaseType,
@@ -180,22 +268,29 @@ public sealed partial class NalixUsageAnalyzer
         ITypeSymbol? type,
         ref List<LeaseEvent>? events,
         ref List<LeaseEvent>? borrowedViolations,
-        ref HashSet<ISymbol>? excluded)
+        ref HashSet<ISymbol>? excluded,
+        ref Dictionary<ISymbol, RetainInfo>? retains)
     {
         if (type is null || !IsLeaseType(type, leaseType))
         {
             return;
         }
 
+        bool isBorrowedParameter = symbol is IParameterSymbol parameterSymbol && IsBorrowedParameter(parameterSymbol);
+
         // References captured by a lambda or local function are not tracked: their
         // execution order relative to the enclosing method is unknown.
         if (!SymbolEqualityComparer.Default.Equals(symbol.ContainingSymbol, GetEnclosingFunction(reference, context.OwningSymbol)))
         {
+            if (isBorrowedParameter && GetDeferredLambdaTarget(reference) is { } queuedTo)
+            {
+                borrowedViolations ??= [];
+                borrowedViolations.Add(new LeaseEvent(symbol, LeaseEventKind.Release, reference, $"captured by a lambda queued to '{queuedTo}', which can run after this method returns"));
+            }
+
             Exclude(symbol, ref excluded);
             return;
         }
-
-        bool isBorrowedParameter = symbol is IParameterSymbol parameterSymbol && IsBorrowed(parameterSymbol);
 
         IOperation node = reference;
         IOperation? parent = node.Parent;
@@ -214,7 +309,7 @@ public sealed partial class NalixUsageAnalyzer
             case IInvocationOperation invocation when ReferenceEquals(invocation.Instance, node):
                 if (invocation.TargetMethod.Name == "Retain")
                 {
-                    Exclude(symbol, ref excluded);
+                    Retain(symbol, isBorrowedParameter, invocation, ref excluded, ref retains);
                     return;
                 }
 
@@ -233,7 +328,7 @@ public sealed partial class NalixUsageAnalyzer
                 {
                     if (whenNotNull.TargetMethod.Name == "Retain")
                     {
-                        Exclude(symbol, ref excluded);
+                        Retain(symbol, isBorrowedParameter, whenNotNull, ref excluded, ref retains);
                         return;
                     }
 
@@ -279,6 +374,20 @@ public sealed partial class NalixUsageAnalyzer
                 {
                     borrowedViolations ??= [];
                     borrowedViolations.Add(new LeaseEvent(symbol, LeaseEventKind.Release, assignment, $"stored in '{member.Name}', which is not [Borrowed]"));
+                }
+
+                break;
+
+            case IReturnOperation returnOperation when isBorrowedParameter && ReferenceEquals(returnOperation.ReturnedValue, node):
+                borrowedViolations ??= [];
+                borrowedViolations.Add(new LeaseEvent(symbol, LeaseEventKind.Release, returnOperation, "returned, which hands it to a new owner"));
+                break;
+
+            case IPropertyReferenceOperation { Property.Name: "Memory" } memory when isBorrowedParameter && ReferenceEquals(memory.Instance, node):
+                if (GetStoredMember(memory) is { } memoryTarget)
+                {
+                    borrowedViolations ??= [];
+                    borrowedViolations.Add(new LeaseEvent(symbol, LeaseEventKind.Release, memory, $"exposed through Memory stored in '{memoryTarget.Name}', which outlives the call"));
                 }
 
                 break;
@@ -329,6 +438,124 @@ public sealed partial class NalixUsageAnalyzer
         return false;
     }
 
+    // A parameter is borrowed when it, or the parameter it implements or overrides, is marked [Borrowed].
+    private static bool IsBorrowedParameter(IParameterSymbol parameter)
+        => IsBorrowed(parameter) || TryFindBaseParameter(parameter, borrowed: true, out _);
+
+    // Finds the matching parameter of an overridden method or implemented interface member whose
+    // borrowed state equals 'borrowed'.
+    private static bool TryFindBaseParameter(IParameterSymbol parameter, bool borrowed, out IParameterSymbol? baseParameter)
+    {
+        baseParameter = null;
+        if (parameter.ContainingSymbol is not IMethodSymbol method)
+        {
+            return false;
+        }
+
+        int ordinal = parameter.Ordinal;
+        if (method.OverriddenMethod is { } overridden
+            && overridden.Parameters.Length > ordinal
+            && IsBorrowedParameter(overridden.Parameters[ordinal]) == borrowed)
+        {
+            baseParameter = overridden.Parameters[ordinal];
+            return true;
+        }
+
+        if (method.ContainingType is not { } type || method.IsStatic)
+        {
+            return false;
+        }
+
+        foreach (INamedTypeSymbol @interface in type.AllInterfaces)
+        {
+            foreach (ISymbol member in @interface.GetMembers())
+            {
+                if (member is IMethodSymbol interfaceMethod
+                    && interfaceMethod.Parameters.Length > ordinal
+                    && SymbolEqualityComparer.Default.Equals(type.FindImplementationForInterfaceMember(interfaceMethod), method)
+                    && IsBorrowedParameter(interfaceMethod.Parameters[ordinal]) == borrowed)
+                {
+                    baseParameter = interfaceMethod.Parameters[ordinal];
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static void Retain(ISymbol symbol, bool isBorrowedParameter, IOperation call, ref HashSet<ISymbol>? excluded, ref Dictionary<ISymbol, RetainInfo>? retains)
+    {
+        // An owned lease that is retained has several owners; that is not tracked.
+        if (!isBorrowedParameter)
+        {
+            Exclude(symbol, ref excluded);
+            return;
+        }
+
+        retains ??= new Dictionary<ISymbol, RetainInfo>(SymbolEqualityComparer.Default);
+        int position = call.Syntax.SpanStart;
+        retains[symbol] = retains.TryGetValue(symbol, out RetainInfo info)
+            ? new RetainInfo(info.Count + 1, Math.Min(info.FirstPosition, position))
+            : new RetainInfo(1, position);
+    }
+
+    private static bool IsInsideLoop(IOperation operation)
+    {
+        for (IOperation? current = operation.Parent; current is not null; current = current.Parent)
+        {
+            if (current is ILoopOperation)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The field or property a value is assigned to, looking through implicit conversions.
+    private static ISymbol? GetStoredMember(IOperation value)
+    {
+        IOperation node = value;
+        while (node.Parent is IConversionOperation { IsImplicit: true } conversion)
+        {
+            node = conversion;
+        }
+
+        return node.Parent is ISimpleAssignmentOperation assignment
+               && ReferenceEquals(assignment.Value, node)
+               && GetAssignedMember(assignment.Target) is { } member
+               && !IsBorrowed(member)
+            ? member
+            : null;
+    }
+
+    // "Task.Run" when the reference sits in a lambda passed to Task, TaskFactory or ThreadPool,
+    // which run it after the borrowing method may have returned.
+    private static string? GetDeferredLambdaTarget(IOperation reference)
+    {
+        for (IOperation? current = reference.Parent; current is not null; current = current.Parent)
+        {
+            if (current is not IAnonymousFunctionOperation)
+            {
+                continue;
+            }
+
+            IOperation? parent = current.Parent;
+            while (parent is IDelegateCreationOperation or IConversionOperation)
+            {
+                parent = parent.Parent;
+            }
+
+            return parent is IArgumentOperation { Parent: IInvocationOperation invocation }
+                   && invocation.TargetMethod.ContainingType?.Name is "Task" or "TaskFactory" or "ThreadPool"
+                ? $"{invocation.TargetMethod.ContainingType.Name}.{invocation.TargetMethod.Name}"
+                : null;
+        }
+
+        return null;
+    }
+
     private static bool IsParameterlessDispose(IInvocationOperation invocation)
         => invocation.TargetMethod.Name == "Dispose" && invocation.Arguments.Length == 0;
 
@@ -337,7 +564,7 @@ public sealed partial class NalixUsageAnalyzer
     // (e.g. Tuple.Create<T>) cannot carry [Borrowed], so they are treated as borrowing.
     private static bool TakesOwnership(IParameterSymbol target, IOperation? call, INamedTypeSymbol leaseType)
     {
-        if (IsBorrowed(target)
+        if (IsBorrowedParameter(target)
             || target.OriginalDefinition.Type is ITypeParameterSymbol
             || !IsLeaseType(target.Type, leaseType)
             || IsConditionalTransfer(call))

@@ -90,6 +90,7 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.BufferLeaseReleasedTwice,
             DiagnosticDescriptors.BufferLeaseUsedAfterRelease,
             DiagnosticDescriptors.BorrowedBufferLeaseReleased,
+            DiagnosticDescriptors.BorrowedContractMismatch,
             DiagnosticDescriptors.HandlerMissingPermission,
             DiagnosticDescriptors.PacketRateLimitInvalidValue,
             DiagnosticDescriptors.PacketTimeoutNonPositive,
