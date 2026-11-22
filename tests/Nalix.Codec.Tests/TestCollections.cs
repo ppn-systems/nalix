@@ -13,7 +13,13 @@ public static class TestCollections
 {
     /// <summary>Tests that inspect pooled buffer contents after disposal.</summary>
     public const string PooledBufferScrub = "PooledBufferScrub";
+
+    /// <summary>Tests that inspect the outbound path's process-wide adaptive compression state.</summary>
+    public const string CompressionStats = "CompressionStats";
 }
 
 [CollectionDefinition(TestCollections.PooledBufferScrub, DisableParallelization = true)]
 public sealed class PooledBufferScrubCollection;
+
+[CollectionDefinition(TestCollections.CompressionStats, DisableParallelization = true)]
+public sealed class CompressionStatsCollection;

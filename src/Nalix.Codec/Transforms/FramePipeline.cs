@@ -31,6 +31,89 @@ public static class FramePipeline
     private static bool IsCompressionWorthwhile(int compressedLength, int originalLength)
         => compressedLength <= originalLength - (originalLength >> MinGainShift);
 
+    #region Adaptive Compression
+
+    // Whether a payload compresses depends mostly on what it carries, so the outbound path learns it per opcode:
+    // after MissesBeforeBackoff compression attempts in a row that did not pay off, the next frames of that opcode
+    // skip the attempt (it costs as much CPU as the rest of the send path for an incompressible 1 KB payload).
+    // The window starts at MinSkipFrames and doubles on every further failed probe up to MaxSkipFrames; one probe
+    // that pays off returns the opcode to always compressing. A skipped frame goes out uncompressed, exactly as an
+    // attempt that did not pay off would, so receivers see no difference.
+    //
+    // The state is process-wide and racy on purpose: a lost update only shifts when the next probe happens.
+
+    internal const int CompressionStatBuckets = 4096;
+    internal const int MissesBeforeBackoff = 4;
+    internal const int MinSkipFrames = 32;
+    internal const int MaxSkipFrames = 1024;
+
+    private static readonly int[] s_skipRemaining = new int[CompressionStatBuckets];
+    private static readonly int[] s_skipWindow = new int[CompressionStatBuckets];
+    private static readonly byte[] s_misses = new byte[CompressionStatBuckets];
+
+    /// <summary>Returns <see langword="false"/> while the opcode's skip window is open, counting the frame against it.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool ShouldAttemptCompression(ushort opCode)
+    {
+        int bucket = opCode & (CompressionStatBuckets - 1);
+        int remaining = s_skipRemaining[bucket];
+        if (remaining <= 0)
+        {
+            return true;
+        }
+
+        s_skipRemaining[bucket] = remaining - 1;
+        return false;
+    }
+
+    /// <summary>Records whether an attempt for the opcode paid off, and opens a skip window after repeated misses.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void RecordCompressionResult(ushort opCode, bool worthwhile)
+    {
+        int bucket = opCode & (CompressionStatBuckets - 1);
+        if (worthwhile)
+        {
+            if (s_misses[bucket] != 0 || s_skipWindow[bucket] != 0)
+            {
+                s_misses[bucket] = 0;
+                s_skipWindow[bucket] = 0;
+            }
+
+            return;
+        }
+
+        RECORD_MISS(bucket);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static void RECORD_MISS(int bucket)
+        {
+            int misses = s_misses[bucket] + 1;
+            int window = s_skipWindow[bucket];
+
+            // Once a window has been opened, a single failed probe is enough to open the next, longer one.
+            if (window == 0 && misses < MissesBeforeBackoff)
+            {
+                s_misses[bucket] = (byte)misses;
+                return;
+            }
+
+            window = window == 0 ? MinSkipFrames : Math.Min(window * 2, MaxSkipFrames);
+            s_misses[bucket] = 0;
+            s_skipWindow[bucket] = window;
+            s_skipRemaining[bucket] = window;
+        }
+    }
+
+    /// <summary>Forgets what was learned about every opcode (tests).</summary>
+    internal static void ResetCompressionStats()
+    {
+        Array.Clear(s_skipRemaining);
+        Array.Clear(s_skipWindow);
+        Array.Clear(s_misses);
+    }
+
+    #endregion Adaptive Compression
+
     /// <summary>
     /// Applies inbound transforms in transport order: decrypt first, then decompress.
     /// Mutates the <paramref name="current"/> lease directly via <see langword="ref"/> to optimize performance.
@@ -231,6 +314,12 @@ public static class FramePipeline
 
         int payloadSize = current.Length - FrameTransformer.Offset;
         bool doCompress = enableCompress && payloadSize >= minSizeToCompress;
+        ushort opCode = 0;
+        if (doCompress)
+        {
+            opCode = current.Span.AsHeaderRef().OpCode;
+            doCompress = ShouldAttemptCompression(opCode);
+        }
 
         if (enableEncrypt && algorithm == CipherSuiteType.None)
         {
@@ -252,15 +341,17 @@ public static class FramePipeline
                 Throw.EncryptRequestedButNoSeq();
             }
 
-            ProcessOutboundFused(ref current, payloadSize, secret, seq.Value, algorithm);
+            ProcessOutboundFused(ref current, payloadSize, opCode, secret, seq.Value, algorithm);
             return;
         }
 
         if (doCompress)
         {
             IBufferLease compressed = FrameCompression.CompressFrame(current);
+            bool worthwhile = IsCompressionWorthwhile(compressed.Length - FrameTransformer.Offset, payloadSize);
+            RecordCompressionResult(opCode, worthwhile);
 
-            if (IsCompressionWorthwhile(compressed.Length - FrameTransformer.Offset, payloadSize))
+            if (worthwhile)
             {
                 current = compressed;
             }
@@ -286,7 +377,7 @@ public static class FramePipeline
 
     private static void ProcessOutboundFused(
         [Borrowed] ref IBufferLease current,
-        int payloadSize, ReadOnlySpan<byte> secret, uint seq, CipherSuiteType algorithm)
+        int payloadSize, ushort opCode, ReadOnlySpan<byte> secret, uint seq, CipherSuiteType algorithm)
     {
         // 1. Calculate maximum required sizes
         int maxCompSize = FrameTransformer.GetMaxCompressedSize(payloadSize);
@@ -308,6 +399,7 @@ public static class FramePipeline
             // 4. LZ4 compress directly into tempRegion
             int compLen = LZ4.LZ4Codec.Encode(srcSpan[FrameTransformer.Offset..], tempRegion);
             bool compressedWins = IsCompressionWorthwhile(compLen, payloadSize);
+            RecordCompressionResult(opCode, compressedWins);
 
             // 5. Encrypt the compressed block, or the raw payload when compression did not pay off
             //    (maxFinalSize is sized from maxCompSize >= payloadSize, so the raw payload fits too).
