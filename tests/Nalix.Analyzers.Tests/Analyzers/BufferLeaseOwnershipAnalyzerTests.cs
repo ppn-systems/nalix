@@ -475,4 +475,296 @@ public sealed class C
     public void Clear() => _lease?.Dispose();
 }
 """);
+
+    // ── Flow-sensitive analysis ─────────────────────────────────────────────
+
+    [Fact]
+    public Task DisposeOnOneBranchThenDisposeAfter_ReportsNalix108() => AssertAsync("""
+public sealed class C
+{
+    public void M(bool early)
+    {
+        Lease lease = Lease.Rent();
+        if (early)
+        {
+            lease.Dispose();
+        }
+
+        lease.Dispose();
+    }
+}
+""", "NALIX108");
+
+    [Fact]
+    public Task UseAfterReleaseOnOneBranch_ReportsNalix109() => AssertAsync("""
+public sealed class C
+{
+    public int M(bool early)
+    {
+        Lease lease = Lease.Rent();
+        if (early)
+        {
+            Api.Take(lease);
+        }
+
+        return lease.Length;
+    }
+}
+""", "NALIX109");
+
+    [Fact]
+    public Task DisposeInsideLoop_ReportsNalix108() => AssertAsync("""
+public sealed class C
+{
+    public void M(int count)
+    {
+        Lease lease = Lease.Rent();
+        for (int i = 0; i < count; i++)
+        {
+            lease.Dispose();
+        }
+    }
+}
+""", "NALIX108");
+
+    [Fact]
+    public Task DisposeThroughAliasThenOriginal_ReportsNalix108() => AssertAsync("""
+public sealed class C
+{
+    public void M()
+    {
+        Lease lease = Lease.Rent();
+        Lease alias = lease;
+        alias.Dispose();
+        lease.Dispose();
+    }
+}
+""", "NALIX108");
+
+    [Fact]
+    public Task DisposeThenThrowingCallThenDisposeInCatch_ReportsNalix108() => AssertAsync("""
+public sealed class C
+{
+    public void M()
+    {
+        Lease lease = Lease.Rent();
+        try
+        {
+            lease.Dispose();
+            Console.WriteLine();
+        }
+        catch (InvalidOperationException)
+        {
+            lease.Dispose();
+        }
+    }
+}
+""", "NALIX108");
+
+    [Fact]
+    public Task AliasOfBorrowedParameterDisposed_ReportsNalix110() => AssertAsync("""
+public sealed class C
+{
+    public void M([Borrowed] Lease lease)
+    {
+        Lease alias = lease;
+        alias.Dispose();
+    }
+}
+""", "NALIX110");
+
+    [Fact]
+    public Task LocalNeverReleased_ReportsNalix039() => AssertAsync("""
+public sealed class C
+{
+    public void M()
+    {
+        Lease lease = Lease.Rent();
+        Api.Peek(lease);
+    }
+}
+""", "NALIX039");
+
+    [Fact]
+    public Task LocalNotReleasedOnEarlyReturn_ReportsNalix039() => AssertAsync("""
+public sealed class C
+{
+    public void M(bool skip)
+    {
+        Lease lease = Lease.Rent();
+        if (skip)
+        {
+            return;
+        }
+
+        lease.Dispose();
+    }
+}
+""", "NALIX039");
+
+    [Fact]
+    public Task LocalOverwrittenWhileOwned_ReportsNalix039() => AssertAsync("""
+public sealed class C
+{
+    public void M()
+    {
+        Lease lease = Lease.Rent();
+        lease = Lease.Rent();
+        lease.Dispose();
+    }
+}
+""", "NALIX039");
+
+    [Fact]
+    public Task DisposeThroughAlias_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    public int M()
+    {
+        Lease lease = Lease.Rent();
+        Lease alias = lease;
+        int length = lease.Length;
+        alias.Dispose();
+        return length;
+    }
+}
+""");
+
+    [Fact]
+    public Task DisposeInFinally_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    public void M()
+    {
+        Lease? lease = null;
+        try
+        {
+            lease = Lease.Rent();
+            Api.Peek(lease);
+        }
+        finally
+        {
+            lease?.Dispose();
+        }
+    }
+}
+""");
+
+    [Fact]
+    public Task ReturnOrDisposeInCatch_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    public Lease M()
+    {
+        Lease lease = Lease.Rent();
+        try
+        {
+            Api.Peek(lease);
+            return lease;
+        }
+        catch (InvalidOperationException)
+        {
+            lease.Dispose();
+            throw;
+        }
+    }
+}
+""");
+
+    [Fact]
+    public Task EarlyReturnInsideLockThenDisposeAfter_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    private readonly object _sync = new();
+
+    public void M(bool early)
+    {
+        Lease lease = Lease.Rent();
+        lock (_sync)
+        {
+            if (early)
+            {
+                lease.Dispose();
+                return;
+            }
+        }
+
+        lease.Dispose();
+    }
+}
+""");
+
+    [Fact]
+    public Task RentAndDisposeInsideLoop_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    public void M(int count)
+    {
+        Lease? lease = null;
+        for (int i = 0; i < count; i++)
+        {
+            lease?.Dispose();
+            lease = Lease.Rent();
+        }
+
+        lease?.Dispose();
+    }
+}
+""");
+
+    [Fact]
+    public Task LeaseHandedToCollectionOutParameterOrCaller_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    private readonly System.Collections.Generic.List<Lease> _queue = new();
+
+    public void Enqueue()
+    {
+        Lease lease = Lease.Rent();
+        _queue.Add(lease);
+    }
+
+    public void Make(out Lease? result)
+    {
+        Lease lease = Lease.Rent();
+        result = lease;
+    }
+
+    public Lease Make()
+    {
+        Lease lease = Lease.Rent();
+        return lease;
+    }
+}
+""");
+
+    [Fact]
+    public Task ConditionalTransferMethodKeepsLeaseOnFailure_NoDiagnostic() => AssertAsync("""
+public sealed class C
+{
+    private Lease? _slot;
+
+    public bool Offer(Lease lease)
+    {
+        if (_slot is not null)
+        {
+            return false;
+        }
+
+        _slot = lease;
+        return true;
+    }
+
+    public void M()
+    {
+        Lease lease = Lease.Rent();
+        if (!this.Offer(lease))
+        {
+            lease.Dispose();
+        }
+    }
+
+    public void Clear() => _slot?.Dispose();
+}
+""");
 }

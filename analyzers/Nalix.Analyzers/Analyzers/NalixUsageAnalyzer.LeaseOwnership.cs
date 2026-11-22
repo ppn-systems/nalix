@@ -21,17 +21,14 @@ namespace Nalix.Analyzers.Analyzers;
 //   * A borrowed lease must not outlive the call: it cannot be returned, stored (nor its
 //     Memory), or captured by a lambda queued to Task/ThreadPool without Retain().
 //
-// The analysis is intraprocedural; cross-method correctness comes from the
-// [Borrowed] contract on signatures. To avoid false positives it only reports
-// when the first release runs unconditionally and the second event sits in a
-// later statement of the same block.
+// This file holds the signature-based checks for [Borrowed] parameters (NALIX110, NALIX119).
+// The flow-sensitive checks for owned leases live in NalixUsageAnalyzer.LeaseFlow.cs.
 public sealed partial class NalixUsageAnalyzer
 {
     private enum LeaseEventKind : byte
     {
         Use,
-        Release,
-        Reassign
+        Release
     }
 
     private readonly struct LeaseEvent
@@ -74,10 +71,7 @@ public sealed partial class NalixUsageAnalyzer
             return;
         }
 
-        List<LeaseEvent>? events = null;
         List<LeaseEvent>? borrowedViolations = null;
-        HashSet<ISymbol>? excluded = null;
-        HashSet<ISymbol>? usingLocals = null;
         Dictionary<ISymbol, RetainInfo>? retains = null;
 
         if (context.OwningSymbol is IMethodSymbol owningMethod)
@@ -93,17 +87,11 @@ public sealed partial class NalixUsageAnalyzer
 
                 switch (operation)
                 {
-                    case IUsingDeclarationOperation usingDeclaration:
-                        CollectUsingLocals(usingDeclaration.DeclarationGroup, ref usingLocals);
-                        break;
-                    case IUsingOperation { Resources: IVariableDeclarationGroupOperation group }:
-                        CollectUsingLocals(group, ref usingLocals);
-                        break;
                     case ILocalReferenceOperation localReference:
-                        ClassifyLeaseReference(context, leaseType, localReference, localReference.Local, localReference.Local.Type, ref events, ref borrowedViolations, ref excluded, ref retains);
+                        ClassifyLeaseReference(context, leaseType, localReference, localReference.Local, localReference.Local.Type, ref borrowedViolations, ref retains);
                         break;
                     case IParameterReferenceOperation parameterReference:
-                        ClassifyLeaseReference(context, leaseType, parameterReference, parameterReference.Parameter, parameterReference.Parameter.Type, ref events, ref borrowedViolations, ref excluded, ref retains);
+                        ClassifyLeaseReference(context, leaseType, parameterReference, parameterReference.Parameter, parameterReference.Parameter.Type, ref borrowedViolations, ref retains);
                         break;
 
                     default:
@@ -117,71 +105,7 @@ public sealed partial class NalixUsageAnalyzer
             ReportBorrowedViolations(context, borrowedViolations, retains);
         }
 
-        if (events is null)
-        {
-            return;
-        }
-
-        events.Sort(static (a, b) => a.Anchor.Syntax.SpanStart.CompareTo(b.Anchor.Syntax.SpanStart));
-
-        HashSet<ISymbol> reported = new(SymbolEqualityComparer.Default);
-        for (int i = 0; i < events.Count; i++)
-        {
-            LeaseEvent first = events[i];
-            if (first.Kind != LeaseEventKind.Release
-                || reported.Contains(first.Symbol)
-                || (excluded is not null && excluded.Contains(first.Symbol)))
-            {
-                continue;
-            }
-
-            // A lease declared with 'using' is disposed automatically at scope end,
-            // so any explicit release is a second release.
-            if (usingLocals is not null && usingLocals.Contains(first.Symbol))
-            {
-                _ = reported.Add(first.Symbol);
-                context.ReportDiagnostic(Diagnostic.Create(
-                    DiagnosticDescriptors.BufferLeaseReleasedTwice,
-                    first.Anchor.Syntax.GetLocation(),
-                    first.Symbol.Name,
-                    "declared with 'using' and is disposed automatically at the end of its scope"));
-                continue;
-            }
-
-            if (!TryGetUnconditionalStatement(first.Anchor, out IBlockOperation? block, out int statementIndex))
-            {
-                continue;
-            }
-
-            for (int j = i + 1; j < events.Count; j++)
-            {
-                LeaseEvent next = events[j];
-                if (!SymbolEqualityComparer.Default.Equals(next.Symbol, first.Symbol))
-                {
-                    continue;
-                }
-
-                if (next.Kind == LeaseEventKind.Reassign)
-                {
-                    break;
-                }
-
-                if (!IsInLaterStatement(next.Anchor, block!, statementIndex))
-                {
-                    continue;
-                }
-
-                _ = reported.Add(first.Symbol);
-                context.ReportDiagnostic(Diagnostic.Create(
-                    next.Kind == LeaseEventKind.Release
-                        ? DiagnosticDescriptors.BufferLeaseReleasedTwice
-                        : DiagnosticDescriptors.BufferLeaseUsedAfterRelease,
-                    next.Anchor.Syntax.GetLocation(),
-                    first.Symbol.Name,
-                    first.Description));
-                break;
-            }
-        }
+        AnalyzeLeaseFlow(context, leaseType);
     }
 
     private static void ReportBorrowedViolations(
@@ -266,9 +190,7 @@ public sealed partial class NalixUsageAnalyzer
         IOperation reference,
         ISymbol symbol,
         ITypeSymbol? type,
-        ref List<LeaseEvent>? events,
         ref List<LeaseEvent>? borrowedViolations,
-        ref HashSet<ISymbol>? excluded,
         ref Dictionary<ISymbol, RetainInfo>? retains)
     {
         if (type is null || !IsLeaseType(type, leaseType))
@@ -288,7 +210,6 @@ public sealed partial class NalixUsageAnalyzer
                 borrowedViolations.Add(new LeaseEvent(symbol, LeaseEventKind.Release, reference, $"captured by a lambda queued to '{queuedTo}', which can run after this method returns"));
             }
 
-            Exclude(symbol, ref excluded);
             return;
         }
 
@@ -309,7 +230,7 @@ public sealed partial class NalixUsageAnalyzer
             case IInvocationOperation invocation when ReferenceEquals(invocation.Instance, node):
                 if (invocation.TargetMethod.Name == "Retain")
                 {
-                    Retain(symbol, isBorrowedParameter, invocation, ref excluded, ref retains);
+                    Retain(symbol, isBorrowedParameter, invocation, ref retains);
                     return;
                 }
 
@@ -328,7 +249,7 @@ public sealed partial class NalixUsageAnalyzer
                 {
                     if (whenNotNull.TargetMethod.Name == "Retain")
                     {
-                        Retain(symbol, isBorrowedParameter, whenNotNull, ref excluded, ref retains);
+                        Retain(symbol, isBorrowedParameter, whenNotNull, ref retains);
                         return;
                     }
 
@@ -351,7 +272,6 @@ public sealed partial class NalixUsageAnalyzer
 
                 if (target.RefKind is RefKind.Ref or RefKind.Out)
                 {
-                    Exclude(symbol, ref excluded);
                     return;
                 }
 
@@ -361,11 +281,6 @@ public sealed partial class NalixUsageAnalyzer
                     description = $"passed to '{GetCalleeName(argument.Parent)}', which takes ownership (parameter '{target.Name}' is not [Borrowed])";
                 }
 
-                break;
-
-            case ISimpleAssignmentOperation assignment when ReferenceEquals(assignment.Target, node):
-                kind = LeaseEventKind.Reassign;
-                anchor = assignment;
                 break;
 
             case ISimpleAssignmentOperation assignment when ReferenceEquals(assignment.Value, node):
@@ -400,11 +315,7 @@ public sealed partial class NalixUsageAnalyzer
         {
             borrowedViolations ??= [];
             borrowedViolations.Add(new LeaseEvent(symbol, kind, anchor, description));
-            kind = LeaseEventKind.Use;
         }
-
-        events ??= [];
-        events.Add(new LeaseEvent(symbol, kind, anchor, description));
     }
 
     private static bool IsLeaseType(ITypeSymbol type, INamedTypeSymbol leaseType)
@@ -484,12 +395,10 @@ public sealed partial class NalixUsageAnalyzer
         return false;
     }
 
-    private static void Retain(ISymbol symbol, bool isBorrowedParameter, IOperation call, ref HashSet<ISymbol>? excluded, ref Dictionary<ISymbol, RetainInfo>? retains)
+    private static void Retain(ISymbol symbol, bool isBorrowedParameter, IOperation call, ref Dictionary<ISymbol, RetainInfo>? retains)
     {
-        // An owned lease that is retained has several owners; that is not tracked.
         if (!isBorrowedParameter)
         {
-            Exclude(symbol, ref excluded);
             return;
         }
 
@@ -575,12 +484,11 @@ public sealed partial class NalixUsageAnalyzer
         return call is not IInvocationOperation { TargetMethod.MethodKind: MethodKind.DelegateInvoke };
     }
 
-    // 'bool TryXxx(lease)' transfers ownership only on success; the caller typically
-    // disposes on failure, so it is not treated as an unconditional release.
+    // A method that returns bool ('TryEnqueue(lease)', 'Push(lease)') transfers ownership only on
+    // success; the caller disposes on failure, so it is not treated as an unconditional release.
     private static bool IsConditionalTransfer(IOperation? call)
         => call is IInvocationOperation invocation
-           && invocation.TargetMethod.ReturnType.SpecialType == SpecialType.System_Boolean
-           && invocation.TargetMethod.Name.StartsWith("Try", StringComparison.Ordinal);
+           && invocation.TargetMethod.ReturnType.SpecialType == SpecialType.System_Boolean;
 
     private static string GetCalleeName(IOperation? call) => call switch
     {
@@ -613,24 +521,6 @@ public sealed partial class NalixUsageAnalyzer
         }
 
         return owningSymbol;
-    }
-
-    private static void Exclude(ISymbol symbol, ref HashSet<ISymbol>? excluded)
-    {
-        excluded ??= new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-        _ = excluded.Add(symbol);
-    }
-
-    private static void CollectUsingLocals(IVariableDeclarationGroupOperation group, ref HashSet<ISymbol>? usingLocals)
-    {
-        foreach (IVariableDeclarationOperation declaration in group.Declarations)
-        {
-            foreach (IVariableDeclaratorOperation declarator in declaration.Declarators)
-            {
-                usingLocals ??= new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-                _ = usingLocals.Add(declarator.Symbol);
-            }
-        }
     }
 
     // True when 'anchor' always runs as part of one statement of a block, i.e. no

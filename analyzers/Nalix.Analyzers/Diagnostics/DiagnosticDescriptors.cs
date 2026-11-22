@@ -308,7 +308,7 @@ internal static class DiagnosticDescriptors
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "IBufferLease represents a pooled resource that must be returned to the pool exactly once via Dispose() or an explicit return call.");
+        description: "IBufferLease represents a pooled resource that must be released exactly once, by Dispose() or by handing it to a new owner. The rule follows every path through the method and reports a lease-typed local or owning parameter that is certainly still owned where the method returns or where its variable is overwritten.");
 
     public static readonly DiagnosticDescriptor NetworkHostingMissingBufferPoolManager = new(
         id: "NALIX040",
@@ -597,7 +597,7 @@ internal static class DiagnosticDescriptors
         category: "Lifecycle",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "An IBufferLease must be released exactly once per owned reference, either by Dispose() or by passing it to a parameter that takes ownership (a parameter not marked [Borrowed]). Lease instances are pooled, so a stale second release can return a buffer that now belongs to a different lease. Call Retain() when an additional owner is intended.");
+        description: "An IBufferLease must be released exactly once per owned reference, either by Dispose() or by passing it to a parameter that takes ownership (a parameter not marked [Borrowed]). The rule follows branches, loops, try/catch/finally and aliases, and reports a release that can follow an earlier one on at least one path. Lease instances are pooled, so a stale second release can return a buffer that now belongs to a different lease. Call Retain() when an additional owner is intended.");
 
     public static readonly DiagnosticDescriptor BufferLeaseUsedAfterRelease = new(
         id: "NALIX109",
@@ -606,7 +606,7 @@ internal static class DiagnosticDescriptors
         category: "Lifecycle",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "After Dispose() or after passing an IBufferLease to a parameter that takes ownership (not marked [Borrowed]), the caller no longer owns the lease. Pooled lease instances are reused, so later reads or writes can touch another owner's buffer.");
+        description: "After Dispose() or after passing an IBufferLease to a parameter that takes ownership (not marked [Borrowed]), the caller no longer owns the lease. The rule reports a use that can follow such a release on at least one path. Pooled lease instances are reused, so later reads or writes can touch another owner's buffer.");
 
     public static readonly DiagnosticDescriptor BorrowedBufferLeaseReleased = new(
         id: "NALIX110",

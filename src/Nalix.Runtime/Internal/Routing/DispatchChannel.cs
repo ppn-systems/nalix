@@ -436,12 +436,12 @@ internal sealed class DispatchChannel<TPacket> : IDispatchChannel<TPacket>, IDis
     /// Enqueues a packet and reports whether a new ready entry was generated.
     /// </summary>
     /// <param name="connection">The destination connection.</param>
-    /// <param name="raw">The packet lease to enqueue.</param>
+    /// <param name="raw">The packet lease to enqueue. The channel takes over the caller's reference only when the method returns <see langword="true"/>.</param>
     /// <param name="readyEmitted">When <see langword="true"/>, indicates that a ready queue entry was emitted.</param>
     /// <param name="noBlock">When <see langword="true"/>, block-mode overflow will fail fast instead of waiting for capacity.</param>
     /// <returns><see langword="true"/> if the packet was successfully enqueued.</returns>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal bool PushCore(IConnection connection, [Borrowed] IBufferLease raw, out bool readyEmitted, bool noBlock = false)
+    internal bool PushCore(IConnection connection, IBufferLease raw, out bool readyEmitted, bool noBlock = false)
     {
         readyEmitted = false;
 

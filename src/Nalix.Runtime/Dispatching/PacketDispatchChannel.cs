@@ -646,8 +646,8 @@ public sealed class PacketDispatchChannel
                     "RT.PacketDispatchChannel:ExecutePacketAsync",
                     $"no-handler opcode={opcode}");
 
-                lease.Dispose();
                 connection.IncrementErrorCount();
+                lease.Dispose();
                 return ValueTask.CompletedTask;
             }
 
@@ -678,8 +678,8 @@ public sealed class PacketDispatchChannel
                 if (!PacketRegistry.TryDeserialize(lease.Span, out IPacket? deserialized) || deserialized is null)
                 {
                     _ = Interlocked.Increment(ref _deserializationErrors);
-                    lease.Dispose();
                     connection.IncrementErrorCount();
+                    lease.Dispose();
                     return ValueTask.CompletedTask;
                 }
 
