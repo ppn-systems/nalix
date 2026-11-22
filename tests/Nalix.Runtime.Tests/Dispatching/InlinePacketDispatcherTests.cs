@@ -48,6 +48,31 @@ public sealed class InlinePacketDispatcherTests
     }
 
     /// <summary>
+    /// The lease is borrowed: when the dispatcher rejects a packet without queuing it, the caller still owns the
+    /// lease and releases it. Disposing it here as well would release the caller's reference a second time.
+    /// </summary>
+    [Theory]
+    [InlineData(false, 16)]
+    [InlineData(true, 1)]
+    public void HandlePacket_WhenPacketIsRejected_DoesNotDisposeBorrowedLease(bool running, int frameLength)
+    {
+        using InlinePacketDispatcher dispatcher = new();
+        if (running)
+        {
+            dispatcher.Activate();
+        }
+
+        using FakeConnection connection = new();
+        CountingLease lease = new(new byte[frameLength]);
+
+        dispatcher.HandlePacket(lease, connection);
+        dispatcher.HandlePacket(lease, null!);
+
+        Assert.Equal(0, lease.DisposeCount);
+        Assert.Equal(running ? 1 : 0, connection.ErrorCount);
+    }
+
+    /// <summary>
     /// Every queued packet runs exactly once, also when the pooled work items are reused across many packets.
     /// </summary>
     [Fact]

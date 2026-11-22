@@ -61,23 +61,21 @@ public sealed class InlinePacketDispatcher
 
     /// <inheritdoc />
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public void HandlePacket(IBufferLease lease, IConnection connection)
+    public void HandlePacket([Borrowed] IBufferLease lease, IConnection connection)
     {
+        // The lease is borrowed: the caller releases its own reference, so the early returns must not dispose it.
         if (Volatile.Read(ref _running) == 0)
         {
-            lease?.Dispose();
             return;
         }
 
         if (lease is null || connection is null)
         {
-            lease?.Dispose();
             return;
         }
 
         if (connection.Transport.Framing == TransportFraming.UInt16LengthPrefixed && (uint)lease.Length < PacketConstants.HeaderSize)
         {
-            lease.Dispose();
             connection.IncrementErrorCount();
             return;
         }

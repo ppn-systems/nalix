@@ -20,10 +20,12 @@ public interface IPacketDispatch : IActivatable, IReportable
     /// Handles an incoming packet represented as a pooled buffer lease.
     /// </summary>
     /// <param name="lease">
-    /// The pooled buffer containing the raw packet data.
+    /// The pooled buffer containing the raw packet data. The lease is borrowed: the caller keeps its
+    /// reference and releases it after this call returns. An implementation that needs the buffer
+    /// beyond the call must take its own reference with <see cref="IBufferLease.Retain"/>.
     /// </param>
     /// <param name="connection">
     /// The connection from which the packet was received.
     /// </param>
-    void HandlePacket(IBufferLease lease, IConnection connection);
+    void HandlePacket([Borrowed] IBufferLease lease, IConnection connection);
 }
