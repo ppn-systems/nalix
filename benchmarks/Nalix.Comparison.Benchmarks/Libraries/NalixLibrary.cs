@@ -91,8 +91,8 @@ public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
         }
 
         b = mode == NalixMode.WebSocket
-            ? b.ListenWebSocket<DefaultProtocol>(().AsRef()).OnPort((ushort)port).WithPath("/ws").Bind()
-            : b.ListenTcp<DefaultProtocol>(().AsRef()).OnPort((ushort)port).Bind();
+            ? b.ListenWebSocket<DefaultProtocol>().OnPort((ushort)port).WithPath("/ws").Bind()
+            : b.ListenTcp<DefaultProtocol>().OnPort((ushort)port).Bind();
 
         NetworkApplication app = b.Build();
         await app.ActivateAsync();
