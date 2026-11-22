@@ -53,6 +53,7 @@ public static class FrameCompression
     }
 
     /// <inheritdoc cref="DecompressFrame(LeaseRef)"/>
+    [Obsolete(FrameTransformer.ObsoleteLeaseOverload)]
     public static IBufferLease DecompressFrame([Borrowed] IBufferLease src)
     {
         ArgumentNullException.ThrowIfNull(src);
@@ -100,6 +101,7 @@ public static class FrameCompression
     }
 
     /// <inheritdoc cref="TryDecompressFrame(LeaseRef, out IBufferLease?)"/>
+    [Obsolete(FrameTransformer.ObsoleteLeaseOverload)]
     public static bool TryDecompressFrame([Borrowed] IBufferLease src, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IBufferLease? dest)
     {
         if (src is null)
@@ -143,6 +145,7 @@ public static class FrameCompression
     }
 
     /// <inheritdoc cref="CompressFrame(LeaseRef)"/>
+    [Obsolete(FrameTransformer.ObsoleteLeaseOverload)]
     public static IBufferLease CompressFrame([Borrowed] IBufferLease src)
     {
         ArgumentNullException.ThrowIfNull(src);

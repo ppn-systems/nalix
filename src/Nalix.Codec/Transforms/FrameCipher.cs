@@ -64,6 +64,7 @@ public static class FrameCipher
     }
 
     /// <inheritdoc cref="DecryptFrame(LeaseRef, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
+    [Obsolete(FrameTransformer.ObsoleteLeaseOverload)]
     public static IBufferLease DecryptFrame(
         [Borrowed] IBufferLease src,
         ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
@@ -122,6 +123,7 @@ public static class FrameCipher
     }
 
     /// <inheritdoc cref="TryDecryptFrame(LeaseRef, ReadOnlySpan{byte}, CipherSuiteType, out uint, out IBufferLease?)"/>
+    [Obsolete(FrameTransformer.ObsoleteLeaseOverload)]
     public static bool TryDecryptFrame(
         [Borrowed] IBufferLease src,
         ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm,
@@ -164,6 +166,7 @@ public static class FrameCipher
     }
 
     /// <inheritdoc cref="EncryptFrame(LeaseRef, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>
+    [Obsolete(FrameTransformer.ObsoleteLeaseOverload)]
     public static IBufferLease EncryptFrame([Borrowed] IBufferLease src, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
     {
         ArgumentNullException.ThrowIfNull(src);

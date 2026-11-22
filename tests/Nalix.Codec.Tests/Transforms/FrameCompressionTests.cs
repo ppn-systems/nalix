@@ -37,12 +37,12 @@ public sealed class FrameCompressionTests
         originalPayload.CopyTo(src.Span[FrameTransformer.Offset..]);
 
         // 2. Compress
-        using IBufferLease compressed = FrameCompression.CompressFrame(src);
+        using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
 
         Assert.True(compressed.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.COMPRESSED));
 
         // 3. Decompress
-        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
+        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
 
         Assert.False(decompressed.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.COMPRESSED));
         Assert.Equal(src.Length, decompressed.Length);
@@ -54,8 +54,8 @@ public sealed class FrameCompressionTests
     [Fact]
     public void CompressOrDecompressFrame_WhenSourceIsNull_ThrowsArgumentNullException()
     {
-        _ = Assert.Throws<ArgumentNullException>(() => FrameCompression.CompressFrame(null!));
-        _ = Assert.Throws<ArgumentNullException>(() => FrameCompression.DecompressFrame(null!));
+        _ = Assert.Throws<ArgumentNullException>(() => FrameCompression.CompressFrame(((IBufferLease)null!).AsRef()));
+        _ = Assert.Throws<ArgumentNullException>(() => FrameCompression.DecompressFrame(((IBufferLease)null!).AsRef()));
     }
 
     [Fact]
@@ -73,8 +73,8 @@ public sealed class FrameCompressionTests
         src.Span.AsHeaderRef() = new PacketHeader { Flags = PacketFlags.ENCRYPTED };
         payload.CopyTo(src.Span[FrameTransformer.Offset..]);
 
-        using IBufferLease compressed = FrameCompression.CompressFrame(src);
-        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
+        using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
+        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
 
         PacketFlags flags = decompressed.Span.AsHeaderRef().Flags;
         Assert.True(flags.HasFlag(PacketFlags.ENCRYPTED));

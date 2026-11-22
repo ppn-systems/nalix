@@ -34,6 +34,11 @@ namespace Nalix.Codec.Transforms;
 public static class FrameTransformer
 {
     /// <summary>
+    /// The message of the obsolete <see cref="IBufferLease"/> source overloads.
+    /// </summary>
+    internal const string ObsoleteLeaseOverload = "Pass the source as a LeaseRef (src.AsRef()). The IBufferLease source overload will be removed in a future version.";
+
+    /// <summary>
     /// Offset in bytes where the payload (DATA_REGION) starts in the packet.
     /// </summary>
     public const int Offset = (int)PacketHeaderOffset.Region;
@@ -211,6 +216,7 @@ public static class FrameTransformer
     }
 
     /// <inheritdoc cref="Encrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>
+    [Obsolete(ObsoleteLeaseOverload)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Encrypt([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
     {
@@ -269,6 +275,7 @@ public static class FrameTransformer
     }
 
     /// <inheritdoc cref="Decrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
+    [Obsolete(ObsoleteLeaseOverload)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Decrypt(
         [Borrowed] IBufferLease src,
@@ -314,6 +321,7 @@ public static class FrameTransformer
     }
 
     /// <inheritdoc cref="TryDecrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
+    [Obsolete(ObsoleteLeaseOverload)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryDecrypt(
         [Borrowed] IBufferLease src,
@@ -380,6 +388,7 @@ public static class FrameTransformer
     }
 
     /// <inheritdoc cref="Compress(LeaseRef, IBufferLease)"/>
+    [Obsolete(ObsoleteLeaseOverload)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Compress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
     {
@@ -416,6 +425,7 @@ public static class FrameTransformer
     }
 
     /// <inheritdoc cref="Decompress(LeaseRef, IBufferLease)"/>
+    [Obsolete(ObsoleteLeaseOverload)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Decompress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
     {
@@ -453,6 +463,7 @@ public static class FrameTransformer
     }
 
     /// <inheritdoc cref="TryDecompress(LeaseRef, IBufferLease)"/>
+    [Obsolete(ObsoleteLeaseOverload)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryDecompress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
         => src is not null && TryDecompress(src.AsRef(), dest);

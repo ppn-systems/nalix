@@ -44,14 +44,14 @@ public sealed class FrameCipherTests
         originalPayload.CopyTo(src.Span[FrameTransformer.Offset..]);
 
         // 2. Encrypt
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Chacha20Poly1305);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Chacha20Poly1305);
 
         Assert.True(encrypted.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.ENCRYPTED));
         Assert.NotEqual(0, encrypted.Length);
         Assert.True(encrypted.Length >= FrameTransformer.Offset + EnvelopeCipher.HeaderSize);
 
         // 3. Decrypt
-        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted, s_testKey, CipherSuiteType.Chacha20Poly1305, out _);
+        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted.AsRef(), s_testKey, CipherSuiteType.Chacha20Poly1305, out _);
 
         // ENCRYPTED is transform-internal bookkeeping and is cleared post-decrypt;
         // the dedicated EncryptedOnWire signal is the on-wire audit trail instead.
@@ -74,11 +74,11 @@ public sealed class FrameCipherTests
         src.Span[..FrameTransformer.Offset].Clear();
         src.Span.AsHeaderRef() = new PacketHeader { Flags = PacketFlags.NONE };
 
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Chacha20Poly1305);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Chacha20Poly1305);
 
         Assert.True(encrypted.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.ENCRYPTED));
 
-        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted, s_testKey, CipherSuiteType.Chacha20Poly1305, out _);
+        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted.AsRef(), s_testKey, CipherSuiteType.Chacha20Poly1305, out _);
 
         Assert.False(decrypted.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.ENCRYPTED));
         Assert.True(decrypted.EncryptedOnWire);
@@ -89,8 +89,8 @@ public sealed class FrameCipherTests
     public void EncryptOrDecryptFrame_WhenSourceIsNull_ThrowsArgumentNullException()
     {
         byte[] key = new byte[32];
-        _ = Assert.Throws<ArgumentNullException>(() => FrameCipher.EncryptFrame(null!, key, null, CipherSuiteType.Chacha20Poly1305));
-        _ = Assert.Throws<ArgumentNullException>(() => FrameCipher.DecryptFrame(null!, key, CipherSuiteType.Chacha20Poly1305, out _));
+        _ = Assert.Throws<ArgumentNullException>(() => FrameCipher.EncryptFrame(((IBufferLease)null!).AsRef(), key, null, CipherSuiteType.Chacha20Poly1305));
+        _ = Assert.Throws<ArgumentNullException>(() => FrameCipher.DecryptFrame(((IBufferLease)null!).AsRef(), key, CipherSuiteType.Chacha20Poly1305, out _));
     }
 
     [Fact]
@@ -109,8 +109,8 @@ public sealed class FrameCipherTests
         src.Span.AsHeaderRef() = new PacketHeader { Flags = PacketFlags.COMPRESSED };
         payload.CopyTo(src.Span[FrameTransformer.Offset..]);
 
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, key, null, CipherSuiteType.Chacha20Poly1305);
-        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted, key, CipherSuiteType.Chacha20Poly1305, out _);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), key, null, CipherSuiteType.Chacha20Poly1305);
+        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted.AsRef(), key, CipherSuiteType.Chacha20Poly1305, out _);
 
         PacketFlags flags = decrypted.Span.AsHeaderRef().Flags;
         Assert.True(flags.HasFlag(PacketFlags.COMPRESSED));
@@ -125,7 +125,7 @@ public sealed class FrameCipherTests
         using BufferLease shortFrame = BufferLease.Rent(FrameTransformer.Offset);
         shortFrame.CommitLength(FrameTransformer.Offset);
 
-        _ = Assert.ThrowsAny<CipherException>(() => FrameCipher.DecryptFrame(shortFrame, key, CipherSuiteType.Chacha20, out _));
+        _ = Assert.ThrowsAny<CipherException>(() => FrameCipher.DecryptFrame(shortFrame.AsRef(), key, CipherSuiteType.Chacha20, out _));
     }
 
     [Fact]
@@ -134,6 +134,6 @@ public sealed class FrameCipherTests
         byte[] key = [.. Enumerable.Range(1, 32).Select(static x => (byte)x)];
         using BufferLease source = BufferLease.CopyFrom(new byte[FrameTransformer.Offset + 1]);
 
-        _ = Assert.ThrowsAny<CipherException>(() => FrameCipher.DecryptFrame(source, key, CipherSuiteType.Chacha20, out _));
+        _ = Assert.ThrowsAny<CipherException>(() => FrameCipher.DecryptFrame(source.AsRef(), key, CipherSuiteType.Chacha20, out _));
     }
 }

@@ -66,7 +66,7 @@ public sealed class TcpFrameReaderTests
 
             using (BufferLease plain10 = BufferLease.CopyFrom(validPlain))
             {
-                IBufferLease enc10 = FrameCipher.EncryptFrame(plain10, session.State.Secret.AsSpan(), seq: 10u, CipherSuiteType.Chacha20Poly1305);
+                IBufferLease enc10 = FrameCipher.EncryptFrame(plain10.AsRef(), session.State.Secret.AsSpan(), seq: 10u, CipherSuiteType.Chacha20Poly1305);
                 processNormal.Invoke(reader, [enc10]);
             }
 
@@ -77,7 +77,7 @@ public sealed class TcpFrameReaderTests
             // The rejected packet must NOT call UpdateTo(8) in the finally block!
             using (BufferLease plain8 = BufferLease.CopyFrom(validPlain))
             {
-                IBufferLease enc8 = FrameCipher.EncryptFrame(plain8, session.State.Secret.AsSpan(), seq: 8u, CipherSuiteType.Chacha20Poly1305);
+                IBufferLease enc8 = FrameCipher.EncryptFrame(plain8.AsRef(), session.State.Secret.AsSpan(), seq: 8u, CipherSuiteType.Chacha20Poly1305);
                 processNormal.Invoke(reader, [enc8]);
             }
 

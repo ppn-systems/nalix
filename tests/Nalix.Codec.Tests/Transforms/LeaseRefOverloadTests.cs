@@ -8,6 +8,8 @@ using Nalix.Environment.Memory;
 
 namespace Nalix.Codec.Tests.Transforms;
 
+#pragma warning disable CS0618 // These tests cover the obsolete IBufferLease source overloads until they are removed.
+
 /// <summary>
 /// The <see cref="IBufferLease"/> overloads forward to the <see cref="LeaseRef"/> ones. A missing source
 /// must behave as it did before the split: the throwing methods throw, the Try methods return false.

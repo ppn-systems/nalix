@@ -50,9 +50,9 @@ public sealed class FrameTransformerTests
         using BufferLease compressed = BufferLease.Rent(FrameTransformer.Offset + FrameTransformer.GetMaxCompressedSize(source.Length - FrameTransformer.Offset));
         using BufferLease decompressed = BufferLease.Rent(packetBytes.Length);
 
-        FrameTransformer.Compress(source, compressed);
+        FrameTransformer.Compress(source.AsRef(), compressed);
         int decompressedLength = FrameTransformer.GetDecompressedLength(compressed.Span[FrameTransformer.Offset..]);
-        FrameTransformer.Decompress(compressed, decompressed);
+        FrameTransformer.Decompress(compressed.AsRef(), decompressed);
 
         Assert.Equal(source.Length - FrameTransformer.Offset, decompressedLength);
         Assert.Equal(packetBytes, decompressed.Memory.ToArray());
@@ -69,9 +69,9 @@ public sealed class FrameTransformerTests
         using BufferLease encrypted = BufferLease.Rent(FrameTransformer.Offset + FrameTransformer.GetMaxCiphertextSize(suite, source.Length - FrameTransformer.Offset));
         using BufferLease decrypted = BufferLease.Rent(packetBytes.Length);
 
-        FrameTransformer.Encrypt(source, encrypted, key, null, suite);
+        FrameTransformer.Encrypt(source.AsRef(), encrypted, key, null, suite);
         int plaintextLength = FrameTransformer.GetPlaintextLength(encrypted.Span);
-        FrameTransformer.Decrypt(encrypted, decrypted, key, suite, out _);
+        FrameTransformer.Decrypt(encrypted.AsRef(), decrypted, key, suite, out _);
 
         Assert.Equal(source.Length - FrameTransformer.Offset, plaintextLength);
         Assert.Equal(packetBytes, decrypted.Memory.ToArray());
@@ -97,11 +97,11 @@ public sealed class FrameTransformerTests
 
         if (useEmptyKey)
         {
-            _ = Assert.ThrowsAny<CipherException>(() => FrameTransformer.Encrypt(source, destination, key, null, CipherSuiteType.Chacha20));
+            _ = Assert.ThrowsAny<CipherException>(() => FrameTransformer.Encrypt(source.AsRef(), destination, key, null, CipherSuiteType.Chacha20));
         }
         else
         {
-            _ = Assert.ThrowsAny<InternalErrorException>(() => FrameTransformer.Encrypt(source, destination, key, null, CipherSuiteType.Chacha20));
+            _ = Assert.ThrowsAny<InternalErrorException>(() => FrameTransformer.Encrypt(source.AsRef(), destination, key, null, CipherSuiteType.Chacha20));
         }
     }
 
@@ -115,8 +115,8 @@ public sealed class FrameTransformerTests
         using BufferLease compressed = BufferLease.Rent(FrameTransformer.Offset + FrameTransformer.GetMaxCompressedSize(source.Length - FrameTransformer.Offset));
         using BufferLease decompressed = BufferLease.Rent(packetBytes.Length);
 
-        FrameTransformer.Compress(source, compressed);
-        FrameTransformer.Decompress(compressed, decompressed);
+        FrameTransformer.Compress(source.AsRef(), compressed);
+        FrameTransformer.Decompress(compressed.AsRef(), decompressed);
 
         Assert.Equal(packetBytes, decompressed.Memory.ToArray());
     }
@@ -132,8 +132,8 @@ public sealed class FrameTransformerTests
         using BufferLease encrypted = BufferLease.Rent(FrameTransformer.Offset + FrameTransformer.GetMaxCiphertextSize(suite, source.Length - FrameTransformer.Offset));
         using BufferLease decrypted = BufferLease.Rent(packetBytes.Length);
 
-        FrameTransformer.Encrypt(source, encrypted, key, null, suite);
-        FrameTransformer.Decrypt(encrypted, decrypted, key, suite, out _);
+        FrameTransformer.Encrypt(source.AsRef(), encrypted, key, null, suite);
+        FrameTransformer.Decrypt(encrypted.AsRef(), decrypted, key, suite, out _);
 
         Assert.True(decrypted.Length >= packetBytes.Length);
         Assert.Equal(packetBytes, decrypted.Memory.Span[..packetBytes.Length].ToArray());

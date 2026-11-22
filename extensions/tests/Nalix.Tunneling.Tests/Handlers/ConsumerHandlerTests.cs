@@ -135,7 +135,7 @@ public sealed class ConsumerHandlerTests
     {
         Assert.NotEmpty(provider.FakeTcp.SentMessages);
         using IBufferLease frame = BufferLease.CopyFrom(provider.FakeTcp.SentMessages[0]);
-        using IBufferLease plain = FrameCipher.DecryptFrame(frame, provider.Secret.AsSpan(), provider.Algorithm, out _);
+        using IBufferLease plain = FrameCipher.DecryptFrame(frame.AsRef(), provider.Secret.AsSpan(), provider.Algorithm, out _);
         return TunnelRequest.Deserialize(plain.Span);
     }
 

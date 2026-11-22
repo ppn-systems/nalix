@@ -133,7 +133,7 @@ public sealed class FramePipelineScrubTests : IDisposable
         rawBomb.CommitLength(FrameTransformer.Offset + payloadLen);
 
         // Encrypt the fake-header bomb and mark as COMPRESSED | ENCRYPTED (fused inbound path)
-        using IBufferLease encryptedBomb = FrameCipher.EncryptFrame(rawBomb, key, seq: 9, CipherSuiteType.Chacha20Poly1305);
+        using IBufferLease encryptedBomb = FrameCipher.EncryptFrame(rawBomb.AsRef(), key, seq: 9, CipherSuiteType.Chacha20Poly1305);
         Nalix.Environment.Extensions.HeaderExtensions.AsHeaderRef(encryptedBomb.Span).Flags |=
             Nalix.Abstractions.Networking.Packets.PacketFlags.COMPRESSED | Nalix.Abstractions.Networking.Packets.PacketFlags.ENCRYPTED;
 

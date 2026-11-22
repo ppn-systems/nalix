@@ -43,7 +43,7 @@ public sealed class FramePipelineTests
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(malformedInner.AsSpan(PacketHeader.Size, 4), 1024);
 
         using BufferLease plainLease = BufferLease.CopyFrom(malformedInner);
-        IBufferLease encrypted = FrameCipher.EncryptFrame(plainLease, secret, seq: 99u, CipherSuiteType.Chacha20Poly1305);
+        IBufferLease encrypted = FrameCipher.EncryptFrame(plainLease.AsRef(), secret, seq: 99u, CipherSuiteType.Chacha20Poly1305);
         try
         {
             bool ok = FramePipeline.TryProcessInbound(ref encrypted, secret, CipherSuiteType.Chacha20Poly1305, out uint? seq);
