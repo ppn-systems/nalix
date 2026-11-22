@@ -21,16 +21,6 @@ public sealed partial class ObjectPoolOptions : ConfigurationLoader, IValidatabl
     public bool EnableDiagnostics { get; set; } = false;
 
     /// <summary>
-    /// Kept for configuration compatibility; it has no effect. Per-type metrics (gets, returns, hit rate, outstanding
-    /// and peak outstanding objects, last activity) are always collected: they come from per-processor counts that
-    /// Get and Return already keep, the outstanding count is derived from them when read, and the peak is sampled at
-    /// pool misses, trim cycles and reads, so no metric writes a counter shared by every thread renting a type.
-    /// Exact per-object lifetimes and leak tracking remain behind <see cref="EnableDiagnostics"/>.
-    /// </summary>
-    [IniComment("No effect (kept for compatibility): per-type pool metrics are always collected at no throughput cost")]
-    public bool EnableMetrics { get; set; }
-
-    /// <summary>
     /// Captures stack traces when objects are rented from the pool.
     /// Extremely expensive; enable only for debugging leaks. Requires EnableDiagnostics=true.
     /// </summary>

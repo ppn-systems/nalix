@@ -18,7 +18,7 @@ internal static class PoolBootstrap
     {
         try
         {
-            ObjectPoolManager.Configure(new ObjectPoolManager(new ObjectPoolOptions { EnableMetrics = false, EnableDiagnostics = false }));
+            ObjectPoolManager.Configure(new ObjectPoolManager(new ObjectPoolOptions { EnableDiagnostics = false }));
         }
         catch (System.InvalidOperationException)
         {

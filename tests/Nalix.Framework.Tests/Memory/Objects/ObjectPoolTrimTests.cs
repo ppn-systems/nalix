@@ -11,9 +11,9 @@ using Nalix.Framework.Tests.TestSupport;
 namespace Nalix.Framework.Tests.Memory.Objects;
 
 /// <summary>
-/// The trim cycle with and without per-type metrics: an idle pool shrinks to its safety floor, a busy pool keeps
-/// its objects, and a recent working set stays protected while an old one is shed. With metrics off (the default)
-/// the cycle must still see the traffic, or a pool would keep whatever it once held.
+/// The trim cycle: an idle pool shrinks to its safety floor, a busy pool keeps its objects, and a recent working set
+/// stays protected while an old one is shed. The cycle must see the traffic from the per-processor counts, or a pool
+/// would keep whatever it once held.
 /// </summary>
 [Collection(TestCollections.TypePoolPhase1)]
 public sealed class ObjectPoolTrimTests
@@ -22,12 +22,10 @@ public sealed class ObjectPoolTrimTests
     private const int Floor = DefaultCapacity / 12;
     private static readonly MethodInfo s_trim = typeof(ObjectPoolManager).GetMethod("TRIM_EXCESS_OBJECTS", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Trim_WhenAPoolGoesIdle_ShrinksItToTheSafetyFloor(bool metrics)
+    [Fact]
+    public void Trim_WhenAPoolGoesIdle_ShrinksItToTheSafetyFloor()
     {
-        using ObjectPoolManager manager = Create(metrics);
+        using ObjectPoolManager manager = Create();
         Release(manager, Rent(manager, 1000));
         Trim(manager); // The cycle that saw the burst.
         Assert.Equal(1000, Available(manager));
@@ -42,12 +40,10 @@ public sealed class ObjectPoolTrimTests
         Assert.InRange(Available(manager), Floor, Floor + (DefaultCapacity / 100) + 1);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Trim_WhileThePoolIsBusy_KeepsItsObjects(bool metrics)
+    [Fact]
+    public void Trim_WhileThePoolIsBusy_KeepsItsObjects()
     {
-        using ObjectPoolManager manager = Create(metrics);
+        using ObjectPoolManager manager = Create();
         Release(manager, Rent(manager, 500));
 
         for (int i = 0; i < 12; i++)
@@ -60,12 +56,10 @@ public sealed class ObjectPoolTrimTests
         Assert.Equal(500, Available(manager));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Trim_AfterAWorkingSetWasOut_KeepsMostOfItThenShedsItWhenIdle(bool metrics)
+    [Fact]
+    public void Trim_AfterAWorkingSetWasOut_KeepsMostOfItThenShedsItWhenIdle()
     {
-        using ObjectPoolManager manager = Create(metrics);
+        using ObjectPoolManager manager = Create();
 
         // 600 objects are rented when a trim runs (without metrics the peak is sampled there), then returned.
         List<TestPoolable> held = Rent(manager, 600);
@@ -85,8 +79,8 @@ public sealed class ObjectPoolTrimTests
         Assert.InRange(Available(manager), Floor, Floor + (DefaultCapacity / 100) + 1);
     }
 
-    private static ObjectPoolManager Create(bool metrics)
-        => new(new ObjectPoolOptions { EnableObjectTrimming = false, EnableMetrics = metrics, DefaultPreallocate = 0 });
+    private static ObjectPoolManager Create()
+        => new(new ObjectPoolOptions { EnableObjectTrimming = false, DefaultPreallocate = 0 });
 
     private static List<TestPoolable> Rent(ObjectPoolManager manager, int count)
         => [.. Enumerable.Range(0, count).Select(_ => manager.Get<TestPoolable>())];

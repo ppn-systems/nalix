@@ -25,7 +25,7 @@ public sealed class DefaultFrameProcessorReplayTests : IDisposable
     {
         try
         {
-            var config = new Nalix.Framework.Options.ObjectPoolOptions { EnableMetrics = false, EnableDiagnostics = false };
+            var config = new Nalix.Framework.Options.ObjectPoolOptions { EnableDiagnostics = false };
             var poolManager = new Nalix.Framework.Memory.Objects.ObjectPoolManager(config);
             Nalix.Framework.Memory.Objects.ObjectPoolManager.Configure(poolManager);
             Nalix.Framework.Injection.InstanceManager.Instance.Register<IObjectPoolManager>(poolManager);

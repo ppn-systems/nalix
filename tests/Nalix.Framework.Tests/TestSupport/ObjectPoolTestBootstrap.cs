@@ -16,7 +16,7 @@ internal static class ObjectPoolTestBootstrap
     {
         try
         {
-            var config = new Nalix.Framework.Options.ObjectPoolOptions { EnableMetrics = false, EnableDiagnostics = false };
+            var config = new Nalix.Framework.Options.ObjectPoolOptions { EnableDiagnostics = false };
             ObjectPoolManager.Configure(new ObjectPoolManager(config));
         }
         catch (System.InvalidOperationException)
