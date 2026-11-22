@@ -13,85 +13,98 @@ namespace Nalix.Codec.Transforms;
 /// </summary>
 /// <remarks>
 /// <para>
-/// After <see cref="MissesBeforeBackoff"/> attempts in a row that did not pay off, the next frames of that opcode
-/// skip the attempt. The window starts at <see cref="MinSkipFrames"/> and doubles on every further failed probe up
-/// to <see cref="MaxSkipFrames"/>; one probe that pays off returns the opcode to always compressing. A skipped frame
-/// goes out uncompressed, exactly as an attempt that did not pay off would, so receivers see no difference.
+/// After <see cref="MissesBeforeBackoff"/> attempts in a row that did not pay off, the opcode backs off: a thread
+/// then attempts only one frame in <see cref="MinSkipFrames"/> of that opcode. Each further failed probe doubles
+/// that interval up to <see cref="MaxSkipFrames"/>; one probe that pays off returns the opcode to always
+/// compressing. A skipped frame goes out uncompressed, exactly as an attempt that did not pay off would, so
+/// receivers see no difference.
 /// </para>
 /// <para>
-/// Opcodes are hashed into <see cref="Buckets"/> buckets. The state is process-wide and its updates are not
-/// synchronized on purpose: a lost update only shifts when the next probe happens.
+/// Every opcode has its own entry (one byte, 64 KB in all), so opcodes never share state. Deciding whether to
+/// attempt only reads that entry: the probe cadence comes from a per-thread counter, so frames sent from several
+/// cores do not write the same cache line. The entry is written only when an attempt finishes, and those writes are
+/// not synchronized on purpose: a lost update only shifts when the next probe happens.
 /// </para>
 /// </remarks>
 internal static class AdaptiveCompression
 {
-    internal const int Buckets = 4096;
     internal const int MissesBeforeBackoff = 4;
     internal const int MinSkipFrames = 32;
     internal const int MaxSkipFrames = 1024;
 
-    private static readonly int[] s_skipRemaining = new int[Buckets];
-    private static readonly int[] s_skipWindow = new int[Buckets];
-    private static readonly byte[] s_misses = new byte[Buckets];
+    // Entry layout: bits 0-2 = backoff level (0 = always attempt; level L attempts 1 frame in MinSkipFrames << (L - 1)),
+    // bits 3-4 = attempts in a row that did not pay off while at level 0.
+    private const int LevelMask = 0b111;
+    private const int MissShift = 3;
+    private const int MaxLevel = 6; // MinSkipFrames << (MaxLevel - 1) == MaxSkipFrames
 
-    /// <summary>Returns <see langword="false"/> while the opcode's skip window is open, counting the frame against it.</summary>
+    private static readonly byte[] s_state = new byte[ushort.MaxValue + 1];
+
+    [ThreadStatic]
+    private static uint s_frames;
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the frame should try compression: always for an opcode that compresses,
+    /// and one frame in the backoff interval (per thread) for an opcode that does not.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool ShouldAttempt(ushort opCode)
     {
-        int bucket = opCode & (Buckets - 1);
-        int remaining = s_skipRemaining[bucket];
-        if (remaining <= 0)
+        int level = s_state[opCode] & LevelMask;
+        if (level == 0)
         {
             return true;
         }
 
-        s_skipRemaining[bucket] = remaining - 1;
-        return false;
+        uint interval = (uint)MinSkipFrames << (level - 1);
+        return (++s_frames & (interval - 1)) == 0;
     }
 
-    /// <summary>Records whether an attempt for the opcode paid off, and opens a skip window after repeated misses.</summary>
+    /// <summary>Records whether an attempt for the opcode paid off, and backs off after repeated misses.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void Record(ushort opCode, bool worthwhile)
     {
-        int bucket = opCode & (Buckets - 1);
         if (worthwhile)
         {
-            if (s_misses[bucket] != 0 || s_skipWindow[bucket] != 0)
+            if (s_state[opCode] != 0)
             {
-                s_misses[bucket] = 0;
-                s_skipWindow[bucket] = 0;
+                s_state[opCode] = 0;
             }
 
             return;
         }
 
-        RECORD_MISS(bucket);
+        RECORD_MISS(opCode);
     }
 
-    /// <summary>Forgets what was learned about every opcode (tests).</summary>
+    /// <summary>Returns the current backoff interval of the opcode in frames; 1 when it is always attempted (tests).</summary>
+    internal static int Interval(ushort opCode)
+    {
+        int level = s_state[opCode] & LevelMask;
+        return level == 0 ? 1 : MinSkipFrames << (level - 1);
+    }
+
+    /// <summary>Forgets what was learned about every opcode, and restarts this thread's probe counter (tests).</summary>
     internal static void Reset()
     {
-        Array.Clear(s_skipRemaining);
-        Array.Clear(s_skipWindow);
-        Array.Clear(s_misses);
+        Array.Clear(s_state);
+        s_frames = 0;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void RECORD_MISS(int bucket)
+    private static void RECORD_MISS(ushort opCode)
     {
-        int misses = s_misses[bucket] + 1;
-        int window = s_skipWindow[bucket];
+        int state = s_state[opCode];
+        int level = state & LevelMask;
 
-        // Once a window has been opened, a single failed probe is enough to open the next, longer one.
-        if (window == 0 && misses < MissesBeforeBackoff)
+        if (level != 0)
         {
-            s_misses[bucket] = (byte)misses;
+            // A failed probe: back off further.
+            s_state[opCode] = (byte)Math.Min(level + 1, MaxLevel);
             return;
         }
 
-        window = window == 0 ? MinSkipFrames : Math.Min(window * 2, MaxSkipFrames);
-        s_misses[bucket] = 0;
-        s_skipWindow[bucket] = window;
-        s_skipRemaining[bucket] = window;
+        int misses = (state >> MissShift) + 1;
+        s_state[opCode] = misses >= MissesBeforeBackoff ? (byte)1 : (byte)(misses << MissShift);
     }
 }

@@ -15,8 +15,8 @@ using Xunit;
 namespace Nalix.Codec.Tests.Transforms;
 
 /// <summary>
-/// The outbound path stops trying to compress an opcode whose payloads keep failing to compress, and probes again
-/// later. The learned state is process-wide, so these tests run alone and use their own opcodes.
+/// The outbound path backs off from compressing an opcode whose payloads keep failing to compress, and probes it
+/// again now and then. The learned state is process-wide, so these tests run alone and use their own opcodes.
 /// </summary>
 [Collection(TestCollections.CompressionStats)]
 public sealed class AdaptiveCompressionTests : IDisposable
@@ -31,26 +31,27 @@ public sealed class AdaptiveCompressionTests : IDisposable
     public void Dispose() => AdaptiveCompression.Reset();
 
     [Fact]
-    public void ProcessOutbound_AfterRepeatedIncompressiblePayloads_SkipsTheAttemptForAWindow()
+    public void ProcessOutbound_AfterRepeatedIncompressiblePayloads_BacksOffToOneAttemptPerInterval()
     {
-        for (int i = 0; i < AdaptiveCompression.MissesBeforeBackoff; i++)
+        for (int i = 0; i < AdaptiveCompression.MissesBeforeBackoff - 1; i++)
         {
             Assert.False(SendIsCompressed(Op, compressible: false, encrypt: false));
+            Assert.Equal(1, AdaptiveCompression.Interval(Op));
         }
 
-        // The window is open: the opcode is not attempted for MinSkipFrames frames, then probed again.
-        for (int i = 0; i < AdaptiveCompression.MinSkipFrames; i++)
-        {
-            Assert.False(AdaptiveCompression.ShouldAttempt(Op));
-        }
+        Assert.False(SendIsCompressed(Op, compressible: false, encrypt: false));
+        Assert.Equal(AdaptiveCompression.MinSkipFrames, AdaptiveCompression.Interval(Op));
 
-        Assert.True(AdaptiveCompression.ShouldAttempt(Op));
+        // Any run of Interval consecutive frames holds exactly one attempt.
+        Assert.Equal(1, CountAttempts(Op, AdaptiveCompression.MinSkipFrames));
+        Assert.Equal(1, CountAttempts(Op, AdaptiveCompression.MinSkipFrames));
     }
 
     [Fact]
     public void ProcessOutbound_WhileSkipping_SendsCompressiblePayloadUncompressedAndIntact()
     {
-        OpenSkipWindow(Op);
+        BackOff(Op);
+        AlignToNextProbe(Op);
 
         byte[] payload = CompressiblePayload();
         IBufferLease outbound = NewFrame(Op, payload);
@@ -64,42 +65,45 @@ public sealed class AdaptiveCompressionTests : IDisposable
     }
 
     [Fact]
-    public void ProcessOutbound_WhenProbePaysOff_CompressesTheOpcodeAgain()
+    public void Record_WhenProbePaysOff_CompressesTheOpcodeAgain()
     {
-        OpenSkipWindow(Op);
-        DrainSkipWindow(Op);
+        BackOff(Op);
 
-        // The probe compresses, so the opcode goes back to compressing every frame.
+        AdaptiveCompression.Record(Op, worthwhile: true);
+
+        Assert.Equal(1, AdaptiveCompression.Interval(Op));
+        Assert.Equal(AdaptiveCompression.MinSkipFrames * 2, CountAttempts(Op, AdaptiveCompression.MinSkipFrames * 2));
         Assert.True(SendIsCompressed(Op, compressible: true, encrypt: false));
-        for (int i = 0; i < AdaptiveCompression.MinSkipFrames * 2; i++)
-        {
-            Assert.True(AdaptiveCompression.ShouldAttempt(Op));
-        }
     }
 
     [Fact]
-    public void ProcessOutbound_WhenProbeFailsAgain_DoublesTheWindowUpToTheMaximum()
+    public void Record_WhenProbeFailsAgain_DoublesTheIntervalUpToTheMaximum()
     {
-        OpenSkipWindow(Op);
+        BackOff(Op);
 
         int expected = AdaptiveCompression.MinSkipFrames;
         for (int round = 0; round < 8; round++)
         {
-            Assert.Equal(expected, DrainSkipWindow(Op));
+            Assert.Equal(expected, AdaptiveCompression.Interval(Op));
 
-            // The probe fails: one failure is enough to open the next, longer window.
-            Assert.False(SendIsCompressed(Op, compressible: false, encrypt: false));
+            // One failed probe is enough to double the interval.
+            AdaptiveCompression.Record(Op, worthwhile: false);
             expected = Math.Min(expected * 2, AdaptiveCompression.MaxSkipFrames);
         }
 
-        Assert.Equal(AdaptiveCompression.MaxSkipFrames, DrainSkipWindow(Op));
+        Assert.Equal(AdaptiveCompression.MaxSkipFrames, AdaptiveCompression.Interval(Op));
+        Assert.Equal(1, CountAttempts(Op, AdaptiveCompression.MaxSkipFrames));
     }
 
     [Fact]
-    public void ProcessOutbound_IncompressibleOpcode_DoesNotAffectOtherOpcodes()
+    public void Record_IncompressibleOpcode_DoesNotAffectAnyOtherOpcode()
     {
-        OpenSkipWindow(Op);
+        BackOff(Op);
 
+        // Every other opcode keeps its own entry, including the ones that differ only in the high bits.
+        Assert.Equal(1, AdaptiveCompression.Interval(OtherOp));
+        Assert.Equal(1, AdaptiveCompression.Interval((ushort)(Op ^ 0x1000)));
+        Assert.Equal(1, AdaptiveCompression.Interval((ushort)(Op & 0x0FFF)));
         Assert.True(SendIsCompressed(OtherOp, compressible: true, encrypt: false));
     }
 
@@ -113,7 +117,8 @@ public sealed class AdaptiveCompressionTests : IDisposable
             Assert.False(SendIsCompressed(Op, compressible: false, encrypt));
         }
 
-        Assert.False(AdaptiveCompression.ShouldAttempt(Op));
+        Assert.Equal(AdaptiveCompression.MinSkipFrames, AdaptiveCompression.Interval(Op));
+        AlignToNextProbe(Op);
 
         // A skipped frame takes the uncompressed path and still decodes on the receiving side.
         byte[] payload = CompressiblePayload();
@@ -142,23 +147,39 @@ public sealed class AdaptiveCompressionTests : IDisposable
         original.Dispose();
     }
 
-    private static void OpenSkipWindow(ushort opCode)
+    private static void BackOff(ushort opCode)
     {
         for (int i = 0; i < AdaptiveCompression.MissesBeforeBackoff; i++)
         {
-            _ = SendIsCompressed(opCode, compressible: false, encrypt: false);
+            AdaptiveCompression.Record(opCode, worthwhile: false);
         }
+
+        Assert.Equal(AdaptiveCompression.MinSkipFrames, AdaptiveCompression.Interval(opCode));
     }
 
-    private static int DrainSkipWindow(ushort opCode)
+    /// <summary>Advances this thread's probe counter to just after an attempt, so the next frame is skipped.</summary>
+    private static void AlignToNextProbe(ushort opCode)
     {
-        int skipped = 0;
-        while (!AdaptiveCompression.ShouldAttempt(opCode))
+        int guard = AdaptiveCompression.MaxSkipFrames;
+        while (!AdaptiveCompression.ShouldAttempt(opCode) && --guard > 0)
         {
-            skipped++;
         }
 
-        return skipped;
+        Assert.True(guard > 0);
+    }
+
+    private static int CountAttempts(ushort opCode, int frames)
+    {
+        int attempts = 0;
+        for (int i = 0; i < frames; i++)
+        {
+            if (AdaptiveCompression.ShouldAttempt(opCode))
+            {
+                attempts++;
+            }
+        }
+
+        return attempts;
     }
 
     private static bool SendIsCompressed(ushort opCode, bool compressible, bool encrypt)
