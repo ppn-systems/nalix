@@ -114,9 +114,19 @@ public sealed class NetworkApplication : IActivatableAsync, IAsyncDisposable
     /// </summary>
     /// <param name="cancellationToken">A token that stops the host when canceled.</param>
     /// <returns>A task that completes when the host has stopped.</returns>
+    /// <remarks>
+    /// Canceling <paramref name="cancellationToken"/> starts a graceful shutdown through
+    /// <see cref="DeactivateAsync(CancellationToken)"/>, so connected WebSocket clients get a
+    /// 1001 (endpoint unavailable) close frame. The token only stops the run; it is not handed to
+    /// the listeners, whose own cancellation would drop every socket before shutdown could close it.
+    /// </remarks>
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        await this.ActivateAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Listeners tie their lifetime to the activation token (see TcpListenerBase.Activate): passing the
+        // shutdown token here would abort every socket the moment it is canceled.
+        await this.ActivateAsync(CancellationToken.None).ConfigureAwait(false);
 
         try
         {
