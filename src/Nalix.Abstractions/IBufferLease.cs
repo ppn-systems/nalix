@@ -36,6 +36,17 @@ public interface IBufferLease : IDisposable
     ReadOnlyMemory<byte> Memory { get; }
 
     /// <summary>
+    /// Gets a number that changes every time the last reference to this lease is released.
+    /// </summary>
+    /// <remarks>
+    /// Lease instances are pooled and reused, so a reference kept after the release can point at a
+    /// lease that now belongs to another owner. A holder that recorded this value can detect that
+    /// (see <see cref="BorrowedLease.IsAlive"/>). Implementations that are never reused may keep
+    /// the default of 0.
+    /// </remarks>
+    int Generation => 0;
+
+    /// <summary>
     /// Increases the reference count so multiple consumers can hold this lease safely.
     /// </summary>
     /// <exception cref="ObjectDisposedException">Thrown when the underlying buffer has already been released.</exception>
