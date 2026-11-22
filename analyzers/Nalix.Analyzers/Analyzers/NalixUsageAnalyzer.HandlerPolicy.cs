@@ -325,7 +325,7 @@ public sealed partial class NalixUsageAnalyzer
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 
-    private static Location GetAttributeLocation(AttributeData attribute, IMethodSymbol fallback, CancellationToken cancellationToken)
+    private static Location GetAttributeLocation(AttributeData attribute, ISymbol fallback, CancellationToken cancellationToken)
     {
         Location? location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
         return location ?? fallback.Locations.FirstOrDefault(static l => l.IsInSource) ?? Location.None;

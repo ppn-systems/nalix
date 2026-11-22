@@ -96,7 +96,8 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.PolicyAttributeWithoutMiddleware,
             DiagnosticDescriptors.RetryOnNonIdempotentPacket,
             DiagnosticDescriptors.DiscardedSubscription,
-            DiagnosticDescriptors.NonConstantTimeSecretComparison
+            DiagnosticDescriptors.NonConstantTimeSecretComparison,
+            DiagnosticDescriptors.ConfigurationValidationAttributeInvalid
         ];
 
     public override void Initialize(AnalysisContext context)
@@ -317,6 +318,10 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
                     property.Name,
                     typeSymbol.Name,
                     property.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+            }
+            else
+            {
+                AnalyzeValidationAttributes(context, typeSymbol, property);
             }
         }
     }

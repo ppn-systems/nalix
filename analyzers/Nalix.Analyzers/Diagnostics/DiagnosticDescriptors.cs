@@ -680,4 +680,13 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true,
         description: "Comparing a MAC, tag, signature, proof, challenge, token or password with SequenceEqual returns as soon as a byte differs, which lets an attacker recover the value one byte at a time from response timing. Use a fixed-time comparison. The check is name-based, so rename the variable or suppress the diagnostic when the data is not secret.");
+
+    public static readonly DiagnosticDescriptor ConfigurationValidationAttributeInvalid = new(
+        id: "NALIX118",
+        title: "Configuration validation attribute does not fit its property",
+        messageFormat: "[{0}] on '{1}' {2}",
+        category: "Configuration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "ConfigurationGenerator turns [ValueRange], [DurationRange], [Length], [AllowedEnum] and [Required] into validation code. A range whose minimum exceeds its maximum rejects every value, an unparsable [DurationRange] bound throws when the configuration is validated, [ValueRange]/[DurationRange]/[Length] on an unsuitable type produce generated code that does not compile, and [AllowedEnum] on a non-enum or [Required] on a non-nullable value type is silently skipped.");
 }

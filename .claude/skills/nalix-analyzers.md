@@ -22,6 +22,8 @@ IDs are sequential: `NALIX001`–`NALIX078`, **not organized by hundreds**. Cate
 - `NALIX111–NALIX114`: Handler policy attributes — missing `[PacketPermission]`, non-positive `[PacketRateLimit]`/`[PacketTimeout]`, policy attribute with no middleware (`NalixUsageAnalyzer.HandlerPolicy.cs`)
 - `NALIX115–NALIX116`: SDK usage — retry on a packet without `[PacketIdempotent]`, discarded `On`/`OnExact`/`SubscribeTemp` subscription (`NalixUsageAnalyzer.SdkUsage.cs`)
 - `NALIX117`: byte-wise `SequenceEqual` on secret-named data (`NalixUsageAnalyzer.SecretComparison.cs`)
+- `NALIX118`: validation attributes that do not fit their `ConfigurationLoader` property (`NalixUsageAnalyzer.ConfigurationValidation.cs`)
+- `NALIX025`, `NALIX026`, `NALIX043` were removed (the metadata-provider types no longer exist); do not reuse the IDs
 
 When adding a new rule, append the next available ID — do not try to "slot" into a category range.
 
@@ -36,7 +38,7 @@ When adding a new rule, append the next available ID — do not try to "slot" in
 - `NalixUsageAnalyzer.cs` — registration, main `Initialize()` entry
 - `NalixUsageAnalyzer.InvocationAnalysis.cs` — invocation-specific analysis
 - `NalixUsageAnalyzer.SymbolSet.cs` — cached Roslyn symbol lookups
-- `NalixUsageAnalyzer.HandlerPolicy.cs` / `.SdkUsage.cs` / `.SecretComparison.cs` — NALIX111–117; they resolve their own optional symbols in `PolicySymbols` (null = rule skipped) and share one `Invocation` action, `AnalyzePolicyInvocation`
+- `NalixUsageAnalyzer.HandlerPolicy.cs` / `.SdkUsage.cs` / `.SecretComparison.cs` / `.ConfigurationValidation.cs` — NALIX111–118; they resolve their own optional symbols in `PolicySymbols` (null = rule skipped) and share one `Invocation` action, `AnalyzePolicyInvocation`
 
 ---
 
