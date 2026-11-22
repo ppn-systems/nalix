@@ -27,7 +27,7 @@ internal static class TestRuntimeBootstrap
 
         try
         {
-            ObjectPoolOptions config = new() { EnableMetrics = false, EnableDiagnostics = false };
+            ObjectPoolOptions config = new() { EnableDiagnostics = false };
             ObjectPoolManager poolManager = new(config);
             ObjectPoolManager.Configure(poolManager);
             InstanceManager.Instance.Register<IObjectPoolManager>(poolManager);

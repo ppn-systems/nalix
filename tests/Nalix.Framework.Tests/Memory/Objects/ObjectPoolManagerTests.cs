@@ -70,7 +70,6 @@ public sealed class ObjectPoolManagerTests
         {
             EnableObjectTrimming = false,
             DefaultPreallocate = 0,
-            EnableMetrics = true
         };
 
         using ObjectPoolManager manager = new(options);
@@ -171,7 +170,6 @@ public sealed class ObjectPoolManagerTests
         ObjectPoolOptions options = new()
         {
             EnableObjectTrimming = false,
-            EnableMetrics = true,
             DefaultPreallocate = 0
         };
 
@@ -194,7 +192,6 @@ public sealed class ObjectPoolManagerTests
         ObjectPoolOptions options = new()
         {
             EnableObjectTrimming = false,
-            EnableMetrics = true,
             DefaultPreallocate = 0
         };
 
@@ -215,7 +212,6 @@ public sealed class ObjectPoolManagerTests
         ObjectPoolOptions options = new()
         {
             EnableObjectTrimming = false,
-            EnableMetrics = true,
             DefaultPreallocate = 0
         };
 
@@ -242,7 +238,6 @@ public sealed class ObjectPoolManagerTests
         ObjectPoolOptions options = new()
         {
             EnableObjectTrimming = false,
-            EnableMetrics = true,
             DefaultPreallocate = 0
         };
 
@@ -307,7 +302,6 @@ public sealed class ObjectPoolManagerTests
         ObjectPoolOptions options = new()
         {
             EnableObjectTrimming = false,
-            EnableMetrics = true,
             DefaultPreallocate = 0
         };
 
@@ -331,7 +325,6 @@ public sealed class ObjectPoolManagerTests
         ObjectPoolOptions options = new()
         {
             EnableObjectTrimming = false,
-            EnableMetrics = true,
             DefaultPreallocate = 0
         };
 
@@ -377,7 +370,6 @@ public sealed class ObjectPoolManagerTests
         {
             EnableObjectTrimming = false,
             DefaultPreallocate = 5,
-            EnableMetrics = true
         };
 
         using ObjectPoolManager manager = new(options);
@@ -419,16 +411,15 @@ public sealed class ObjectPoolManagerTests
         Assert.Null(ex);
     }
     /// <summary>
-    /// Per-type metrics no longer depend on EnableMetrics: the outstanding count, the peak and the last activity are
-    /// reported with it off (the default), without Get or Return writing a counter shared by every thread.
+    /// Per-type metrics are always reported (the outstanding count, the peak and the last activity), without Get or
+    /// Return writing a counter shared by every thread.
     /// </summary>
     [Fact]
-    public void GetTypeInfo_WithMetricsOff_ReportsOutstandingPeakAndLastActivity()
+    public void GetTypeInfo_ReportsOutstandingPeakAndLastActivity()
     {
         using ObjectPoolManager manager = new(new ObjectPoolOptions
         {
             EnableObjectTrimming = false,
-            EnableMetrics = false,
             DefaultPreallocate = 0,
         });
 
@@ -489,5 +480,28 @@ public sealed class ObjectPoolManagerTests
 
         // LastAccessUtc is rebuilt from a tick count on every read, so allow a few milliseconds of rounding.
         Assert.InRange((second - first).TotalMilliseconds, -10, 10);
+    }
+    /// <summary>Both reports carry the outstanding count and the peak, sampled when the report is written.</summary>
+    [Fact]
+    public void Reports_AfterActivity_IncludeOutstandingAndPeak()
+    {
+        using ObjectPoolManager manager = new(new ObjectPoolOptions { EnableObjectTrimming = false, DefaultPreallocate = 0 });
+        TestPoolable a = manager.Get<TestPoolable>();
+        _ = manager.Get<TestPoolable>();
+        manager.Return(a);
+
+        using System.IO.MemoryStream stream = new();
+        using (System.Text.Json.Utf8JsonWriter writer = new(stream))
+        {
+            manager.WriteReportData(writer);
+        }
+
+        using System.Text.Json.JsonDocument json = System.Text.Json.JsonDocument.Parse(stream.ToArray());
+        string text = json.RootElement.GetRawText();
+        Assert.Contains("\"Outstanding\":1", text, StringComparison.Ordinal);
+        Assert.Contains("\"PeakOutstanding\":2", text, StringComparison.Ordinal);
+        Assert.Contains("\"LastAccessType\":\"Return\"", text, StringComparison.Ordinal);
+
+        Assert.Contains(nameof(TestPoolable), manager.GenerateReport(), StringComparison.Ordinal);
     }
 }

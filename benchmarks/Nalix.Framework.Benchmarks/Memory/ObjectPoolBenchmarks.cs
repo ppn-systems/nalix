@@ -14,10 +14,6 @@ public class ObjectPoolBenchmarks
 {
     private ObjectPoolManager _poolManager = null!;
 
-    /// <summary>Per-type metrics (on by default in hosts).</summary>
-    [Params(true, false)]
-    public bool Metrics { get; set; }
-
     public class SamplePoolable : IPoolable
     {
         public int Value1 { get; set; }
@@ -38,7 +34,6 @@ public class ObjectPoolBenchmarks
         options.EnableObjectTrimming = false;
         options.EnableDiagnostics = false;
         options.EnableLeakDetection = false;
-        options.EnableMetrics = this.Metrics;
 
         _poolManager = new ObjectPoolManager(options);
 

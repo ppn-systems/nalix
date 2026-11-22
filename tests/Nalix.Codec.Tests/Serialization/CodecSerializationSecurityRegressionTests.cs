@@ -210,7 +210,7 @@ public sealed partial class CodecSerializationSecurityRegressionTests
     [Fact]
     public void Deserialize_WhenNullableMarkerIsInvalid_ReturnsNullAndReleasesPooledPacket()
     {
-        using ObjectPoolManager poolMgr = new(new ObjectPoolOptions { EnableMetrics = true });
+        using ObjectPoolManager poolMgr = new(new ObjectPoolOptions());
         PacketRegistry.Configure(poolMgr);
         try
         {

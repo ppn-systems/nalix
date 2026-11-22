@@ -537,4 +537,71 @@ public sealed class TypePoolTests
         Assert.Equal(pushed, popped);
         Assert.Equal(0, pool.AvailableCount);
     }
+    /// <summary>
+    /// Lowering the capacity moves the pool into a slot array of that size: it keeps as many objects as fit, refuses
+    /// pushes beyond the new capacity and still hands out every object it kept.
+    /// </summary>
+    [Fact]
+    public void SetMaxCapacity_WhenLowered_KeepsCapacityObjectsAndBoundsPushes()
+    {
+        TypePool pool = new(maxCapacity: 64);
+        for (int i = 0; i < 40; i++)
+        {
+            Assert.True(pool.TryPush(new TestPoolable { Value = i }));
+        }
+
+        pool.SetMaxCapacity(8);
+
+        Assert.Equal(8, pool.MaxCapacity);
+        Assert.Equal(8, pool.AvailableCount);
+        Assert.False(pool.TryPush(new TestPoolable()));
+
+        int popped = 0;
+        while (pool.TryPop(out IPoolable? obj))
+        {
+            Assert.NotNull(obj);
+            popped++;
+        }
+
+        Assert.Equal(8, popped);
+        Assert.Equal(0, pool.AvailableCount);
+
+        // The smaller pool fills back up to its new capacity, and no further.
+        for (int i = 0; i < 8; i++)
+        {
+            Assert.True(pool.TryPush(new TestPoolable()));
+        }
+
+        Assert.False(pool.TryPush(new TestPoolable()));
+    }
+
+    /// <summary>A capacity raised again after it was lowered grows the slot array back.</summary>
+    [Fact]
+    public void SetMaxCapacity_WhenRaisedAfterLowering_AcceptsTheNewCapacity()
+    {
+        TypePool pool = new(maxCapacity: 64);
+        pool.SetMaxCapacity(4);
+        pool.SetMaxCapacity(32);
+
+        for (int i = 0; i < 32; i++)
+        {
+            Assert.True(pool.TryPush(new TestPoolable()));
+        }
+
+        Assert.False(pool.TryPush(new TestPoolable()));
+        Assert.Equal(32, pool.AvailableCount);
+    }
+
+    /// <summary>A capacity of zero keeps nothing.</summary>
+    [Fact]
+    public void SetMaxCapacity_WhenZero_RefusesEveryPush()
+    {
+        TypePool pool = new(maxCapacity: 16);
+        Assert.True(pool.TryPush(new TestPoolable()));
+
+        pool.SetMaxCapacity(0);
+
+        Assert.Equal(0, pool.AvailableCount);
+        Assert.False(pool.TryPush(new TestPoolable()));
+    }
 }

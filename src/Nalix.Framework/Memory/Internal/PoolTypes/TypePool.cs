@@ -33,7 +33,7 @@ internal class TypePool(int maxCapacity)
 
     /// <summary>
     /// Fixed-slot array. Individual slots are atomically swapped between null and non-null.
-    /// The reference only changes when <see cref="SetMaxCapacity"/> grows the pool.
+    /// The reference only changes when <see cref="SetMaxCapacity"/> resizes the pool.
     /// </summary>
     private IPoolable?[] _slots = new IPoolable?[maxCapacity > 0 ? maxCapacity : 1];
 
@@ -78,18 +78,56 @@ internal class TypePool(int maxCapacity)
             return;
         }
 
-        int oldCapacity = Interlocked.Exchange(ref _maxCapacity, maxCapacity);
+        _ = Interlocked.Exchange(ref _maxCapacity, maxCapacity);
 
-        // Slots are sized at construction, so growing the capacity needs a larger slot array.
+        // The slot array is the capacity: growing needs a larger one, and lowering moves the pool into a smaller
+        // one. A slot array larger than the capacity made every push sum the per-processor counts (reading cache
+        // lines the other cores keep writing) to tell whether the pool was full.
         if (maxCapacity > _slots.Length)
         {
             this.GrowSlots(maxCapacity);
         }
-
-        // If the new capacity is less than the old one, trim the pool
-        if (maxCapacity < oldCapacity)
+        else if (maxCapacity < _slots.Length)
         {
-            _ = this.Trim(100); // Trim to exactly the max capacity
+            this.ShrinkSlots(maxCapacity);
+        }
+    }
+
+    /// <summary>
+    /// Moves the pooled objects into a slot array of <paramref name="newSize"/> slots (at least one), dropping those
+    /// that do not fit, and recounts. Runs only on capacity decreases, normally while a host configures its pools.
+    /// A push racing the move can land in the old array and be lost to the garbage collector, as a trimmed object is.
+    /// </summary>
+    private void ShrinkSlots(int newSize)
+    {
+        lock (_growLock)
+        {
+            IPoolable?[] current = _slots;
+            int size = newSize > 0 ? newSize : 1;
+            if (size >= current.Length)
+            {
+                return;
+            }
+
+            IPoolable?[] shrunk = new IPoolable?[size];
+            int kept = 0;
+            for (int i = 0; i < current.Length; i++)
+            {
+                IPoolable? obj = Interlocked.Exchange(ref current[i], null);
+                if (obj is not null && kept < newSize)
+                {
+                    shrunk[kept++] = obj;
+                }
+            }
+
+            Volatile.Write(ref _slots, shrunk);
+
+            for (int i = 0; i < _counts.Length; i++)
+            {
+                Volatile.Write(ref _counts[i].Value, 0);
+            }
+
+            _ = Interlocked.Add(ref this.CurrentCount, kept);
         }
     }
 

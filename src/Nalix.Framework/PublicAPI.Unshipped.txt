@@ -1,3 +1,5 @@
 #nullable enable
+*REMOVED*Nalix.Framework.Options.ObjectPoolOptions.EnableMetrics.get -> bool
+*REMOVED*Nalix.Framework.Options.ObjectPoolOptions.EnableMetrics.set -> void
 *REMOVED*const Nalix.Framework.Tasks.TaskNaming.Tags.Udp = "udp" -> string!
 const Nalix.Framework.Tasks.TaskNaming.Tags.Datagram = "dgram" -> string!
