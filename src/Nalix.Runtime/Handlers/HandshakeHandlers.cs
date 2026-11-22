@@ -243,6 +243,11 @@ public static partial class HandshakeHandlers
             connection.Secret = state.SessionKey;
             connection.Algorithm = CipherSuiteType.Chacha20Poly1305;
 
+            // A new key starts a new session: both directions restart at 0, as the client's do (and as on rekey).
+            // Without this, receive progress made before the key would reject the session's first frames as replays.
+            connection.Transport.SendSequence.Reset();
+            connection.Transport.ReceiveSequence.Reset();
+
             expectedFinish = HandshakeX25519.ComputeServerFinishProof(state.SharedSecret, state.TranscriptHash);
         }
         finally

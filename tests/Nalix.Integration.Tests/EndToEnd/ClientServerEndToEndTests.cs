@@ -94,6 +94,32 @@ public sealed class ClientServerEndToEndTests : IDisposable
     }
 
     [Fact]
+    public async Task RequestAsync_WhenEncryptedFrameArrivedBeforeTheKey_WorksAfterHandshake()
+    {
+        ushort port = NextPort();
+        await using NetworkApplication app = await this.StartServerAsync(port, secure: true);
+
+        using TcpSession client = new(CreateOptions(port));
+        await client.ConnectAsync().WaitAsync(s_timeout);
+
+        // An encrypted request before any key exists: it must be dropped, not answered, and must not leave the
+        // connection unable to carry encrypted traffic once the handshake has run on it.
+        Exception? early = await Record.ExceptionAsync(() => client.RequestAsync<EchoPacket>(
+            new EchoPacket { Sequence = 1, Text = "too early" }, s_request.WithTimeout(1_000).WithEncrypt()).AsTask());
+        Assert.IsType<TimeoutException>(early);
+
+        await client.HandshakeAsync().AsTask().WaitAsync(s_timeout);
+
+        EchoPacket response = await client.RequestAsync<EchoPacket>(
+            new EchoPacket { Sequence = 7, Text = "secret" }, s_request.WithEncrypt()).AsTask().WaitAsync(s_timeout);
+
+        Assert.Equal(8, response.Sequence);
+        Assert.Equal("SECRET", response.Text);
+
+        await client.DisconnectAsync().WaitAsync(s_timeout);
+    }
+
+    [Fact]
     public async Task RequestAsync_WithCompressedLargePayload_ReturnsPayloadIntact()
     {
         ushort port = NextPort();

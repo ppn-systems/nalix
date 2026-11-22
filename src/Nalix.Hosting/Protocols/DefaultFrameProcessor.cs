@@ -148,7 +148,14 @@ public sealed class DefaultFrameProcessor : IFrameProcessor
 
         try
         {
-            if (!FramePipeline.TryProcessInbound(ref current, args.Connection.Secret.AsSpan(), args.Connection.Algorithm, out seq))
+            // Before the handshake the connection holds the all-zero secret, which is not a key. Passed as 32 zero
+            // bytes it would decrypt any frame "encrypted" with zeros: the frame would count as encrypted on the
+            // wire and advance the receive sequence, which then rejects every frame of the real session. An empty
+            // secret makes an encrypted frame that arrives before the key fail like any frame that does not decrypt.
+            Bytes32 secret = args.Connection.Secret;
+            ReadOnlySpan<byte> key = secret.IsZero ? [] : secret.AsSpan();
+
+            if (!FramePipeline.TryProcessInbound(ref current, key, args.Connection.Algorithm, out seq))
             {
                 args.Connection.IncrementErrorCount();
 

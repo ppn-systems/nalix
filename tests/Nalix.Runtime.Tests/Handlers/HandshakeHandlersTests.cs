@@ -8,6 +8,8 @@ using FluentAssertions;
 using Nalix.Abstractions.Networking.Protocols;
 using Nalix.Abstractions.Primitives;
 using Nalix.Codec.ProtocolFrames;
+using Nalix.Codec.Security;
+using Nalix.Environment.Sequencing;
 using Nalix.Framework.Memory.Objects;
 using Nalix.Runtime.Dispatching;
 using Nalix.Runtime.Handlers;
@@ -19,6 +21,40 @@ namespace Nalix.Runtime.Tests.Handlers;
 [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "xUnit tests intentionally follow the test synchronization context.")]
 public sealed class HandshakeHandlersTests
 {
+    [Fact]
+    public async Task HandleSessionProofAsync_WhenProofIsValid_RestartsBothSequenceCounters()
+    {
+        System.Type hsContextType = typeof(HandshakeHandlers).GetNestedType("HandshakeContext", BindingFlags.NonPublic)!;
+        object state = typeof(ObjectPoolManager)
+            .GetMethod(nameof(ObjectPoolManager.Get), BindingFlags.Public | BindingFlags.Instance)!
+            .MakeGenericMethod(hsContextType)
+            .Invoke(ObjectPoolManager.Shared, null)!;
+
+        Bytes32 sharedSecret = new([.. System.Linq.Enumerable.Repeat((byte)0x11, 32)]);
+        Bytes32 transcriptHash = new([.. System.Linq.Enumerable.Repeat((byte)0x22, 32)]);
+        hsContextType.GetField("SharedSecret")!.SetValue(state, sharedSecret);
+        hsContextType.GetField("TranscriptHash")!.SetValue(state, transcriptHash);
+        hsContextType.GetField("SessionKey")!.SetValue(state, new Bytes32([.. System.Linq.Enumerable.Repeat((byte)0x33, 32)]));
+
+        // Progress made before the key: the client restarts both directions at 0 for the new session.
+        SequenceCounter send = new(40);
+        SequenceCounter receive = new(50);
+        using FakeConnection connection = new(new FakeTransport(send, receive));
+        ConnectionRuntimeStateAccessor.SetHandshakeState(connection, state);
+
+        SessionProof proof = new();
+        proof.Initialize(HandshakeX25519.ComputeClientProof(sharedSecret, transcriptHash));
+
+        using (PacketContext<SessionProof> context = PacketContextFactory.Create(proof, connection, encryptedOnWire: false))
+        {
+            await HandshakeHandlers.HandleSessionProofAsync(context);
+        }
+
+        connection.Secret.IsZero.Should().BeFalse("a valid proof installs the session key");
+        receive.Current().Should().Be(0, "the session's first encrypted frame must not be rejected as a replay");
+        send.Current().Should().BeLessThanOrEqualTo(1, "the server's sends restart with the new key");
+    }
+
     [Fact]
     public async Task HandleSessionProofAsync_WhenProofFailsConcurrently_DoesNotDoubleReturnHandshakeContextToPool()
     {
