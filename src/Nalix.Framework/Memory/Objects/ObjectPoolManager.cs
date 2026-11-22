@@ -127,6 +127,9 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
     private readonly IRecurringHandle? _trimJob;
 
     private const int MinimumHealthSample = 32;
+
+    /// <summary>A pool's peak outstanding count is sampled at every miss up to this many, then at one miss in this many.</summary>
+    private const int PeakSampleInterval = 16;
     private const double FailureThreshold = 0.1;
     private const double ElevatedFailureThreshold = 0.5;
     private static readonly TimeSpan s_poolFailureLogCooldown = TimeSpan.FromMinutes(15);
@@ -287,8 +290,9 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             _ = Interlocked.Increment(ref _totalCreated);
         }
 
-        // 1. Per-type counts, always: trimming reads them, and the manager-wide totals are their sums. They are per
-        //    processor, so they stay cheap.
+        // 1. Per-type counts, always: trimming, the outstanding count and the reports read them, and the manager-wide
+        //    totals are their sums. They are per processor, so they stay cheap; nothing here writes a counter every
+        //    thread renting the type shares.
         ref StatSlot typeStats = ref metrics.Current;
         if (isCacheHit)
         {
@@ -297,29 +301,14 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
         else
         {
             _ = Interlocked.Increment(ref typeStats.Misses);
-            _ = Interlocked.Increment(ref metrics.TotalCreated);
-        }
 
-        // 2. Exact outstanding and peak tracking (EnableMetrics): one counter every thread renting the type writes.
-        if (_config.EnableMetrics || _config.EnableDiagnostics)
-        {
-            // Track outstanding objects so we can detect leaks (Gets - Returns)
-            long outstanding = Interlocked.Increment(ref metrics.Outstanding);
-
-            // Update peak outstanding (always tracked for pool metrics)
-            if (outstanding > Volatile.Read(ref metrics.PeakOutstanding))
+            // 2. A miss is the only moment the working set can outgrow what the pool holds, so the peak outstanding
+            //    count is sampled here (every miss while the pool warms up, then one in PeakSampleInterval).
+            long created = Interlocked.Increment(ref metrics.TotalCreated);
+            if (created <= PeakSampleInterval || (created & (PeakSampleInterval - 1)) == 0)
             {
-                long currentPeak;
-                while (outstanding > (currentPeak = Interlocked.Read(ref metrics.PeakOutstanding)))
-                {
-                    if (Interlocked.CompareExchange(ref metrics.PeakOutstanding, outstanding, currentPeak) == currentPeak)
-                    {
-                        break;
-                    }
-                }
+                _ = metrics.SamplePeak();
             }
-
-            metrics.Touch("Get");
         }
 
         // 3. Heavyweight diagnostics (Development / QA leaks tracking)
@@ -398,32 +387,14 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             }
         }
 
-        // 2. Per-type count, always (see Get); exact outstanding tracking with EnableMetrics.
+        // 2. Per-type count, always (see Get).
         _ = Interlocked.Increment(ref metrics.Current.Returns);
-
-        if (_config.EnableMetrics || _config.EnableDiagnostics)
-        {
-            metrics.Touch("Return");
-
-            // Decrement outstanding; ensure it doesn't go negative
-            long outstandingAfter = Interlocked.Decrement(ref metrics.Outstanding);
-
-            if (outstandingAfter < 0)
-            {
-                // Log and reset to zero to avoid negative counters due to bugs
-                if (DiagnosticsEvents.Source.IsEnabled(DiagnosticsEvents.Memory.PoolReturned))
-                {
-                    DiagnosticsEvents.Write(DiagnosticsEvents.Memory.PoolReturned, new DiagnosticLog("FW.ObjectPoolManager:Internal", $"pool-returned type={obj.GetType().Name} outstanding={outstandingAfter} status=outstanding-negative"));
-                }
-
-                _ = Interlocked.Exchange(ref metrics.Outstanding, 0);
-            }
-        }
 
         bool retained = pool.ReturnFast(obj, id);
 
-        if (!retained && (_config.EnableMetrics || _config.EnableDiagnostics))
+        if (!retained)
         {
+            // Rare: the pool is full.
             _ = Interlocked.Increment(ref metrics.TotalDropped);
         }
     }
@@ -503,7 +474,7 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             metrics.Reset(StatField.Returns);
             metrics.Reset(StatField.Hits);
             metrics.Reset(StatField.Misses);
-            _ = Interlocked.Exchange(ref metrics.Outstanding, 0);
+            metrics.ResetObservation();
             _ = Interlocked.Exchange(ref metrics.ConsecutiveFailures, 0);
             _ = Interlocked.Exchange(ref metrics.TotalCreated, 0);
             _ = Interlocked.Exchange(ref metrics.TotalDisposed, 0);
@@ -564,6 +535,9 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
         // Add metrics if available
         if (_metricsDict.TryGetValue(type, out PoolMetrics? metrics))
         {
+            metrics.ObserveActivity();
+            _ = metrics.SamplePeak();
+
             info["TotalGets"] = metrics.TotalGets;
             info["TotalReturns"] = metrics.TotalReturns;
             info["TotalCreated"] = metrics.TotalCreated;
@@ -856,7 +830,7 @@ public sealed partial class ObjectPoolManager : IObjectPoolManager, IDisposable
             }
         }
 
-        long outstanding = Interlocked.Read(ref metrics.Outstanding);
+        long outstanding = metrics.SamplePeak();
         long peakOutstanding = Interlocked.Read(ref metrics.PeakOutstanding);
         long previousPeak = Interlocked.Exchange(ref metrics.LastHealthPeakOutstanding, peakOutstanding);
         bool capacityPressure = outstanding > 0 && available == 0 && peakOutstanding > previousPeak;

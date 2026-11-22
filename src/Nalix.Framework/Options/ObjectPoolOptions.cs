@@ -21,13 +21,13 @@ public sealed partial class ObjectPoolOptions : ConfigurationLoader, IValidatabl
     public bool EnableDiagnostics { get; set; } = false;
 
     /// <summary>
-    /// Enables per-type traffic metrics for object pools (gets, returns, hit rate, outstanding and peak
-    /// outstanding objects). Default off: every thread renting a type updates that type's counters, which cost
-    /// more than the pooling itself on a multi-core server. Turn it on to diagnose pool usage or leaks; the
-    /// manager-wide totals (<see cref="Memory.Objects.ObjectPoolManager.TotalGetOperations"/> and the like)
-    /// are kept either way.
+    /// Kept for configuration compatibility; it has no effect. Per-type metrics (gets, returns, hit rate, outstanding
+    /// and peak outstanding objects, last activity) are always collected: they come from per-processor counts that
+    /// Get and Return already keep, the outstanding count is derived from them when read, and the peak is sampled at
+    /// pool misses, trim cycles and reads, so no metric writes a counter shared by every thread renting a type.
+    /// Exact per-object lifetimes and leak tracking remain behind <see cref="EnableDiagnostics"/>.
     /// </summary>
-    [IniComment("Per-type pool metrics: gets, returns, hit rate, outstanding (off by default: costs throughput on many cores)")]
+    [IniComment("No effect (kept for compatibility): per-type pool metrics are always collected at no throughput cost")]
     public bool EnableMetrics { get; set; }
 
     /// <summary>

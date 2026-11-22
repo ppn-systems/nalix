@@ -60,14 +60,18 @@ public sealed partial class ObjectPoolManager
         public long LastTrimLifetimePeak;
 
         /// <summary>
-        /// <see cref="System.Environment.TickCount64"/> at the last Get or Return, 0 before the first. Written only
-        /// when it changes (at most once a millisecond): every thread using the type would otherwise write this
-        /// cache line on every operation, and <see cref="DateTime.UtcNow"/> costs far more than the pooling itself.
+        /// <see cref="System.Environment.TickCount64"/> when activity (a Get or a Return) was last observed, 0 before
+        /// the first. It is not written by Get or Return: every thread using the type would write this cache line.
+        /// <see cref="ObserveActivity"/> sets it when the counts moved since the previous observation (trim cycles
+        /// and reads of the metrics), so its resolution is the interval between those.
         /// </summary>
         public long LastAccessTick;
         public string? LastAccessType;
 
-        /// <summary>Gets the time of the last Get or Return, or <see cref="DateTime.MinValue"/> before the first.</summary>
+        private long _observedGets;
+        private long _observedReturns;
+
+        /// <summary>Gets the time activity was last observed, or <see cref="DateTime.MinValue"/> before the first.</summary>
         public DateTime LastAccessUtc
         {
             get
@@ -77,32 +81,57 @@ public sealed partial class ObjectPoolManager
             }
         }
 
-        /// <summary>Records an access; a no-op when nothing changed since the last one.</summary>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public void Touch(string type)
+        /// <summary>Records the current time as the last access when the counts moved since the previous call.</summary>
+        public void ObserveActivity()
         {
-            long now = System.Environment.TickCount64;
-            if (this.LastAccessTick != now)
-            {
-                this.LastAccessTick = now;
-            }
+            long gets = this.TotalGets;
+            long returns = this.TotalReturns;
+            long previousGets = System.Threading.Interlocked.Exchange(ref _observedGets, gets);
+            long previousReturns = System.Threading.Interlocked.Exchange(ref _observedReturns, returns);
 
-            if (!ReferenceEquals(this.LastAccessType, type))
+            if (gets != previousGets || returns != previousReturns)
             {
-                this.LastAccessType = type;
+                this.LastAccessType = returns != previousReturns ? "Return" : "Get";
+                System.Threading.Volatile.Write(ref this.LastAccessTick, System.Environment.TickCount64);
             }
         }
+
         public int ConsecutiveFailures;
 
         /// <summary>
-        /// Number of objects currently checked out (Get without Return)
+        /// Gets the number of objects currently checked out (Get without Return): the gets minus the returns, both
+        /// summed from the per-processor counts, so nothing on the Get or Return path writes a shared counter.
         /// </summary>
-        public long Outstanding;
+        public long Outstanding => System.Math.Max(0, this.TotalGets - this.TotalReturns);
 
         /// <summary>
-        /// Maximum concurrent outstanding objects recorded.
+        /// Maximum outstanding objects observed. Sampled with <see cref="SamplePeak"/> when the pool misses (the only
+        /// moment the working set can outgrow what the pool holds), at every trim cycle and when the metrics are read.
         /// </summary>
         public long PeakOutstanding;
+
+        /// <summary>Raises <see cref="PeakOutstanding"/> to the current outstanding count, and returns that count.</summary>
+        public long SamplePeak()
+        {
+            long outstanding = this.Outstanding;
+            long peak;
+            while (outstanding > (peak = System.Threading.Interlocked.Read(ref this.PeakOutstanding)))
+            {
+                if (System.Threading.Interlocked.CompareExchange(ref this.PeakOutstanding, outstanding, peak) == peak)
+                {
+                    break;
+                }
+            }
+
+            return outstanding;
+        }
+
+        /// <summary>Forgets the observed counts after the per-processor counts were reset.</summary>
+        public void ResetObservation()
+        {
+            _ = System.Threading.Interlocked.Exchange(ref _observedGets, 0);
+            _ = System.Threading.Interlocked.Exchange(ref _observedReturns, 0);
+        }
 
         // Diagnostic Metrics (Only populated when diagnostics enabled)
         public long TotalLifetimeTicks;

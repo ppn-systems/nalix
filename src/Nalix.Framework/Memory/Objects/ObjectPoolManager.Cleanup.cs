@@ -112,7 +112,7 @@ public sealed partial class ObjectPoolManager
         // working set of the recent past, not of the pool's whole life: the lifetime peak never falls, so one
         // burst kept 1.5x its size in every idle pool for good. The recent peak is this interval's peak, or half
         // the previous one, whichever is larger; an idle pool sheds the burst over a few intervals.
-        long peakOutstanding = this.UPDATE_TRIM_PEAK(metrics);
+        long peakOutstanding = UPDATE_TRIM_PEAK(metrics);
         int minKeep = Math.Max(
             _config.MinimumKeepObjects,
             Math.Max(maxCap / 12, (int)(peakOutstanding * 1.5))
@@ -163,23 +163,14 @@ public sealed partial class ObjectPoolManager
     /// Advances the recent peak of outstanding objects that the trim floor protects, and returns it.
     /// </summary>
     /// <remarks>
-    /// With <see cref="Options.ObjectPoolOptions.EnableMetrics"/> the lifetime peak is exact: when it rose during the
-    /// interval, that is the interval's peak. Without it the outstanding count is sampled now from the per-type
-    /// Gets and Returns, so the working set out at a trim is protected (the lifetime peak follows the samples, for
-    /// the reports).
+    /// The outstanding count is sampled now from the per-type Gets and Returns, which also raises the lifetime peak,
+    /// so the working set out at a trim is protected even when no miss sampled it.
     /// </remarks>
-    private long UPDATE_TRIM_PEAK(PoolMetrics metrics)
+    private static long UPDATE_TRIM_PEAK(PoolMetrics metrics)
     {
+        metrics.ObserveActivity();
+        long outstanding = metrics.SamplePeak();
         long lifetimePeak = Interlocked.Read(ref metrics.PeakOutstanding);
-        long outstanding = _config.EnableMetrics || _config.EnableDiagnostics
-            ? Interlocked.Read(ref metrics.Outstanding)
-            : Math.Max(0, metrics.TotalGets - metrics.TotalReturns);
-
-        if (!_config.EnableMetrics && !_config.EnableDiagnostics && outstanding > lifetimePeak)
-        {
-            _ = Interlocked.Exchange(ref metrics.PeakOutstanding, outstanding);
-            lifetimePeak = outstanding;
-        }
 
         long previousLifetimePeak = Interlocked.Exchange(ref metrics.LastTrimLifetimePeak, lifetimePeak);
         long intervalPeak = lifetimePeak > previousLifetimePeak ? lifetimePeak : outstanding;
