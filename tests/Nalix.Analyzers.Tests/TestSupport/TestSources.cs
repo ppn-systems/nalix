@@ -125,7 +125,6 @@ namespace Nalix.Network.Routing
 
 namespace Nalix.Runtime.Dispatching
 {
-    using System.Reflection;
     using Nalix.Abstractions.Networking.Packets;
     using Nalix.Abstractions.Networking;
 
@@ -137,19 +136,7 @@ namespace Nalix.Runtime.Dispatching
         public CancellationToken CancellationToken => default;
     }
 
-    public sealed class PacketMetadataBuilder
-    {
-        public PacketOpcodeAttribute? Opcode { get; set; }
-        public void Add(Attribute attribute) { }
-        public TAttribute? Get<TAttribute>() where TAttribute : Attribute => null;
-    }
-
     public interface IPacketDispatch { }
-
-    public interface IPacketMetadataProvider
-    {
-        void Populate(MethodInfo method, PacketMetadataBuilder builder);
-    }
 }
 
 namespace Nalix.Abstractions.Middleware
@@ -296,7 +283,6 @@ namespace Nalix.Hosting
         public IProtocolBindingBuilder ListenTcp<T>() => new StubBindingBuilder(this);
         public IProtocolBindingBuilder MapDatagram<T>() => new StubBindingBuilder(this);
         public NetworkApplicationBuilder MapHandlers<THandler>() => this;
-        public NetworkApplicationBuilder AddMetadataProvider<TProvider>() => this;
         public object Build() => new();
 
         private sealed class StubBindingBuilder(NetworkApplicationBuilder parent) : IProtocolBindingBuilder

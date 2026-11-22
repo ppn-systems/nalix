@@ -56,13 +56,16 @@ The analyzer defines a rich catalog of diagnostic checks across four main catego
 
 ## Deprecated / Removed Diagnostics
 
-The following diagnostics have been removed because the underlying `INetworkBufferMiddleware` type was intentionally dropped from Nalix:
+The following diagnostics have been removed because the types they analyzed no longer exist in Nalix (`INetworkBufferMiddleware`, `IPacketMetadataProvider`, `PacketMetadataBuilder`, `AddMetadataProvider`):
 
 | ID | Title | Status |
 | :--- | :--- | :--- |
 | `NALIX007` | Buffer middleware ignores stage attribute | Removed |
 | `NALIX019` | Buffer middleware type invalid | Removed |
 | `NALIX031` | Buffer middleware missing order | Removed |
+| `NALIX025` | Packet metadata provider clears Opcode | Removed (`IPacketMetadataProvider` and `PacketMetadataBuilder` no longer exist) |
+| `NALIX026` | Packet metadata provider overwrites Opcode without guard | Removed (same reason as `NALIX025`) |
+| `NALIX043` | NetworkApplicationBuilder metadata provider type is not constructible | Removed (`AddMetadataProvider` no longer exists) |
 
 ---
 

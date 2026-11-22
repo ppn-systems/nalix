@@ -209,24 +209,6 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Nalix ConfigurationLoader binds only public instance properties with public setters. Non-bindable properties should either expose a public setter or be marked with ConfiguredIgnoreAttribute.");
 
-    public static readonly DiagnosticDescriptor MetadataProviderClearsOpcode = new(
-        id: "NALIX025",
-        title: "Packet metadata provider clears Opcode",
-        messageFormat: "Metadata provider '{0}' assigns builder.Opcode = null inside Populate(...), which will make PacketMetadataBuilder.Build() fail",
-        category: "Routing",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "Nalix packet metadata providers should not clear builder.Opcode because packet metadata requires a non-null opcode.");
-
-    public static readonly DiagnosticDescriptor MetadataProviderOverwritesOpcodeWithoutGuard = new(
-        id: "NALIX026",
-        title: "Packet metadata provider overwrites Opcode without guard",
-        messageFormat: "Metadata provider '{0}' assigns builder.Opcode in Populate(...) without checking the current value first",
-        category: "Routing",
-        defaultSeverity: DiagnosticSeverity.Info,
-        isEnabledByDefault: true,
-        description: "Nalix packet metadata providers usually should augment metadata instead of unconditionally replacing an existing PacketOpcodeAttribute.");
-
     public static readonly DiagnosticDescriptor RequestOptionsRetryCountNegative = new(
         id: "NALIX027",
         title: "RequestOptions RetryCount should not be negative",
@@ -354,15 +336,6 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Nalix handler registration creates instances at runtime, so the handler type should be a concrete class.");
-
-    public static readonly DiagnosticDescriptor NetworkHostingMetadataProviderTypeInvalid = new(
-        id: "NALIX043",
-        title: "NetworkApplicationBuilder metadata provider type is not constructible",
-        messageFormat: "AddMetadataProvider<{0}>() expects a concrete, non-abstract, non-open-generic class type",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "Nalix metadata provider registration creates instances at runtime, so the provider type should be a concrete class.");
 
     public static readonly DiagnosticDescriptor NetworkHostingMissingTcpBinding = new(
         id: "NALIX044",

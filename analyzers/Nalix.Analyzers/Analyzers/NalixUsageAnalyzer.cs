@@ -45,8 +45,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.ReservedPacketHeaderSlot,
             DiagnosticDescriptors.UnsupportedConfigurationPropertyType,
             DiagnosticDescriptors.ConfigurationPropertyNotBindable,
-            DiagnosticDescriptors.MetadataProviderClearsOpcode,
-            DiagnosticDescriptors.MetadataProviderOverwritesOpcodeWithoutGuard,
             DiagnosticDescriptors.RequestOptionsRetryCountNegative,
             DiagnosticDescriptors.RequestOptionsTimeoutNegative,
             DiagnosticDescriptors.PacketMiddlewareMissingOrder,
@@ -61,7 +59,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.NetworkHostingMissingBufferPoolManager,
             DiagnosticDescriptors.NetworkHostingMissingConnectionHub,
             DiagnosticDescriptors.NetworkHostingHandlerTypeInvalid,
-            DiagnosticDescriptors.NetworkHostingMetadataProviderTypeInvalid,
             DiagnosticDescriptors.NetworkHostingMissingTcpBinding,
             DiagnosticDescriptors.NetworkHostingUdpWithoutTcpBinding,
             DiagnosticDescriptors.UnusuallyLargeSerializeOrderGap,
@@ -261,7 +258,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         AnalyzePacketType(context, typeSymbol, symbols, globalPacketOpcodes);
         AnalyzeSerializationType(context, typeSymbol, symbols);
         AnalyzeConfigurationType(context, typeSymbol, symbols);
-        AnalyzeMetadataProviderType(context, typeSymbol, symbols);
         AnalyzeMiddlewareType(context, typeSymbol, symbols);
         AnalyzeRpcServiceType(context, typeSymbol, symbols);
 
@@ -325,36 +321,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    private static void AnalyzeMetadataProviderType(SymbolAnalysisContext context, INamedTypeSymbol typeSymbol, SymbolSet symbols)
-    {
-        if (!Implements(typeSymbol, symbols.PacketMetadataProviderType))
-        {
-            return;
-        }
-
-        foreach (IMethodSymbol method in typeSymbol.GetMembers().OfType<IMethodSymbol>())
-        {
-            if (method.Name != "Populate"
-                || method.MethodKind != MethodKind.Ordinary
-                || method.Parameters.Length != 2
-                || !IsSymbol(method.Parameters[0].Type, symbols.MethodInfoType)
-                || !IsSymbol(method.Parameters[1].Type, symbols.PacketMetadataBuilderType))
-            {
-                continue;
-            }
-
-            foreach (SyntaxReference syntaxReference in method.DeclaringSyntaxReferences)
-            {
-                if (syntaxReference.GetSyntax(context.CancellationToken) is not MethodDeclarationSyntax methodSyntax)
-                {
-                    continue;
-                }
-
-                AnalyzePopulateMethod(context, typeSymbol, method, methodSyntax, symbols);
-            }
-        }
-    }
-
     private static void AnalyzeMiddlewareType(SymbolAnalysisContext context, INamedTypeSymbol typeSymbol, SymbolSet symbols)
     {
         if (!ImplementsOpenGeneric(typeSymbol, symbols.PacketMiddlewareType))
@@ -375,50 +341,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         if (stageAttribute is not null && IsInboundAlwaysExecute(stageAttribute, symbols.MiddlewareStageType))
         {
             Report(context, DiagnosticDescriptors.InboundMiddlewareAlwaysExecuteIgnored, typeSymbol, typeSymbol.Name);
-        }
-    }
-
-    private static void AnalyzePopulateMethod(
-        SymbolAnalysisContext context,
-        INamedTypeSymbol typeSymbol,
-        IMethodSymbol methodSymbol,
-        MethodDeclarationSyntax methodSyntax,
-        SymbolSet _)
-    {
-        SyntaxNode? bodyRoot = (SyntaxNode?)methodSyntax.Body ?? methodSyntax.ExpressionBody?.Expression;
-        if (bodyRoot is null)
-        {
-            return;
-        }
-
-        string builderParameterName = methodSymbol.Parameters[1].Name;
-        bool hasOpcodeGuard = bodyRoot.DescendantNodesAndSelf().Any(node => IsOpcodeGuard(node, builderParameterName));
-        bool reportedOverwrite = false;
-
-        foreach (AssignmentExpressionSyntax assignment in bodyRoot.DescendantNodesAndSelf().OfType<AssignmentExpressionSyntax>())
-        {
-            if (!IsBuilderOpcodeAccess(assignment.Left, builderParameterName))
-            {
-                continue;
-            }
-
-            if (assignment.Right.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.NullLiteralExpression))
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    DiagnosticDescriptors.MetadataProviderClearsOpcode,
-                    assignment.GetLocation(),
-                    typeSymbol.Name));
-                continue;
-            }
-
-            if (!hasOpcodeGuard && !reportedOverwrite)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    DiagnosticDescriptors.MetadataProviderOverwritesOpcodeWithoutGuard,
-                    assignment.GetLocation(),
-                    typeSymbol.Name));
-                reportedOverwrite = true;
-            }
         }
     }
 
@@ -1719,15 +1641,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         return current.Type ?? operation.Type;
     }
 
-
-
-    private static bool IsBuilderOpcodeAccess(ExpressionSyntax expression, string builderParameterName)
-        => expression is MemberAccessExpressionSyntax
-        {
-            Expression: IdentifierNameSyntax { Identifier.ValueText: var identifier },
-            Name.Identifier.ValueText: "Opcode"
-        } && identifier == builderParameterName;
-
     private static bool IsInboundAlwaysExecute(AttributeData stageAttribute, INamedTypeSymbol? middlewareStageType)
     {
         if (stageAttribute.ConstructorArguments.Length != 1
@@ -1747,23 +1660,6 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             {
                 return true;
             }
-        }
-
-        return false;
-    }
-
-    private static bool IsOpcodeGuard(SyntaxNode node, string builderParameterName)
-    {
-        if (node is BinaryExpressionSyntax binary)
-        {
-            return (binary.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.EqualsExpression)
-                    || binary.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.NotEqualsExpression))
-                   && (IsBuilderOpcodeAccess(binary.Left, builderParameterName) || IsBuilderOpcodeAccess(binary.Right, builderParameterName));
-        }
-
-        if (node is IsPatternExpressionSyntax pattern)
-        {
-            return IsBuilderOpcodeAccess(pattern.Expression, builderParameterName);
         }
 
         return false;

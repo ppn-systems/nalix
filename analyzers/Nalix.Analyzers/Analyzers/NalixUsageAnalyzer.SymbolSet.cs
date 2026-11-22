@@ -38,9 +38,6 @@ public sealed partial class NalixUsageAnalyzer
             INamedTypeSymbol? configurationLoaderType,
             INamedTypeSymbol? configurationIgnoreAttribute,
             INamedTypeSymbol? reservedOpcodePermittedAttribute,
-            INamedTypeSymbol? packetMetadataProviderType,
-            INamedTypeSymbol? packetMetadataBuilderType,
-            INamedTypeSymbol? methodInfoType,
             INamedTypeSymbol? requestOptionsType,
             INamedTypeSymbol? requestExtensionsType,
             INamedTypeSymbol? taskType,
@@ -90,9 +87,6 @@ public sealed partial class NalixUsageAnalyzer
             this.ConfigurationLoaderType = configurationLoaderType;
             this.ConfigurationIgnoreAttribute = configurationIgnoreAttribute;
             this.ReservedOpcodePermittedAttribute = reservedOpcodePermittedAttribute;
-            this.PacketMetadataProviderType = packetMetadataProviderType;
-            this.PacketMetadataBuilderType = packetMetadataBuilderType;
-            this.MethodInfoType = methodInfoType;
             this.RequestOptionsType = requestOptionsType;
             this.RequestExtensionsType = requestExtensionsType;
             this.TaskType = taskType;
@@ -143,9 +137,6 @@ public sealed partial class NalixUsageAnalyzer
         public INamedTypeSymbol? ConfigurationLoaderType { get; }
         public INamedTypeSymbol? ConfigurationIgnoreAttribute { get; }
         public INamedTypeSymbol? ReservedOpcodePermittedAttribute { get; }
-        public INamedTypeSymbol? PacketMetadataProviderType { get; }
-        public INamedTypeSymbol? PacketMetadataBuilderType { get; }
-        public INamedTypeSymbol? MethodInfoType { get; }
         public INamedTypeSymbol? RequestOptionsType { get; }
         public INamedTypeSymbol? RequestExtensionsType { get; }
         public INamedTypeSymbol? TaskType { get; }
@@ -199,9 +190,6 @@ public sealed partial class NalixUsageAnalyzer
             INamedTypeSymbol? configurationLoaderType = compilation.GetTypeByMetadataName("Nalix.Environment.Configuration.Binding.ConfigurationLoader");
             INamedTypeSymbol? configurationIgnoreAttribute = compilation.GetTypeByMetadataName("Nalix.Abstractions.ConfiguredIgnoreAttribute");
             INamedTypeSymbol? reservedOpcodePermittedAttribute = compilation.GetTypeByMetadataName("Nalix.Abstractions.ReservedOpcodePermittedAttribute");
-            INamedTypeSymbol? packetMetadataProviderType = compilation.GetTypeByMetadataName("Nalix.Runtime.Dispatching.IPacketMetadataProvider");
-            INamedTypeSymbol? packetMetadataBuilderType = compilation.GetTypeByMetadataName("Nalix.Runtime.Dispatching.PacketMetadataBuilder");
-            INamedTypeSymbol? methodInfoType = compilation.GetTypeByMetadataName("System.Reflection.MethodInfo");
             INamedTypeSymbol? requestOptionsType = compilation.GetTypeByMetadataName("Nalix.SDK.Options.RequestOptions");
             INamedTypeSymbol? requestExtensionsType = compilation.GetTypeByMetadataName("Nalix.SDK.Transport.Extensions.RequestExtensions");
             INamedTypeSymbol? taskType = compilation.GetTypeByMetadataName(typeof(Task).FullName);
@@ -292,9 +280,6 @@ public sealed partial class NalixUsageAnalyzer
                     configurationLoaderType,
                     configurationIgnoreAttribute,
                     reservedOpcodePermittedAttribute,
-                    packetMetadataProviderType,
-                    packetMetadataBuilderType,
-                    methodInfoType,
                     requestOptionsType,
                     requestExtensionsType,
                     taskType,
