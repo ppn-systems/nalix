@@ -64,4 +64,17 @@ public sealed class LeaseRefOverloadTests
         Assert.False(FrameTransformer.TryDecompress(default(LeaseRef), dest));
         Assert.False(FrameTransformer.TryDecrypt(default(LeaseRef), dest, s_key, Suite, out _));
     }
+
+    [Fact]
+    public void TryOverloads_WhenDestinationIsNullOrKeyIsEmpty_ReturnFalse()
+    {
+        using BufferLease src = BufferLease.Rent(64);
+        src.CommitLength(64);
+        using BufferLease dest = BufferLease.Rent(64);
+
+        Assert.False(FrameTransformer.TryDecompress(src, null!));
+        Assert.False(FrameTransformer.TryDecompress(src.AsRef(), null!));
+        Assert.False(FrameTransformer.TryDecrypt(src, null!, s_key, Suite, out _));
+        Assert.False(FrameTransformer.TryDecrypt(src.AsRef(), dest, [], Suite, out _));
+    }
 }

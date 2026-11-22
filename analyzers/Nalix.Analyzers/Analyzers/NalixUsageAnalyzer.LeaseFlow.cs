@@ -685,7 +685,16 @@ public sealed partial class NalixUsageAnalyzer
                             continue;
                         }
 
-                        ISymbol? symbol = ReferencedSymbol(capture.Value);
+                        // A capture can be filled from another capture ('a ?? b' copies the tested value).
+                        IOperation value = capture.Value;
+                        while (value is IConversionOperation conversion)
+                        {
+                            value = conversion.Operand;
+                        }
+
+                        ISymbol? symbol = value is IFlowCaptureReferenceOperation inner
+                            ? (_captures is not null && _captures.TryGetValue(inner.Id, out ISymbol? copied) ? copied : null)
+                            : ReferencedSymbol(value);
                         if (symbol is not null && this.GroupOf(symbol) < 0)
                         {
                             symbol = null;
