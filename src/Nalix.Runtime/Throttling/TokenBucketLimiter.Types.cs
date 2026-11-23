@@ -109,6 +109,7 @@ public sealed partial class TokenBucketLimiter
         /// Set (under <see cref="Lock"/>) once the state was removed from its shard map. A retired state is never
         /// pooled or reused, so a request that fetched it just before removal can detect that and look it up again.
         /// </summary>
+        [SkipClean]
         public int Retired;
 
         public readonly Lock Lock = new();

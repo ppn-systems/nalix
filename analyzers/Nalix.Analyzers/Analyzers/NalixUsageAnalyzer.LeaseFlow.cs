@@ -38,9 +38,19 @@ public sealed partial class NalixUsageAnalyzer
     private const int MaxLeaseFlowBlocks = 2048;
     private const int MaxLeaseFlowContexts = 256;
 
-    private static void AnalyzeLeaseFlow(OperationBlockAnalysisContext context, INamedTypeSymbol leaseType)
+    private static void AnalyzeLeaseFlow(OperationBlockAnalysisContext context, INamedTypeSymbol leaseType, INamedTypeSymbol? poolableType)
     {
-        LeaseFlow? flow = LeaseFlow.TryCreate(context, leaseType);
+        RunLeaseFlow(context, LeaseFlow.TryCreate(context, leaseType, poolableType: null));
+
+        // The same analysis for any other pooled object: Return() is its only release (NALIX121).
+        if (poolableType is not null)
+        {
+            RunLeaseFlow(context, LeaseFlow.TryCreate(context, leaseType, poolableType));
+        }
+    }
+
+    private static void RunLeaseFlow(OperationBlockAnalysisContext context, LeaseFlow? flow)
+    {
         if (flow is null)
         {
             return;
@@ -70,6 +80,9 @@ public sealed partial class NalixUsageAnalyzer
         private readonly OperationBlockAnalysisContext _context;
         private readonly INamedTypeSymbol _leaseType;
 
+        // Non-null in pooled mode: the analysis follows IPoolable objects that are not leases.
+        private readonly INamedTypeSymbol? _poolableType;
+
         // Symbol -> alias group. Each group has one state.
         private readonly Dictionary<ISymbol, int> _groupOf = new(SymbolEqualityComparer.Default);
         private readonly List<ISymbol> _groupSymbol = [];
@@ -92,26 +105,34 @@ public sealed partial class NalixUsageAnalyzer
         private bool _report;
         private bool _aborted;
 
-        private LeaseFlow(OperationBlockAnalysisContext context, INamedTypeSymbol leaseType)
+        private LeaseFlow(OperationBlockAnalysisContext context, INamedTypeSymbol leaseType, INamedTypeSymbol? poolableType)
         {
             _context = context;
             _leaseType = leaseType;
+            _poolableType = poolableType;
         }
+
+        private bool Pooled => _poolableType is not null;
+
+        private bool IsTrackedType(ITypeSymbol type)
+            => _poolableType is null
+                ? IsLeaseType(type, _leaseType)
+                : IsLeaseType(type, _poolableType) && !IsLeaseType(type, _leaseType);
 
         // ── Alias groups ────────────────────────────────────────────────────
 
-        public static LeaseFlow? TryCreate(OperationBlockAnalysisContext context, INamedTypeSymbol leaseType)
+        public static LeaseFlow? TryCreate(OperationBlockAnalysisContext context, INamedTypeSymbol leaseType, INamedTypeSymbol? poolableType)
         {
-            LeaseFlow flow = new(context, leaseType);
+            LeaseFlow flow = new(context, leaseType, poolableType);
 
             if (context.OwningSymbol is IMethodSymbol method)
             {
                 // A method that returns bool keeps its lease parameters only on success, so leaving
                 // one unreleased is not a leak.
-                bool conditional = method.ReturnType.SpecialType == SpecialType.System_Boolean;
+                bool conditional = !flow.Pooled && method.ReturnType.SpecialType == SpecialType.System_Boolean;
                 foreach (IParameterSymbol parameter in method.Parameters)
                 {
-                    if (parameter.RefKind == RefKind.None && IsLeaseType(parameter.Type, leaseType))
+                    if (parameter.RefKind == RefKind.None && flow.IsTrackedType(parameter.Type))
                     {
                         int group = flow.GroupFor(parameter);
                         flow._sources[group]++;
@@ -169,7 +190,7 @@ public sealed partial class NalixUsageAnalyzer
             };
 
             return type is not null
-                   && IsLeaseType(type, _leaseType)
+                   && this.IsTrackedType(type)
                    && SymbolEqualityComparer.Default.Equals(symbol!.ContainingSymbol, _context.OwningSymbol);
         }
 
@@ -210,13 +231,13 @@ public sealed partial class NalixUsageAnalyzer
                     }
                     else
                     {
-                        _untracked[this.GroupFor(declared)] = true;
+                        _untracked[this.GroupFor(declared)] = !this.Pooled;
                     }
 
                     break;
 
                 case IDeclarationExpressionOperation declaration when ReferencedSymbol(declaration.Expression) is { } outLocal && this.IsTrackable(outLocal):
-                    _untracked[this.GroupFor(outLocal)] = true;
+                    _untracked[this.GroupFor(outLocal)] = !this.Pooled;
                     break;
 
                 case IForEachLoopOperation forEach:
@@ -224,7 +245,7 @@ public sealed partial class NalixUsageAnalyzer
                     {
                         if (this.IsTrackable(local))
                         {
-                            _untracked[this.GroupFor(local)] = true;
+                            _untracked[this.GroupFor(local)] = !this.Pooled;
                         }
                     }
 
@@ -339,9 +360,10 @@ public sealed partial class NalixUsageAnalyzer
                 }
 
                 _parent[i] = root;
-                _untracked[i] = untracked[root];
-                _usingResource[i] = usingResource[root];
-                _leakTracked[i] = !untracked[root] && !usingResource[root];
+                // A pooled object in a 'using' is released by its own Dispose, which is not followed.
+                _untracked[i] = untracked[root] || (this.Pooled && usingResource[root]);
+                _usingResource[i] = !this.Pooled && usingResource[root];
+                _leakTracked[i] = !this.Pooled && !untracked[root] && !usingResource[root];
             }
 
             return this;
@@ -370,14 +392,15 @@ public sealed partial class NalixUsageAnalyzer
             byte[] entry = new byte[groups];
             for (int i = 0; i < groups; i++)
             {
-                entry[i] = LeaseNull;
+                // A pooled object is live wherever it comes from; a lease local starts unassigned.
+                entry[i] = this.Pooled ? LeaseOwned : LeaseNull;
             }
 
             foreach (KeyValuePair<ISymbol, int> pair in _groupOf)
             {
                 if (pair.Key is IParameterSymbol parameter)
                 {
-                    byte state = IsBorrowedParameter(parameter) ? LeaseBorrowed : LeaseOwned;
+                    byte state = !this.Pooled && IsBorrowedParameter(parameter) ? LeaseBorrowed : LeaseOwned;
                     if (parameter.NullableAnnotation == NullableAnnotation.Annotated)
                     {
                         state |= LeaseNull;
@@ -443,7 +466,7 @@ public sealed partial class NalixUsageAnalyzer
                     && this.GroupOf(returned) is int returnedGroup and >= 0)
                 {
                     // Returned to the caller, who is the new owner.
-                    state[returnedGroup] = LeaseEscaped;
+                    state[returnedGroup] = this.Pooled ? state[returnedGroup] : LeaseEscaped;
                 }
             }
 

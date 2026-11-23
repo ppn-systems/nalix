@@ -698,4 +698,22 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "The ownership contract of an IBufferLease parameter is set by the interface member or base method. An implementation or override inherits [Borrowed] from it, but cannot add [Borrowed] on its own: callers that only see the base declaration treat the lease as transferred and do not release it, so the buffer leaks. Put [Borrowed] on the base declaration, or remove it here.");
+
+    public static readonly DiagnosticDescriptor PoolableResetForPoolMissingMemberReset = new(
+        id: "NALIX120",
+        title: "ResetForPool does not reset mutable member",
+        messageFormat: "Pooled type '{0}' does not reset mutable member '{1}' in ResetForPool(); its value carries over to the next renter",
+        category: "Lifecycle",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "An IPoolable instance is handed out again after ResetForPool(). Every mutable instance field and auto-property that ResetForPool() does not assign keeps the value of the previous renter. Reset the member, or mark it [SkipClean] when it must survive pooling (a generation counter, a rent flag, a cached buffer).");
+
+    public static readonly DiagnosticDescriptor PooledObjectUsedAfterReturn = new(
+        id: "NALIX121",
+        title: "Pooled object used after it was returned to the pool",
+        messageFormat: "'{0}' is {1}, but it was already returned to the pool{2}; the instance may already belong to another renter",
+        category: "Lifecycle",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "After an IPoolable object is passed to a Return method, or its own Return() is called, the pool can hand the same instance to another caller. The rule follows branches, loops, try/catch/finally and aliases, and reports a use or a second return that can follow the first return on at least one path.");
 }

@@ -86,7 +86,9 @@ public sealed partial class NalixUsageAnalyzer
                 case IArgumentOperation:
                 case ISimpleAssignmentOperation:
                 case IInvocationOperation invocation when ReferenceEquals(invocation.Instance, node)
-                                                          && (IsParameterlessDispose(invocation) || invocation.TargetMethod.Name == "Retain"):
+                                                          && (IsParameterlessDispose(invocation)
+                                                              || invocation.TargetMethod.Name == "Retain"
+                                                              || (this.Pooled && invocation.TargetMethod.Name == "Return" && invocation.Arguments.Length == 0)):
                     return;
 
                 // Neither reads the buffer nor hands the lease on.
@@ -111,14 +113,25 @@ public sealed partial class NalixUsageAnalyzer
 
                 default:
                     // Anything else (a tuple, an array, an await, a method group...) may keep the lease.
+                    // A pooled object stays followed: only Return() ends its life.
                     this.Use(symbol, group, reference, state);
-                    state[group] = LeaseEscaped;
+                    if (!this.Pooled)
+                    {
+                        state[group] = LeaseEscaped;
+                    }
+
                     return;
             }
         }
 
         private void VisitInvocation(IInvocationOperation invocation, byte[] state)
         {
+            if (this.Pooled)
+            {
+                this.VisitPooledInvocation(invocation, state);
+                return;
+            }
+
             if (this.TrackedSymbol(invocation.Instance) is { } receiver)
             {
                 int group = this.GroupOf(receiver);
@@ -139,6 +152,43 @@ public sealed partial class NalixUsageAnalyzer
             }
         }
 
+        // Pooled mode: 'pool.Return(x)' and 'x.Return()' release x; every other call only uses it.
+        private void VisitPooledInvocation(IInvocationOperation invocation, byte[] state)
+        {
+            bool returns = invocation.TargetMethod.Name == "Return";
+            if (this.TrackedSymbol(invocation.Instance) is { } receiver)
+            {
+                int group = this.GroupOf(receiver);
+                if (returns && invocation.Arguments.Length == 0)
+                {
+                    this.Release(receiver, group, invocation, "returned to the pool", state);
+                }
+                else if (IsParameterlessDispose(invocation) || invocation.TargetMethod.Name == "Retain")
+                {
+                    // Skipped by VisitReference, which leaves these two to the lease rules.
+                    this.Use(receiver, group, invocation, state);
+                }
+            }
+
+            foreach (IArgumentOperation argument in invocation.Arguments)
+            {
+                if (this.TrackedSymbol(argument.Value) is not { } symbol)
+                {
+                    continue;
+                }
+
+                int group = this.GroupOf(symbol);
+                if (returns && argument.Parameter is { RefKind: RefKind.None })
+                {
+                    this.Release(symbol, group, argument, "returned to the pool", state);
+                }
+                else if (invocation.TargetMethod.Name != "ReferenceEquals")
+                {
+                    this.Use(symbol, group, argument, state);
+                }
+            }
+        }
+
         private void VisitArguments(System.Collections.Immutable.ImmutableArray<IArgumentOperation> arguments, IOperation call, byte[] state)
         {
             foreach (IArgumentOperation argument in arguments)
@@ -150,7 +200,12 @@ public sealed partial class NalixUsageAnalyzer
 
                 int group = this.GroupOf(symbol);
                 IParameterSymbol? target = argument.Parameter;
-                if (target is null || target.RefKind is RefKind.Ref or RefKind.Out)
+                if (this.Pooled)
+                {
+                    // A constructor argument: the new object holds a reference, the pool is not involved.
+                    this.Use(symbol, group, argument, state);
+                }
+                else if (target is null || target.RefKind is RefKind.Ref or RefKind.Out)
                 {
                     state[group] = LeaseEscaped;
                 }
@@ -190,7 +245,11 @@ public sealed partial class NalixUsageAnalyzer
                 if (target is null)
                 {
                     // Stored in a field, a property, an element or an out parameter.
-                    state[sourceGroup] = LeaseEscaped;
+                    if (!this.Pooled)
+                    {
+                        state[sourceGroup] = LeaseEscaped;
+                    }
+
                     return;
                 }
             }
@@ -225,7 +284,7 @@ public sealed partial class NalixUsageAnalyzer
                 value = awaited.Operation;
             }
 
-            if (value is IInvocationOperation or IObjectCreationOperation)
+            if (this.Pooled || value is IInvocationOperation or IObjectCreationOperation)
             {
                 this.ReportOverwrite(target, targetGroup, assignment, state);
                 state[targetGroup] = LeaseOwned;
@@ -313,7 +372,14 @@ public sealed partial class NalixUsageAnalyzer
             byte current = state[group];
             if (!_usingResource[group] && this.IsFollowed(group, current) && (current & LeaseReleased) != 0)
             {
-                this.Report(DiagnosticDescriptors.BufferLeaseUsedAfterRelease, anchor, symbol.Name, this.Describe(group, current));
+                if (this.Pooled)
+                {
+                    this.ReportPooled(anchor, symbol.Name, "used here", current);
+                }
+                else
+                {
+                    this.Report(DiagnosticDescriptors.BufferLeaseUsedAfterRelease, anchor, symbol.Name, this.Describe(group, current));
+                }
             }
         }
 
@@ -340,7 +406,11 @@ public sealed partial class NalixUsageAnalyzer
                 return;
             }
 
-            if ((current & LeaseReleased) != 0)
+            if ((current & LeaseReleased) != 0 && this.Pooled)
+            {
+                this.ReportPooled(anchor, symbol.Name, "returned to the pool again here", current);
+            }
+            else if ((current & LeaseReleased) != 0)
             {
                 this.Report(DiagnosticDescriptors.BufferLeaseReleasedTwice, anchor, symbol.Name, this.Describe(group, current));
             }
@@ -366,6 +436,19 @@ public sealed partial class NalixUsageAnalyzer
         {
             string description = _releaseDescription[group] ?? "released";
             return (current & (LeaseOwned | LeaseNull)) != 0 ? description + " on another path" : description;
+        }
+
+        private void ReportPooled(IOperation anchor, string name, string action, byte current)
+        {
+            if (_report && _reported!.Add(((long)anchor.Syntax.SpanStart << 3) | 5))
+            {
+                _context.ReportDiagnostic(Diagnostic.Create(
+                    DiagnosticDescriptors.PooledObjectUsedAfterReturn,
+                    anchor.Syntax.GetLocation(),
+                    name,
+                    action,
+                    (current & (LeaseOwned | LeaseNull)) != 0 ? " on another path" : string.Empty));
+            }
         }
 
         private void ReportOverwrite(ISymbol target, int group, IOperation assignment, byte[] state)

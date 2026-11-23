@@ -91,6 +91,8 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
             DiagnosticDescriptors.BufferLeaseUsedAfterRelease,
             DiagnosticDescriptors.BorrowedBufferLeaseReleased,
             DiagnosticDescriptors.BorrowedContractMismatch,
+            DiagnosticDescriptors.PoolableResetForPoolMissingMemberReset,
+            DiagnosticDescriptors.PooledObjectUsedAfterReturn,
             DiagnosticDescriptors.HandlerMissingPermission,
             DiagnosticDescriptors.PacketRateLimitInvalidValue,
             DiagnosticDescriptors.PacketTimeoutNonPositive,
@@ -494,9 +496,24 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
 
         if (methodDeclaration.Identifier.ValueText != "ResetForPool"
             || methodDeclaration.ParameterList.Parameters.Count != 0
-            || !methodSymbol.IsOverride
-            || methodSymbol.ContainingType is not INamedTypeSymbol containingType
-            || !InheritsPacketBase(containingType, symbols))
+            || methodSymbol.ContainingType is not INamedTypeSymbol containingType)
+        {
+            return;
+        }
+
+        if (!InheritsPacketBase(containingType, symbols))
+        {
+            // Any other pooled type: the same completeness check, under its own rule.
+            if (symbols.PoolableInterface is { } poolable && ImplementsInterface(containingType, poolable))
+            {
+                AnalyzeResetForPoolCompleteness(
+                    context, methodDeclaration, containingType, symbols, DiagnosticDescriptors.PoolableResetForPoolMissingMemberReset);
+            }
+
+            return;
+        }
+
+        if (!methodSymbol.IsOverride)
         {
             return;
         }
@@ -518,14 +535,29 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
                 containingType.Name));
         }
 
-        AnalyzePacketResetForPoolCompleteness(context, methodDeclaration, containingType, symbols);
+        AnalyzeResetForPoolCompleteness(
+            context, methodDeclaration, containingType, symbols, DiagnosticDescriptors.PacketResetForPoolMissingMemberReset);
     }
 
-    private static void AnalyzePacketResetForPoolCompleteness(
+    private static bool ImplementsInterface(INamedTypeSymbol type, INamedTypeSymbol @interface)
+    {
+        foreach (INamedTypeSymbol implemented in type.AllInterfaces)
+        {
+            if (SymbolEqualityComparer.Default.Equals(implemented, @interface))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void AnalyzeResetForPoolCompleteness(
         SyntaxNodeAnalysisContext context,
         MethodDeclarationSyntax methodDeclaration,
         INamedTypeSymbol containingType,
-        SymbolSet symbols)
+        SymbolSet symbols,
+        DiagnosticDescriptor descriptor)
     {
         ImmutableArray<ISymbol> declaredMembers = containingType.GetMembers();
         List<ISymbol> mutableMembers = [];
@@ -578,12 +610,22 @@ public sealed partial class NalixUsageAnalyzer : DiagnosticAnalyzer
         HashSet<string> touchedNames = new(StringComparer.Ordinal);
         CollectTouchedMemberNames(methodDeclaration, containingType, touchedNames, context.CancellationToken, depth: 0);
 
+        // IPoolRentable.OnRent() runs on every rent, so a member it initializes cannot carry over either.
+        foreach (ISymbol onRent in containingType.GetMembers("OnRent"))
+        {
+            foreach (SyntaxReference reference in onRent.DeclaringSyntaxReferences)
+            {
+                CollectTouchedMemberNames(
+                    reference.GetSyntax(context.CancellationToken), containingType, touchedNames, context.CancellationToken, depth: 0);
+            }
+        }
+
         foreach (ISymbol member in mutableMembers)
         {
             if (!touchedNames.Contains(member.Name))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
-                    DiagnosticDescriptors.PacketResetForPoolMissingMemberReset,
+                    descriptor,
                     methodDeclaration.Identifier.GetLocation(),
                     containingType.Name,
                     member.Name));

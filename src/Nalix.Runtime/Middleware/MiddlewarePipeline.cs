@@ -464,6 +464,9 @@ internal sealed class MiddlewarePipeline<TPacket> where TPacket : IPacket
         private Action<Exception, Type>? _errorHandler;
 
         private Func<CancellationToken, ValueTask>? _final;
+
+        // The step delegates are bound to this instance and index only, so they are kept across rents.
+        [SkipClean]
         private Func<CancellationToken, ValueTask>[] _steps = [];
 
         // Full pipeline state — typed terminal handler (no delegate allocation).
