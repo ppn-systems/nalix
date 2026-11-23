@@ -17,11 +17,35 @@ permissions:
   contents: read
 
 jobs:
-  # Test, build and pack. Holds no publishing credentials.
-  pack:
-    name: "Test & Pack"
+  # Never ship a package whose tests are red. Runs beside `pack`; `publish` waits for both.
+  test:
+    name: "Test"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          # net10.0 and net11.0 are both built and tested: the .NET 11 SDK builds both.
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      # The test build must stay unsigned: a strong-name-signed assembly cannot grant InternalsVisibleTo by
+      # simple name, so this job never sees the signing key.
+      - name: Test
+        timeout-minutes: 20
+        run: dotnet test ./tests/Nalix.Tests.sln --configuration Release --blame-hang --blame-hang-timeout 120000
+
+  # Build and pack. Holds no publishing credentials.
+  pack:
+    name: "Pack"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       version: ${{ steps.version.outputs.version }}
 
@@ -32,7 +56,6 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v6
         with:
-          # net10.0 and net11.0 are both built: the .NET 11 SDK builds both, the .NET 10 runtime runs the net10.0 tests.
           dotnet-version: |
             10.0.x
             11.0.x
@@ -54,22 +77,8 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
       - name: Restore dependencies
-        run: dotnet restore ./tests/Nalix.Tests.sln
-
-      # Never ship a package whose tests are red. The test build must stay unsigned: a strong-name-signed assembly
-      # cannot grant InternalsVisibleTo by simple name, so the signing key is decoded only after this step.
-      - name: Test
-        timeout-minutes: 20
-        run: dotnet test ./tests/Nalix.Tests.sln --configuration Release --no-restore --blame-hang --blame-hang-timeout 120000
+        run: dotnet restore ./src/Nalix.sln
 
       - name: Decode signing key
         shell: bash
@@ -77,10 +86,10 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         run: echo "$SIGNING_KEY" | base64 -d > ./src/Nalix.snk
 
-      # Rebuild everything from scratch so the packed assemblies are the signed, version-stamped ones.
+      # The packed assemblies are the signed, version-stamped ones.
       # NalixInternalsVisibleTo=false keeps the test/benchmark assembly names out of the shipped assemblies.
       - name: Build
-        run: dotnet build ./src/Nalix.sln --configuration Release --no-restore --no-incremental /p:Version=${{ steps.version.outputs.version }} /p:NalixInternalsVisibleTo=false
+        run: dotnet build ./src/Nalix.sln --configuration Release --no-restore /p:Version=${{ steps.version.outputs.version }} /p:NalixInternalsVisibleTo=false
 
       - name: Pack
         run: dotnet pack ./src/Nalix.sln --configuration Release --no-build --output ./out /p:Version=${{ steps.version.outputs.version }}
@@ -113,7 +122,7 @@ jobs:
   # (owner ppn-systems, repository nalix, workflow nuget.yml, environment production).
   publish:
     name: "Publish"
-    needs: pack
+    needs: [test, pack]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production

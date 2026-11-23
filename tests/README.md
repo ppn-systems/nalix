@@ -48,17 +48,38 @@ Build output goes to `build/bin/<Configuration>/<Project>/`. Test run output (`T
 dotnet test tests/Nalix.Tests.sln -c Release --collect:"XPlat Code Coverage" --results-directory artifacts/coverage
 ```
 
-CI publishes a coverage summary on the Linux/Release job.
+CI uploads coverage to Codecov from the Linux test shards.
 
 ## Continuous integration
 
-`CI` (`.github/workflows/ci.yml`) detects which tier a change touches and runs only the affected jobs:
+`CI` (`.github/workflows/ci.yml`) splits the work into shards that run in parallel, one runner each. The shards
+are defined in `.github/scripts/ci_plan.py`:
 
-| Job | Configuration | OS |
+| Shard | OS | What it does |
 | :--- | :--- | :--- |
-| Core | Release | Linux (whole suite) |
-| Core | Release | Windows (client-side projects only: `tests/Nalix.Client.Tests.slnf` — SDK, Codec, Environment, Abstractions) |
-| Extensions | Release | Linux (one job per extension whose sources, contracts, tests or solution changed; shared changes run all) |
+| `base`, `network`, `hosting`, `sdk`, `analyzers` | Linux | Groups of the test projects in `tests/` (with coverage, except `analyzers`) |
+| `extensions` | Linux | The test projects in `extensions/tests/` |
+| `windows-client` | Windows | Client-side projects only: SDK, Codec, Environment, Abstractions |
+| `build` | Linux | `src/Nalix.sln` and `extensions/*.sln` for every target framework, analyzers on |
+| `lint` | Linux | `actionlint` over the workflows |
+
+A test shard builds its test projects and what they reference for `net10.0` only, without analyzers; the `build`
+shard is where a `net11.0` break, an analyzer error or a public API change is caught.
+
+Each shard has a key: a hash of every tracked file that can change its result (its projects, everything they
+reference, and the shared build files). A shard that passes saves a marker under that key, and a later run skips
+a shard whose marker exists, when it was saved from `master` or from the same pull request. A change therefore
+only runs the shards it can affect, and a documentation-only change runs none. "Run workflow" on the Actions
+page runs every shard regardless. A new test project must be added to a shard in `ci_plan.py`; the plan fails
+until it is.
+
+To see what CI would do with your working tree (staged changes included), run the plan locally. It prints every
+shard with its key; `inputs` lists the files hashed for one shard:
+
+```powershell
+python3 .github/scripts/ci_plan.py plan
+python3 .github/scripts/ci_plan.py inputs hosting
+```
 
 `CI OK` is the single required status check. Test builds are never strong-name signed (a signed assembly cannot
 grant `InternalsVisibleTo` by simple name), so CI does not decode the signing key for test runs.

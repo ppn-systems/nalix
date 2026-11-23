@@ -51,11 +51,6 @@ jobs:
             10.0.x
             11.0.x
 
-      - name: Install zip
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zip
-
       - name: Build extensions
         shell: bash
         run: |

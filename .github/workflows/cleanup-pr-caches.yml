@@ -1,6 +1,6 @@
 name: "Repo: Cleanup PR caches"
-# Actions caches are scoped per ref, so every PR leaves its own NuGet cache copy (refs/pull/<n>/merge)
-# behind for up to 7 days and eats into the 10 GB repo quota. Delete them the moment the PR closes.
+# Actions caches are scoped per ref, so every PR leaves its CI pass markers (refs/pull/<n>/merge, see ci.yml)
+# behind for up to 7 days. Only that PR's own runs trust them, so delete them the moment the PR closes.
 # Best-effort only: never fail the close event over a missing cache.
 on:
   pull_request:

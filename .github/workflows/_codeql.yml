@@ -32,40 +32,12 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Gate: skip analysis when the PR is documentation-only
-  # ---------------------------------------------------------------------------
-  check-label:
-    name: "Check: Documentation label"
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    outputs:
-      is_document: ${{ steps.label_check.outputs.is_document }}
-    steps:
-      - name: Detect 'documentation' label on PR
-        id: label_check
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-            });
-            const isDoc = labels.some(l => l.name === 'documentation');
-            core.info(`is_document = ${isDoc}`);
-            core.setOutput('is_document', isDoc ? 'true' : 'false');
-
-  # ---------------------------------------------------------------------------
   # CodeQL: manual build mode for C#
   # ---------------------------------------------------------------------------
   analyze:
     name: "Analyze: C# (CodeQL)"
-    needs: check-label
-    # always() prevents skip when check-label is skipped (non-PR events)
-    if: |
-      always() &&
-      (needs.check-label.outputs.is_document != 'true')
-       
+    # Skipped when the pull request is labelled as documentation-only.
+    if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'documentation')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

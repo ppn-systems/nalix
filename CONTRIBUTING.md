@@ -205,17 +205,15 @@ Keep the `#nullable enable` line as the first line of both files. Members that e
 
 ## CI Quality Gates
 
-Pull requests and pushes to `master` must pass the shared `_build.yml` workflow:
+Pull requests and pushes to `master` must pass the `CI OK` check of the `CI` workflow (`.github/workflows/ci.yml`):
 
 | Check | Description |
 | :--- | :--- |
-| `dotnet format --verify-no-changes` | Code formatting compliance |
-| Release build | Full solution compilation |
-| Test execution | TRX results with XPlat Code Coverage |
-| Coverage artifacts | Cobertura format generation |
-| Trim smoke test | `linux-x64` self-contained publish with `PublishTrimmed=true` |
+| Build | `src/Nalix.sln` and `extensions/*.sln` in Release for every target framework, analyzers on |
+| Tests | Every test project on Linux (with coverage uploaded to Codecov), the client-side ones also on Windows |
+| Workflow lint | `actionlint` over `.github/workflows` |
 
-Additionally, the **benchmark workflow** runs BenchmarkDotNet on pushes to `master`, exports JSON/CSV artifacts, and compares results with the previous run to highlight regressions.
+CI only runs the parts a change can affect; see [tests/README.md](tests/README.md#continuous-integration).
 
 ---
 

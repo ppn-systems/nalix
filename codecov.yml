@@ -1,0 +1,6 @@
+# CI uploads coverage per test shard, one flag each, and skips a shard whose inputs already passed
+# (see .github/workflows/ci.yml). A flag that was not uploaded for a commit is carried forward from its parent,
+# so a skipped shard does not read as lost coverage.
+flag_management:
+  default_rules:
+    carryforward: true
