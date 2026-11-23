@@ -4,6 +4,7 @@
 using BlazorWasm.Contracts;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Codec.Pooling;
 using Nalix.Framework.Injection;
 using Nalix.Runtime.Extensions;
@@ -19,6 +20,9 @@ public static class DemoHandlers
     /// <summary>
     /// Request/response: replies to the caller only.
     /// </summary>
+    // Handlers require PermissionLevel.USER by default; a connection that has not authenticated
+    // is NONE, so this demo lowers the requirement explicitly.
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(0x7301)]
     public static async ValueTask HandleEchoAsync(IPacketContext<EchoRequestPacket> context)
     {
@@ -36,6 +40,9 @@ public static class DemoHandlers
     /// <summary>
     /// Server push: re-broadcasts a chat line to every connected client (including the sender).
     /// </summary>
+    // Handlers require PermissionLevel.USER by default; a connection that has not authenticated
+    // is NONE, so this demo lowers the requirement explicitly.
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(0x7303)]
     public static async ValueTask HandleChatAsync(IPacketContext<ChatMessagePacket> context)
     {

@@ -4,6 +4,7 @@
 using ChatRoom.Contracts;
 using Nalix.Abstractions.Networking;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Framework.Injection;
 using Nalix.Runtime.Extensions;
 
@@ -23,6 +24,9 @@ public static class ChatHandlers
     /// <param name="context">
     /// The packet context carrying the message, connection, and sender.
     /// </param>
+    // Handlers require PermissionLevel.USER by default; a connection that has not authenticated
+    // is NONE, so this demo lowers the requirement explicitly.
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(0x7101)]
     public static async ValueTask HandleChatAsync(IPacketContext<ChatMessagePacket> context)
     {

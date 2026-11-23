@@ -3,6 +3,7 @@
 
 using SecureMultiTransportHelloWorld.Contracts;
 using Nalix.Abstractions.Networking.Packets;
+using Nalix.Abstractions.Security;
 using Nalix.Codec.Pooling;
 
 namespace SecureMultiTransportHelloWorld.Server;
@@ -25,6 +26,9 @@ public static class HelloHandlers
     /// <param name="context">
     /// The packet context carrying the request, connection, and sender.
     /// </param>
+    // Handlers require PermissionLevel.USER by default; a connection that only completed the
+    // handshake is NONE, so this demo lowers the requirement explicitly.
+    [PacketPermission(PermissionLevel.NONE)]
     [PacketOpcode(0x7201)]
     public static async ValueTask HandleHelloAsync(IPacketContext<HelloRequestPacket> context)
     {
