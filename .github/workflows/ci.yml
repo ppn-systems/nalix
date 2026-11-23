@@ -1,176 +1,201 @@
 name: "CI"
-# Single entry point for build & test. Replaces ci-linux.yml, ci-windows.yml and ci-extensions.yml.
-# `changes` maps the diff to tiers with plain git; any ambiguity (new branch, force-push, diff failure)
-# flips every tier on -- over-running is safer than silently skipping a real change.
-# Only `CI OK` should be marked as a required status check.
+# Single entry point for build & test. Only `CI OK` should be marked as a required status check.
+#
+# `plan` (.github/scripts/ci_plan.py) splits the work into shards and gives each one a key: a hash of every
+# tracked file that can change its result, following the ProjectReference graph. A shard that passes saves a
+# marker under its key, and a later run skips a shard whose marker already exists (saved from master or from the
+# same pull request). So a run only pays for what the change can affect; a docs-only change skips everything.
+# "Run workflow" (workflow_dispatch) ignores the markers and runs every shard.
+#
+# The shards that remain run in parallel, one runner each:
+#   test   builds its test projects and what they reference for net10.0 only, without analyzers, and runs them;
+#   build  compiles src and the extensions for every target framework with analyzers on (net11.0 breaks,
+#          analyzer errors and public API changes are caught here, off the tests' critical path);
+#   lint   actionlint over the workflows.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DOTNET_CLI_USE_MSBUILD_SERVER: false
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NUGET_XMLDOC_MODE: skip
+  # MSBuild reads environment variables as properties, so every dotnet restore/build/test below follows these.
+  # Directory.Build.targets narrows the test projects' TargetFrameworks to this one.
+  TestTargetFramework: net10.0
+  # A project built through a ProjectReference from a solution keeps the solution's configuration (Release)
+  # instead of falling back to its own default (Debug).
+  ShouldUnsetParentConfigurationAndPlatform: false
 
+# No paths-ignore: `plan` skips what a change cannot affect, and `CI OK` must report on every pull request.
 on:
   push:
     branches: ["master"]
-    paths-ignore:
-      - "**/*.md"
-      - "site/**"
-      - "LICENSE"
-      - ".github/ISSUE_TEMPLATE/**"
   pull_request:
     branches: ["master"]
-    paths-ignore:
-      - "**/*.md"
-      - "site/**"
-      - "LICENSE"
-      - ".github/ISSUE_TEMPLATE/**"
   workflow_dispatch:
 
-# PR runs are superseded by the next push; master runs verify a merged commit and must finish.
+# A pull request run is superseded by the next push. A master run verifies a merged commit and must finish: the
+# commit is part of its group, because runs that share a group cancel the older pending one when a newer arrives.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'latest' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
-  checks: write
-  pull-requests: write # required for test result comments
 
 jobs:
-  changes:
-    name: Detect changes
+  plan:
+    name: Plan
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # list the pass markers (Actions caches)
     outputs:
-      core: ${{ steps.map.outputs.core }}
-      extensions_matrix: ${{ steps.map.outputs.extensions_matrix }}
-      workflows: ${{ steps.map.outputs.workflows }}
+      tests: ${{ steps.plan.outputs.tests }}
+      build: ${{ steps.plan.outputs.build }}
+      build_key: ${{ steps.plan.outputs.build_key }}
+      lint: ${{ steps.plan.outputs.lint }}
+      lint_key: ${{ steps.plan.outputs.lint_key }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
-      - name: Map changed files to tiers
-        id: map
+      - name: Decide which shards must run
+        id: plan
         shell: bash
         env:
-          EVENT: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
-        run: |
-          set -uo pipefail
-          # Extension matrix: one entry per extension whose sources, contracts, tests or solution changed.
-          # The matrix is {"include":[...]}; the extensions job is skipped when it is empty.
-          ALL_EXTENSIONS='{"include":[{"name":"Observability","project":"extensions/Nalix.Observability.sln","test":"extensions/Nalix.Observability.sln"},{"name":"Traversal","project":"extensions/Nalix.Traversal.sln","test":"extensions/Nalix.Traversal.sln"},{"name":"SDK.Traversal","project":"extensions/Nalix.SDK.Traversal.sln","test":"extensions/Nalix.SDK.Traversal.sln"},{"name":"Tunneling","project":"extensions/Nalix.Tunneling.sln","test":"extensions/Nalix.Tunneling.sln"}]}'
+          GH_TOKEN: ${{ github.token }}
+          CI_FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          # A pull request from a fork may only skip what master has verified, never what its own runs marked.
+          CI_TRUST_OWN_REF: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: python3 .github/scripts/ci_plan.py plan
 
-          all() {
-            echo "Running every tier: $1"
-            { echo "core=true"; echo "workflows=true"; echo "extensions_matrix=$ALL_EXTENSIONS"; } >> "$GITHUB_OUTPUT"
-            exit 0
-          }
-
-          case "$EVENT" in
-            pull_request) base="$PR_BASE" ;;
-            push) base="$PUSH_BEFORE" ;;
-            *) all "event '$EVENT'" ;;
-          esac
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            all "no base commit"
-          fi
-
-          changed="$RUNNER_TEMP/changed.txt"
-          git diff --name-only "$base" HEAD > "$changed" || all "git diff failed"
-          echo "Changed files:"; cat "$changed"
-
-          # Per-extension trigger: the extension's own project folders, its contracts project and its test project,
-          # or its solution file. Keep these in step with the ProjectReferences of each extension.
-          X_OBSERVABILITY='^extensions/(Nalix\.Observability|Nalix\.Observability\.Contracts|tests/Nalix\.Observability\.Tests)/|^extensions/Nalix\.Observability\.sln$'
-          X_TRAVERSAL='^extensions/(Nalix\.Traversal|Nalix\.Traversal\.Contracts|tests/Nalix\.Traversal\.Tests)/|^extensions/Nalix\.Traversal\.sln$'
-          # SDK.Traversal references Traversal.Contracts, so a contracts change also rebuilds it.
-          X_SDK_TRAVERSAL='^extensions/(Nalix\.SDK\.Traversal|Nalix\.Traversal\.Contracts|tests/Nalix\.SDK\.Traversal\.Tests)/|^extensions/Nalix\.SDK\.Traversal\.sln$'
-          X_TUNNELING='^extensions/(Nalix\.Tunneling|Nalix\.Tunneling\.Contracts|tests/Nalix\.Tunneling\.Tests)/|^extensions/Nalix\.Tunneling\.sln$'
-          OWN_ANY="$X_OBSERVABILITY|$X_TRAVERSAL|$X_SDK_TRAVERSAL|$X_TUNNELING"
-
-          # Changes that can affect every extension: core sources and analyzers, root build props, the shared
-          # extension props and test props, and workflows. Any extension path that no extension claims is also
-          # treated as shared, so a new file cannot silently skip every job.
-          SHARED='^(src/|analyzers/)|^[^/]+\.(props|targets)$|^(global\.json|NuGet\.config)$|^extensions/(Directory\.Build\.props|tests/Directory\.Build\.props)$|^extensions/tests/[^/]+$|^\.github/(workflows|actions)/'
-          unclaimed=$(grep -E '^extensions/' "$changed" | grep -vE "$OWN_ANY" || true)
-          entries=()
-          add() { entries+=("{\"name\":\"$1\",\"project\":\"$2\",\"test\":\"$2\"}"); }
-          if grep -qE "$SHARED" "$changed" || [ -n "$unclaimed" ]; then
-            echo "Shared change: every extension runs"
-            add Observability extensions/Nalix.Observability.sln
-            add Traversal extensions/Nalix.Traversal.sln
-            add SDK.Traversal extensions/Nalix.SDK.Traversal.sln
-            add Tunneling extensions/Nalix.Tunneling.sln
-          else
-            if grep -qE "$X_OBSERVABILITY" "$changed"; then add Observability extensions/Nalix.Observability.sln; fi
-            if grep -qE "$X_TRAVERSAL" "$changed"; then add Traversal extensions/Nalix.Traversal.sln; fi
-            if grep -qE "$X_SDK_TRAVERSAL" "$changed"; then add SDK.Traversal extensions/Nalix.SDK.Traversal.sln; fi
-            if grep -qE "$X_TUNNELING" "$changed"; then add Tunneling extensions/Nalix.Tunneling.sln; fi
-          fi
-          matrix='{"include":[]}'
-          if [ "${#entries[@]}" -gt 0 ]; then
-            joined=$(IFS=,; echo "${entries[*]}")
-            matrix="{\"include\":[$joined]}"
-          fi
-
-          core=false; workflows=false
-          # Anything outside extensions/ can affect the core solution (src, tests, analyzers, root props, ...).
-          if grep -qvE '^extensions/' "$changed"; then core=true; fi
-          if grep -qE '^\.github/(workflows|actions)/' "$changed"; then workflows=true; core=true; fi
-
-          echo "core=$core workflows=$workflows extensions=$matrix"
-          { echo "core=$core"; echo "workflows=$workflows"; echo "extensions_matrix=$matrix"; } >> "$GITHUB_OUTPUT"
-
-  # Release only (what ships). Linux runs the whole suite; Windows runs only the client-side projects
-  # (Nalix.SDK and the libraries it ships with) listed in tests/Nalix.Client.Tests.slnf.
-  # Tests run on net10.0 only; the product projects in the test solutions still compile for net10.0 and net11.0,
-  # so a net11.0 build break or warning is still caught.
-  core:
-    name: Core (${{ matrix.os }}, Release)
-    needs: [changes]
-    if: needs.changes.outputs.core == 'true'
+  test:
+    name: Test (${{ matrix.name }})
+    needs: [plan]
+    if: needs.plan.outputs.tests != '[]'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            test: tests/Nalix.Tests.sln
-            coverage: true
-          - os: windows-latest
-            test: tests/Nalix.Client.Tests.slnf
-            coverage: false
-    uses: ./.github/workflows/_build.yml
-    secrets: inherit
-    with:
-      os: ${{ matrix.os }}
-      configuration: Release
-      project: src/Nalix.sln
-      test: ${{ matrix.test }}
-      deploy: false
-      coverage: ${{ matrix.coverage }}
-      test-framework: net10.0
+        include: ${{ fromJSON(needs.plan.outputs.tests) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      # The build job runs the analyzers; here they would only slow the compile down. Source generators still run.
+      RunAnalyzers: false
+      DisableNalixAnalyzers: true
+      RESULTS_DIR: artifacts/test-results
+    steps:
+      # Real-time scanning of every obj/bin write is the main reason Windows builds lag Linux.
+      # Ephemeral GitHub-hosted runner only; the VM is discarded after the job.
+      - name: Disable Windows Defender real-time scanning
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
 
-  # One matrix entry per extension the diff touches (see the changes job). Each entry builds and tests its own solution.
-  extensions:
-    name: Extension (${{ matrix.name }})
-    needs: [changes]
-    if: needs.changes.outputs.extensions_matrix != '{"include":[]}'
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.changes.outputs.extensions_matrix) }}
-    uses: ./.github/workflows/_build.yml
-    secrets: inherit
-    with:
-      os: ubuntu-latest
-      project: ${{ matrix.project }}
-      test: ${{ matrix.test }}
-      deploy: false
-      test-framework: net10.0
+      - uses: actions/checkout@v7
 
-  lint-workflows:
+      - uses: actions/setup-dotnet@v6
+        with:
+          # The .NET 11 SDK restores the net11.0 target of the referenced projects; the tests run on .NET 10.
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      # Only the shard's test projects: what they reference is built through ProjectReference, for net10.0 only.
+      - name: Write the shard solution
+        shell: bash
+        env:
+          SOLUTION: ${{ matrix.solution }}
+        run: printf '%s' "$SOLUTION" > ci-shard.slnx
+
+      # No NuGet cache: a cold restore takes ~10 s, less than downloading and unpacking the cache did.
+      - name: Restore
+        shell: bash
+        run: dotnet restore ci-shard.slnx
+
+      - name: Build
+        shell: bash
+        run: dotnet build ci-shard.slnx -c Release --no-restore -m
+
+      - name: Test
+        shell: bash
+        run: bash .github/scripts/run-tests.sh ci-shard.slnx "$RESULTS_DIR" "${{ matrix.coverage }}"
+
+      # One flag per shard: codecov.yml carries a flag forward from the parent commit when its shard was skipped.
+      - name: List coverage reports
+        id: coverage
+        if: matrix.coverage
+        shell: bash
+        run: echo "files=$(find "$RESULTS_DIR" -name '*.cobertura.xml' | paste -sd, -)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload coverage to Codecov
+        if: matrix.coverage && steps.coverage.outputs.files != ''
+        uses: codecov/codecov-action@v7
+        with:
+          files: ${{ steps.coverage.outputs.files }}
+          disable_search: true
+          flags: ${{ matrix.name }}
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.name }}
+          path: ${{ env.RESULTS_DIR }}
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Write the pass marker
+        shell: bash
+        run: echo passed > ci-pass.txt
+
+      - name: Save the pass marker
+        uses: actions/cache/save@v6
+        with:
+          path: ci-pass.txt
+          key: ${{ matrix.key }}
+
+  build:
+    name: Build (all targets, analyzers)
+    needs: [plan]
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      # The real solutions, so a project missing from one is caught here and not at release time.
+      - name: Build src and extensions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for solution in src/Nalix.sln extensions/*.sln; do
+            dotnet build "$solution" -c Release -m
+          done
+
+      - name: Write the pass marker
+        shell: bash
+        run: echo passed > ci-pass.txt
+
+      - name: Save the pass marker
+        uses: actions/cache/save@v6
+        with:
+          path: ci-pass.txt
+          key: ${{ needs.plan.outputs.build_key }}
+
+  lint:
     name: Lint workflows
-    needs: [changes]
-    if: needs.changes.outputs.workflows == 'true'
+    needs: [plan]
+    if: needs.plan.outputs.lint == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -182,9 +207,19 @@ jobs:
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
           ./actionlint -color -shellcheck=
 
+      - name: Write the pass marker
+        shell: bash
+        run: echo passed > ci-pass.txt
+
+      - name: Save the pass marker
+        uses: actions/cache/save@v6
+        with:
+          path: ci-pass.txt
+          key: ${{ needs.plan.outputs.lint_key }}
+
   ci-ok:
     name: CI OK
-    needs: [changes, core, extensions, lint-workflows]
+    needs: [plan, test, build, lint]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
