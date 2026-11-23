@@ -6,10 +6,11 @@ using Nalix.Abstractions.Security;
 using Nalix.Abstractions.Serialization;
 using Nalix.Codec.DataFrames;
 using Nalix.Codec.Pooling;
+using Nalix.Environment.Memory;
 
 namespace Nalix.Comparison.Benchmarks.Libraries;
 
-/// <summary>Echo request carrying an opaque byte payload.</summary>
+/// <summary>Echo request carrying an opaque payload held in a pooled buffer (no <c>byte[]</c> per message).</summary>
 [Packet]
 [GenerateFormatter]
 [SerializePackable(SerializeLayout.Explicit)]
@@ -18,11 +19,17 @@ public sealed partial class EchoRequestPacket : PacketBase<EchoRequestPacket>, I
     public static ushort StaticOpCode => 0x7301;
 
     [SerializeOrder(0)]
-    [SerializeDynamicSize(1024)]
-    public byte[] Data { get; set; } = [];
+    public BufferLease? Data { get; set; }
+
+    public override void ResetForPool()
+    {
+        base.ResetForPool();
+        this.Data?.Dispose();
+        this.Data = null;
+    }
 }
 
-/// <summary>Echo response carrying the same payload back.</summary>
+/// <summary>Echo response carrying the same payload back, in a pooled buffer.</summary>
 [Packet]
 [GenerateFormatter]
 [SerializePackable(SerializeLayout.Explicit)]
@@ -31,8 +38,14 @@ public sealed partial class EchoResponsePacket : PacketBase<EchoResponsePacket>,
     public static ushort StaticOpCode => 0x7302;
 
     [SerializeOrder(0)]
-    [SerializeDynamicSize(1024)]
-    public byte[] Data { get; set; } = [];
+    public BufferLease? Data { get; set; }
+
+    public override void ResetForPool()
+    {
+        base.ResetForPool();
+        this.Data?.Dispose();
+        this.Data = null;
+    }
 }
 
 /// <summary>Plaintext echo handler (recommended pooled-response pattern from the samples).</summary>
@@ -44,6 +57,8 @@ public static class EchoHandlers
     public static async ValueTask EchoAsync(IPacketContext<EchoRequestPacket> context)
     {
         using PacketScope<EchoResponsePacket> lease = PacketFactory<EchoResponsePacket>.Acquire();
+        // The request keeps its reference until the dispatcher returns it; the response takes its own.
+        context.Packet.Data!.Retain();
         lease.Value.Data = context.Packet.Data;
         await context.Sender.ReplyAsync(lease.Value).ConfigureAwait(false);
     }
@@ -59,6 +74,8 @@ public static class EchoEncryptedHandlers
     public static async ValueTask EchoAsync(IPacketContext<EchoRequestPacket> context)
     {
         using PacketScope<EchoResponsePacket> lease = PacketFactory<EchoResponsePacket>.Acquire();
+        // The request keeps its reference until the dispatcher returns it; the response takes its own.
+        context.Packet.Data!.Retain();
         lease.Value.Data = context.Packet.Data;
         await context.Sender.ReplyAsync(lease.Value).ConfigureAwait(false);
     }

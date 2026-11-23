@@ -44,6 +44,7 @@ public static class FormatterProvider
         // String formatters are registered first because they are among the most
         // common and often participate in higher-level composite serializers.
         Register(new StringFormatter());
+        Register(new BufferLeaseFormatter());
         Register(new StringArrayFormatter());
         Register(new ReferenceListFormatter<string>());
         Register(new ReferenceArrayFormatter<string>());
