@@ -63,15 +63,6 @@ public static class FrameCipher
         }
     }
 
-    /// <inheritdoc cref="DecryptFrame(LeaseRef, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
-    public static IBufferLease DecryptFrame(
-        [Borrowed] IBufferLease src,
-        ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-        return DecryptFrame(src.AsRef(), key, expectedAlgorithm, out seq);
-    }
-
     /// <summary>
     /// Attempts to decrypt a framed packet without throwing exceptions on authentication failures.
     /// Returns true and a new leased buffer on success, or false on failure.
@@ -121,23 +112,6 @@ public static class FrameCipher
         return true;
     }
 
-    /// <inheritdoc cref="TryDecryptFrame(LeaseRef, ReadOnlySpan{byte}, CipherSuiteType, out uint, out IBufferLease?)"/>
-    public static bool TryDecryptFrame(
-        [Borrowed] IBufferLease src,
-        ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm,
-        out uint seq,
-        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IBufferLease? dest)
-    {
-        if (src is null)
-        {
-            dest = null;
-            seq = 0;
-            return false;
-        }
-
-        return TryDecryptFrame(src.AsRef(), key, expectedAlgorithm, out seq, out dest);
-    }
-
     /// <summary>
     /// Encrypts a framed packet and sets the encrypted flag in the resulting buffer.
     /// </summary>
@@ -161,12 +135,5 @@ public static class FrameCipher
             dest.Dispose();
             throw;
         }
-    }
-
-    /// <inheritdoc cref="EncryptFrame(LeaseRef, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>
-    public static IBufferLease EncryptFrame([Borrowed] IBufferLease src, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-        return EncryptFrame(src.AsRef(), key, seq, suite);
     }
 }

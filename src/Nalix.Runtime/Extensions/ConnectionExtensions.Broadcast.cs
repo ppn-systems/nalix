@@ -49,7 +49,7 @@ public static partial class ConnectionExtensions
             int payloadSize = rawLease.Length - PacketConstants.HeaderSize;
             if (enableCompress && payloadSize >= minSizeToCompress)
             {
-                IBufferLease temp = FrameCompression.CompressFrame(rawLease);
+                IBufferLease temp = FrameCompression.CompressFrame(rawLease.AsRef());
                 rawLease.Dispose();
                 rawLease = (BufferLease)temp;
                 rawLease.ZeroOnDispose = enableEncrypt; // [SECURITY] compressed plaintext
@@ -106,7 +106,7 @@ public static partial class ConnectionExtensions
             int payloadSize = rawLease.Length - PacketConstants.HeaderSize;
             if (enableCompress && payloadSize >= minSizeToCompress)
             {
-                IBufferLease temp = FrameCompression.CompressFrame(rawLease);
+                IBufferLease temp = FrameCompression.CompressFrame(rawLease.AsRef());
                 rawLease.Dispose();
                 rawLease = (BufferLease)temp;
                 rawLease.ZeroOnDispose = enableEncrypt; // [SECURITY] compressed plaintext
@@ -166,7 +166,7 @@ public static partial class ConnectionExtensions
             int payloadSize = rawLease.Length - PacketConstants.HeaderSize;
             if (enableCompress && payloadSize >= minSizeToCompress)
             {
-                IBufferLease temp = FrameCompression.CompressFrame(rawLease);
+                IBufferLease temp = FrameCompression.CompressFrame(rawLease.AsRef());
                 rawLease.Dispose();
                 rawLease = (BufferLease)temp;
                 rawLease.ZeroOnDispose = enableEncrypt; // [SECURITY] compressed plaintext

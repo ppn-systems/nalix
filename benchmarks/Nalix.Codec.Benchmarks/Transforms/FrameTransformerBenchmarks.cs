@@ -49,15 +49,15 @@ public class FrameTransformerBenchmarks
     public void Encrypt_AEAD_ChaCha20Poly1305()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Chacha20Poly1305);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Chacha20Poly1305);
     }
 
     [Benchmark]
     public void Decrypt_AEAD_ChaCha20Poly1305()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Chacha20Poly1305);
-        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted, s_testKey, CipherSuiteType.Chacha20Poly1305, out _);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Chacha20Poly1305);
+        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted.AsRef(), s_testKey, CipherSuiteType.Chacha20Poly1305, out _);
     }
 
     // ── AEAD (Salsa20Poly1305) ──
@@ -66,15 +66,15 @@ public class FrameTransformerBenchmarks
     public void Encrypt_AEAD_Salsa20Poly1305()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Salsa20Poly1305);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Salsa20Poly1305);
     }
 
     [Benchmark]
     public void Decrypt_AEAD_Salsa20Poly1305()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Salsa20Poly1305);
-        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted, s_testKey, CipherSuiteType.Salsa20Poly1305, out _);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Salsa20Poly1305);
+        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted.AsRef(), s_testKey, CipherSuiteType.Salsa20Poly1305, out _);
     }
 
     // ── Symmetric Stream (ChaCha20) ──
@@ -83,15 +83,15 @@ public class FrameTransformerBenchmarks
     public void Encrypt_Symmetric_ChaCha20()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Chacha20);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Chacha20);
     }
 
     [Benchmark]
     public void Decrypt_Symmetric_ChaCha20()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Chacha20);
-        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted, s_testKey, CipherSuiteType.Chacha20, out _);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Chacha20);
+        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted.AsRef(), s_testKey, CipherSuiteType.Chacha20, out _);
     }
 
     // ── Symmetric Stream (Salsa20) ──
@@ -100,15 +100,15 @@ public class FrameTransformerBenchmarks
     public void Encrypt_Symmetric_Salsa20()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Salsa20);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Salsa20);
     }
 
     [Benchmark]
     public void Decrypt_Symmetric_Salsa20()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Salsa20);
-        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted, s_testKey, CipherSuiteType.Salsa20, out _);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Salsa20);
+        using IBufferLease decrypted = FrameCipher.DecryptFrame(encrypted.AsRef(), s_testKey, CipherSuiteType.Salsa20, out _);
     }
 
     // ── LZ4 Compression ──
@@ -117,14 +117,14 @@ public class FrameTransformerBenchmarks
     public void Compress_LZ4()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease compressed = FrameCompression.CompressFrame(src);
+        using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
     }
 
     [Benchmark]
     public void Decompress_LZ4()
     {
         using IBufferLease src = CreateSourceLease();
-        using IBufferLease compressed = FrameCompression.CompressFrame(src);
-        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
+        using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
+        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
     }
 }

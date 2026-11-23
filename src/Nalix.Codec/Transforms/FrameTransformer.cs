@@ -210,14 +210,6 @@ public static class FrameTransformer
         dest.CommitLength(Offset + encrypted);
     }
 
-    /// <inheritdoc cref="Encrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, uint?, CipherSuiteType)"/>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Encrypt([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, uint? seq, CipherSuiteType suite)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-        Encrypt(src.AsRef(), dest, key, seq, suite);
-    }
-
     /// <summary>
     /// Decrypts the payload (DATA_REGION) of a packet while preserving the header.
     /// </summary>
@@ -268,16 +260,6 @@ public static class FrameTransformer
         dest.CommitLength(Offset + decrypted);
     }
 
-    /// <inheritdoc cref="Decrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Decrypt(
-        [Borrowed] IBufferLease src,
-        [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-        Decrypt(src.AsRef(), dest, key, expectedAlgorithm, out seq);
-    }
-
     /// <summary>
     /// Attempts to decrypt the payload (DATA_REGION) of a packet without throwing exceptions.
     /// </summary>
@@ -311,21 +293,6 @@ public static class FrameTransformer
         srcSpan[..Offset].CopyTo(destFull[..Offset]);
         dest.CommitLength(Offset + decrypted);
         return true;
-    }
-
-    /// <inheritdoc cref="TryDecrypt(LeaseRef, IBufferLease, ReadOnlySpan{byte}, CipherSuiteType, out uint)"/>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryDecrypt(
-        [Borrowed] IBufferLease src,
-        [Borrowed] IBufferLease dest, ReadOnlySpan<byte> key, CipherSuiteType expectedAlgorithm, out uint seq)
-    {
-        if (src is null)
-        {
-            seq = 0;
-            return false;
-        }
-
-        return TryDecrypt(src.AsRef(), dest, key, expectedAlgorithm, out seq);
     }
 
     /// <summary>
@@ -379,14 +346,6 @@ public static class FrameTransformer
         dest.CommitLength(Offset + compressed);
     }
 
-    /// <inheritdoc cref="Compress(LeaseRef, IBufferLease)"/>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Compress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-        Compress(src.AsRef(), dest);
-    }
-
     /// <summary>
     /// Decompresses the payload (DATA_REGION) of a packet using LZ4 while preserving the header.
     /// </summary>
@@ -413,14 +372,6 @@ public static class FrameTransformer
         int decoded = LZ4Codec.Decode(srcSpan[Offset..], destFull[Offset..]);
         srcSpan[..Offset].CopyTo(destFull[..Offset]);
         dest.CommitLength(Offset + decoded);
-    }
-
-    /// <inheritdoc cref="Decompress(LeaseRef, IBufferLease)"/>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Decompress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-        Decompress(src.AsRef(), dest);
     }
 
     /// <summary>
@@ -451,9 +402,4 @@ public static class FrameTransformer
         dest.CommitLength(Offset + decoded);
         return true;
     }
-
-    /// <inheritdoc cref="TryDecompress(LeaseRef, IBufferLease)"/>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryDecompress([Borrowed] IBufferLease src, [Borrowed] IBufferLease dest)
-        => src is not null && TryDecompress(src.AsRef(), dest);
 }

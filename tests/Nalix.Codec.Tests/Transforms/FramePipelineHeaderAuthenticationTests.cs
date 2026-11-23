@@ -54,10 +54,10 @@ public sealed class FramePipelineHeaderAuthenticationTests
     public void TryDecryptFrame_WhenHeaderByteTampered_ReturnsFalse(int offset)
     {
         using BufferLease src = ToLease(CreateFrame(64, compressible: false));
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, Key, 7u, Suite);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), Key, 7u, Suite);
         using BufferLease tampered = ToLease(Tamper(encrypted.Span.ToArray(), offset));
 
-        Assert.False(FrameCipher.TryDecryptFrame(tampered, Key, Suite, out _, out IBufferLease? dest));
+        Assert.False(FrameCipher.TryDecryptFrame(tampered.AsRef(), Key, Suite, out _, out IBufferLease? dest));
         Assert.Null(dest);
     }
 
@@ -66,10 +66,10 @@ public sealed class FramePipelineHeaderAuthenticationTests
     public void DecryptFrame_WhenHeaderByteTampered_ThrowsException(int offset)
     {
         using BufferLease src = ToLease(CreateFrame(64, compressible: false));
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, Key, 7u, Suite);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), Key, 7u, Suite);
         using BufferLease tampered = ToLease(Tamper(encrypted.Span.ToArray(), offset));
 
-        _ = Assert.ThrowsAny<Exception>(() => FrameCipher.DecryptFrame(tampered, Key, Suite, out _));
+        _ = Assert.ThrowsAny<Exception>(() => FrameCipher.DecryptFrame(tampered.AsRef(), Key, Suite, out _));
     }
 
     [Theory]

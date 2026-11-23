@@ -34,15 +34,15 @@ public sealed class FramePipelineTests
         originalPayload.CopyTo(src.Span[FrameTransformer.Offset..]);
 
         // 2. Encrypt then Compress
-        using IBufferLease encrypted = FrameCipher.EncryptFrame(src, s_testKey, null, CipherSuiteType.Chacha20Poly1305);
-        using IBufferLease compressed = FrameCompression.CompressFrame(encrypted);
+        using IBufferLease encrypted = FrameCipher.EncryptFrame(src.AsRef(), s_testKey, null, CipherSuiteType.Chacha20Poly1305);
+        using IBufferLease compressed = FrameCompression.CompressFrame(encrypted.AsRef());
 
         Assert.True(compressed.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.ENCRYPTED));
         Assert.True(compressed.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.COMPRESSED));
 
         // 3. Decompress then Decrypt
-        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
-        using IBufferLease decrypted = FrameCipher.DecryptFrame(decompressed, s_testKey, CipherSuiteType.Chacha20Poly1305, out _);
+        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
+        using IBufferLease decrypted = FrameCipher.DecryptFrame(decompressed.AsRef(), s_testKey, CipherSuiteType.Chacha20Poly1305, out _);
 
         Assert.False(decrypted.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.ENCRYPTED));
         Assert.False(decrypted.Span.AsHeaderRef().Flags.HasFlag(PacketFlags.COMPRESSED));

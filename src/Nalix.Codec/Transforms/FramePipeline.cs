@@ -103,7 +103,7 @@ public static class FramePipeline
                 return false;
             }
 
-            if (!FrameCipher.TryDecryptFrame(current, secret, algorithm, out uint _seq, out IBufferLease? decrypted))
+            if (!FrameCipher.TryDecryptFrame(current.AsRef(), secret, algorithm, out uint _seq, out IBufferLease? decrypted))
             {
                 return false;
             }
@@ -118,7 +118,7 @@ public static class FramePipeline
         if ((flags & PacketFlags.COMPRESSED) != 0)
         {
             IBufferLease prev = current;
-            if (!FrameCompression.TryDecompressFrame(current, out IBufferLease? decompressed))
+            if (!FrameCompression.TryDecompressFrame(current.AsRef(), out IBufferLease? decompressed))
             {
                 // If we replaced a buffer that was ALREADY a replacement (intermediate),
                 // we must dispose it to avoid a leak. We do NOT dispose the 'original' one.
@@ -264,7 +264,7 @@ public static class FramePipeline
 
         if (doCompress)
         {
-            IBufferLease compressed = FrameCompression.CompressFrame(current);
+            IBufferLease compressed = FrameCompression.CompressFrame(current.AsRef());
             bool worthwhile = IsCompressionWorthwhile(compressed.Length - FrameTransformer.Offset, payloadSize);
             AdaptiveCompression.Record(opCode, worthwhile);
 
@@ -281,7 +281,7 @@ public static class FramePipeline
         else if (enableEncrypt)
         {
             IBufferLease prev = current;
-            current = FrameCipher.EncryptFrame(current, secret, seq, algorithm);
+            current = FrameCipher.EncryptFrame(current.AsRef(), secret, seq, algorithm);
 
             // If we replaced a buffer that was ALREADY a replacement (intermediate),
             // we must dispose it to avoid a leak. We do NOT dispose the 'original' one.

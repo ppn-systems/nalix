@@ -86,8 +86,8 @@ public sealed class FramePipelineAdversarialTests
             byte[] serialized = original.Serialize();
 
             using BufferLease src = ToLease(serialized);
-            using IBufferLease compressed = FrameCompression.CompressFrame(src);
-            using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
+            using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
+            using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
 
             byte[] roundTripped = decompressed.Span.ToArray();
             Control restored = Control.Deserialize(roundTripped);
@@ -110,8 +110,8 @@ public sealed class FramePipelineAdversarialTests
             byte[] serialized = original.Serialize();
 
             using BufferLease src = ToLease(serialized);
-            using IBufferLease compressed = FrameCompression.CompressFrame(src);
-            using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
+            using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
+            using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
 
             byte[] roundTripped = decompressed.Span.ToArray();
             Directive restored = Directive.Deserialize(roundTripped);
@@ -136,8 +136,8 @@ public sealed class FramePipelineAdversarialTests
             byte[] serialized = original.Serialize();
 
             using BufferLease src = ToLease(serialized);
-            using IBufferLease compressed = FrameCompression.CompressFrame(src);
-            using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
+            using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
+            using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
 
             byte[] roundTripped = decompressed.Span.ToArray();
             SessionResume restored = SessionResume.Deserialize(roundTripped);
@@ -171,8 +171,8 @@ public sealed class FramePipelineAdversarialTests
 
             try
             {
-                using IBufferLease compressed = FrameCompression.CompressFrame(src);
-                using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
+                using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
+                using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
                 byte[] roundTripped = decompressed.Span.ToArray();
                 Control? restored = Control.Deserialize(roundTripped);
 
@@ -199,7 +199,7 @@ public sealed class FramePipelineAdversarialTests
         byte[] serialized = original.Serialize();
 
         using BufferLease src = ToLease(serialized);
-        using IBufferLease compressed = FrameCompression.CompressFrame(src);
+        using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
         byte[] compressedBytes = compressed.Span.ToArray();
 
         for (int i = 0; i < compressedBytes.Length; i++)
@@ -211,7 +211,7 @@ public sealed class FramePipelineAdversarialTests
 
             try
             {
-                using IBufferLease decompressed = FrameCompression.DecompressFrame(tamperedLease);
+                using IBufferLease decompressed = FrameCompression.DecompressFrame(tamperedLease.AsRef());
                 byte[] roundTripped = decompressed.Span.ToArray();
                 Directive? restored = Directive.Deserialize(roundTripped);
 
@@ -239,8 +239,8 @@ public sealed class FramePipelineAdversarialTests
         byte[] serialized = original.Serialize();
 
         using BufferLease src = ToLease(serialized);
-        using IBufferLease compressed = FrameCompression.CompressFrame(src);
-        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed);
+        using IBufferLease compressed = FrameCompression.CompressFrame(src.AsRef());
+        using IBufferLease decompressed = FrameCompression.DecompressFrame(compressed.AsRef());
         byte[] decompressedBytes = decompressed.Span.ToArray();
 
         for (int i = 0; i < decompressedBytes.Length; i++)

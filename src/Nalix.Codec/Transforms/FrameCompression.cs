@@ -52,13 +52,6 @@ public static class FrameCompression
         }
     }
 
-    /// <inheritdoc cref="DecompressFrame(LeaseRef)"/>
-    public static IBufferLease DecompressFrame([Borrowed] IBufferLease src)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-        return DecompressFrame(src.AsRef());
-    }
-
     /// <summary>
     /// Attempts to decompress a framed packet without throwing exceptions on failures.
     /// Returns true and a new leased buffer on success, or false on failure.
@@ -99,18 +92,6 @@ public static class FrameCompression
         return true;
     }
 
-    /// <inheritdoc cref="TryDecompressFrame(LeaseRef, out IBufferLease?)"/>
-    public static bool TryDecompressFrame([Borrowed] IBufferLease src, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IBufferLease? dest)
-    {
-        if (src is null)
-        {
-            dest = null;
-            return false;
-        }
-
-        return TryDecompressFrame(src.AsRef(), out dest);
-    }
-
     /// <summary>
     /// Compresses a framed packet and sets the compressed flag in the resulting buffer.
     /// </summary>
@@ -140,12 +121,5 @@ public static class FrameCompression
             dest.Dispose();
             throw;
         }
-    }
-
-    /// <inheritdoc cref="CompressFrame(LeaseRef)"/>
-    public static IBufferLease CompressFrame([Borrowed] IBufferLease src)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-        return CompressFrame(src.AsRef());
     }
 }

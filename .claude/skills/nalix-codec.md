@@ -23,6 +23,8 @@ Inbound:   decrypt   → decompress     → deserialize
 ```
 Never swap compress and encrypt. Encrypting before compressing produces high-entropy ciphertext that compresses poorly (near-zero gain). Compressing before encrypting is the correct security model. `FramePipeline` enforces this order — do not reorder stages.
 
+- The source of `FrameTransformer`, `FrameCipher` and `FrameCompression` is a `LeaseRef`: call them with `src.AsRef()`. There is no overload that takes the source as `IBufferLease`
+
 ### Cryptography Invariants
 - **Never generate nonces outside `EnvelopeCipher`** — nonce management (counter, uniqueness) is internal to the cipher engine
 - `HandshakeX25519` derives master secret via HKDF-Extract (no salt) combining two shared secrets: EE (ephemeral-ephemeral = forward secrecy) + SE (static-ephemeral = authentication)
