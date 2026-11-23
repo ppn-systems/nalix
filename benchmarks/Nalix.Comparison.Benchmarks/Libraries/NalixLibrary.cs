@@ -4,6 +4,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nalix.Comparison.Benchmarks.Harness;
+using Nalix.Environment.Memory;
 using Nalix.Hosting;
 using Nalix.Hosting.Protocols;
 using Nalix.Network.Options;
@@ -106,6 +107,7 @@ public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
         private TransportSession? _session;
         private RequestOptions _opts = RequestOptions.Default.WithTimeout(10_000);
         private readonly EchoRequestPacket _request = new();
+        private byte[]? _payload;
 
         public async Task ConnectAsync()
         {
@@ -137,9 +139,16 @@ public sealed class NalixLibrary(NalixMode mode) : IBenchLibrary
 
         public async ValueTask<int> EchoAsync(byte[] payload)
         {
-            _request.Data = payload;
-            EchoResponsePacket r = await _session!.RequestAsync<EchoResponsePacket>(_request, _opts);
-            return r.Data.Length;
+            // The harness reuses one payload array per size, so the pooled copy is made once, not per call.
+            if (!ReferenceEquals(_payload, payload))
+            {
+                _request.Data?.Dispose();
+                _request.Data = BufferLease.CopyFrom(payload);
+                _payload = payload;
+            }
+
+            using EchoResponsePacket r = await _session!.RequestAsync<EchoResponsePacket>(_request, _opts);
+            return r.Data!.Length;
         }
 
         public async ValueTask DisposeAsync()

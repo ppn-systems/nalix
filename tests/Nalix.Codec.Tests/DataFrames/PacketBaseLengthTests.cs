@@ -7,6 +7,7 @@ using Nalix.Abstractions.Networking.Packets;
 using Nalix.Abstractions.Primitives;
 using Nalix.Abstractions.Serialization;
 using Nalix.Codec.DataFrames;
+using Nalix.Environment.Memory;
 
 namespace Nalix.Codec.Tests.DataFrames;
 
@@ -60,6 +61,31 @@ public sealed partial class PacketBaseLengthTests
 
         Assert.Equal(packet.Length, written);
         Assert.Equal(bytes, buffer);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(32)]
+    [InlineData(1024)]
+    public void Length_WhenPacketContainsBufferLease_MatchesSerializedByteCount(int size)
+    {
+        using LeasePacket packet = new() { Payload = BufferLease.CopyFrom(new byte[size]) };
+
+        byte[] bytes = packet.Serialize();
+        byte[] buffer = new byte[packet.Length];
+        int written = packet.Serialize(buffer);
+
+        Assert.Equal(packet.Length, bytes.Length);
+        Assert.Equal(packet.Length, written);
+        Assert.Equal(bytes, buffer);
+    }
+
+    [Fact]
+    public void Length_WhenBufferLeaseIsNull_CountsOnlyTheLengthPrefix()
+    {
+        using LeasePacket packet = new();
+
+        Assert.Equal(packet.Serialize().Length, packet.Length);
     }
 
     [Fact]
@@ -171,6 +197,22 @@ public sealed partial class PacketBaseLengthTests
         int written = packet.Serialize(buffer);
         Assert.Equal(packet.Length, written);
         Assert.Equal(bytes, buffer);
+    }
+
+    [GenerateFormatter]
+    [SerializePackable(SerializeLayout.Sequential)]
+    internal sealed partial class LeasePacket : PacketBase<LeasePacket>, IPacketStaticOpcode
+    {
+        public static ushort StaticOpCode => 9998;
+        [SerializeOrder(0)]
+        public BufferLease? Payload { get; set; }
+
+        public override void ResetForPool()
+        {
+            base.ResetForPool();
+            this.Payload?.Dispose();
+            this.Payload = null;
+        }
     }
 
     [GenerateFormatter]

@@ -422,6 +422,9 @@ public sealed class PacketSchemaGenerator : IIncrementalGenerator
         return 0;
     }
 
+    private static bool IS_BUFFER_LEASE(ITypeSymbol type) =>
+        type.Name == "BufferLease" && type.ContainingNamespace?.ToDisplayString() == KnownNames.CodecMemoryNamespace;
+
     private static string BUILD_SIZE_EXPRESSION(ITypeSymbol type, string accessor)
     {
         // ---- Fixed-size shortcut ----
@@ -435,6 +438,12 @@ public sealed class PacketSchemaGenerator : IIncrementalGenerator
         if (type.SpecialType == SpecialType.System_String)
         {
             return $"({accessor} is null ? 4 : 4 + global::System.Text.Encoding.UTF8.GetByteCount({accessor}))";
+        }
+
+        // ---- BufferLease (length prefix + pooled bytes) ----
+        if (IS_BUFFER_LEASE(type))
+        {
+            return $"({accessor} is null ? 4 : 4 + {accessor}.Length)";
         }
 
         // ---- Nullable<T> ----
