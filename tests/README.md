@@ -73,6 +73,14 @@ only runs the shards it can affect, and a documentation-only change runs none. "
 page runs every shard regardless. A new test project must be added to a shard in `ci_plan.py`; the plan fails
 until it is.
 
+To see what CI would do with your working tree (staged changes included), run the plan locally. It prints every
+shard with its key; `inputs` lists the files hashed for one shard:
+
+```powershell
+python3 .github/scripts/ci_plan.py plan
+python3 .github/scripts/ci_plan.py inputs hosting
+```
+
 `CI OK` is the single required status check. Test builds are never strong-name signed (a signed assembly cannot
 grant `InternalsVisibleTo` by simple name), so CI does not decode the signing key for test runs.
 
