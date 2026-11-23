@@ -19,7 +19,7 @@
 
 ### Object Pooling (`ObjectPoolManager`)
 - Uses `PoolType<T>.Id` — a compile-time unique integer per type used as an array index on the hot path (no dictionary lookup per rent/return)
-- **`IPoolable.ResetForPool()` must clear every mutable field** — `PacketSchemaGenerator` auto-generates `ResetForPool()` for `PacketBase<T>` subclasses (including `[SerializeIgnore]` transient fields, while preserving `[SkipClean]`/`[Inject]` members), and `NALIX107` warns if a manual `override void ResetForPool()` forgets to reset a mutable field or auto-property.
+- **`IPoolable.ResetForPool()` must clear every mutable field** — `PacketSchemaGenerator` auto-generates `ResetForPool()` for `PacketBase<T>` subclasses (including `[SerializeIgnore]` transient fields, while preserving `[SkipClean]`/`[Inject]` members), and `NALIX107` warns if a manual `override void ResetForPool()` forgets to reset a mutable field or auto-property. `NALIX120` does the same for every other `IPoolable` (a member initialized in `OnRent()` counts as reset; mark members that must survive pooling `[SkipClean]`), and `NALIX121` reports a pooled object that is used after `pool.Return(x)` / `x.Return()`.
 - Outstanding balance = Get count − Return count; negative = pool leak; logged as a warning but not thrown
 - Health auto-monitored: miss rate > `ElevatedFailureThreshold` → health escalates to critical
 - Trim cycles: deep trim every 6 cycles, hot pools (high hit rate) get light trim, cold pools get aggressive trim

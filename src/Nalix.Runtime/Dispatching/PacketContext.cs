@@ -256,6 +256,7 @@ public sealed class PacketContext<TPacket> : IPacketContext<TPacket>, IPoolable,
 
             this.Sender.ResetForPool();
 
+            _ownsPacket = false;
             _isInitialized = false;
         }
 

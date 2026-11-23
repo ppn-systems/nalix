@@ -105,7 +105,7 @@ public sealed partial class NalixUsageAnalyzer
             ReportBorrowedViolations(context, borrowedViolations, retains);
         }
 
-        AnalyzeLeaseFlow(context, leaseType);
+        AnalyzeLeaseFlow(context, leaseType, symbols.PoolableInterface);
     }
 
     private static void ReportBorrowedViolations(

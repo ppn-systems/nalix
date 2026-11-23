@@ -23,6 +23,8 @@ IDs are sequential: `NALIX001`–`NALIX078`, **not organized by hundreds**. Cate
 - `NALIX115–NALIX116`: SDK usage — retry on a packet without `[PacketIdempotent]`, discarded `On`/`OnExact`/`SubscribeTemp` subscription (`NalixUsageAnalyzer.SdkUsage.cs`)
 - `NALIX117`: byte-wise `SequenceEqual` on secret-named data (`NalixUsageAnalyzer.SecretComparison.cs`)
 - `NALIX118`: validation attributes that do not fit their `ConfigurationLoader` property (`NalixUsageAnalyzer.ConfigurationValidation.cs`)
+- `NALIX120`: `ResetForPool()` completeness for every `IPoolable` (NALIX107 is the packet version; both share `AnalyzeResetForPoolCompleteness`, and a member touched in `OnRent()` counts as reset)
+- `NALIX121`: pooled object used after `Return` — the lease flow analysis in pooled mode (`LeaseFlow` with a non-null poolable type: `Return` is the only release, nothing escapes, no leak reports)
 - `NALIX025`, `NALIX026`, `NALIX043` were removed (the metadata-provider types no longer exist); do not reuse the IDs
 
 When adding a new rule, append the next available ID — do not try to "slot" into a category range.
