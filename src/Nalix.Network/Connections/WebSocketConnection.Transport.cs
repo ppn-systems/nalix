@@ -565,9 +565,19 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
             return;
         }
 
+        await DRAIN_UNTIL_PEER_CLOSE_ASYNC(webSocket, buffer, length, cts.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// After this side's close frame is out, reads and discards whatever the peer still sends until its close frame
+    /// arrives. Frames left unread when the socket is released make the kernel answer with a TCP reset, and the peer
+    /// then sees a broken pipe or 1006 instead of the close status it was sent.
+    /// </summary>
+    private static async Task DRAIN_UNTIL_PEER_CLOSE_ASYNC(WebSocket webSocket, byte[] buffer, int length, CancellationToken cancellationToken)
+    {
         while (webSocket.State == WebSocketState.CloseSent)
         {
-            WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, length), cts.Token).ConfigureAwait(false);
+            ValueWebSocketReceiveResult result = await webSocket.ReceiveAsync(buffer.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
             if (result.MessageType == WebSocketMessageType.Close)
             {
                 break;
@@ -688,8 +698,8 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
     }
 
     /// <summary>
-    /// Runs the closing handshake: sends the close frame, waits for the peer's close frame while the receive loop is
-    /// still reading, then releases the socket. Bounded by <see cref="s_closeHandshakeTimeout"/>.
+    /// Runs the closing handshake: sends the close frame, reads until the peer's close frame arrives, then releases the
+    /// socket. Bounded by <see cref="s_closeHandshakeTimeout"/>.
     /// </summary>
     private async Task CLOSE_GRACEFULLY_ASYNC(WebSocket webSocket, WebSocketCloseStatus status, string reason, Task? receiveLoopTask)
     {
@@ -698,11 +708,24 @@ public sealed partial class WebSocketConnection : IConnection.ITransport
             using CancellationTokenSource cts = new(s_closeHandshakeTimeout);
 
             if (await this.SEND_CLOSE_FRAME_ASYNC(webSocket, status, reason, cts.Token).ConfigureAwait(false) &&
-                webSocket.State == WebSocketState.CloseSent &&
-                receiveLoopTask is { IsCompleted: false })
+                webSocket.State == WebSocketState.CloseSent)
             {
-                // The receive loop stops when the peer's close frame arrives.
-                await receiveLoopTask.WaitAsync(cts.Token).ConfigureAwait(false);
+                // The receive loop stops at its next frame (this connection is disposed and no longer Open), not at the
+                // peer's close frame. Wait for it so only one read runs at a time, then read the rest here.
+                if (receiveLoopTask is { IsCompleted: false })
+                {
+                    await receiveLoopTask.WaitAsync(cts.Token).ConfigureAwait(false);
+                }
+
+                byte[] buffer = BufferLease.ByteArrayPool.Rent(GET_RECEIVE_BUFFER_SIZE());
+                try
+                {
+                    await DRAIN_UNTIL_PEER_CLOSE_ASYNC(webSocket, buffer, buffer.Length, cts.Token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    BufferLease.ByteArrayPool.Return(buffer);
+                }
             }
         }
         catch (Exception ex) when (ExceptionClassifier.IsNonFatal(ex))
